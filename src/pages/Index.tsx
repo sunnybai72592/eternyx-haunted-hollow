@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +10,7 @@ import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
 import { Code, Shield, Zap, Terminal, Mail, User, MessageSquare } from "lucide-react";
 
 const Index = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -48,6 +50,7 @@ const Index = () => {
           
           <Button 
             size="lg" 
+            onClick={() => navigate("/hacked")}
             className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow"
           >
             <Terminal className="mr-2 h-5 w-5" />
