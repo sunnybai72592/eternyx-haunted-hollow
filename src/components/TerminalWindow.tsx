@@ -10,17 +10,17 @@ export const TerminalWindow = ({ title = "terminal", children, className = "" }:
   return (
     <div className={`neon-border rounded-lg overflow-hidden ${className}`}>
       {/* Terminal Header */}
-      <div className="bg-card border-b border-border px-4 py-2 flex items-center space-x-2">
+      <div className="bg-card border-b border-border px-3 sm:px-4 py-2 flex items-center space-x-2">
         <div className="flex space-x-1">
-          <div className="w-3 h-3 rounded-full bg-red-500"></div>
-          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500"></div>
+          <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-yellow-500"></div>
+          <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500"></div>
         </div>
-        <span className="text-sm text-muted-foreground ml-4">{title}</span>
+        <span className="text-xs sm:text-sm text-muted-foreground ml-2 sm:ml-4 truncate">{title}</span>
       </div>
       
       {/* Terminal Body */}
-      <div className="bg-background p-4 font-mono text-sm">
+      <div className="bg-background p-3 sm:p-4 font-mono text-xs sm:text-sm overflow-x-auto">
         {children}
       </div>
     </div>
