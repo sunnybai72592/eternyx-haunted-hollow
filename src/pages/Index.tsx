@@ -189,15 +189,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Connection Status Indicator */}
-      <div className="fixed top-4 left-4 z-50">
-        <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs ${
-          isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        }`}>
-          {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          <span>{isConnected ? 'ONLINE' : 'OFFLINE'}</span>
-        </div>
-      </div>
 
       {/* Hero Section */}
       <section 
