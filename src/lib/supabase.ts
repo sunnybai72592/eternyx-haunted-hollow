@@ -105,16 +105,18 @@ export class SupabaseAPI {
       if (error) throw error;
 
       // Log security event
-      await this.logSecurityEvent('signup', undefined, {
+      await this.logSecurityEvent('login', undefined, {
         email,
-        success: true
+        success: true,
+        action: 'signup'
       });
 
       return { data, error: null };
     } catch (error) {
-      await this.logSecurityEvent('signup', undefined, {
+      await this.logSecurityEvent('login', undefined, {
         email,
         success: false,
+        action: 'signup',
         error: (error as Error).message
       });
       return { data: null, error };

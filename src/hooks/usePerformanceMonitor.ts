@@ -47,9 +47,9 @@ export const usePerformanceMonitor = () => {
   }, [updatePerformanceMetrics, addNotification]);
 
   const trackError = useCallback((error: Error, context?: string) => {
-    updatePerformanceMetrics(prev => ({ 
-      errorCount: prev.errorCount + 1 
-    }));
+    updatePerformanceMetrics({ 
+      errorCount: 1 
+    });
     
     addNotification({
       type: 'error',
