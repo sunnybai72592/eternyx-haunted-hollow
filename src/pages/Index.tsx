@@ -8,10 +8,9 @@ import { CyberCard } from "@/components/CyberCard";
 import { TerminalWindow } from "@/components/TerminalWindow";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
-import { Code, Shield, Zap, Terminal, Mail, User, MessageSquare, Wifi, WifiOff } from "lucide-react";
+import { Code, Shield, Zap, Terminal, Mail, User, MessageSquare } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useAccessibility } from "@/components/AccessibilityProvider";
 import { supabaseAPI } from "@/lib/supabase";
 import { analyticsService } from "@/lib/analyticsService";
@@ -30,12 +29,6 @@ const Index = () => {
   const { addNotification, isLoading } = useAppStore();
   const { measureApiCall, trackError } = usePerformanceMonitor();
   const { announceToScreenReader } = useAccessibility();
-  
-  const { isConnected, sendMessage } = useWebSocket({
-    onMessage: (message) => {
-      console.log('Received real-time message:', message);
-    }
-  });
 
   useEffect(() => {
     // Initialize analytics tracking
@@ -103,14 +96,6 @@ const Index = () => {
       
       // Cache successful submission
       cacheService.set(`submission_${data.id}`, data, 3600000); // 1 hour
-      
-      // Send real-time notification if connected
-      if (isConnected) {
-        sendMessage({
-          type: 'contact-form-submitted',
-          data: { name: formData.name, email: formData.email }
-        });
-      }
       
       // Track conversion
       analyticsService.trackConversion('contact_form', 1, {
@@ -189,15 +174,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Connection Status Indicator */}
-      <div className="fixed top-4 left-4 z-50">
-        <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs ${
-          isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        }`}>
-          {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          <span>{isConnected ? 'ONLINE' : 'OFFLINE'}</span>
-        </div>
-      </div>
 
       {/* Hero Section */}
       <section 
