@@ -18,12 +18,12 @@ interface UseWebSocketOptions {
 
 export const useWebSocket = (options: UseWebSocketOptions = {}) => {
   const {
-    url = 'wss://echo.websocket.org', // Demo WebSocket server
+    url = 'wss://ws.postman-echo.com/raw', // More reliable WebSocket test server
     protocols,
     onMessage,
     onError,
-    reconnectAttempts = 5,
-    reconnectInterval = 3000
+    reconnectAttempts = 3, // Reduced from 5
+    reconnectInterval = 5000 // Increased from 3000
   } = options;
 
   const { setConnectionStatus, addNotification } = useAppStore();
