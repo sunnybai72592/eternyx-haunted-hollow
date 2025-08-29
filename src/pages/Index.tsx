@@ -225,15 +225,36 @@ const Index = () => {
             />
           </div>
           
-          <Button 
-            size="lg" 
-            onClick={handleInitializeConnection}
-            className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow"
-            aria-label="Initialize secure connection to premium services"
-          >
-            <Terminal className="mr-2 h-5 w-5" />
-            Initialize Connection
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+            <Button 
+              size="lg" 
+              onClick={handleInitializeConnection}
+              className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow"
+              aria-label="Initialize secure connection to premium services"
+            >
+              <Terminal className="mr-2 h-5 w-5" />
+              Initialize Connection
+            </Button>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                size="lg"
+                onClick={() => navigate("/signin")}
+                className="border-cyber-blue text-cyber-blue hover:bg-cyber-blue/10 neon-border"
+              >
+                Sign In
+              </Button>
+              <Button 
+                variant="outline"
+                size="lg"
+                onClick={() => navigate("/signup")}
+                className="border-cyber-green text-cyber-green hover:bg-cyber-green/10 neon-border"
+              >
+                Sign Up
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -13,6 +13,9 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
 const Hacked = lazy(() => import("./pages/Hacked"));
+const SignUp = lazy(() => import("./pages/SignUp"));
+const SignIn = lazy(() => import("./pages/SignIn"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -44,6 +47,9 @@ const App = () => {
               }>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/signup" element={<SignUp />} />
+                  <Route path="/signin" element={<SignIn />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/hacked" element={<Hacked />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />

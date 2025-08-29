@@ -18,8 +18,7 @@ interface UseWebSocketOptions {
 
 export const useWebSocket = (options: UseWebSocketOptions = {}) => {
   const {
-    url = 'wss://ws.postman-echo.com/raw', // More reliable WebSocket test server
-    protocols,
+    url = `wss://wcncuarekaofmfurbtbh.supabase.co/realtime/v1/websocket?apikey=${import.meta.env.VITE_SUPABASE_ANON_KEY}&vsn=1.0.0`,   protocols,
     onMessage,
     onError,
     reconnectAttempts = 3, // Reduced from 5
