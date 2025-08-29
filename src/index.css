@@ -66,6 +66,10 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 120 100% 75%;
     --sidebar-border: 0 0% 15%;
     --sidebar-ring: 120 100% 50%;
+
+    /* Animation durations - can be overridden for accessibility */
+    --animation-duration: 300ms;
+    --transition-duration: 200ms;
   }
 
   .dark {
@@ -105,6 +109,20 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
+  /* Accessibility: High contrast mode */
+  .high-contrast {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --border: 0 0% 50%;
+    --primary: 120 100% 75%;
+  }
+
+  /* Accessibility: Keyboard navigation focus styles */
+  .keyboard-navigation *:focus {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+  }
 }
 
 @layer base {
@@ -114,6 +132,23 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground font-mono;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Accessibility: Respect user's motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -132,6 +167,7 @@ All colors MUST be HSL.
     background: linear-gradient(135deg, hsl(var(--cyber-gray)), hsl(var(--background)));
     border: 1px solid hsl(var(--border));
     box-shadow: 0 4px 20px hsl(var(--neon-green) / 0.1);
+    transition: all var(--transition-duration) ease;
   }
   
   .glitch {
@@ -166,6 +202,19 @@ All colors MUST be HSL.
     animation: blink 1s infinite;
     color: hsl(var(--neon-green));
   }
+
+  /* Enhanced animations */
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .animate-matrix-rain {
+    animation: matrix-rain 20s linear infinite;
+  }
 }
 
 @layer utilities {
@@ -179,5 +228,82 @@ All colors MUST be HSL.
   
   .text-cyber-purple {
     color: hsl(var(--neon-purple));
+  }
+
+  /* Skip link for screen readers */
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 6px;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    padding: 8px;
+    text-decoration: none;
+    z-index: 1000;
+  }
+
+  .skip-link:focus {
+    top: 6px;
+  }
+}
+
+/* Keyframe animations */
+@keyframes glitch-1 {
+  0%, 14%, 15%, 49%, 50%, 99%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  1%, 13% {
+    transform: translate3d(-2px, 0, 0);
+  }
+  16%, 48% {
+    transform: translate3d(2px, 0, 0);
+  }
+}
+
+@keyframes glitch-2 {
+  0%, 20%, 21%, 62%, 63%, 99%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  1%, 19% {
+    transform: translate3d(2px, 0, 0);
+  }
+  22%, 61% {
+    transform: translate3d(-2px, 0, 0);
+  }
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px hsl(var(--neon-green) / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px hsl(var(--neon-green) / 0.8), 0 0 30px hsl(var(--neon-green) / 0.6);
+  }
+}
+
+@keyframes matrix-rain {
+  0% {
+    transform: translateY(-100vh);
+  }
+  100% {
+    transform: translateY(100vh);
   }
 }
