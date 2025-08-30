@@ -2,7 +2,7 @@ import { Loader2, Terminal } from 'lucide-react';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
-  variant?: 'default' | 'cyber';
+  variant?: 'default' | 'cyber' | 'minimal';
   text?: string;
 }
 
@@ -31,6 +31,17 @@ const LoadingSpinner = ({
             {text}
             <span className="animate-ping">...</span>
           </div>
+        )}
+      </div>
+    );
+  }
+
+  if (variant === 'minimal') {
+    return (
+      <div className="flex items-center space-x-2">
+        <Loader2 className={`${sizeClasses[size]} animate-spin text-primary`} />
+        {text && (
+          <span className="text-sm text-muted-foreground">{text}</span>
         )}
       </div>
     );

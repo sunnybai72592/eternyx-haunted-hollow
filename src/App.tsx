@@ -12,6 +12,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -44,6 +45,7 @@ const App = () => {
               }>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/hacked" element={<Hacked />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />

@@ -6,10 +6,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { TypingText } from "@/components/TypingText";
 import { CyberCard } from "@/components/CyberCard";
 import { TerminalWindow } from "@/components/TerminalWindow";
+import { UserProfile } from "@/components/auth/UserProfile";
+import { AuthModal } from "@/components/auth/AuthModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
-import { Code, Shield, Zap, Terminal, Mail, User, MessageSquare } from "lucide-react";
+import { Code, Shield, Zap, Terminal, Mail, User, MessageSquare, LogIn, UserPlus } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
+import { useAuthStore } from "@/store/authStore";
 import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
 import { useAccessibility } from "@/components/AccessibilityProvider";
 import { supabaseAPI } from "@/lib/supabase";
@@ -19,17 +22,29 @@ import { cacheService } from "@/lib/cacheService";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, user, profile, initialize } = useAuthStore();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    message: ""
+    message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const { addNotification, isLoading } = useAppStore();
-  const { measureApiCall, trackError } = usePerformanceMonitor();
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const { announceToScreenReader } = useAccessibility();
+  
+  usePerformanceMonitor();
 
+  // Initialize auth on component mount
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  const openAuthModal = (mode: 'login' | 'signup') => {
+    setAuthMode(mode);
+    setAuthModalOpen(true);
+  };
   useEffect(() => {
     // Initialize analytics tracking
     analyticsService.setUserId('anonymous');
@@ -174,6 +189,32 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Authentication Header */}
+      <header className="fixed top-0 right-0 z-50 p-4">
+        {isAuthenticated ? (
+          <UserProfile className="animate-fade-in" />
+        ) : (
+          <div className="flex space-x-2 animate-fade-in">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openAuthModal('login')}
+              className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 transition-all duration-300 hover:scale-105"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Sign In
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => openAuthModal('signup')}
+              className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border transition-all duration-300 hover:scale-105"
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Sign Up
+            </Button>
+          </div>
+        )}
+      </header>
 
       {/* Hero Section */}
       <section 
@@ -186,14 +227,14 @@ const Index = () => {
         
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
           <h1 
-            className="text-8xl md:text-9xl font-bold mb-6 glitch neon-text"
+            className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold mb-6 glitch neon-text"
             data-text="ETERNYX"
             aria-label="ETERNYX - Full Stack Development and Cybersecurity"
           >
             ETERNYX
           </h1>
           
-          <div className="text-xl md:text-2xl mb-8 h-12" aria-live="polite">
+          <div className="text-lg sm:text-xl md:text-2xl mb-8 h-12" aria-live="polite">
             <TypingText 
               text="Full Stack Development • Cybersecurity • Digital Innovation"
               speed={80}
@@ -201,15 +242,42 @@ const Index = () => {
             />
           </div>
           
-          <Button 
-            size="lg" 
-            onClick={handleInitializeConnection}
-            className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow"
-            aria-label="Initialize secure connection to premium services"
-          >
-            <Terminal className="mr-2 h-5 w-5" />
-            Initialize Connection
-          </Button>
+          {!isAuthenticated ? (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Button 
+                size="lg" 
+                onClick={handleInitializeConnection}
+                className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow min-h-[48px] px-8 transition-all duration-300 hover:scale-105"
+                aria-label="Initialize secure connection to premium services"
+              >
+                <Terminal className="mr-2 h-5 w-5" />
+                Initialize Connection
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => openAuthModal('signup')}
+                className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 min-h-[48px] px-8 transition-all duration-300 hover:scale-105"
+              >
+                <UserPlus className="mr-2 h-5 w-5" />
+                Join Network
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-primary text-lg">
+                Welcome back, <span className="font-bold text-cyber-green">{profile?.username}</span>
+              </div>
+              <Button 
+                size="lg" 
+                onClick={() => navigate('/dashboard')}
+                className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow min-h-[48px] px-8 transition-all duration-300 hover:scale-105"
+              >
+                <Terminal className="mr-2 h-5 w-5" />
+                Access Dashboard
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -364,6 +432,13 @@ const Index = () => {
           </span>
         </p>
       </footer>
+
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        defaultMode={authMode}
+      />
     </div>
   );
 };
