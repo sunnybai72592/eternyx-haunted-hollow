@@ -15,6 +15,13 @@ const Index = lazy(() => import("./pages/Index"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const BlackHatPentesting = lazy(() => import("./pages/BlackHatPentesting"));
+const ZeroDayProtection = lazy(() => import("./pages/ZeroDayProtection"));
+const QuantumEncryption = lazy(() => import("./pages/QuantumEncryption"));
+const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
+const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
+const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
+const Services = lazy(() => import("./pages/Services"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +54,13 @@ const App = () => {
                   <Route path="/" element={<Index />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/hacked" element={<Hacked />} />
+              <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
+              <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
+              <Route path="/quantum-encryption" element={<QuantumEncryption />} />
+              <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
+              <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
+              <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
+              <Route path="/services" element={<Services />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
@@ -60,3 +74,4 @@ const App = () => {
 };
 
 export default App;
+

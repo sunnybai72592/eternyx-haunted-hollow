@@ -10,7 +10,23 @@ import { UserProfile } from "@/components/auth/UserProfile";
 import { AuthModal } from "@/components/auth/AuthModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
-import { Code, Shield, Zap, Terminal, Mail, User, MessageSquare, LogIn, UserPlus } from "lucide-react";
+import { 
+  Code, 
+  Shield, 
+  Zap, 
+  Terminal, 
+  Mail, 
+  User, 
+  MessageSquare, 
+  LogIn, 
+  UserPlus,
+  Skull,
+  AlertTriangle,
+  Diamond,
+  Eye,
+  Users,
+  Wifi
+} from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuthStore } from "@/store/authStore";
 import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
@@ -54,139 +70,171 @@ const Index = () => {
     setAuthMode(mode);
     setAuthModalOpen(true);
   };
-  useEffect(() => {
-    // Initialize analytics tracking
-    analyticsService.setUserId('anonymous');
-    analyticsService.trackPageView('/');
-    
-    // Announce page load to screen readers
-    announceToScreenReader("ETERNYX homepage loaded. Full stack development and cybersecurity services.");
-    
-    // Track performance metrics
-    const loadTime = performance.now();
-    analyticsService.trackPerformance('page_load', loadTime);
-  }, [announceToScreenReader]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Security validation
-    const nameValidation = securityService.validateInput(formData.name, 'text');
-    const emailValidation = securityService.validateInput(formData.email, 'email');
-    const messageValidation = securityService.validateInput(formData.message, 'text');
-    
-    if (!nameValidation.isValid || !emailValidation.isValid || !messageValidation.isValid) {
-      addNotification({
-        type: 'error',
-        message: 'Invalid input detected. Please check your form data.'
-      });
-      return;
-    }
-    
-    if (!formData.name || !formData.email || !formData.message) {
-      addNotification({
-        type: 'error',
-        message: 'Please fill in all fields'
-      });
-      return;
-    }
-
-    // Rate limiting check
-    if (!securityService.checkRateLimit(`form_${formData.email}`, 3, 300000)) { // 3 submissions per 5 minutes
-      addNotification({
-        type: 'error',
-        message: 'Too many submissions. Please wait before trying again.'
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    const startTime = performance.now();
-    
-    try {
-      // Track form submission
-      analyticsService.trackFormSubmission('contact_form', formData);
-      
-      // Submit to Supabase with enhanced features
-      const { data, error } = await supabaseAPI.submitContactForm({
-        name: nameValidation.sanitized,
-        email: emailValidation.sanitized,
-        message: messageValidation.sanitized
-      });
-      
-      if (error) throw error;
-      
-      const duration = measureApiCall('contact-form', startTime);
-      
-      // Cache successful submission
-      cacheService.set(`submission_${data.id}`, data, 3600000); // 1 hour
-      
-      // Track conversion
-      analyticsService.trackConversion('contact_form', 1, {
-        formType: 'contact',
-        responseTime: duration
-      });
-      
-      addNotification({
-        type: 'success',
-        message: 'Message sent successfully! We\'ll get back to you soon.'
-      });
-      
-      announceToScreenReader("Contact form submitted successfully");
-      
-      // Reset form
-      setFormData({ name: "", email: "", message: "" });
-      
-    } catch (error) {
-      trackError(error as Error, 'contact-form');
-      securityService.logSecurityEvent('data_access', 'medium', {
-        type: 'form_submission_error',
-        error: (error as Error).message
-      });
-      
-      addNotification({
-        type: 'error',
-        message: 'Failed to send message. Please try again.'
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleInitializeConnection = () => {
-    // Track user interaction
-    analyticsService.trackInteraction('initialize_button', 'click', {
-      page: '/',
-      timestamp: Date.now()
-    });
-    
-    // Security logging
-    securityService.logSecurityEvent('data_access', 'low', {
-      type: 'secure_area_access',
-      action: 'initialize_connection'
-    });
-    
-    addNotification({
-      type: 'info',
-      message: 'Initializing secure connection...'
-    });
-    
-    announceToScreenReader("Initializing connection to secure area");
-    
-    setTimeout(() => {
-      navigate("/hacked");
-    }, 1000);
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    } else {
+      openAuthModal('login');
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
-    // Track user engagement
-    analyticsService.trackInteraction('form_input', 'change', {
-      field,
-      length: value.length
-    });
+    // Clear error status when user starts typing
+    if (submitStatus === 'error') {
+      setSubmitStatus('idle');
+    }
   };
+
+  const validateForm = () => {
+    const errors = [];
+    
+    if (!formData.name.trim()) {
+      errors.push('Name is required');
+    }
+    
+    if (!formData.email.trim()) {
+      errors.push('Email is required');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.push('Please enter a valid email address');
+    }
+    
+    if (!formData.message.trim()) {
+      errors.push('Message is required');
+    }
+    
+    return errors;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const errors = validateForm();
+    if (errors.length > 0) {
+      addNotification({
+        type: 'error',
+        title: 'Validation Error',
+        message: errors.join(', ')
+      });
+      setSubmitStatus('error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+
+    try {
+      const startTime = performance.now();
+      
+      // Submit form data
+      const result = await measureApiCall(
+        'contact_form_submission',
+        () => supabaseAPI.submitContactForm(formData)
+      );
+
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+
+      // Track successful submission
+      analyticsService.trackEvent('contact_form_submitted', {
+        name: formData.name,
+        email: formData.email,
+        message_length: formData.message.length
+      });
+
+      // Security logging
+      await securityService.logEvent('contact_form_submission', {
+        email: formData.email,
+        success: true
+      });
+
+      setSubmitStatus('success');
+      setFormData({ name: "", email: "", message: "" });
+      
+      addNotification({
+        type: 'success',
+        title: 'Message Sent',
+        message: 'Your message has been transmitted successfully. We\'ll respond within 24 hours.'
+      });
+
+      announceToScreenReader('Contact form submitted successfully');
+
+    } catch (error) {
+      console.error('Contact form submission error:', error);
+      
+      trackError(error as Error, {
+        context: 'contact_form_submission',
+        formData: { ...formData, message: '[REDACTED]' }
+      });
+
+      setSubmitStatus('error');
+      
+      addNotification({
+        type: 'error',
+        title: 'Transmission Failed',
+        message: 'Failed to send message. Please try again or contact us directly.'
+      });
+
+      announceToScreenReader('Contact form submission failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Cybersecurity services from the image
+  const securityServices = [
+    {
+      id: 'black-hat-pentesting',
+      title: 'Black Hat Pentesting',
+      description: 'Advanced penetration testing using cutting-edge techniques. We think like attackers to protect your systems from real threats.',
+      icon: <Skull className="h-6 w-6" />,
+      route: '/black-hat-pentesting',
+      color: 'text-red-400'
+    },
+    {
+      id: 'zero-day-protection',
+      title: 'Zero-Day Protection',
+      description: 'Stay ahead of unknown threats with our proprietary detection systems and real-time threat intelligence feeds.',
+      icon: <AlertTriangle className="h-6 w-6" />,
+      route: '/zero-day-protection',
+      color: 'text-yellow-400'
+    },
+    {
+      id: 'quantum-encryption',
+      title: 'Quantum-Ready Encryption',
+      description: 'Future-proof your data with quantum-resistant encryption algorithms and next-generation security protocols.',
+      icon: <Diamond className="h-6 w-6" />,
+      route: '/quantum-encryption',
+      color: 'text-purple-400'
+    },
+    {
+      id: 'ai-security',
+      title: 'AI-Powered Security',
+      description: 'Machine learning algorithms that adapt to new threats in real-time, providing predictive security measures.',
+      icon: <Eye className="h-6 w-6" />,
+      route: '/ai-powered-security',
+      color: 'text-blue-400'
+    },
+    {
+      id: 'elite-team',
+      title: 'Elite Development Team',
+      description: 'Access to our top-tier developers for mission-critical applications that require the highest security standards.',
+      icon: <Users className="h-6 w-6" />,
+      route: '/elite-development-team',
+      color: 'text-green-400'
+    },
+    {
+      id: 'threat-monitoring',
+      title: '24/7 Threat Monitoring',
+      description: 'Round-the-clock security operations center monitoring your infrastructure with instant threat response.',
+      icon: <Wifi className="h-6 w-6" />,
+      route: '/threat-monitoring',
+      color: 'text-orange-400'
+    }
+  ];
 
   if (isLoading) {
     return (
@@ -198,6 +246,14 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        mode={authMode}
+        onModeChange={setAuthMode}
+      />
+
       {/* Authentication Header */}
       <header className="fixed top-0 right-0 z-50 p-4">
         {isAuthenticated ? (
@@ -290,14 +346,52 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Services Section */}
-      <section className="py-20 px-4 max-w-6xl mx-auto" id="services" aria-label="Our Services">
+      {/* Cybersecurity Services Section - Matching the Image */}
+      <section className="py-20 px-4 max-w-6xl mx-auto" id="services" aria-label="Cybersecurity Services">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
+            <TypingText text="./security_services" speed={120} />
+          </h2>
+          <p className="text-muted-foreground text-lg">
+            Advanced cybersecurity solutions powered by cutting-edge technology
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" role="list">
+          {securityServices.map((service) => (
+            <div key={service.id} role="listitem">
+              <Button
+                onClick={() => navigate(service.route)}
+                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
+                variant="ghost"
+              >
+                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-blue-500/20 rounded-lg hover:border-blue-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/20">
+                  <div className="flex items-center mb-4">
+                    <div className={`${service.color} mr-3`}>
+                      {service.icon}
+                    </div>
+                    <h3 className={`text-lg font-bold ${service.color} text-left`}>
+                      {service.title}
+                    </h3>
+                  </div>
+                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
+                    {service.description}
+                  </p>
+                </div>
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Traditional Services Section */}
+      <section className="py-20 px-4 max-w-6xl mx-auto" aria-label="Our Services">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
             <TypingText text="./services" speed={120} />
           </h2>
           <p className="text-muted-foreground text-lg">
-            Advanced digital solutions powered by cutting-edge technology
+            Complete digital solutions for modern businesses
           </p>
         </div>
 
@@ -405,7 +499,7 @@ const Index = () => {
                 id="message"
                 value={formData.message}
                 onChange={(e) => handleInputChange('message', e.target.value)}
-                className="bg-background border-border text-foreground min-h-32"
+                className="bg-background border-border text-foreground min-h-[120px]"
                 placeholder="Describe your project requirements..."
                 required
                 aria-required="true"
@@ -413,14 +507,20 @@ const Index = () => {
               />
             </div>
             
-            <Button 
+            <Button
               type="submit"
+              size="lg"
               disabled={isSubmitting}
-              className="w-full bg-primary hover:bg-primary/80 text-primary-foreground neon-border"
-              aria-label="Submit contact form"
+              className={`w-full neon-border transition-all duration-300 hover:scale-105 ${
+                submitStatus === 'success' 
+                  ? 'bg-green-600 hover:bg-green-700' 
+                  : submitStatus === 'error'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-primary hover:bg-primary/80'
+              }`}
             >
               {isSubmitting ? (
-                <LoadingSpinner size="sm" text="" />
+                <LoadingSpinner size="sm" text="Transmitting..." />
               ) : (
                 <>
                   <Terminal className="mr-2 h-5 w-5" />
@@ -431,25 +531,9 @@ const Index = () => {
           </form>
         </TerminalWindow>
       </section>
-
-      {/* Footer */}
-      <footer className="py-8 px-4 text-center border-t border-border" role="contentinfo">
-        <p className="text-muted-foreground">
-          © 2024 ETERNYX • <span className="text-cyber-green">System Online</span> • 
-          <span className="text-xs ml-2">
-            Secured by AI • Analytics Enabled • Performance Optimized
-          </span>
-        </p>
-      </footer>
-
-      {/* Authentication Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        defaultMode={authMode}
-      />
     </div>
   );
 };
 
 export default Index;
+
