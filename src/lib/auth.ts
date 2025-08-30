@@ -1,5 +1,10 @@
-import { supabase, supabaseAPI } from './supabase';
-import { User } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
+
+// Supabase configuration - REPLACE WITH YOUR ACTUAL SUPABASE PROJECT URL AND ANON KEY
+const SUPABASE_URL = 'https://wcncuarekaofmfurbtbh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjbmN1YXJla2FvZm1mdXJidGJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzMzgwMDMsImV4cCI6MjA3MTkxNDAwM30.BWyv1LRIwjHMnNS-bsNy3BgXT6fpRrsBzmRelAstp00';
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export interface UserProfile {
   id: string;
@@ -58,14 +63,20 @@ export class AuthService {
   // Authentication methods
   async signUp(email: string, password: string, username: string) {
     try {
-      const { data, error } = await supabaseAPI.signUp(email, password, {
-        username,
-        access_level: 'basic',
-        preferences: {
-          theme: 'cyberpunk',
-          notifications: true,
-          analytics: true,
-          sound_effects: true
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+            access_level: 'basic',
+            preferences: {
+              theme: 'cyberpunk',
+              notifications: true,
+              analytics: true,
+              sound_effects: true
+            }
+          }
         }
       });
 
@@ -84,7 +95,10 @@ export class AuthService {
 
   async signIn(email: string, password: string) {
     try {
-      const { data, error } = await supabaseAPI.signIn(email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) throw error;
 
       return { success: true, error: null };
@@ -95,7 +109,8 @@ export class AuthService {
 
   async signOut() {
     try {
-      await supabaseAPI.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       this.currentUser = null;
       this.userProfile = null;
       return { success: true, error: null };
@@ -171,7 +186,7 @@ export class AuthService {
         .from('user_profiles')
         .update({ 
           last_login: new Date().toISOString(),
-          'stats.login_count': supabase.sql`stats->>'login_count'::int + 1`
+          'stats.login_count': (this.userProfile?.stats?.login_count || 0) + 1
         })
         .eq('id', this.currentUser.id);
     } catch (error) {
@@ -271,4 +286,6 @@ export class AuthService {
 
 // Export singleton instance
 export const authService = new AuthService();
+
+
 
