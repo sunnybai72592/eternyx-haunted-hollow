@@ -186,14 +186,14 @@ const Index = () => {
         
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
           <h1 
-            className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold mb-6 glitch neon-text"
+            className="text-8xl md:text-9xl font-bold mb-6 glitch neon-text"
             data-text="ETERNYX"
             aria-label="ETERNYX - Full Stack Development and Cybersecurity"
           >
             ETERNYX
           </h1>
           
-          <div className="text-sm sm:text-lg md:text-xl lg:text-2xl mb-8 h-8 sm:h-10 md:h-12" aria-live="polite">
+          <div className="text-xl md:text-2xl mb-8 h-12" aria-live="polite">
             <TypingText 
               text="Full Stack Development • Cybersecurity • Digital Innovation"
               speed={80}
@@ -204,7 +204,7 @@ const Index = () => {
           <Button 
             size="lg" 
             onClick={handleInitializeConnection}
-            className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow px-6 py-3 min-h-[48px] text-base sm:text-lg"
+            className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow"
             aria-label="Initialize secure connection to premium services"
           >
             <Terminal className="mr-2 h-5 w-5" />
@@ -224,7 +224,7 @@ const Index = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8" role="list">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8" role="list">
           <div role="listitem">
             <CyberCard
               title="Full Stack Development"
@@ -281,7 +281,7 @@ const Index = () => {
 
         <TerminalWindow title="contact-form.exe">
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="name" className="block text-cyber-green mb-2">
                   <User className="inline mr-2 h-4 w-4" />
@@ -339,7 +339,7 @@ const Index = () => {
             <Button 
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-primary hover:bg-primary/80 text-primary-foreground neon-border min-h-[48px] text-base sm:text-lg px-6 py-3"
+              className="w-full bg-primary hover:bg-primary/80 text-primary-foreground neon-border"
               aria-label="Submit contact form"
             >
               {isSubmitting ? (
