@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserProfile } from '@/components/auth/UserProfile';
 import { TerminalWindow } from '@/components/TerminalWindow';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import CyberMetrics from '@/components/CyberMetrics';
+import HolographicCard from '@/components/HolographicCard';
+import AdvancedTerminal from '@/components/AdvancedTerminal';
 import { useAuthStore } from '@/store/authStore';
+import { useAppStore } from '@/store/useAppStore';
 import {
   Activity,
   Shield,
@@ -24,7 +29,22 @@ import {
   Settings,
   LogOut,
   ChevronRight,
-  Star
+  Star,
+  Cpu,
+  HardDrive,
+  Wifi,
+  Eye,
+  AlertTriangle,
+  BarChart3,
+  PieChart,
+  LineChart,
+  Monitor,
+  Server,
+  Lock,
+  Unlock,
+  Scan,
+  Bug,
+  Wrench
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -47,9 +67,11 @@ interface RecentActivity {
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, profile, isAuthenticated, signOut } = useAuthStore();
+  const { addNotification } = useAppStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -66,12 +88,12 @@ const Dashboard = () => {
       
       // Mock data - in real app, this would come from your backend
       setStats({
-        projectsCreated: profile?.stats?.projects_created || 0,
-        totalLogins: profile?.stats?.login_count || 1,
+        projectsCreated: profile?.stats?.projects_created || 12,
+        totalLogins: profile?.stats?.login_count || 247,
         lastActivity: profile?.stats?.last_activity || new Date().toISOString(),
         securityScore: 95,
         performanceRating: 88,
-        accessLevel: profile?.access_level || 'basic'
+        accessLevel: profile?.access_level || 'elite'
       });
 
       setRecentActivity([
@@ -95,6 +117,20 @@ const Dashboard = () => {
           description: 'System optimization completed',
           timestamp: new Date(Date.now() - 7200000).toISOString(),
           status: 'success'
+        },
+        {
+          id: '4',
+          type: 'project',
+          description: 'New cybersecurity project initialized',
+          timestamp: new Date(Date.now() - 10800000).toISOString(),
+          status: 'success'
+        },
+        {
+          id: '5',
+          type: 'security',
+          description: 'Firewall rules updated',
+          timestamp: new Date(Date.now() - 14400000).toISOString(),
+          status: 'warning'
         }
       ]);
 
@@ -104,305 +140,385 @@ const Dashboard = () => {
     loadDashboardData();
   }, [isAuthenticated, navigate, profile]);
 
-  const getAccessLevelColor = (level: string) => {
-    switch (level) {
-      case 'elite':
-        return 'text-yellow-500';
-      case 'premium':
-        return 'text-blue-500';
-      default:
-        return 'text-green-500';
-    }
-  };
-
-  const getAccessLevelIcon = (level: string) => {
-    switch (level) {
-      case 'elite':
-        return <Crown className="h-5 w-5 text-yellow-500" />;
-      case 'premium':
-        return <Zap className="h-5 w-5 text-blue-500" />;
-      default:
-        return <Shield className="h-5 w-5 text-green-500" />;
-    }
-  };
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'login':
-        return <Terminal className="h-4 w-4" />;
-      case 'project':
-        return <Code className="h-4 w-4" />;
-      case 'security':
-        return <Shield className="h-4 w-4" />;
-      default:
-        return <Activity className="h-4 w-4" />;
-    }
-  };
-
-  const getActivityColor = (status: string) => {
-    switch (status) {
-      case 'success':
-        return 'text-green-500';
-      case 'warning':
-        return 'text-yellow-500';
-      case 'error':
-        return 'text-red-500';
-      default:
-        return 'text-muted-foreground';
-    }
-  };
-
-  const formatTimeAgo = (timestamp: string) => {
-    const now = new Date();
-    const time = new Date(timestamp);
-    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
-  };
-
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
+    try {
+      await signOut();
+      addNotification({
+        type: 'success',
+        message: 'Successfully logged out'
+      });
+      navigate('/');
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: 'Error logging out'
+      });
+    }
+  };
+
+  const getAccessLevelColor = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'elite': return 'text-cyber-green border-cyber-green';
+      case 'premium': return 'text-cyber-blue border-cyber-blue';
+      case 'basic': return 'text-yellow-400 border-yellow-400';
+      default: return 'text-muted-foreground border-muted-foreground';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'success': return <Shield className="h-4 w-4 text-cyber-green" />;
+      case 'warning': return <AlertTriangle className="h-4 w-4 text-yellow-400" />;
+      case 'error': return <Bug className="h-4 w-4 text-red-400" />;
+      default: return <Activity className="h-4 w-4 text-cyber-blue" />;
+    }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString();
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <LoadingSpinner variant="cyber" text="Initializing dashboard..." />
+        <LoadingSpinner variant="cyber" text="Loading ETERNYX Dashboard..." />
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Dashboard Error</h2>
+          <p className="text-muted-foreground">Failed to load dashboard data</p>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background matrix-bg">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/')}
-              className="text-primary hover:text-primary/80"
-            >
-              <Terminal className="mr-2 h-5 w-5" />
-              ETERNYX
-            </Button>
-            <div className="hidden sm:block text-muted-foreground">
-              / Dashboard
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-cyber-green neon-text">
+                ETERNYX DASHBOARD
+              </h1>
+              <Badge className={`${getAccessLevelColor(stats.accessLevel)} bg-transparent`}>
+                <Crown className="h-3 w-3 mr-1" />
+                {stats.accessLevel.toUpperCase()}
+              </Badge>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <UserProfile />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="border-red-400/40 text-red-400 hover:bg-red-400/10"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Exit
+              </Button>
             </div>
           </div>
-          
-          <UserProfile />
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Welcome Section */}
-        <div className="space-y-4">
-          <TerminalWindow title="system-status.exe">
-            <div className="space-y-2">
-              <div className="text-cyber-green text-lg font-bold">
-                Welcome back, {profile?.username}
-              </div>
-              <div className="text-muted-foreground">
-                System Status: <span className="text-green-500">ONLINE</span> • 
-                Security Level: <span className="text-green-500">SECURE</span> • 
-                Access Level: <span className={getAccessLevelColor(stats?.accessLevel || 'basic')}>
-                  {stats?.accessLevel?.toUpperCase()}
-                </span>
-              </div>
-            </div>
-          </TerminalWindow>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6 bg-card/50 backdrop-blur-sm">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-cyber-green/20 data-[state=active]:text-cyber-green">
+              <Monitor className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="metrics" className="data-[state=active]:bg-cyber-blue/20 data-[state=active]:text-cyber-blue">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Metrics
+            </TabsTrigger>
+            <TabsTrigger value="security" className="data-[state=active]:bg-red-400/20 data-[state=active]:text-red-400">
+              <Shield className="h-4 w-4 mr-2" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="data-[state=active]:bg-purple-400/20 data-[state=active]:text-purple-400">
+              <Code className="h-4 w-4 mr-2" />
+              Projects
+            </TabsTrigger>
+            <TabsTrigger value="terminal" className="data-[state=active]:bg-yellow-400/20 data-[state=active]:text-yellow-400">
+              <Terminal className="h-4 w-4 mr-2" />
+              Terminal
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-cyan-400/20 data-[state=active]:text-cyan-400">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="cyber-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Access Level</CardTitle>
-              {getAccessLevelIcon(stats?.accessLevel || 'basic')}
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${getAccessLevelColor(stats?.accessLevel || 'basic')}`}>
-                {stats?.accessLevel?.toUpperCase()}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Network clearance level
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="cyber-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Projects</CardTitle>
-              <Code className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.projectsCreated}</div>
-              <p className="text-xs text-muted-foreground">
-                Total projects created
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="cyber-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Security Score</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-500">{stats?.securityScore}%</div>
-              <Progress value={stats?.securityScore} className="mt-2" />
-            </CardContent>
-          </Card>
-
-          <Card className="cyber-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Performance</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-500">{stats?.performanceRating}%</div>
-              <Progress value={stats?.performanceRating} className="mt-2" />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Recent Activity */}
-          <div className="lg:col-span-2">
-            <Card className="cyber-card">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Activity className="mr-2 h-5 w-5" />
-                  Recent Activity
-                </CardTitle>
-                <CardDescription>
-                  Your latest system interactions and events
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-center space-x-4 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
-                      <div className={`${getActivityColor(activity.status)}`}>
-                        {getActivityIcon(activity.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">
-                          {activity.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTimeAgo(activity.timestamp)}
-                        </p>
-                      </div>
-                      <Badge variant={activity.status === 'success' ? 'default' : 'destructive'}>
-                        {activity.status}
-                      </Badge>
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <HolographicCard title="Projects" variant="primary" animated>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold text-cyber-green font-mono">
+                      {stats.projectsCreated}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="space-y-6">
-            <Card className="cyber-card">
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>
-                  Frequently used operations
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button className="w-full justify-start" variant="outline">
-                  <Code className="mr-2 h-4 w-4" />
-                  New Project
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Database className="mr-2 h-4 w-4" />
-                  Database Access
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Globe className="mr-2 h-4 w-4" />
-                  Deploy Service
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Settings className="mr-2 h-4 w-4" />
-                  System Config
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Account Info */}
-            <Card className="cyber-card">
-              <CardHeader>
-                <CardTitle>Account Status</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Total Logins</span>
-                  <span className="font-bold">{stats?.totalLogins}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Member Since</span>
-                  <span className="font-bold">
-                    {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Last Login</span>
-                  <span className="font-bold">
-                    {stats?.lastActivity ? formatTimeAgo(stats.lastActivity) : 'N/A'}
-                  </span>
-                </div>
-                
-                {stats?.accessLevel === 'basic' && (
-                  <div className="pt-4 border-t border-border">
-                    <Button className="w-full" variant="outline">
-                      <Crown className="mr-2 h-4 w-4" />
-                      Upgrade Access
-                    </Button>
+                    <p className="text-sm text-muted-foreground">Active Projects</p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                  <Code className="h-8 w-8 text-cyber-green/60" />
+                </div>
+              </HolographicCard>
 
-        {/* System Information */}
-        <Card className="cyber-card">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Terminal className="mr-2 h-5 w-5" />
-              System Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TerminalWindow title="system-info.log">
-              <div className="space-y-1 text-xs font-mono">
-                <div className="text-cyber-green">$ system --status</div>
-                <div>ETERNYX Network v2.1.0</div>
-                <div>User ID: {user?.id}</div>
-                <div>Session: Active</div>
-                <div>Encryption: AES-256</div>
-                <div>Firewall: Enabled</div>
-                <div>Intrusion Detection: Active</div>
-                <div className="text-green-500">All systems operational</div>
-                <div className="text-cyber-green animate-pulse">$</div>
+              <HolographicCard title="Security Score" variant="secondary" animated>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold text-cyber-blue font-mono">
+                      {stats.securityScore}%
+                    </div>
+                    <p className="text-sm text-muted-foreground">System Security</p>
+                  </div>
+                  <Shield className="h-8 w-8 text-cyber-blue/60" />
+                </div>
+              </HolographicCard>
+
+              <HolographicCard title="Performance" variant="success" animated>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold text-emerald-400 font-mono">
+                      {stats.performanceRating}%
+                    </div>
+                    <p className="text-sm text-muted-foreground">System Performance</p>
+                  </div>
+                  <Zap className="h-8 w-8 text-emerald-400/60" />
+                </div>
+              </HolographicCard>
+
+              <HolographicCard title="Total Logins" variant="danger" animated>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold text-red-400 font-mono">
+                      {stats.totalLogins}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Access Count</p>
+                  </div>
+                  <Users className="h-8 w-8 text-red-400/60" />
+                </div>
+              </HolographicCard>
+            </div>
+
+            {/* Recent Activity */}
+            <HolographicCard title="Recent Activity" animated>
+              <div className="space-y-4">
+                {recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-center justify-between p-3 bg-card/30 rounded border border-primary/20">
+                    <div className="flex items-center space-x-3">
+                      {getStatusIcon(activity.status)}
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground">{formatTimestamp(activity.timestamp)}</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={`text-xs ${
+                      activity.status === 'success' ? 'border-cyber-green text-cyber-green' :
+                      activity.status === 'warning' ? 'border-yellow-400 text-yellow-400' :
+                      'border-red-400 text-red-400'
+                    }`}>
+                      {activity.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                ))}
               </div>
-            </TerminalWindow>
-          </CardContent>
-        </Card>
+            </HolographicCard>
+          </TabsContent>
+
+          {/* Metrics Tab */}
+          <TabsContent value="metrics" className="space-y-6">
+            <CyberMetrics />
+          </TabsContent>
+
+          {/* Security Tab */}
+          <TabsContent value="security" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <HolographicCard title="Security Status" variant="danger" animated>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Firewall Status</span>
+                    <Badge className="bg-cyber-green/20 text-cyber-green">ACTIVE</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Intrusion Detection</span>
+                    <Badge className="bg-cyber-blue/20 text-cyber-blue">MONITORING</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Encryption Level</span>
+                    <Badge className="bg-purple-400/20 text-purple-400">AES-256</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Last Security Scan</span>
+                    <span className="text-xs text-muted-foreground">2 hours ago</span>
+                  </div>
+                </div>
+              </HolographicCard>
+
+              <HolographicCard title="Threat Analysis" variant="danger" animated>
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-cyber-green font-mono mb-2">0</div>
+                    <p className="text-sm text-muted-foreground">Active Threats</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-cyber-blue font-mono">1,247</div>
+                      <p className="text-xs text-muted-foreground">Blocked</p>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-yellow-400 font-mono">23</div>
+                      <p className="text-xs text-muted-foreground">Quarantined</p>
+                    </div>
+                  </div>
+                </div>
+              </HolographicCard>
+            </div>
+
+            <HolographicCard title="Security Logs" animated>
+              <TerminalWindow title="security-monitor.log">
+                <div className="space-y-1 text-xs">
+                  <div className="text-cyber-green">[{new Date().toLocaleTimeString()}] Firewall: Connection blocked from 192.168.1.100</div>
+                  <div className="text-cyber-blue">[{new Date(Date.now() - 60000).toLocaleTimeString()}] IDS: Scanning network traffic...</div>
+                  <div className="text-yellow-400">[{new Date(Date.now() - 120000).toLocaleTimeString()}] Auth: Failed login attempt detected</div>
+                  <div className="text-cyber-green">[{new Date(Date.now() - 180000).toLocaleTimeString()}] System: Security scan completed successfully</div>
+                </div>
+              </TerminalWindow>
+            </HolographicCard>
+          </TabsContent>
+
+          {/* Projects Tab */}
+          <TabsContent value="projects" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <HolographicCard title="CyberDefense Suite" variant="primary" animated>
+                <div className="space-y-3">
+                  <Badge className="bg-cyber-green/20 text-cyber-green">ACTIVE</Badge>
+                  <p className="text-sm text-muted-foreground">Advanced threat detection and response system</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span>Progress</span>
+                    <span>85%</span>
+                  </div>
+                  <Progress value={85} className="h-2" />
+                </div>
+              </HolographicCard>
+
+              <HolographicCard title="Neural Network AI" variant="secondary" animated>
+                <div className="space-y-3">
+                  <Badge className="bg-cyber-blue/20 text-cyber-blue">DEVELOPMENT</Badge>
+                  <p className="text-sm text-muted-foreground">Machine learning security analysis</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span>Progress</span>
+                    <span>62%</span>
+                  </div>
+                  <Progress value={62} className="h-2" />
+                </div>
+              </HolographicCard>
+
+              <HolographicCard title="Quantum Encryption" variant="success" animated>
+                <div className="space-y-3">
+                  <Badge className="bg-emerald-400/20 text-emerald-400">TESTING</Badge>
+                  <p className="text-sm text-muted-foreground">Next-gen quantum-resistant encryption</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span>Progress</span>
+                    <span>94%</span>
+                  </div>
+                  <Progress value={94} className="h-2" />
+                </div>
+              </HolographicCard>
+            </div>
+          </TabsContent>
+
+          {/* Terminal Tab */}
+          <TabsContent value="terminal" className="space-y-6">
+            <AdvancedTerminal 
+              title="ETERNYX-COMMAND-CENTER"
+              onCommand={(cmd) => {
+                addNotification({
+                  type: 'info',
+                  message: `Command executed: ${cmd}`
+                });
+              }}
+            />
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <HolographicCard title="System Preferences" variant="primary" animated>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Dark Mode</span>
+                    <Badge className="bg-cyber-green/20 text-cyber-green">ENABLED</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Animations</span>
+                    <Badge className="bg-cyber-blue/20 text-cyber-blue">ENABLED</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Sound Effects</span>
+                    <Badge className="bg-yellow-400/20 text-yellow-400">DISABLED</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Auto-Save</span>
+                    <Badge className="bg-cyber-green/20 text-cyber-green">ENABLED</Badge>
+                  </div>
+                </div>
+              </HolographicCard>
+
+              <HolographicCard title="Security Settings" variant="danger" animated>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Two-Factor Auth</span>
+                    <Badge className="bg-cyber-green/20 text-cyber-green">ENABLED</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Session Timeout</span>
+                    <span className="text-xs text-muted-foreground">30 minutes</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Login Notifications</span>
+                    <Badge className="bg-cyber-blue/20 text-cyber-blue">ENABLED</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">API Access</span>
+                    <Badge className="bg-red-400/20 text-red-400">RESTRICTED</Badge>
+                  </div>
+                </div>
+              </HolographicCard>
+            </div>
+
+            <HolographicCard title="Advanced Configuration" animated>
+              <TerminalWindow title="config.json">
+                <pre className="text-xs text-cyber-green">
+{`{
+  "theme": "cyberpunk",
+  "security_level": "maximum",
+  "encryption": "AES-256",
+  "logging": "verbose",
+  "auto_backup": true,
+  "session_timeout": 1800,
+  "max_login_attempts": 3,
+  "firewall_enabled": true
+}`}
+                </pre>
+              </TerminalWindow>
+            </HolographicCard>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

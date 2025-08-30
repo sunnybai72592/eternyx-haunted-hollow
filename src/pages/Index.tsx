@@ -23,6 +23,8 @@ import { cacheService } from "@/lib/cacheService";
 const Index = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user, profile, initialize } = useAuthStore();
+  const { addNotification } = useAppStore();
+  const { measureApiCall, trackError } = usePerformanceMonitor();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [formData, setFormData] = useState({
@@ -34,7 +36,14 @@ const Index = () => {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const { announceToScreenReader } = useAccessibility();
   
-  usePerformanceMonitor();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate loading time or actual data fetching
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+  }, []);
 
   // Initialize auth on component mount
   useEffect(() => {

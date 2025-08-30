@@ -42,7 +42,7 @@ export const LoginForm = ({ onSuccess, onSwitchToSignup }: LoginFormProps) => {
     if (result.success) {
       onSuccess?.();
     } else {
-      setErrors({ general: result.error?.message || 'Login failed' });
+      setErrors({ general: result.error || 'Login failed' });
     }
   };
 
