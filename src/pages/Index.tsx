@@ -19,13 +19,7 @@ import {
   User, 
   MessageSquare, 
   LogIn, 
-  UserPlus,
-  Skull,
-  AlertTriangle,
-  Diamond,
-  Eye,
-  Users,
-  Wifi
+  UserPlus
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuthStore } from "@/store/authStore";
@@ -173,56 +167,6 @@ const Index = () => {
   };
 
   // Cybersecurity services from the image
-  const securityServices = [
-    {
-      id: 'black-hat-pentesting',
-      title: 'Black Hat Pentesting',
-      description: 'Advanced penetration testing using cutting-edge techniques. We think like attackers to protect your systems from real threats.',
-      icon: <Skull className="h-6 w-6" />,
-      route: '/black-hat-pentesting',
-      color: 'text-red-400'
-    },
-    {
-      id: 'zero-day-protection',
-      title: 'Zero-Day Protection',
-      description: 'Stay ahead of unknown threats with our proprietary detection systems and real-time threat intelligence feeds.',
-      icon: <AlertTriangle className="h-6 w-6" />,
-      route: '/zero-day-protection',
-      color: 'text-yellow-400'
-    },
-    {
-      id: 'quantum-encryption',
-      title: 'Quantum-Ready Encryption',
-      description: 'Future-proof your data with quantum-resistant encryption algorithms and next-generation security protocols.',
-      icon: <Diamond className="h-6 w-6" />,
-      route: '/quantum-encryption',
-      color: 'text-purple-400'
-    },
-    {
-      id: 'ai-security',
-      title: 'AI-Powered Security',
-      description: 'Machine learning algorithms that adapt to new threats in real-time, providing predictive security measures.',
-      icon: <Eye className="h-6 w-6" />,
-      route: '/ai-powered-security',
-      color: 'text-blue-400'
-    },
-    {
-      id: 'elite-team',
-      title: 'Elite Development Team',
-      description: 'Access to our top-tier developers for mission-critical applications that require the highest security standards.',
-      icon: <Users className="h-6 w-6" />,
-      route: '/elite-development-team',
-      color: 'text-green-400'
-    },
-    {
-      id: 'threat-monitoring',
-      title: '24/7 Threat Monitoring',
-      description: 'Round-the-clock security operations center monitoring your infrastructure with instant threat response.',
-      icon: <Wifi className="h-6 w-6" />,
-      route: '/threat-monitoring',
-      color: 'text-orange-400'
-    }
-  ];
 
   if (isLoading) {
     return (
@@ -334,43 +278,123 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Cybersecurity Services Section - Matching the Image */}
-      <section className="py-20 px-4 max-w-6xl mx-auto" id="services" aria-label="Cybersecurity Services">
+      {/* Cybersecurity Navigation Section */}
+      <section className="py-20 px-4 max-w-6xl mx-auto" id="cybersecurity" aria-label="Cybersecurity Services">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
-            <TypingText text="./security_services" speed={120} />
+            <TypingText text="./cybersecurity" speed={120} />
           </h2>
           <p className="text-muted-foreground text-lg">
             Advanced cybersecurity solutions powered by cutting-edge technology
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" role="list">
-          {securityServices.map((service) => (
-            <div key={service.id} role="listitem">
+        <div className="flex justify-center">
+          <Button
+            onClick={() => navigate('/services')}
+            className="bg-gradient-to-r from-red-600 to-purple-600 hover:from-red-700 hover:to-purple-700 text-white font-bold py-6 px-12 rounded-lg text-xl neon-border transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/20"
+          >
+            <Shield className="mr-3 h-8 w-8" />
+            Access Cybersecurity Services
+          </Button>
+        </div>
+      </section>
+
+      {/* Advanced Features Navigation */}
+      {isAuthenticated && (
+        <section className="py-20 px-4 max-w-6xl mx-auto" aria-label="Advanced Features">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
+              <TypingText text="./advanced_features" speed={120} />
+            </h2>
+            <p className="text-muted-foreground text-lg">
+              Access your personalized dashboard and advanced tools
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
+            <div role="listitem">
               <Button
-                onClick={() => navigate(service.route)}
+                onClick={() => navigate('/profile')}
+                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
+                variant="ghost"
+              >
+                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-green-500/20 rounded-lg hover:border-green-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-green-500/20">
+                  <div className="flex items-center mb-4">
+                    <User className="h-6 w-6 text-green-400 mr-3" />
+                    <h3 className="text-lg font-bold text-green-400 text-left">
+                      User Profile
+                    </h3>
+                  </div>
+                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
+                    Manage your account settings, avatar, and personal information
+                  </p>
+                </div>
+              </Button>
+            </div>
+
+            <div role="listitem">
+              <Button
+                onClick={() => navigate('/settings')}
                 className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
                 variant="ghost"
               >
                 <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-blue-500/20 rounded-lg hover:border-blue-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/20">
                   <div className="flex items-center mb-4">
-                    <div className={`${service.color} mr-3`}>
-                      {service.icon}
-                    </div>
-                    <h3 className={`text-lg font-bold ${service.color} text-left`}>
-                      {service.title}
+                    <Zap className="h-6 w-6 text-blue-400 mr-3" />
+                    <h3 className="text-lg font-bold text-blue-400 text-left">
+                      Settings
                     </h3>
                   </div>
                   <p className="text-muted-foreground text-sm text-left leading-relaxed">
-                    {service.description}
+                    Configure preferences, themes, notifications, and privacy settings
                   </p>
                 </div>
               </Button>
             </div>
-          ))}
-        </div>
-      </section>
+
+            <div role="listitem">
+              <Button
+                onClick={() => navigate('/dashboard')}
+                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
+                variant="ghost"
+              >
+                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-purple-500/20 rounded-lg hover:border-purple-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20">
+                  <div className="flex items-center mb-4">
+                    <Terminal className="h-6 w-6 text-purple-400 mr-3" />
+                    <h3 className="text-lg font-bold text-purple-400 text-left">
+                      Dashboard
+                    </h3>
+                  </div>
+                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
+                    Access your personalized control center and analytics
+                  </p>
+                </div>
+              </Button>
+            </div>
+
+            <div role="listitem">
+              <Button
+                onClick={() => navigate('/tools')}
+                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
+                variant="ghost"
+              >
+                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-orange-500/20 rounded-lg hover:border-orange-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/20">
+                  <div className="flex items-center mb-4">
+                    <Code className="h-6 w-6 text-orange-400 mr-3" />
+                    <h3 className="text-lg font-bold text-orange-400 text-left">
+                      Tools Hub
+                    </h3>
+                  </div>
+                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
+                    Access advanced cybersecurity and development tools
+                  </p>
+                </div>
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Traditional Services Section */}
       <section className="py-20 px-4 max-w-6xl mx-auto" aria-label="Our Services">
