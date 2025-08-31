@@ -44,7 +44,10 @@ const Index = () => {
   const { addNotification } = useAppStore();
   const { measureApiCall, trackError } = usePerformanceMonitor();
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authMode, setAuthMode] = useState<
+    | 'login'
+    | 'signup'
+  >('login');
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -57,7 +60,11 @@ const Index = () => {
     timeline: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<
+    | 'idle'
+    | 'success'
+    | 'error'
+  >('idle');
   const { announceToScreenReader } = useAccessibility();
   
   const [isLoading, setIsLoading] = useState(true);
@@ -407,165 +414,161 @@ const Index = () => {
           <div className="space-y-2">
             <div className="text-cyber-green">$ cat tech_stack.txt</div>
             <div className="text-foreground">
-              <div>Frontend: React • TypeScript • Next.js • Tailwind CSS</div>
-              <div>Backend: Node.js • Python • PostgreSQL • Redis</div>
-              <div>Cloud: AWS • Docker • Kubernetes • Terraform</div>
-              <div>Security: OWASP • Pentesting • Encryption • Zero Trust</div>
-              <div>AI/ML: OpenAI • TensorFlow • PyTorch • Analytics</div>
+              <div>Frontend: React, TypeScript, Vite, TailwindCSS</div>
+              <div>Backend: Node.js, Express, PostgreSQL</div>
+              <div>DevOps: Docker, GitHub Actions, Vercel</div>
             </div>
-            <div className="text-cyber-green typing-cursor">$ _</div>
           </div>
         </TerminalWindow>
       </section>
 
       {/* Contact Section */}
-      <section className="py-20 px-4 max-w-4xl mx-auto" id="contact" aria-label="Contact Form">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
-            <TypingText text="./contact" speed={120} />
-          </h2>
-          <p className="text-muted-foreground text-lg">
-            Ready to build something extraordinary?
-          </p>
-        </div>
-
-        <TerminalWindow title="contact-form.exe">
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+      <section className="py-20 px-4 max-w-4xl mx-auto" aria-label="Contact Form">
+        <TerminalWindow title="contact-form.sh" className="mb-8">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="name" className="block text-cyber-green mb-2">
-                  <User className="inline mr-2 h-4 w-4" />
-                  Name:
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-muted-foreground flex items-center">
+                  <User className="mr-2 h-4 w-4" /> Name:
                 </label>
-            <Input
-              type="text"
-              placeholder="Enter your name..."
-              value={formData.name}
-              onChange={(e) => handleInputChange("name", e.target.value)}
-              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-              aria-label="Name"
-            />
-          </div>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Your Name"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange("name", e.target.value)}
+                  className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                  aria-label="Name"
+                  required
+                  aria-required="true"
+                />
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-muted-foreground flex items-center">
-                <Mail className="mr-2 h-4 w-4" /> Email:
-              </label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={formData.email}
-                onChange={(e) => handleInputChange("email", e.target.value)}
-                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-                aria-label="Email"
-              />
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-muted-foreground flex items-center">
+                  <Mail className="mr-2 h-4 w-4" /> Email:
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                  aria-label="Email"
+                  required
+                  aria-required="true"
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
-              <label htmlFor="phone" className="text-muted-foreground flex items-center">
-                <Phone className="mr-2 h-4 w-4" /> Phone (Optional):
+              <label htmlFor="subject" className="text-muted-foreground flex items-center">
+                <Wrench className="mr-2 h-4 w-4" /> Subject:
               </label>
               <Input
-                id="phone"
-                type="tel"
-                placeholder="(123) 456-7890"
-                value={formData.phone}
-                onChange={(e) => handleInputChange("phone", e.target.value)}
-                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-                aria-label="Phone Number"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="company" className="text-muted-foreground flex items-center">
-              <Building className="mr-2 h-4 w-4" /> Company (Optional):
-            </label>
-            <Input
-              id="company"
-              type="text"
-              placeholder="Your Company Name"
-              value={formData.company}
-              onChange={(e) => handleInputChange("company", e.target.value)}
-              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-              aria-label="Company Name"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="subject" className="text-muted-foreground flex items-center">
-              <MessageSquare className="mr-2 h-4 w-4" /> Subject:
-            </label>
-            <Input
-              id="subject"
-              type="text"
-              placeholder="Briefly describe your inquiry"
-              value={formData.subject}
-              onChange={(e) => handleInputChange("subject", e.target.value)}
-              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-              aria-label="Subject"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="service" className="text-muted-foreground flex items-center">
-                <Zap className="mr-2 h-4 w-4" /> Service Interested In (Optional):
-              </label>
-              <Input
-                id="service"
+                id="subject"
                 type="text"
-                placeholder="e.g., Cybersecurity, Web Dev"
+                placeholder="Project Inquiry, Support, etc."
+                value={formData.subject}
+                onChange={(e) => handleInputChange("subject", e.target.value)}
+                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                aria-label="Subject"
+                required
+                aria-required="true"
+              />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="company" className="text-muted-foreground flex items-center">
+                  <Building className="mr-2 h-4 w-4" /> Company (Optional):
+                </label>
+                <Input
+                  id="company"
+                  type="text"
+                  placeholder="Your Company Name"
+                  value={formData.company}
+                  onChange={(e) => handleInputChange("company", e.target.value)}
+                  className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                  aria-label="Company"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="phone" className="text-muted-foreground flex items-center">
+                  <Phone className="mr-2 h-4 w-4" /> Phone (Optional):
+                </label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="e.g., +1 (555) 123-4567"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                  aria-label="Phone"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="service_interested" className="text-muted-foreground flex items-center">
+                <Code className="mr-2 h-4 w-4" /> Service Interested In (Optional):
+              </label>
+              <Input
+                id="service_interested"
+                type="text"
+                placeholder="e.g., Full Stack Development, Cybersecurity"
                 value={formData.service_interested}
                 onChange={(e) => handleInputChange("service_interested", e.target.value)}
                 className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
                 aria-label="Service Interested In"
               />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="budget" className="text-muted-foreground flex items-center">
-                <DollarSign className="mr-2 h-4 w-4" /> Budget Range (Optional):
-              </label>
-              <Input
-                id="budget"
-                type="text"
-                placeholder="e.g., $5000 - $10000"
-                value={formData.budget_range}
-                onChange={(e) => handleInputChange("budget_range", e.target.value)}
-                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-                aria-label="Budget Range"
-              />
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="budget_range" className="text-muted-foreground flex items-center">
+                  <DollarSign className="mr-2 h-4 w-4" /> Budget Range (Optional):
+                </label>
+                <Input
+                  id="budget_range"
+                  type="text"
+                  placeholder="e.g., $5,000 - $10,000"
+                  value={formData.budget_range}
+                  onChange={(e) => handleInputChange("budget_range", e.target.value)}
+                  className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                  aria-label="Budget Range"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="timeline" className="text-muted-foreground flex items-center">
+                  <Clock className="mr-2 h-4 w-4" /> Timeline (Optional):
+                </label>
+                <Input
+                  id="timeline"
+                  type="text"
+                  placeholder="e.g., 2-3 months"
+                  value={formData.timeline}
+                  onChange={(e) => handleInputChange("timeline", e.target.value)}
+                  className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                  aria-label="Timeline"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <label htmlFor="timeline" className="text-muted-foreground flex items-center">
-              <Clock className="mr-2 h-4 w-4" /> Timeline (Optional):
-            </label>
-            <Input
-              id="timeline"
-              type="text"
-              placeholder="e.g., 2-3 months"
-              value={formData.timeline}
-              onChange={(e) => handleInputChange("timeline", e.target.value)}
-              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
-              aria-label="Timeline"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="message" className="text-muted-foreground flex items-center">
-              <MessageSquare className="mr-2 h-4 w-4" /> Message:
-            </label>
-            <Textarea
-              id="message"
-              placeholder="Describe your project requirements..."
-              value={formData.message}
-              onChange={(e) => handleInputChange("message", e.target.value)}
-              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300 min-h-[120px]"
-              aria-label="Message"
-            />uirements..."
+            <div className="space-y-2">
+              <label htmlFor="message" className="text-muted-foreground flex items-center">
+                <MessageSquare className="mr-2 h-4 w-4" /> Message:
+              </label>
+              <Textarea
+                id="message"
+                placeholder="Describe your project requirements..."
+                value={formData.message}
+                onChange={(e) => handleInputChange("message", e.target.value)}
+                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300 min-h-[120px]"
+                aria-label="Message"
                 required
                 aria-required="true"
                 aria-describedby="message-error"
@@ -601,4 +604,5 @@ const Index = () => {
 };
 
 export default Index;
+
 

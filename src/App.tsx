@@ -29,6 +29,12 @@ const Premium = lazy(() => import("./pages/Premium"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
+const FrontendDevelopment = lazy(() => import("./pages/FrontendDevelopment"));
+const BackendDevelopment = lazy(() => import("./pages/BackendDevelopment"));
+const MobileDevelopment = lazy(() => import("./pages/MobileDevelopment"));
+const CloudSolutions = lazy(() => import("./pages/CloudSolutions"));
+const PerformanceOptimization = lazy(() => import("./pages/PerformanceOptimization"));
+const CustomSolutions = lazy(() => import("./pages/CustomSolutions"));
 
 // Enhanced platform pages
 const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"));
@@ -83,6 +89,12 @@ const App = () => {
                   <Route path="/services" element={<Services />} />
                   <Route path="/tools" element={<Tools />} />
                   <Route path="/development" element={<Development />} />
+                  <Route path="/frontend-development" element={<FrontendDevelopment />} />
+                  <Route path="/backend-development" element={<BackendDevelopment />} />
+                  <Route path="/mobile-development" element={<MobileDevelopment />} />
+                  <Route path="/cloud-solutions" element={<CloudSolutions />} />
+                  <Route path="/performance-optimization" element={<PerformanceOptimization />} />
+                  <Route path="/custom-solutions" element={<CustomSolutions />} />
                   <Route path="/innovation" element={<Innovation />} />
                   <Route path="/premium" element={<Premium />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

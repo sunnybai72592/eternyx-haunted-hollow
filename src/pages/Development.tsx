@@ -1,6 +1,7 @@
 import { Navigation } from '@/components/Navigation';
 import { MobileViewport } from '@/components/MobileViewport';
 import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 import { Code, Globe, Smartphone, Database, Cloud, Zap } from 'lucide-react';
 
 export default function Development() {
@@ -33,9 +34,11 @@ export default function Development() {
               <p className="text-muted-foreground mb-4">
                 Modern React, Vue, and Angular applications with responsive design and optimal performance.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-blue-400/20 hover:bg-blue-400/10">
-                Learn More
-              </Button>
+              <Link to="/frontend-development">
+                <Button variant="outline" size="sm" className="w-full border-blue-400/20 hover:bg-blue-400/10">
+                  Learn More
+                </Button>
+              </Link>
             </div>
 
             <div className="mobile-card hover:border-green-400/40 transition-all duration-300">
@@ -46,9 +49,11 @@ export default function Development() {
               <p className="text-muted-foreground mb-4">
                 Scalable APIs and microservices using Node.js, Python, and cloud-native architectures.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-green-400/20 hover:bg-green-400/10">
-                Learn More
-              </Button>
+              <Link to="/backend-development">
+                <Button variant="outline" size="sm" className="w-full border-green-400/20 hover:bg-green-400/10">
+                  Learn More
+                </Button>
+              </Link>
             </div>
 
             <div className="mobile-card hover:border-purple-400/40 transition-all duration-300">
@@ -59,9 +64,11 @@ export default function Development() {
               <p className="text-muted-foreground mb-4">
                 Cross-platform mobile apps using React Native and Flutter for iOS and Android.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-purple-400/20 hover:bg-purple-400/10">
-                Learn More
-              </Button>
+              <Link to="/mobile-development">
+                <Button variant="outline" size="sm" className="w-full border-purple-400/20 hover:bg-purple-400/10">
+                  Learn More
+                </Button>
+              </Link>
             </div>
 
             <div className="mobile-card hover:border-cyan-400/40 transition-all duration-300">
@@ -72,9 +79,11 @@ export default function Development() {
               <p className="text-muted-foreground mb-4">
                 AWS, Azure, and GCP deployment with containerization and serverless architectures.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-cyan-400/20 hover:bg-cyan-400/10">
-                Learn More
-              </Button>
+              <Link to="/cloud-solutions">
+                <Button variant="outline" size="sm" className="w-full border-cyan-400/20 hover:bg-cyan-400/10">
+                  Learn More
+                </Button>
+              </Link>
             </div>
 
             <div className="mobile-card hover:border-yellow-400/40 transition-all duration-300">
@@ -85,9 +94,11 @@ export default function Development() {
               <p className="text-muted-foreground mb-4">
                 Speed optimization, SEO enhancement, and performance monitoring for web applications.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-yellow-400/20 hover:bg-yellow-400/10">
-                Learn More
-              </Button>
+              <Link to="/performance-optimization">
+                <Button variant="outline" size="sm" className="w-full border-yellow-400/20 hover:bg-yellow-400/10">
+                  Learn More
+                </Button>
+              </Link>
             </div>
 
             <div className="mobile-card hover:border-red-400/40 transition-all duration-300">
@@ -98,9 +109,11 @@ export default function Development() {
               <p className="text-muted-foreground mb-4">
                 Tailored development solutions for unique business requirements and complex challenges.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-red-400/20 hover:bg-red-400/10">
-                Learn More
-              </Button>
+              <Link to="/custom-solutions">
+                <Button variant="outline" size="sm" className="w-full border-red-400/20 hover:bg-red-400/10">
+                  Learn More
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
