@@ -193,35 +193,6 @@ const Index = () => {
         onModeChange={setAuthMode}
       />
 
-      {/* Authentication Header */}
-      <header className="fixed top-0 right-0 z-50 p-2 sm:p-4 android-safe-area">
-        {isAuthenticated ? (
-          <UserProfile className="animate-fade-in" />
-        ) : (
-          <div className="flex space-x-1 sm:space-x-2 animate-fade-in">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openAuthModal('login')}
-              className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 transition-all duration-300 hover:scale-105 text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 touch-target"
-            >
-              <LogIn className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Sign In</span>
-              <span className="xs:hidden">In</span>
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => openAuthModal('signup')}
-              className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border transition-all duration-300 hover:scale-105 text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 touch-target"
-            >
-              <UserPlus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Sign Up</span>
-              <span className="xs:hidden">Up</span>
-            </Button>
-          </div>
-        )}
-      </header>
-
       {/* Hero Section */}
       <section 
         className="relative min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat safe-area-padding pt-20 sm:pt-24"

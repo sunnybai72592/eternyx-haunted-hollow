@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { CombinedAuthButton } from '@/components/CombinedAuthButton';
+import { UserProfile } from '@/components/auth/UserProfile';
 import { 
   Home, 
   Shield, 
@@ -201,8 +203,24 @@ export const Navigation = ({ className = '' }: NavigationProps) => {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="lg:hidden">
+          {/* Desktop Authentication */}
+          <div className="hidden lg:flex items-center space-x-3">
+            {!isAuthenticated ? (
+              <CombinedAuthButton />
+            ) : (
+              <UserProfile />
+            )}
+          </div>
+
+          {/* Mobile Menu Button and Auth */}
+          <div className="lg:hidden flex items-center space-x-2">
+            {/* Authentication Button for Mobile */}
+            {!isAuthenticated ? (
+              <CombinedAuthButton className="mr-1" />
+            ) : (
+              <UserProfile className="mr-1" />
+            )}
+            
             <Button
               variant="ghost"
               size="sm"
