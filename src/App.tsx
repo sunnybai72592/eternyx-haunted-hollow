@@ -22,6 +22,9 @@ const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
 const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
 const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
 const Services = lazy(() => import("./pages/Services"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Help = lazy(() => import("./pages/Help"));
+const Profile = lazy(() => import("./pages/Profile"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,14 +56,17 @@ const App = () => {
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/help" element={<Help />} />
                   <Route path="/hacked" element={<Hacked />} />
-              <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
-              <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
-              <Route path="/quantum-encryption" element={<QuantumEncryption />} />
-              <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
-              <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
-              <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
-              <Route path="/services" element={<Services />} />
+                  <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
+                  <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
+                  <Route path="/quantum-encryption" element={<QuantumEncryption />} />
+                  <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
+                  <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
+                  <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
+                  <Route path="/services" element={<Services />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

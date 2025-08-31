@@ -14,6 +14,132 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_security_analysis: {
+        Row: {
+          analysis_type: string
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          input_data: Json
+          model_version: string | null
+          processing_time: number | null
+          results: Json
+          user_id: string | null
+        }
+        Insert: {
+          analysis_type: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          input_data: Json
+          model_version?: string | null
+          processing_time?: number | null
+          results: Json
+          user_id?: string | null
+        }
+        Update: {
+          analysis_type?: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          input_data?: Json
+          model_version?: string | null
+          processing_time?: number | null
+          results?: Json
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_security_analysis_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          api_key_encrypted: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_used: string | null
+          service_name: string
+          user_id: string | null
+        }
+        Insert: {
+          api_key_encrypted: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_used?: string | null
+          service_name: string
+          user_id?: string | null
+        }
+        Update: {
+          api_key_encrypted?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_used?: string | null
+          service_name?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          ip_address: unknown | null
+          resource_id: string | null
+          resource_type: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          resource_id?: string | null
+          resource_type?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          resource_id?: string | null
+          resource_type?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blog_posts: {
         Row: {
           author_id: string | null
@@ -83,6 +209,7 @@ export type Database = {
           subject: string
           timeline: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           assigned_to?: string | null
@@ -101,6 +228,7 @@ export type Database = {
           subject: string
           timeline?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           assigned_to?: string | null
@@ -119,8 +247,231 @@ export type Database = {
           subject?: string
           timeline?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
+      }
+      dashboard_stats: {
+        Row: {
+          access_level: Database["public"]["Enums"]["access_level"] | null
+          id: string
+          last_activity: string | null
+          performance_rating: number | null
+          projects_created: number | null
+          security_score: number | null
+          total_logins: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_level?: Database["public"]["Enums"]["access_level"] | null
+          id?: string
+          last_activity?: string | null
+          performance_rating?: number | null
+          projects_created?: number | null
+          security_score?: number | null
+          total_logins?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_level?: Database["public"]["Enums"]["access_level"] | null
+          id?: string
+          last_activity?: string | null
+          performance_rating?: number | null
+          projects_created?: number | null
+          security_score?: number | null
+          total_logins?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      encrypted_data: {
+        Row: {
+          created_at: string | null
+          data_name: string
+          encrypted_content: string
+          encryption_algorithm: string
+          id: string
+          key_id: string | null
+          original_size: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_name: string
+          encrypted_content: string
+          encryption_algorithm: string
+          id?: string
+          key_id?: string | null
+          original_size?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data_name?: string
+          encrypted_content?: string
+          encryption_algorithm?: string
+          id?: string
+          key_id?: string | null
+          original_size?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encrypted_data_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "encryption_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encrypted_data_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      encryption_keys: {
+        Row: {
+          algorithm: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_quantum_resistant: boolean | null
+          key_name: string
+          key_size: number
+          private_key_encrypted: string | null
+          public_key: string | null
+          user_id: string | null
+        }
+        Insert: {
+          algorithm: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_quantum_resistant?: boolean | null
+          key_name: string
+          key_size: number
+          private_key_encrypted?: string | null
+          public_key?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_quantum_resistant?: boolean | null
+          key_name?: string
+          key_size?: number
+          private_key_encrypted?: string | null
+          public_key?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encryption_keys_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          id: string
+          sender_id: string | null
+          thread_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          sender_id?: string | null
+          thread_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          sender_id?: string | null
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      network_traffic_analysis: {
+        Row: {
+          analysis_name: string | null
+          analysis_results: Json | null
+          analyzed_at: string | null
+          anomalies_detected: number | null
+          created_at: string | null
+          id: string
+          risk_level: string | null
+          traffic_data: Json
+          user_id: string | null
+        }
+        Insert: {
+          analysis_name?: string | null
+          analysis_results?: Json | null
+          analyzed_at?: string | null
+          anomalies_detected?: number | null
+          created_at?: string | null
+          id?: string
+          risk_level?: string | null
+          traffic_data: Json
+          user_id?: string | null
+        }
+        Update: {
+          analysis_name?: string | null
+          analysis_results?: Json | null
+          analyzed_at?: string | null
+          anomalies_detected?: number | null
+          created_at?: string | null
+          id?: string
+          risk_level?: string | null
+          traffic_data?: Json
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_traffic_analysis_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -254,68 +605,235 @@ export type Database = {
         }
         Relationships: []
       }
-      projects: {
+      project_requests: {
         Row: {
+          assigned_team_member: string | null
           budget_range: string | null
-          category: string
-          client_name: string | null
-          created_at: string
           description: string
-          end_date: string | null
-          featured: boolean | null
-          github_url: string | null
           id: string
-          image_urls: string[] | null
-          long_description: string | null
-          project_url: string | null
-          start_date: string | null
-          status: string
-          tech_stack: string[]
-          testimonial: string | null
+          priority: string | null
+          project_type: string
+          requirements: string | null
+          status: string | null
+          submitted_at: string | null
+          timeline: string | null
           title: string
-          updated_at: string
+          updated_at: string | null
+          user_id: string | null
         }
         Insert: {
+          assigned_team_member?: string | null
           budget_range?: string | null
-          category: string
-          client_name?: string | null
-          created_at?: string
           description: string
-          end_date?: string | null
-          featured?: boolean | null
-          github_url?: string | null
           id?: string
-          image_urls?: string[] | null
-          long_description?: string | null
-          project_url?: string | null
-          start_date?: string | null
-          status?: string
-          tech_stack: string[]
-          testimonial?: string | null
+          priority?: string | null
+          project_type: string
+          requirements?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          timeline?: string | null
           title: string
-          updated_at?: string
+          updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
+          assigned_team_member?: string | null
           budget_range?: string | null
-          category?: string
-          client_name?: string | null
-          created_at?: string
           description?: string
-          end_date?: string | null
-          featured?: boolean | null
-          github_url?: string | null
           id?: string
-          image_urls?: string[] | null
-          long_description?: string | null
-          project_url?: string | null
-          start_date?: string | null
-          status?: string
-          tech_stack?: string[]
-          testimonial?: string | null
+          priority?: string | null
+          project_type?: string
+          requirements?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          timeline?: string | null
           title?: string
-          updated_at?: string
+          updated_at?: string | null
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_requests_assigned_team_member_fkey"
+            columns: ["assigned_team_member"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          last_updated: string | null
+          name: string
+          progress: number | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          last_updated?: string | null
+          name: string
+          progress?: number | null
+          status?: Database["public"]["Enums"]["project_status"] | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          last_updated?: string | null
+          name?: string
+          progress?: number | null
+          status?: Database["public"]["Enums"]["project_status"] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recent_activities: {
+        Row: {
+          description: string
+          id: string
+          status: Database["public"]["Enums"]["activity_status"] | null
+          timestamp: string | null
+          type: Database["public"]["Enums"]["activity_type"]
+          user_id: string
+        }
+        Insert: {
+          description: string
+          id?: string
+          status?: Database["public"]["Enums"]["activity_status"] | null
+          timestamp?: string | null
+          type: Database["public"]["Enums"]["activity_type"]
+          user_id: string
+        }
+        Update: {
+          description?: string
+          id?: string
+          status?: Database["public"]["Enums"]["activity_status"] | null
+          timestamp?: string | null
+          type?: Database["public"]["Enums"]["activity_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recent_activities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_incidents: {
+        Row: {
+          assigned_to: string | null
+          created_at: string | null
+          description: string | null
+          detected_at: string | null
+          id: string
+          incident_type: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          severity: string
+          source_ip: unknown | null
+          status: string | null
+          target_system: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string | null
+          description?: string | null
+          detected_at?: string | null
+          id?: string
+          incident_type: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          severity: string
+          source_ip?: unknown | null
+          status?: string | null
+          target_system?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string | null
+          description?: string | null
+          detected_at?: string | null
+          id?: string
+          incident_type?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          severity?: string
+          source_ip?: unknown | null
+          status?: string | null
+          target_system?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_logs: {
+        Row: {
+          event_type: string
+          id: string
+          message: string
+          severity: Database["public"]["Enums"]["log_severity"] | null
+          source_ip: string | null
+          timestamp: string | null
+          user_id: string
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          message: string
+          severity?: Database["public"]["Enums"]["log_severity"] | null
+          source_ip?: string | null
+          timestamp?: string | null
+          user_id: string
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          message?: string
+          severity?: Database["public"]["Enums"]["log_severity"] | null
+          source_ip?: string | null
+          timestamp?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       security_scans: {
         Row: {
@@ -413,18 +931,387 @@ export type Database = {
         }
         Relationships: []
       }
+      system_metrics: {
+        Row: {
+          cpu_usage: number | null
+          disk_usage: number | null
+          id: string
+          network_traffic: number | null
+          ram_usage: number | null
+          timestamp: string | null
+          user_id: string
+        }
+        Insert: {
+          cpu_usage?: number | null
+          disk_usage?: number | null
+          id?: string
+          network_traffic?: number | null
+          ram_usage?: number | null
+          timestamp?: string | null
+          user_id: string
+        }
+        Update: {
+          cpu_usage?: number | null
+          disk_usage?: number | null
+          id?: string
+          network_traffic?: number | null
+          ram_usage?: number | null
+          timestamp?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_metrics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thread_participants: {
+        Row: {
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_participants_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      threads: {
+        Row: {
+          created_at: string | null
+          id: string
+          title: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          title?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          title?: string | null
+        }
+        Relationships: []
+      }
+      threat_intelligence: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          description: string | null
+          first_seen: string | null
+          id: string
+          indicator_type: string
+          indicator_value: string
+          is_active: boolean | null
+          last_seen: string | null
+          severity: string
+          source: string
+          tags: string[] | null
+          threat_type: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string | null
+          first_seen?: string | null
+          id?: string
+          indicator_type: string
+          indicator_value: string
+          is_active?: boolean | null
+          last_seen?: string | null
+          severity: string
+          source: string
+          tags?: string[] | null
+          threat_type: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string | null
+          first_seen?: string | null
+          id?: string
+          indicator_type?: string
+          indicator_value?: string
+          is_active?: boolean | null
+          last_seen?: string | null
+          severity?: string
+          source?: string
+          tags?: string[] | null
+          threat_type?: string
+        }
+        Relationships: []
+      }
+      threat_monitoring_events: {
+        Row: {
+          analyst_notes: string | null
+          created_at: string | null
+          destination_ip: unknown | null
+          destination_port: number | null
+          detected_at: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          is_false_positive: boolean | null
+          protocol: string | null
+          severity: string
+          source_ip: unknown | null
+          source_port: number | null
+        }
+        Insert: {
+          analyst_notes?: string | null
+          created_at?: string | null
+          destination_ip?: unknown | null
+          destination_port?: number | null
+          detected_at?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          is_false_positive?: boolean | null
+          protocol?: string | null
+          severity: string
+          source_ip?: unknown | null
+          source_port?: number | null
+        }
+        Update: {
+          analyst_notes?: string | null
+          created_at?: string | null
+          destination_ip?: unknown | null
+          destination_port?: number | null
+          detected_at?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          is_false_positive?: boolean | null
+          protocol?: string | null
+          severity?: string
+          source_ip?: unknown | null
+          source_port?: number | null
+        }
+        Relationships: []
+      }
+      user_profiles: {
+        Row: {
+          access_level: Database["public"]["Enums"]["access_level"] | null
+          avatar_url: string | null
+          created_at: string | null
+          email: string
+          id: string
+          last_login: string | null
+          preferences: Json | null
+          stats: Json | null
+          username: string
+        }
+        Insert: {
+          access_level?: Database["public"]["Enums"]["access_level"] | null
+          avatar_url?: string | null
+          created_at?: string | null
+          email: string
+          id: string
+          last_login?: string | null
+          preferences?: Json | null
+          stats?: Json | null
+          username: string
+        }
+        Update: {
+          access_level?: Database["public"]["Enums"]["access_level"] | null
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          last_login?: string | null
+          preferences?: Json | null
+          stats?: Json | null
+          username?: string
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          password_hash: string
+          role: string | null
+          updated_at: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          password_hash: string
+          role?: string | null
+          updated_at?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          password_hash?: string
+          role?: string | null
+          updated_at?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
+      vulnerability_details: {
+        Row: {
+          created_at: string | null
+          cve_id: string | null
+          cvss_score: number | null
+          description: string | null
+          id: string
+          location: string | null
+          proof_of_concept: string | null
+          remediation: string | null
+          scan_id: string | null
+          severity: string
+          vulnerability_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          cve_id?: string | null
+          cvss_score?: number | null
+          description?: string | null
+          id?: string
+          location?: string | null
+          proof_of_concept?: string | null
+          remediation?: string | null
+          scan_id?: string | null
+          severity: string
+          vulnerability_type: string
+        }
+        Update: {
+          created_at?: string | null
+          cve_id?: string | null
+          cvss_score?: number | null
+          description?: string | null
+          id?: string
+          location?: string | null
+          proof_of_concept?: string | null
+          remediation?: string | null
+          scan_id?: string | null
+          severity?: string
+          vulnerability_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vulnerability_details_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "vulnerability_scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vulnerability_scans: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          results: Json | null
+          risk_score: number | null
+          scan_duration: number | null
+          scan_type: string
+          started_at: string | null
+          status: string | null
+          target_url: string
+          user_id: string | null
+          vulnerabilities_found: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          results?: Json | null
+          risk_score?: number | null
+          scan_duration?: number | null
+          scan_type: string
+          started_at?: string | null
+          status?: string | null
+          target_url: string
+          user_id?: string | null
+          vulnerabilities_found?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          results?: Json | null
+          risk_score?: number | null
+          scan_duration?: number | null
+          scan_type?: string
+          started_at?: string | null
+          status?: string | null
+          target_url?: string
+          user_id?: string | null
+          vulnerabilities_found?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vulnerability_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      calculate_risk_score: {
+        Args: { scan_id: string }
+        Returns: number
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_threat_statistics: {
+        Args: { days?: number }
+        Returns: {
+          critical_threats: number
+          high_threats: number
+          low_threats: number
+          medium_threats: number
+          total_threats: number
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      access_level: "basic" | "premium" | "elite"
+      activity_status: "success" | "warning" | "error"
+      activity_type: "login" | "project" | "security" | "system"
+      log_severity: "info" | "warning" | "critical"
+      project_status: "active" | "completed" | "on_hold"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -551,6 +1438,12 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      access_level: ["basic", "premium", "elite"],
+      activity_status: ["success", "warning", "error"],
+      activity_type: ["login", "project", "security", "system"],
+      log_severity: ["info", "warning", "critical"],
+      project_status: ["active", "completed", "on_hold"],
+    },
   },
 } as const
