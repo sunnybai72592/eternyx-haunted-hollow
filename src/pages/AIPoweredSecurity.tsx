@@ -36,24 +36,24 @@ class AISecurityEngine {
 
   private initializeModels() {
     // Initialize pre-trained models (in production, these would be real ML models)
-    this.models.set('malware_detection', {
-      name: 'Neural Malware Detector',
+    this.models.set("malware_detection", {
+      name: "Neural Malware Detector",
       accuracy: 0.987,
-      lastTrained: new Date('2024-08-15'),
+      lastTrained: new Date("2024-08-15"),
       samples: 2847392
     });
 
-    this.models.set('anomaly_detection', {
-      name: 'Behavioral Anomaly Engine',
+    this.models.set("anomaly_detection", {
+      name: "Behavioral Anomaly Engine",
       accuracy: 0.943,
-      lastTrained: new Date('2024-08-20'),
+      lastTrained: new Date("2024-08-20"),
       samples: 1923847
     });
 
-    this.models.set('threat_classification', {
-      name: 'Threat Intelligence Classifier',
+    this.models.set("threat_classification", {
+      name: "Threat Intelligence Classifier",
       accuracy: 0.976,
-      lastTrained: new Date('2024-08-25'),
+      lastTrained: new Date("2024-08-25"),
       samples: 3847291
     });
   }
@@ -110,7 +110,7 @@ class AISecurityEngine {
       suspiciousStrings,
       length: content.length,
       hasObfuscation: entropy > 7.5,
-      fileExtension: fileName.split('.').pop()?.toLowerCase() || ''
+      fileExtension: fileName.split(".").pop()?.toLowerCase() || ""
     };
   }
 
@@ -144,13 +144,13 @@ class AISecurityEngine {
     // Normalize score
     score = Math.min(score, 1);
     
-    const classification = score > 0.7 ? 'Malware' : 
-                          score > 0.4 ? 'Suspicious' : 'Clean';
+    const classification = score > 0.7 ? "Malware" : 
+                          score > 0.4 ? "Suspicious" : "Clean";
     
     const threats = [];
-    if (features.suspiciousStrings > 5) threats.push('Code Injection');
-    if (features.hasObfuscation) threats.push('Obfuscated Code');
-    if (features.entropy > 7) threats.push('Encrypted Payload');
+    if (features.suspiciousStrings > 5) threats.push("Code Injection");
+    if (features.hasObfuscation) threats.push("Obfuscated Code");
+    if (features.entropy > 7) threats.push("Encrypted Payload");
 
     return {
       score,
@@ -161,18 +161,18 @@ class AISecurityEngine {
   }
 
   private detectFileType(fileName: string): string {
-    const ext = fileName.split('.').pop()?.toLowerCase();
+    const ext = fileName.split(".").pop()?.toLowerCase();
     const types: { [key: string]: string } = {
-      'js': 'JavaScript',
-      'php': 'PHP Script',
-      'py': 'Python Script',
-      'exe': 'Windows Executable',
-      'bat': 'Batch File',
-      'sh': 'Shell Script',
-      'html': 'HTML Document',
-      'pdf': 'PDF Document'
+      "js": "JavaScript",
+      "php": "PHP Script",
+      "py": "Python Script",
+      "exe": "Windows Executable",
+      "bat": "Batch File",
+      "sh": "Shell Script",
+      "html": "HTML Document",
+      "pdf": "PDF Document"
     };
-    return types[ext || ''] || 'Unknown';
+    return types[ext || ""] || "Unknown";
   }
 
   // Network traffic anomaly detection
@@ -201,7 +201,7 @@ class AISecurityEngine {
         anomaliesDetected: anomalies.length,
         anomalies: anomalies.slice(0, 10), // Top 10 anomalies
         stats,
-        riskLevel: anomalies.length > 5 ? 'High' : anomalies.length > 2 ? 'Medium' : 'Low'
+        riskLevel: anomalies.length > 5 ? "High" : anomalies.length > 2 ? "Medium" : "Low"
       };
     } catch (error) {
       throw new Error(`Traffic analysis failed: ${error}`);
@@ -233,7 +233,7 @@ class AISecurityEngine {
     if (packet.frequency && packet.frequency > 100) score += 0.4;
     
     // Protocol anomaly
-    if (packet.protocol && !['HTTP', 'HTTPS', 'TCP', 'UDP'].includes(packet.protocol)) {
+    if (packet.protocol && !["HTTP", "HTTPS", "TCP", "UDP"].includes(packet.protocol)) {
       score += 0.3;
     }
 
@@ -243,11 +243,11 @@ class AISecurityEngine {
   private getAnomalyReason(packet: any, stats: any): string {
     const reasons = [];
     
-    if (packet.size > stats.avgSize * 3) reasons.push('Unusual packet size');
-    if (!stats.commonPorts.includes(packet.port)) reasons.push('Uncommon port');
-    if (packet.frequency > 100) reasons.push('High frequency');
+    if (packet.size > stats.avgSize * 3) reasons.push("Unusual packet size");
+    if (!stats.commonPorts.includes(packet.port)) reasons.push("Uncommon port");
+    if (packet.frequency > 100) reasons.push("High frequency");
     
-    return reasons.join(', ') || 'Statistical anomaly';
+    return reasons.join(", ") || "Statistical anomaly";
   }
 
   private getMostCommon(arr: number[]): number[] {
@@ -280,7 +280,7 @@ class AISecurityEngine {
 
   private analyzeTrends(data: any[]) {
     // Simple trend analysis
-    const timeWindows = this.groupByTimeWindow(data, 'hour');
+    const timeWindows = this.groupByTimeWindow(data, "hour");
     
     return {
       hourlyTrends: timeWindows,
@@ -294,7 +294,7 @@ class AISecurityEngine {
     
     data.forEach(item => {
       const time = new Date(item.timestamp);
-      const key = window === 'hour' ? time.getHours().toString() : 
+      const key = window === "hour" ? time.getHours().toString() : 
                   time.getDate().toString();
       groups[key] = (groups[key] || 0) + 1;
     });
@@ -327,18 +327,18 @@ class AISecurityEngine {
 
     const threatCount = recentThreats.length;
     
-    if (threatCount > 100) return 'Critical';
-    if (threatCount > 50) return 'High';
-    if (threatCount > 20) return 'Medium';
-    return 'Low';
+    if (threatCount > 100) return "Critical";
+    if (threatCount > 50) return "High";
+    if (threatCount > 20) return "Medium";
+    return "Low";
   }
 
   private generatePredictions(trends: any) {
     const growthRate = trends.growthRate;
     
     return {
-      next24Hours: growthRate > 0.2 ? 'Increasing threat activity expected' : 'Stable threat levels',
-      nextWeek: growthRate > 0.5 ? 'Significant threat escalation likely' : 'Normal threat patterns',
+      next24Hours: growthRate > 0.2 ? "Increasing threat activity expected" : "Stable threat levels",
+      nextWeek: growthRate > 0.5 ? "Significant threat escalation likely" : "Normal threat patterns",
       confidence: Math.min(0.7 + Math.abs(growthRate), 0.95)
     };
   }
@@ -347,16 +347,16 @@ class AISecurityEngine {
     const recommendations = [];
     
     if (predictions.confidence > 0.8) {
-      recommendations.push('Increase monitoring frequency');
+      recommendations.push("Increase monitoring frequency");
     }
     
-    if (predictions.next24Hours.includes('Increasing')) {
-      recommendations.push('Activate enhanced security protocols');
-      recommendations.push('Alert security team for potential incidents');
+    if (predictions.next24Hours.includes("Increasing")) {
+      recommendations.push("Activate enhanced security protocols");
+      recommendations.push("Alert security team for potential incidents");
     }
     
-    recommendations.push('Review and update threat signatures');
-    recommendations.push('Conduct security awareness training');
+    recommendations.push("Review and update threat signatures");
+    recommendations.push("Conduct security awareness training");
     
     return recommendations;
   }
@@ -387,7 +387,7 @@ const AIPoweredSecurity = () => {
         destination: `10.0.0.${Math.floor(Math.random() * 255)}`,
         port: [80, 443, 22, 21, 25, 53, 3389][Math.floor(Math.random() * 7)],
         size: Math.floor(Math.random() * 10000) + 100,
-        protocol: ['HTTP', 'HTTPS', 'TCP', 'UDP'][Math.floor(Math.random() * 4)],
+        protocol: ["HTTP", "HTTPS", "TCP", "UDP"][Math.floor(Math.random() * 4)],
         frequency: Math.floor(Math.random() * 200)
       });
     }
@@ -403,7 +403,7 @@ const AIPoweredSecurity = () => {
       const result = await aiEngine.analyzeMalware(fileContent, fileName);
       setMalwareResult(result);
     } catch (error) {
-      console.error('Malware analysis failed:', error);
+      console.error("Malware analysis failed:", error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -418,7 +418,7 @@ const AIPoweredSecurity = () => {
       const result = await aiEngine.analyzeNetworkTraffic(data);
       setAnomalyResult(result);
     } catch (error) {
-      console.error('Traffic analysis failed:', error);
+      console.error("Traffic analysis failed:", error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -430,14 +430,14 @@ const AIPoweredSecurity = () => {
       // Generate sample historical data
       const historicalData = Array.from({ length: 200 }, (_, i) => ({
         timestamp: new Date(Date.now() - i * 3600000).toISOString(),
-        threatType: ['malware', 'phishing', 'ddos', 'intrusion'][Math.floor(Math.random() * 4)],
+        threatType: ["malware", "phishing", "ddos", "intrusion"][Math.floor(Math.random() * 4)],
         severity: Math.floor(Math.random() * 10) + 1
       }));
       
       const result = await aiEngine.predictThreats(historicalData);
       setThreatPrediction(result);
     } catch (error) {
-      console.error('Threat prediction failed:', error);
+      console.error("Threat prediction failed:", error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -500,16 +500,16 @@ const AIPoweredSecurity = () => {
               Malware Detection
             </TabsTrigger>
             <TabsTrigger value="anomaly" className="data-[state=active]:bg-blue-600">
-              <Activity className="mr-2 h-4 w-4" />
+              <Network className="mr-2 h-4 w-4" />
               Anomaly Detection
             </TabsTrigger>
             <TabsTrigger value="prediction" className="data-[state=active]:bg-blue-600">
-              <TrendingUp className="mr-2 h-4 w-4" />
+              <BarChart3 className="mr-2 h-4 w-4" />
               Threat Prediction
             </TabsTrigger>
-            <TabsTrigger value="models" className="data-[state=active]:bg-blue-600">
-              <Brain className="mr-2 h-4 w-4" />
-              AI Models
+            <TabsTrigger value="bot" className="data-[state=active]:bg-blue-600">
+              <Bot className="mr-2 h-4 w-4" />
+              AI Assistant
             </TabsTrigger>
           </TabsList>
 
@@ -519,41 +519,40 @@ const AIPoweredSecurity = () => {
                 <CardHeader>
                   <CardTitle className="text-blue-400 flex items-center">
                     <Shield className="mr-2 h-5 w-5" />
-                    Malware Analysis Engine
+                    File Malware Analysis
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">File Name:</label>
+                    <label className="block text-sm font-medium mb-2">Upload File Content:</label>
+                    <Textarea
+                      placeholder="Paste file content here for analysis..."
+                      value={fileContent}
+                      onChange={(e) => setFileContent(e.target.value)}
+                      className="bg-background border-blue-500/20 min-h-32"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">File Name (e.g., virus.exe):</label>
                     <Input
-                      placeholder="suspicious_file.js"
+                      type="text"
+                      placeholder="Enter file name..."
                       value={fileName}
                       onChange={(e) => setFileName(e.target.value)}
                       className="bg-background border-blue-500/20"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">File Content:</label>
-                    <Textarea
-                      placeholder="Paste file content or code here..."
-                      value={fileContent}
-                      onChange={(e) => setFileContent(e.target.value)}
-                      className="bg-background border-blue-500/20 min-h-32 font-mono text-xs"
-                    />
-                  </div>
-
                   <Button
                     onClick={analyzeMalware}
                     disabled={isAnalyzing || !fileContent || !fileName}
                     className="w-full bg-blue-600 hover:bg-blue-700"
                   >
                     {isAnalyzing ? (
-                      <LoadingSpinner size="sm" text="" />
+                      <LoadingSpinner size="sm" text="Analyzing..." />
                     ) : (
                       <>
-                        <Bot className="mr-2 h-4 w-4" />
-                        Analyze with AI
+                        <Zap className="mr-2 h-4 w-4" />
+                        Analyze File
                       </>
                     )}
                   </Button>
@@ -563,67 +562,29 @@ const AIPoweredSecurity = () => {
               <Card className="bg-card/50 border-blue-500/20">
                 <CardHeader>
                   <CardTitle className="text-blue-400 flex items-center">
-                    <BarChart3 className="mr-2 h-5 w-5" />
+                    <Eye className="mr-2 h-5 w-5" />
                     Analysis Results
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {malwareResult && (
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Malware Score:</span>
-                        <div className="flex items-center space-x-2">
-                          <Progress 
-                            value={malwareResult.malwareScore * 100} 
-                            className="w-24"
-                          />
-                          <span className={`font-bold ${
-                            malwareResult.malwareScore > 0.7 ? 'text-red-400' :
-                            malwareResult.malwareScore > 0.4 ? 'text-yellow-400' :
-                            'text-green-400'
-                          }`}>
-                            {(malwareResult.malwareScore * 100).toFixed(1)}%
-                          </span>
-                        </div>
+                <CardContent className="space-y-4">
+                  {malwareResult ? (
+                    <TerminalWindow title="malware-analysis-report.log">
+                      <div className="space-y-1 text-sm">
+                        <div className="text-green-400">[REPORT] File: {malwareResult.fileName}</div>
+                        <div className="text-green-400">[REPORT] Classification: <span className={malwareResult.classification === "Malware" ? "text-red-400" : malwareResult.classification === "Suspicious" ? "text-orange-400" : "text-green-400"}>{malwareResult.classification}</span></div>
+                        <div className="text-green-400">[REPORT] Confidence: {(malwareResult.confidence * 100).toFixed(2)}%</div>
+                        <div className="text-green-400">[REPORT] Malware Score: {(malwareResult.malwareScore * 100).toFixed(2)}%</div>
+                        <div className="text-green-400">[REPORT] File Type: {malwareResult.analysis.fileType}</div>
+                        <div className="text-green-400">[REPORT] File Size: {malwareResult.analysis.fileSize} bytes</div>
+                        <div className="text-green-400">[REPORT] Entropy: {malwareResult.analysis.entropy.toFixed(2)}</div>
+                        <div className="text-green-400">[REPORT] Suspicious Strings: {malwareResult.analysis.suspiciousStrings}</div>
+                        {malwareResult.threats.length > 0 && (
+                          <div className="text-red-400">[REPORT] Detected Threats: {malwareResult.threats.join(", ")}</div>
+                        )}
                       </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Classification:</span>
-                        <Badge className={
-                          malwareResult.classification === 'Malware' ? 'bg-red-600' :
-                          malwareResult.classification === 'Suspicious' ? 'bg-yellow-600' :
-                          'bg-green-600'
-                        }>
-                          {malwareResult.classification}
-                        </Badge>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Confidence:</span>
-                        <span className="text-blue-400">
-                          {(malwareResult.confidence * 100).toFixed(1)}%
-                        </span>
-                      </div>
-
-                      {malwareResult.threats.length > 0 && (
-                        <div>
-                          <span className="font-medium block mb-2">Detected Threats:</span>
-                          <div className="space-y-1">
-                            {malwareResult.threats.map((threat: string, index: number) => (
-                              <Badge key={index} variant="outline" className="mr-2 border-red-500 text-red-400">
-                                {threat}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <TerminalWindow title="detailed-analysis.json">
-                        <pre className="text-xs text-green-400">
-                          {JSON.stringify(malwareResult.analysis, null, 2)}
-                        </pre>
-                      </TerminalWindow>
-                    </div>
+                    </TerminalWindow>
+                  ) : (
+                    <p className="text-muted-foreground">Upload a file and click "Analyze File" to see results.</p>
                   )}
                 </CardContent>
               </Card>
@@ -636,12 +597,12 @@ const AIPoweredSecurity = () => {
                 <CardHeader>
                   <CardTitle className="text-blue-400 flex items-center">
                     <Network className="mr-2 h-5 w-5" />
-                    Network Traffic Analysis
+                    Network Traffic Input
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Network Traffic Data (JSON):</label>
+                    <label className="block text-sm font-medium mb-2">Network Traffic (JSON Array):</label>
                     <Textarea
                       placeholder="Paste network traffic data here..."
                       value={trafficData}
@@ -649,30 +610,23 @@ const AIPoweredSecurity = () => {
                       className="bg-background border-blue-500/20 min-h-32 font-mono text-xs"
                     />
                   </div>
-
-                  <div className="flex space-x-2">
-                    <Button
-                      onClick={generateSampleTraffic}
-                      variant="outline"
-                      className="border-blue-500/20"
-                    >
-                      Generate Sample Data
-                    </Button>
-                    <Button
-                      onClick={analyzeTraffic}
-                      disabled={isAnalyzing || !trafficData}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      {isAnalyzing ? (
-                        <LoadingSpinner size="sm" text="" />
-                      ) : (
-                        <>
-                          <Activity className="mr-2 h-4 w-4" />
-                          Analyze Traffic
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                  <Button onClick={generateSampleTraffic} variant="outline" className="w-full border-blue-500/20 text-blue-400 hover:bg-blue-500/10">
+                    Generate Sample Traffic Data
+                  </Button>
+                  <Button
+                    onClick={analyzeTraffic}
+                    disabled={isAnalyzing || !trafficData}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isAnalyzing ? (
+                      <LoadingSpinner size="sm" text="Analyzing..." />
+                    ) : (
+                      <>
+                        <Activity className="mr-2 h-4 w-4" />
+                        Analyze Traffic
+                      </>
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -683,56 +637,27 @@ const AIPoweredSecurity = () => {
                     Anomaly Detection Results
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {anomalyResult && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-center p-3 bg-background/50 rounded">
-                          <div className="text-2xl font-bold text-blue-400">
-                            {anomalyResult.totalPackets}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Total Packets</div>
-                        </div>
-                        <div className="text-center p-3 bg-background/50 rounded">
-                          <div className="text-2xl font-bold text-red-400">
-                            {anomalyResult.anomaliesDetected}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Anomalies</div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Risk Level:</span>
-                        <Badge className={
-                          anomalyResult.riskLevel === 'High' ? 'bg-red-600' :
-                          anomalyResult.riskLevel === 'Medium' ? 'bg-yellow-600' :
-                          'bg-green-600'
-                        }>
-                          {anomalyResult.riskLevel}
-                        </Badge>
-                      </div>
-
-                      {anomalyResult.anomalies.length > 0 && (
-                        <div>
-                          <span className="font-medium block mb-2">Top Anomalies:</span>
-                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                <CardContent className="space-y-4">
+                  {anomalyResult ? (
+                    <TerminalWindow title="anomaly-report.log">
+                      <div className="space-y-1 text-sm">
+                        <div className="text-green-400">[REPORT] Total Packets Analyzed: {anomalyResult.totalPackets}</div>
+                        <div className="text-green-400">[REPORT] Anomalies Detected: <span className={anomalyResult.anomaliesDetected > 0 ? "text-red-400" : "text-green-400"}>{anomalyResult.anomaliesDetected}</span></div>
+                        <div className="text-green-400">[REPORT] Risk Level: <span className={anomalyResult.riskLevel === "High" ? "text-red-400" : anomalyResult.riskLevel === "Medium" ? "text-orange-400" : "text-green-400"}>{anomalyResult.riskLevel}</span></div>
+                        {anomalyResult.anomalies.length > 0 && (
+                          <div className="mt-2">
+                            <h4 className="font-semibold text-red-400">Top Anomalies:</h4>
                             {anomalyResult.anomalies.map((anomaly: any, index: number) => (
-                              <div key={index} className="p-2 bg-background/50 rounded border border-red-500/20">
-                                <div className="flex justify-between items-start text-xs">
-                                  <div>
-                                    <div className="font-mono">{anomaly.source} → {anomaly.destination}</div>
-                                    <div className="text-muted-foreground">{anomaly.reason}</div>
-                                  </div>
-                                  <Badge variant="outline" className="border-red-500 text-red-400">
-                                    {(anomaly.anomalyScore * 100).toFixed(0)}%
-                                  </Badge>
-                                </div>
+                              <div key={index} className="text-red-400 text-xs">
+                                - [{anomaly.timestamp.split("T")[1].slice(0, 8)}] Source: {anomaly.source}, Dest: {anomaly.destination}, Score: {anomaly.anomalyScore.toFixed(2)}, Reason: {anomaly.reason}
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    </TerminalWindow>
+                  ) : (
+                    <p className="text-muted-foreground">Paste network traffic data or generate sample data and click "Analyze Traffic" to see results.</p>
                   )}
                 </CardContent>
               </Card>
@@ -744,26 +669,25 @@ const AIPoweredSecurity = () => {
               <Card className="bg-card/50 border-blue-500/20">
                 <CardHeader>
                   <CardTitle className="text-blue-400 flex items-center">
-                    <TrendingUp className="mr-2 h-5 w-5" />
-                    Predictive Threat Intelligence
+                    <BarChart3 className="mr-2 h-5 w-5" />
+                    Threat Prediction Engine
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Analyze historical threat data to predict future security incidents using machine learning.
+                  <p className="text-muted-foreground">
+                    Our AI analyzes historical threat data to predict future attack trends and vulnerabilities.
                   </p>
-                  
                   <Button
                     onClick={predictThreats}
                     disabled={isAnalyzing}
                     className="w-full bg-blue-600 hover:bg-blue-700"
                   >
                     {isAnalyzing ? (
-                      <LoadingSpinner size="sm" text="" />
+                      <LoadingSpinner size="sm" text="Predicting..." />
                     ) : (
                       <>
-                        <Brain className="mr-2 h-4 w-4" />
-                        Generate Predictions
+                        <TrendingUp className="mr-2 h-4 w-4" />
+                        Generate Prediction
                       </>
                     )}
                   </Button>
@@ -774,146 +698,77 @@ const AIPoweredSecurity = () => {
                 <CardHeader>
                   <CardTitle className="text-blue-400 flex items-center">
                     <Target className="mr-2 h-5 w-5" />
-                    Threat Predictions
+                    Prediction Results
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {threatPrediction && (
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Current Threat Level:</span>
-                        <Badge className={
-                          threatPrediction.currentThreatLevel === 'Critical' ? 'bg-red-600' :
-                          threatPrediction.currentThreatLevel === 'High' ? 'bg-orange-600' :
-                          threatPrediction.currentThreatLevel === 'Medium' ? 'bg-yellow-600' :
-                          'bg-green-600'
-                        }>
-                          {threatPrediction.currentThreatLevel}
-                        </Badge>
-                      </div>
-
-                      <div>
-                        <span className="font-medium block mb-2">Predictions:</span>
-                        <div className="space-y-2">
-                          <div className="p-3 bg-background/50 rounded">
-                            <div className="font-medium text-sm">Next 24 Hours:</div>
-                            <div className="text-xs text-muted-foreground">
-                              {threatPrediction.predictions.next24Hours}
-                            </div>
+                <CardContent className="space-y-4">
+                  {threatPrediction ? (
+                    <TerminalWindow title="threat-prediction-report.log">
+                      <div className="space-y-1 text-sm">
+                        <div className="text-green-400">[PREDICTION] Current Threat Level: <span className={threatPrediction.currentThreatLevel === "Critical" ? "text-red-400" : threatPrediction.currentThreatLevel === "High" ? "text-orange-400" : "text-green-400"}>{threatPrediction.currentThreatLevel}</span></div>
+                        <div className="text-green-400">[PREDICTION] Next 24 Hours: {threatPrediction.predictions.next24Hours}</div>
+                        <div className="text-green-400">[PREDICTION] Next Week: {threatPrediction.predictions.nextWeek}</div>
+                        <div className="text-green-400">[PREDICTION] Confidence: {(threatPrediction.predictions.confidence * 100).toFixed(2)}%</div>
+                        {threatPrediction.recommendations.length > 0 && (
+                          <div className="mt-2">
+                            <h4 className="font-semibold text-blue-400">Recommendations:</h4>
+                            {threatPrediction.recommendations.map((rec: string, index: number) => (
+                              <div key={index} className="text-blue-400 text-xs">
+                                - {rec}
+                              </div>
+                            ))}
                           </div>
-                          <div className="p-3 bg-background/50 rounded">
-                            <div className="font-medium text-sm">Next Week:</div>
-                            <div className="text-xs text-muted-foreground">
-                              {threatPrediction.predictions.nextWeek}
-                            </div>
-                          </div>
-                        </div>
+                        )}
                       </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Confidence:</span>
-                        <span className="text-blue-400">
-                          {(threatPrediction.predictions.confidence * 100).toFixed(1)}%
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="font-medium block mb-2">Recommendations:</span>
-                        <div className="space-y-1">
-                          {threatPrediction.recommendations.map((rec: string, index: number) => (
-                            <div key={index} className="text-xs p-2 bg-blue-500/10 rounded border border-blue-500/20">
-                              {rec}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                    </TerminalWindow>
+                  ) : (
+                    <p className="text-muted-foreground">Click "Generate Prediction" to see the latest threat forecast.</p>
                   )}
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
-          <TabsContent value="models" className="mt-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[
-                {
-                  name: "Neural Malware Detector",
-                  accuracy: 98.7,
-                  status: "Active",
-                  lastTrained: "2024-08-15",
-                  samples: "2.8M"
-                },
-                {
-                  name: "Behavioral Anomaly Engine",
-                  accuracy: 94.3,
-                  status: "Active", 
-                  lastTrained: "2024-08-20",
-                  samples: "1.9M"
-                },
-                {
-                  name: "Threat Intelligence Classifier",
-                  accuracy: 97.6,
-                  status: "Active",
-                  lastTrained: "2024-08-25",
-                  samples: "3.8M"
-                },
-                {
-                  name: "Network Intrusion Detector",
-                  accuracy: 95.8,
-                  status: "Training",
-                  lastTrained: "2024-08-28",
-                  samples: "5.2M"
-                },
-                {
-                  name: "Phishing URL Classifier",
-                  accuracy: 99.1,
-                  status: "Active",
-                  lastTrained: "2024-08-22",
-                  samples: "4.1M"
-                },
-                {
-                  name: "Zero-Day Exploit Predictor",
-                  accuracy: 89.4,
-                  status: "Beta",
-                  lastTrained: "2024-08-26",
-                  samples: "1.2M"
-                }
-              ].map((model, index) => (
-                <Card key={index} className="bg-card/50 border-blue-500/20">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-blue-300 text-sm">{model.name}</CardTitle>
-                      <Badge className={
-                        model.status === 'Active' ? 'bg-green-600' :
-                        model.status === 'Training' ? 'bg-yellow-600' :
-                        'bg-blue-600'
-                      }>
-                        {model.status}
-                      </Badge>
+          <TabsContent value="bot" className="mt-6">
+            <div className="grid lg:grid-cols-2 gap-8">
+              <Card className="bg-card/50 border-blue-500/20">
+                <CardHeader>
+                  <CardTitle className="text-blue-400 flex items-center">
+                    <Bot className="mr-2 h-5 w-5" />
+                    AI Security Assistant
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-muted-foreground mb-4">
+                    Interact with our AI assistant for real-time security insights, threat explanations, and best practices.
+                  </p>
+                  <Textarea
+                    placeholder="Ask your security question here..."
+                    className="bg-background border-blue-500/20 min-h-24"
+                  />
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                    Ask AI Assistant
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/50 border-blue-500/20">
+                <CardHeader>
+                  <CardTitle className="text-blue-400 flex items-center">
+                    <Cpu className="mr-2 h-5 w-5" />
+                    Assistant Response
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <TerminalWindow title="ai-assistant-response.log">
+                    <div className="space-y-1 text-sm">
+                      <div className="text-green-400">[AI] Hello, how can I assist you with your cybersecurity needs today?</div>
+                      <div className="text-muted-foreground">[USER] What is a zero-day exploit?</div>
+                      <div className="text-green-400">[AI] A zero-day exploit is a cyberattack that takes advantage of a software vulnerability that is unknown to the vendor or the public. This means there is no patch available, making it a highly dangerous threat.</div>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs">Accuracy:</span>
-                        <div className="flex items-center space-x-2">
-                          <Progress value={model.accuracy} className="w-16 h-2" />
-                          <span className="text-xs text-green-400">{model.accuracy}%</span>
-                        </div>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span>Training Samples:</span>
-                        <span className="text-blue-400">{model.samples}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span>Last Trained:</span>
-                        <span className="text-muted-foreground">{model.lastTrained}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </TerminalWindow>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
