@@ -1,0 +1,650 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eternyx-platform
+  labels:
+    name: eternyx-platform
+    environment: production
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eternyx-frontend
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-frontend
+    tier: frontend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: eternyx-frontend
+  template:
+    metadata:
+      labels:
+        app: eternyx-frontend
+        tier: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: eternyx/frontend:latest
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: REACT_APP_SUPABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: supabase-url
+        - name: REACT_APP_SUPABASE_ANON_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: supabase-anon-key
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eternyx-api
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-api
+    tier: backend
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: eternyx-api
+  template:
+    metadata:
+      labels:
+        app: eternyx-api
+        tier: backend
+    spec:
+      containers:
+      - name: api
+        image: eternyx/api:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: redis-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: openai-api-key
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: stripe-secret-key
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eternyx-ai-engine
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-ai-engine
+    tier: ai
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: eternyx-ai-engine
+  template:
+    metadata:
+      labels:
+        app: eternyx-ai-engine
+        tier: ai
+    spec:
+      containers:
+      - name: ai-engine
+        image: eternyx/ai-engine:latest
+        ports:
+        - containerPort: 9000
+          name: grpc
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: 1
+        livenessProbe:
+          exec:
+            command:
+            - /bin/grpc_health_probe
+            - -addr=:9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/grpc_health_probe
+            - -addr=:9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        env:
+        - name: MODEL_PATH
+          value: "/models"
+        - name: GPU_MEMORY_FRACTION
+          value: "0.8"
+        - name: BATCH_SIZE
+          value: "32"
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+          readOnly: true
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ai-models-pvc
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eternyx-threat-monitor
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-threat-monitor
+    tier: monitoring
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eternyx-threat-monitor
+  template:
+    metadata:
+      labels:
+        app: eternyx-threat-monitor
+        tier: monitoring
+    spec:
+      containers:
+      - name: threat-monitor
+        image: eternyx/threat-monitor:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka-cluster:9092"
+        - name: ELASTICSEARCH_URL
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: elasticsearch-url
+        - name: THREAT_INTEL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eternyx-secrets
+              key: threat-intel-api-key
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eternyx-frontend-service
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: eternyx-frontend
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eternyx-api-service
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: eternyx-api
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eternyx-ai-engine-service
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-ai-engine
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: grpc
+  selector:
+    app: eternyx-ai-engine
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eternyx-threat-monitor-service
+  namespace: eternyx-platform
+  labels:
+    app: eternyx-threat-monitor
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: eternyx-threat-monitor
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eternyx-ingress
+  namespace: eternyx-platform
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - eternyx.io
+    - api.eternyx.io
+    - ai.eternyx.io
+    secretName: eternyx-tls
+  rules:
+  - host: eternyx.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: eternyx-frontend-service
+            port:
+              number: 80
+  - host: api.eternyx.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: eternyx-api-service
+            port:
+              number: 8000
+  - host: ai.eternyx.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: eternyx-ai-engine-service
+            port:
+              number: 9000
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: eternyx-frontend-hpa
+  namespace: eternyx-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: eternyx-frontend
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: eternyx-api-hpa
+  namespace: eternyx-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: eternyx-api
+  minReplicas: 5
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "1000"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Percent
+        value: 200
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eternyx-secrets
+  namespace: eternyx-platform
+type: Opaque
+data:
+  # Base64 encoded secrets (replace with actual values)
+  supabase-url: <BASE64_ENCODED_SUPABASE_URL>
+  supabase-anon-key: <BASE64_ENCODED_SUPABASE_ANON_KEY>
+  supabase-service-key: <BASE64_ENCODED_SUPABASE_SERVICE_KEY>
+  database-url: <BASE64_ENCODED_DATABASE_URL>
+  redis-url: <BASE64_ENCODED_REDIS_URL>
+  openai-api-key: <BASE64_ENCODED_OPENAI_API_KEY>
+  stripe-secret-key: <BASE64_ENCODED_STRIPE_SECRET_KEY>
+  stripe-webhook-secret: <BASE64_ENCODED_STRIPE_WEBHOOK_SECRET>
+  elasticsearch-url: <BASE64_ENCODED_ELASTICSEARCH_URL>
+  threat-intel-api-key: <BASE64_ENCODED_THREAT_INTEL_API_KEY>
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eternyx-config
+  namespace: eternyx-platform
+data:
+  # Application configuration
+  app.yaml: |
+    app:
+      name: "ETERNYX Platform"
+      version: "3.0.0"
+      environment: "production"
+      debug: false
+    
+    security:
+      cors_origins: ["https://eternyx.io", "https://app.eternyx.io"]
+      rate_limiting:
+        enabled: true
+        requests_per_minute: 1000
+        burst_size: 100
+      
+    features:
+      ai_assistant: true
+      threat_monitoring: true
+      vulnerability_scanner: true
+      quantum_encryption: true
+      blockchain_verification: true
+    
+    monitoring:
+      metrics_enabled: true
+      tracing_enabled: true
+      logging_level: "INFO"
+    
+    cache:
+      ttl_seconds: 3600
+      max_size_mb: 512
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-models-pvc
+  namespace: eternyx-platform
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eternyx-frontend-pdb
+  namespace: eternyx-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: eternyx-frontend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eternyx-api-pdb
+  namespace: eternyx-platform
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: eternyx-api
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: eternyx-network-policy
+  namespace: eternyx-platform
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: eternyx-platform
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 9000
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+

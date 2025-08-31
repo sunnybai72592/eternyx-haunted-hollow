@@ -26,6 +26,12 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
 
+// Enhanced platform pages
+const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"));
+const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
+const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
+const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -56,6 +62,10 @@ const App = () => {
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/enhanced-dashboard" element={<EnhancedDashboard />} />
+                  <Route path="/arsenal" element={<CyberArsenal />} />
+                  <Route path="/subscriptions" element={<SubscriptionHub />} />
+                  <Route path="/knowledge" element={<KnowledgeHub />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/help" element={<Help />} />
