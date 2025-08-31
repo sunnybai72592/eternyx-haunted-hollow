@@ -21,7 +21,9 @@ import {
   User, 
   MessageSquare, 
   LogIn, 
-  UserPlus
+  UserPlus,
+  Settings,
+  Wrench
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuthStore } from "@/store/authStore";
