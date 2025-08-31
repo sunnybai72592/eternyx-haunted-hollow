@@ -88,9 +88,9 @@ const Dashboard = () => {
       
       // Mock data - in real app, this would come from your backend
       setStats({
-        projectsCreated: profile?.stats?.projects_created || 12,
-        totalLogins: profile?.stats?.login_count || 247,
-        lastActivity: profile?.stats?.last_activity || new Date().toISOString(),
+        projectsCreated: (profile as any)?.stats?.projects_created || 12,
+        totalLogins: (profile as any)?.stats?.login_count || 247,
+        lastActivity: (profile as any)?.stats?.last_activity || new Date().toISOString(),
         securityScore: 95,
         performanceRating: 88,
         accessLevel: profile?.access_level || 'elite'

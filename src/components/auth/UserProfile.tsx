@@ -68,7 +68,7 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
           >
             <div className="flex items-center space-x-3">
               <Avatar className="h-8 w-8 ring-2 ring-primary/50">
-                <AvatarImage src={profile.avatar_url} alt={profile.username} />
+                <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={profile?.username} />
                 <AvatarFallback className="bg-primary/20 text-primary font-bold">
                   {profile.username.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -100,7 +100,7 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
             <div className="flex flex-col space-y-2">
               <div className="flex items-center space-x-3">
                 <Avatar className="h-10 w-10 ring-2 ring-primary/50">
-                  <AvatarImage src={profile.avatar_url} alt={profile.username} />
+                  <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={profile?.username} />
                   <AvatarFallback className="bg-primary/20 text-primary font-bold">
                     {profile.username.slice(0, 2).toUpperCase()}
                   </AvatarFallback>

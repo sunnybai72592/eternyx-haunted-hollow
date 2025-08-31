@@ -115,7 +115,6 @@ const Index = () => {
     if (errors.length > 0) {
       addNotification({
         type: 'error',
-        title: 'Validation Error',
         message: errors.join(', ')
       });
       setSubmitStatus('error');
@@ -128,14 +127,11 @@ const Index = () => {
     try {
       const startTime = performance.now();
       
-      // Submit form data
-      const result = await measureApiCall(
-        'contact_form_submission',
-        () => supabaseAPI.submitContactForm(formData)
-      );
+      // Submit form data  
+      const result = await supabaseAPI.submitContactForm(formData);
 
       if (result.error) {
-        throw new Error(result.error.message);
+        throw new Error(result.error instanceof Error ? result.error.message : String(result.error));
       }
 
       // Track successful submission
@@ -145,18 +141,14 @@ const Index = () => {
         message_length: formData.message.length
       });
 
-      // Security logging
-      await securityService.logEvent('contact_form_submission', {
-        email: formData.email,
-        success: true
-      });
+      // Security logging - remove this as it doesn't exist
+      console.log('Contact form submitted successfully');
 
       setSubmitStatus('success');
       setFormData({ name: "", email: "", message: "" });
       
       addNotification({
         type: 'success',
-        title: 'Message Sent',
         message: 'Your message has been transmitted successfully. We\'ll respond within 24 hours.'
       });
 
@@ -165,16 +157,12 @@ const Index = () => {
     } catch (error) {
       console.error('Contact form submission error:', error);
       
-      trackError(error as Error, {
-        context: 'contact_form_submission',
-        formData: { ...formData, message: '[REDACTED]' }
-      });
+      trackError(error as Error, 'contact_form_submission');
 
       setSubmitStatus('error');
       
       addNotification({
         type: 'error',
-        title: 'Transmission Failed',
         message: 'Failed to send message. Please try again or contact us directly.'
       });
 

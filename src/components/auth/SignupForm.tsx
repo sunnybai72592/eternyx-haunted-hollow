@@ -71,7 +71,10 @@ export const SignupForm = ({ onSuccess, onSwitchToLogin }: SignupFormProps) => {
     if (result.success) {
       onSuccess?.();
     } else {
-      setErrors({ general: result.error?.message || 'Registration failed' });
+      const errorMessage = typeof result.error === 'string' ? result.error : 
+        (result.error && typeof result.error === 'object' && 'message' in result.error) ? 
+        (result.error as any).message : 'Registration failed';
+      setErrors({ general: errorMessage });
     }
   };
 

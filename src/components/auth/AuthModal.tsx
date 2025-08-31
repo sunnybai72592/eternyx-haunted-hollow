@@ -12,18 +12,26 @@ import { X } from 'lucide-react';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  mode?: 'login' | 'signup';
+  onModeChange?: (mode: 'login' | 'signup') => void;
   defaultMode?: 'login' | 'signup';
 }
 
-export const AuthModal = ({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) => {
-  const [mode, setMode] = useState<'login' | 'signup'>(defaultMode);
+export const AuthModal = ({ isOpen, onClose, mode: propMode, onModeChange, defaultMode = 'login' }: AuthModalProps) => {
+  const [internalMode, setInternalMode] = useState<'login' | 'signup'>(defaultMode);
+  const mode = propMode || internalMode;
 
   const handleSuccess = () => {
     onClose();
   };
 
   const handleSwitchMode = () => {
-    setMode(mode === 'login' ? 'signup' : 'login');
+    const newMode = mode === 'login' ? 'signup' : 'login';
+    if (onModeChange) {
+      onModeChange(newMode);
+    } else {
+      setInternalMode(newMode);
+    }
   };
 
   return (

@@ -170,8 +170,7 @@ export class AuthService {
       await supabase
         .from('user_profiles')
         .update({ 
-          last_login: new Date().toISOString(),
-          'stats.login_count': supabase.sql`stats->>'login_count'::int + 1`
+          last_login: new Date().toISOString()
         })
         .eq('id', this.currentUser.id);
     } catch (error) {
