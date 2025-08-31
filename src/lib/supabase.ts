@@ -51,12 +51,19 @@ export interface ContactSubmission {
   id: string;
   name: string;
   email: string;
+  company?: string;
+  phone?: string;
+  subject?: string;
   message: string;
-  status: 'pending' | 'processed' | 'responded';
+  service_interested?: string;
+  budget_range?: string;
+  timeline?: string;
+  status: 'new' | 'contacted' | 'in-progress' | 'completed' | 'archived';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  notes?: string;
+  assigned_to?: string;
   created_at: string;
-  user_agent: string;
-  ip_address: string;
-  metadata: Record<string, any>;
+  updated_at: string;
 }
 
 export interface SecurityLog {
@@ -178,12 +185,19 @@ export class SupabaseAPI {
     name: string;
     email: string;
     message: string;
+    company?: string;
+    phone?: string;
+    subject?: string;
+    service_interested?: string;
+    budget_range?: string;
+    timeline?: string;
   }) {
     try {
       const submission: Partial<ContactSubmission> = {
         ...formData,
-        status: 'pending',
+        status: 'new',
         user_agent: navigator.userAgent,
+        ip_address: await this.getClientIP(),
         metadata: {
           timestamp: Date.now(),
           page_url: window.location.href,
@@ -199,12 +213,9 @@ export class SupabaseAPI {
 
       if (error) throw error;
 
-      // Trigger background processing
-      await this.processContactSubmission(data.id);
-
       return { data, error: null };
     } catch (error) {
-      console.error('Contact form submission error:', error);
+      console.error('Supabase insert error:', error);
       return { data: null, error };
     }
   }

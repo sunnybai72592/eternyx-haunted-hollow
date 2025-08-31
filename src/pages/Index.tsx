@@ -18,12 +18,16 @@ import {
   Zap, 
   Terminal, 
   Mail, 
-  User, 
-  MessageSquare, 
-  LogIn, 
+  User,
+  MessageSquare,
+  LogIn,
   UserPlus,
   Settings,
-  Wrench
+  Wrench,
+  Phone,
+  Building,
+  DollarSign,
+  Clock
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuthStore } from "@/store/authStore";
@@ -45,6 +49,12 @@ const Index = () => {
     name: "",
     email: "",
     message: "",
+    company: "",
+    phone: "",
+    subject: "",
+    service_interested: "",
+    budget_range: "",
+    timeline: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -90,17 +100,21 @@ const Index = () => {
     const errors = [];
     
     if (!formData.name.trim()) {
-      errors.push('Name is required');
+      errors.push("Name is required");
     }
     
     if (!formData.email.trim()) {
-      errors.push('Email is required');
+      errors.push("Email is required");
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.push('Please enter a valid email address');
+      errors.push("Please enter a valid email address");
+    }
+
+    if (!formData.subject.trim()) {
+      errors.push("Subject is required");
     }
     
     if (!formData.message.trim()) {
-      errors.push('Message is required');
+      errors.push("Message is required");
     }
     
     return errors;
@@ -143,7 +157,7 @@ const Index = () => {
       console.log('Contact form submitted successfully');
 
       setSubmitStatus('success');
-      setFormData({ name: "", email: "", message: "" });
+      setFormData({ name: "", email: "", message: "", company: "", phone: "", subject: "", service_interested: "", budget_range: "", timeline: "" });
       
       addNotification({
         type: 'success',
@@ -423,49 +437,135 @@ const Index = () => {
                   <User className="inline mr-2 h-4 w-4" />
                   Name:
                 </label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="bg-background border-border text-foreground"
-                  placeholder="Enter your name..."
-                  required
-                  aria-required="true"
-                  aria-describedby="name-error"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="email" className="block text-cyber-green mb-2">
-                  <Mail className="inline mr-2 h-4 w-4" />
-                  Email:
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="bg-background border-border text-foreground"
-                  placeholder="your@email.com"
-                  required
-                  aria-required="true"
-                  aria-describedby="email-error"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label htmlFor="message" className="block text-cyber-green mb-2">
-                <MessageSquare className="inline mr-2 h-4 w-4" />
-                Message:
+            <Input
+              type="text"
+              placeholder="Enter your name..."
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+              aria-label="Name"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-muted-foreground flex items-center">
+                <Mail className="mr-2 h-4 w-4" /> Email:
               </label>
-              <Textarea
-                id="message"
-                value={formData.message}
-                onChange={(e) => handleInputChange('message', e.target.value)}
-                className="bg-background border-border text-foreground min-h-[120px]"
-                placeholder="Describe your project requirements..."
+              <Input
+                id="email"
+                type="email"
+                placeholder="your@email.com"
+                value={formData.email}
+                onChange={(e) => handleInputChange("email", e.target.value)}
+                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                aria-label="Email"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="phone" className="text-muted-foreground flex items-center">
+                <Phone className="mr-2 h-4 w-4" /> Phone (Optional):
+              </label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="(123) 456-7890"
+                value={formData.phone}
+                onChange={(e) => handleInputChange("phone", e.target.value)}
+                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                aria-label="Phone Number"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="company" className="text-muted-foreground flex items-center">
+              <Building className="mr-2 h-4 w-4" /> Company (Optional):
+            </label>
+            <Input
+              id="company"
+              type="text"
+              placeholder="Your Company Name"
+              value={formData.company}
+              onChange={(e) => handleInputChange("company", e.target.value)}
+              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+              aria-label="Company Name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="subject" className="text-muted-foreground flex items-center">
+              <MessageSquare className="mr-2 h-4 w-4" /> Subject:
+            </label>
+            <Input
+              id="subject"
+              type="text"
+              placeholder="Briefly describe your inquiry"
+              value={formData.subject}
+              onChange={(e) => handleInputChange("subject", e.target.value)}
+              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+              aria-label="Subject"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="service" className="text-muted-foreground flex items-center">
+                <Zap className="mr-2 h-4 w-4" /> Service Interested In (Optional):
+              </label>
+              <Input
+                id="service"
+                type="text"
+                placeholder="e.g., Cybersecurity, Web Dev"
+                value={formData.service_interested}
+                onChange={(e) => handleInputChange("service_interested", e.target.value)}
+                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                aria-label="Service Interested In"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="budget" className="text-muted-foreground flex items-center">
+                <DollarSign className="mr-2 h-4 w-4" /> Budget Range (Optional):
+              </label>
+              <Input
+                id="budget"
+                type="text"
+                placeholder="e.g., $5000 - $10000"
+                value={formData.budget_range}
+                onChange={(e) => handleInputChange("budget_range", e.target.value)}
+                className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+                aria-label="Budget Range"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="timeline" className="text-muted-foreground flex items-center">
+              <Clock className="mr-2 h-4 w-4" /> Timeline (Optional):
+            </label>
+            <Input
+              id="timeline"
+              type="text"
+              placeholder="e.g., 2-3 months"
+              value={formData.timeline}
+              onChange={(e) => handleInputChange("timeline", e.target.value)}
+              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300"
+              aria-label="Timeline"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="message" className="text-muted-foreground flex items-center">
+              <MessageSquare className="mr-2 h-4 w-4" /> Message:
+            </label>
+            <Textarea
+              id="message"
+              placeholder="Describe your project requirements..."
+              value={formData.message}
+              onChange={(e) => handleInputChange("message", e.target.value)}
+              className="bg-input-background border-input-border text-input-foreground focus:ring-primary focus:border-primary transition-all duration-300 min-h-[120px]"
+              aria-label="Message"
+            />uirements..."
                 required
                 aria-required="true"
                 aria-describedby="message-error"
