@@ -2,6 +2,9 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TypingText } from "@/components/TypingText";
+import { Navigation } from "@/components/Navigation";
+import { PageIndicator } from "@/components/PageIndicator";
+import { MobileViewport } from "@/components/MobileViewport";
 import {
   ArrowLeft,
   Skull,
@@ -55,25 +58,14 @@ const Services = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="border-b border-gray-700 bg-card/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground hover:bg-gray-800/50"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Main
-          </Button>
-          <h1 className="text-xl font-bold text-foreground">Our Services</h1>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
+      <MobileViewport />
+      <Navigation />
+      <PageIndicator />
+      
       {/* Hero Section */}
-      <section className="py-20 px-4 text-center bg-gradient-to-b from-gray-950/20 to-background">
-        <div className="max-w-4xl mx-auto">
+      <section className="py-12 sm:py-16 md:py-20 px-4 text-center bg-gradient-to-b from-gray-950/20 to-background pt-20 sm:pt-24">
+        <div className="max-w-4xl mx-auto responsive-container">
           <h1 className="text-5xl md:text-7xl font-bold mb-6 text-foreground glitch" data-text="CYBERSECURITY">
             CYBERSECURITY
           </h1>

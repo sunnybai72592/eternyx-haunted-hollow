@@ -1197,3 +1197,194 @@ input:focus, textarea:focus, select:focus {
   padding-right: max(1rem, env(safe-area-inset-right));
 }
 
+
+/* Navigation-specific animations and styles */
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-scan {
+  animation: scan 3s linear infinite;
+}
+
+/* Cyberpunk color variables for navigation */
+:root {
+  --cyber-green: 120 100% 50%;
+  --cyber-blue: 200 100% 50%;
+  --cyber-yellow: 60 100% 50%;
+  --cyber-cyan: 180 100% 50%;
+  --cyber-gold: 45 100% 50%;
+}
+
+.text-cyber-green { color: hsl(var(--cyber-green)); }
+.text-cyber-blue { color: hsl(var(--cyber-blue)); }
+.text-cyber-yellow { color: hsl(var(--cyber-yellow)); }
+.text-cyber-cyan { color: hsl(var(--cyber-cyan)); }
+.text-cyber-gold { color: hsl(var(--cyber-gold)); }
+
+/* Enhanced mobile card styles */
+.mobile-card {
+  background: linear-gradient(135deg, hsl(var(--cyber-gray)), hsl(var(--background)));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.mobile-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
+  animation: scan-line 3s infinite;
+}
+
+@keyframes scan-line {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.mobile-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px hsl(var(--primary) / 0.15);
+}
+
+/* Touch target improvements */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive text utilities */
+.responsive-text-5xl {
+  font-size: clamp(2rem, 8vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.responsive-text-4xl {
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+  line-height: 1.2;
+}
+
+.responsive-text-lg {
+  font-size: clamp(0.875rem, 3vw, 1.125rem);
+  line-height: 1.5;
+}
+
+.responsive-text-base {
+  font-size: clamp(0.75rem, 2.5vw, 1rem);
+  line-height: 1.5;
+}
+
+/* Mobile grid improvements */
+.mobile-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .mobile-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+}
+
+/* Mobile animations */
+.mobile-animate-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.mobile-animate-slide-up {
+  animation: slideUp 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Navigation specific styles */
+.nav-item-active {
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary));
+}
+
+.nav-item-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: hsl(var(--primary));
+  animation: pulse 2s infinite;
+}
+
+/* Safe area padding for mobile devices */
+.safe-area-padding {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* Mobile section padding */
+.mobile-section-padding {
+  padding: 2rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .mobile-section-padding {
+    padding: 3rem 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile-section-padding {
+    padding: 4rem 2rem;
+  }
+}
+
+/* Responsive container */
+.responsive-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .responsive-container {
+    padding: 0 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-container {
+    padding: 0 2rem;
+  }
+}
+

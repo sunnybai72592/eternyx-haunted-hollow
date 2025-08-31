@@ -10,6 +10,7 @@ import { UserProfile } from "@/components/auth/UserProfile";
 import { AuthModal } from "@/components/auth/AuthModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { MobileViewport } from "@/components/MobileViewport";
+import { Navigation } from "@/components/Navigation";
 import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
 import { 
   Code, 
@@ -180,6 +181,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
       <MobileViewport />
+      <Navigation />
       
       {/* Authentication Modal */}
       <AuthModal
@@ -220,7 +222,7 @@ const Index = () => {
 
       {/* Hero Section */}
       <section 
-        className="relative min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat safe-area-padding"
+        className="relative min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat safe-area-padding pt-20 sm:pt-24"
         style={{ backgroundImage: `url(${cyberHeroBg})` }}
         role="banner"
         aria-label="ETERNYX Hero Section"
@@ -306,94 +308,68 @@ const Index = () => {
         </div>
       </section>
       {isAuthenticated && (
-        <section className="py-20 px-4 max-w-6xl mx-auto" aria-label="Advanced Features">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
-              <TypingText text="./advanced_features" speed={120} />
+        <section className="py-12 sm:py-16 md:py-20 px-4 max-w-6xl mx-auto responsive-container mobile-section-padding" aria-label="Advanced Features">
+          <div className="text-center mb-8 sm:mb-12 mobile-animate-fade-in">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 text-cyber-blue neon-text responsive-text-4xl">
+              ./advanced_features
             </h2>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto responsive-text-lg">
               Access your personalized dashboard and advanced tools
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
-            <div role="listitem">
-              <Button
-                onClick={() => navigate('/profile')}
-                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
-                variant="ghost"
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mobile-grid">
+            <div className="mobile-card hover:border-primary/40 transition-all duration-300 mobile-animate-slide-up">
+              <div className="flex items-center mb-3 sm:mb-4">
+                <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary mr-2 sm:mr-3" />
+                <h3 className="text-base sm:text-lg font-semibold text-primary responsive-text-lg">User Profile</h3>
+              </div>
+              <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 responsive-text-base">
+                Manage your account settings, preferences, and security options
+              </p>
+              <Button 
+                onClick={() => navigate("/profile")}
+                variant="outline"
+                size="sm"
+                className="w-full touch-button border-primary/20 hover:bg-primary/10 text-xs sm:text-sm"
               >
-                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-green-500/20 rounded-lg hover:border-green-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-green-500/20">
-                  <div className="flex items-center mb-4">
-                    <User className="h-6 w-6 text-green-400 mr-3" />
-                    <h3 className="text-lg font-bold text-green-400 text-left">
-                      User Profile
-                    </h3>
-                  </div>
-                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
-                    Manage your account settings, avatar, and personal information
-                  </p>
-                </div>
+                Access Profile
               </Button>
             </div>
 
-            <div role="listitem">
-              <Button
-                onClick={() => navigate('/settings')}
-                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
-                variant="ghost"
+            <div className="mobile-card hover:border-secondary/40 transition-all duration-300 mobile-animate-slide-up" style={{animationDelay: "0.1s"}}>
+              <div className="flex items-center mb-3 sm:mb-4">
+                <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-secondary mr-2 sm:mr-3" />
+                <h3 className="text-base sm:text-lg font-semibold text-secondary responsive-text-lg">Settings</h3>
+              </div>
+              <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 responsive-text-base">
+                Customize your experience with advanced configuration options
+              </p>
+              <Button 
+                onClick={() => navigate("/settings")}
+                variant="outline"
+                size="sm"
+                className="w-full touch-button border-secondary/20 hover:bg-secondary/10 text-xs sm:text-sm"
               >
-                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-blue-500/20 rounded-lg hover:border-blue-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/20">
-                  <div className="flex items-center mb-4">
-                    <Zap className="h-6 w-6 text-blue-400 mr-3" />
-                    <h3 className="text-lg font-bold text-blue-400 text-left">
-                      Settings
-                    </h3>
-                  </div>
-                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
-                    Configure preferences, themes, notifications, and privacy settings
-                  </p>
-                </div>
+                Open Settings
               </Button>
             </div>
 
-            <div role="listitem">
-              <Button
-                onClick={() => navigate('/dashboard')}
-                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
-                variant="ghost"
+            <div className="mobile-card hover:border-accent/40 transition-all duration-300 mobile-animate-slide-up sm:col-span-2 lg:col-span-1" style={{animationDelay: "0.2s"}}>
+              <div className="flex items-center mb-3 sm:mb-4">
+                <Wrench className="h-5 w-5 sm:h-6 sm:w-6 text-accent mr-2 sm:mr-3" />
+                <h3 className="text-base sm:text-lg font-semibold text-accent responsive-text-lg">Tools Hub</h3>
+              </div>
+              <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 responsive-text-base">
+                Access our comprehensive suite of cybersecurity and development tools
+              </p>
+              <Button 
+                onClick={() => navigate("/tools")}
+                variant="outline"
+                size="sm"
+                className="w-full touch-button border-accent/20 hover:bg-accent/10 text-xs sm:text-sm"
               >
-                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-purple-500/20 rounded-lg hover:border-purple-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20">
-                  <div className="flex items-center mb-4">
-                    <Terminal className="h-6 w-6 text-purple-400 mr-3" />
-                    <h3 className="text-lg font-bold text-purple-400 text-left">
-                      Dashboard
-                    </h3>
-                  </div>
-                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
-                    Access your personalized control center and analytics
-                  </p>
-                </div>
-              </Button>
-            </div>
-
-            <div role="listitem">
-              <Button
-                onClick={() => navigate('/tools')}
-                className="w-full h-auto p-0 bg-transparent hover:bg-transparent border-0"
-                variant="ghost"
-              >
-                <div className="w-full p-6 bg-card/50 backdrop-blur-sm border border-orange-500/20 rounded-lg hover:border-orange-500/40 hover:bg-card/70 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/20">
-                  <div className="flex items-center mb-4">
-                    <Code className="h-6 w-6 text-orange-400 mr-3" />
-                    <h3 className="text-lg font-bold text-orange-400 text-left">
-                      Tools Hub
-                    </h3>
-                  </div>
-                  <p className="text-muted-foreground text-sm text-left leading-relaxed">
-                    Access advanced cybersecurity and development tools
-                  </p>
-                </div>
+                Launch Tools
               </Button>
             </div>
           </div>

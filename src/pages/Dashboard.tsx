@@ -11,6 +11,8 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import CyberMetrics from '@/components/CyberMetrics';
 import HolographicCard from '@/components/HolographicCard';
 import AdvancedTerminal from '@/components/AdvancedTerminal';
+import { Navigation } from '@/components/Navigation';
+import { MobileViewport } from '@/components/MobileViewport';
 import { useAuthStore } from '@/store/authStore';
 import { useAppStore } from '@/store/useAppStore';
 import {
@@ -202,9 +204,12 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background matrix-bg">
+    <div className="min-h-screen bg-background matrix-bg preserve-cyberpunk android-scroll">
+      <MobileViewport />
+      <Navigation />
+      
       {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-20 sm:top-24 z-40 mt-20 sm:mt-24">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">

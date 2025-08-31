@@ -23,6 +23,9 @@ const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
 const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
 const Services = lazy(() => import("./pages/Services"));
 const Tools = lazy(() => import("./pages/Tools"));
+const Development = lazy(() => import("./pages/Development"));
+const Innovation = lazy(() => import("./pages/Innovation"));
+const Premium = lazy(() => import("./pages/Premium"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -79,6 +82,9 @@ const App = () => {
                   <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/tools" element={<Tools />} />
+                  <Route path="/development" element={<Development />} />
+                  <Route path="/innovation" element={<Innovation />} />
+                  <Route path="/premium" element={<Premium />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
