@@ -2,11 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 
 // Environment variables for Supabase
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Ensure environment variables are loaded
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase environment variables are not loaded. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
+  console.error('Supabase environment variables are not loaded. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set.');
   // Fallback to hardcoded values for local development if needed, or throw an error
   // For production, this check should ideally prevent the app from starting without proper config
 }
