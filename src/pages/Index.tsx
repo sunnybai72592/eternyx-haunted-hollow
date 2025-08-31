@@ -9,6 +9,7 @@ import { TerminalWindow } from "@/components/TerminalWindow";
 import { UserProfile } from "@/components/auth/UserProfile";
 import { AuthModal } from "@/components/auth/AuthModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { MobileViewport } from "@/components/MobileViewport";
 import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
 import { 
   Code, 
@@ -177,7 +178,9 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
+      <MobileViewport />
+      
       {/* Authentication Modal */}
       <AuthModal
         isOpen={authModalOpen}
@@ -187,27 +190,29 @@ const Index = () => {
       />
 
       {/* Authentication Header */}
-      <header className="fixed top-0 right-0 z-50 p-4">
+      <header className="fixed top-0 right-0 z-50 p-2 sm:p-4 android-safe-area">
         {isAuthenticated ? (
           <UserProfile className="animate-fade-in" />
         ) : (
-          <div className="flex space-x-2 animate-fade-in">
+          <div className="flex space-x-1 sm:space-x-2 animate-fade-in">
             <Button
               variant="outline"
               size="sm"
               onClick={() => openAuthModal('login')}
-              className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 transition-all duration-300 hover:scale-105"
+              className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 transition-all duration-300 hover:scale-105 text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 touch-target"
             >
-              <LogIn className="mr-2 h-4 w-4" />
-              Sign In
+              <LogIn className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Sign In</span>
+              <span className="xs:hidden">In</span>
             </Button>
             <Button
               size="sm"
               onClick={() => openAuthModal('signup')}
-              className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border transition-all duration-300 hover:scale-105"
+              className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border transition-all duration-300 hover:scale-105 text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 touch-target"
             >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Sign Up
+              <UserPlus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Sign Up</span>
+              <span className="xs:hidden">Up</span>
             </Button>
           </div>
         )}
@@ -215,62 +220,62 @@ const Index = () => {
 
       {/* Hero Section */}
       <section 
-        className="relative min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
+        className="relative min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat safe-area-padding"
         style={{ backgroundImage: `url(${cyberHeroBg})` }}
         role="banner"
         aria-label="ETERNYX Hero Section"
       >
         <div className="absolute inset-0 bg-background/80"></div>
         
-        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto responsive-container">
           <h1 
-            className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold mb-6 glitch neon-text"
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl 2xl:text-9xl font-bold mb-4 sm:mb-6 glitch neon-text responsive-text-8xl"
             data-text="ETERNYX"
             aria-label="ETERNYX - Full Stack Development and Cybersecurity"
           >
             ETERNYX
           </h1>
           
-          <div className="text-lg sm:text-xl md:text-2xl mb-8 h-12" aria-live="polite">
+          <div className="text-base sm:text-lg md:text-xl lg:text-2xl mb-6 sm:mb-8 h-8 sm:h-10 md:h-12" aria-live="polite">
             <TypingText 
               text="Full Stack Development • Cybersecurity • Digital Innovation"
               speed={80}
-              className="text-cyber-blue"
+              className="text-cyber-blue responsive-text-xl"
             />
           </div>
           
           {!isAuthenticated ? (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mobile-space-y-4">
               <Button 
                 size="lg" 
                 onClick={handleInitializeConnection}
-                className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow min-h-[48px] px-8 transition-all duration-300 hover:scale-105"
+                className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow touch-button w-full sm:w-auto min-h-[48px] px-6 sm:px-8 text-sm sm:text-base transition-all duration-300 hover:scale-105"
                 aria-label="Initialize secure connection to premium services"
               >
-                <Terminal className="mr-2 h-5 w-5" />
+                <Terminal className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                 Initialize Connection
               </Button>
               <Button
                 variant="outline"
                 size="lg"
                 onClick={() => openAuthModal('signup')}
-                className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 min-h-[48px] px-8 transition-all duration-300 hover:scale-105"
+                className="bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/40 touch-button w-full sm:w-auto min-h-[48px] px-6 sm:px-8 text-sm sm:text-base transition-all duration-300 hover:scale-105"
               >
-                <UserPlus className="mr-2 h-5 w-5" />
+                <UserPlus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                 Join Network
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="text-primary text-lg">
+            <div className="space-y-4 mobile-animate-fade-in">
+              <div className="text-primary text-base sm:text-lg responsive-text-lg">
                 Welcome back, <span className="font-bold text-cyber-green">{profile?.username}</span>
               </div>
               <Button 
                 size="lg" 
                 onClick={() => navigate('/dashboard')}
-                className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow min-h-[48px] px-8 transition-all duration-300 hover:scale-105"
+                className="bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow touch-button min-h-[48px] px-6 sm:px-8 text-sm sm:text-base transition-all duration-300 hover:scale-105"
               >
-                <Terminal className="mr-2 h-5 w-5" />
+                <Terminal className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                 Access Dashboard
               </Button>
             </div>
@@ -279,28 +284,27 @@ const Index = () => {
       </section>
 
       {/* Cybersecurity Navigation Section */}
-      <section className="py-20 px-4 max-w-6xl mx-auto" id="cybersecurity" aria-label="Cybersecurity Services">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
-            <TypingText text="./cybersecurity" speed={120} />
+      <section className="py-12 sm:py-16 md:py-20 px-4 max-w-6xl mx-auto responsive-container mobile-section-padding" id="cybersecurity" aria-label="Cybersecurity Services">
+        <div className="text-center mb-8 sm:mb-12 mobile-animate-fade-in">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 text-cyber-green neon-text responsive-text-4xl">
+            ./cybersecurity
           </h2>
-          <p className="text-muted-foreground text-lg">
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto responsive-text-lg">
             Advanced cybersecurity solutions powered by cutting-edge technology
           </p>
         </div>
-
-        <div className="flex justify-center">
-          <Button
+        
+        <div className="flex justify-center mobile-animate-slide-up">
+          <Button 
             onClick={() => navigate('/services')}
-            className="bg-gradient-to-r from-red-600 to-purple-600 hover:from-red-700 hover:to-purple-700 text-white font-bold py-6 px-12 rounded-lg text-xl neon-border transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/20"
+            className="bg-gradient-to-r from-red-500 to-purple-600 hover:from-red-600 hover:to-purple-700 text-white font-bold py-3 sm:py-4 px-6 sm:px-8 rounded-lg text-base sm:text-lg transition-all duration-300 hover:scale-105 neon-border animate-pulse-glow touch-button w-full sm:w-auto max-w-sm"
+            aria-label="Access comprehensive cybersecurity services"
           >
-            <Shield className="mr-3 h-8 w-8" />
+            <Shield className="mr-2 h-5 w-5 sm:h-6 sm:w-6" />
             Access Cybersecurity Services
           </Button>
         </div>
       </section>
-
-      {/* Advanced Features Navigation */}
       {isAuthenticated && (
         <section className="py-20 px-4 max-w-6xl mx-auto" aria-label="Advanced Features">
           <div className="text-center mb-16">

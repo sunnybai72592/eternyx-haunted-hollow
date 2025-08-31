@@ -12,12 +12,40 @@ export default {
 	theme: {
 		container: {
 			center: true,
-			padding: '2rem',
+			padding: {
+				DEFAULT: '1rem',
+				sm: '2rem',
+				lg: '4rem',
+				xl: '5rem',
+				'2xl': '6rem',
+			},
 			screens: {
 				'2xl': '1400px'
 			}
 		},
+		screens: {
+			'xs': '375px',
+			'sm': '640px',
+			'md': '768px',
+			'lg': '1024px',
+			'xl': '1280px',
+			'2xl': '1536px',
+			// Custom breakpoints for better mobile support
+			'mobile': '320px',
+			'tablet': '768px',
+			'desktop': '1024px',
+			'wide': '1440px',
+		},
 		extend: {
+			spacing: {
+				'safe-top': 'env(safe-area-inset-top)',
+				'safe-bottom': 'env(safe-area-inset-bottom)',
+				'safe-left': 'env(safe-area-inset-left)',
+				'safe-right': 'env(safe-area-inset-right)',
+			},
+			minHeight: {
+				'screen-safe': 'calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))',
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
@@ -62,6 +90,31 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				}
+			},
+			fontSize: {
+				'xs': ['0.75rem', { lineHeight: '1rem' }],
+				'sm': ['0.875rem', { lineHeight: '1.25rem' }],
+				'base': ['1rem', { lineHeight: '1.5rem' }],
+				'lg': ['1.125rem', { lineHeight: '1.75rem' }],
+				'xl': ['1.25rem', { lineHeight: '1.75rem' }],
+				'2xl': ['1.5rem', { lineHeight: '2rem' }],
+				'3xl': ['1.875rem', { lineHeight: '2.25rem' }],
+				'4xl': ['2.25rem', { lineHeight: '2.5rem' }],
+				'5xl': ['3rem', { lineHeight: '1' }],
+				'6xl': ['3.75rem', { lineHeight: '1' }],
+				'7xl': ['4.5rem', { lineHeight: '1' }],
+				'8xl': ['6rem', { lineHeight: '1' }],
+				'9xl': ['8rem', { lineHeight: '1' }],
+				// Mobile-optimized sizes
+				'mobile-xs': ['0.625rem', { lineHeight: '0.875rem' }],
+				'mobile-sm': ['0.75rem', { lineHeight: '1rem' }],
+				'mobile-base': ['0.875rem', { lineHeight: '1.25rem' }],
+				'mobile-lg': ['1rem', { lineHeight: '1.5rem' }],
+				'mobile-xl': ['1.125rem', { lineHeight: '1.75rem' }],
+				'mobile-2xl': ['1.25rem', { lineHeight: '1.75rem' }],
+				'mobile-3xl': ['1.5rem', { lineHeight: '2rem' }],
+				'mobile-4xl': ['1.875rem', { lineHeight: '2.25rem' }],
+				'mobile-5xl': ['2.25rem', { lineHeight: '2.5rem' }],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
