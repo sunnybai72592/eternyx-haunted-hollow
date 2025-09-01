@@ -42,6 +42,8 @@ const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
 const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 
+import { AdminGuard } from "@/components/AdminGuard";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -55,15 +57,16 @@ const queryClient = new QueryClient({
 
 const App = () => {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AccessibilityProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <NotificationSystem />
-            <PWAInstallPrompt />
-            <BrowserRouter>
+    <AdminGuard>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AccessibilityProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <NotificationSystem />
+              <PWAInstallPrompt />
+              <BrowserRouter>
               <Suspense fallback={
                 <div className="min-h-screen bg-background flex items-center justify-center">
                   <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
@@ -101,11 +104,12 @@ const App = () => {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
-            </BrowserRouter>
-          </TooltipProvider>
-        </AccessibilityProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+              </BrowserRouter>
+            </TooltipProvider>
+          </AccessibilityProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </AdminGuard>
   );
 };
 

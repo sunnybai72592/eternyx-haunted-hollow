@@ -66,9 +66,18 @@ class SecurityAPIService {
   // Vulnerability Scanning
   async createVulnerabilityScan(scanData: Partial<VulnerabilityScan>) {
     try {
+      // Ensure required fields are present
+      const completeScanData = {
+        scan_type: scanData.scan_type || 'basic',
+        target_url: scanData.target_url || '',
+        user_id: scanData.user_id,
+        status: scanData.status || 'pending',
+        ...scanData
+      };
+
       const { data, error } = await supabase
         .from('vulnerability_scans')
-        .insert([scanData])
+        .insert([completeScanData])
         .select()
         .single();
 
@@ -151,9 +160,17 @@ class SecurityAPIService {
   // Security Incidents
   async createSecurityIncident(incidentData: Partial<SecurityIncident>) {
     try {
+      // Ensure required fields are present
+      const completeIncidentData = {
+        incident_type: incidentData.incident_type || 'unauthorized_access',
+        severity: incidentData.severity || 'medium',
+        status: incidentData.status || 'open',
+        ...incidentData
+      };
+
       const { data, error } = await supabase
         .from('security_incidents')
-        .insert([incidentData])
+        .insert([completeIncidentData])
         .select()
         .single();
 
@@ -190,9 +207,18 @@ class SecurityAPIService {
   // AI Security Analysis
   async createAIAnalysis(analysisData: Partial<AISecurityAnalysis>) {
     try {
+      // Ensure required fields are present
+      const completeAnalysisData = {
+        analysis_type: analysisData.analysis_type || 'threat_assessment',
+        input_data: analysisData.input_data || {},
+        results: analysisData.results || {},
+        user_id: analysisData.user_id,
+        ...analysisData
+      };
+
       const { data, error } = await supabase
         .from('ai_security_analysis')
-        .insert([analysisData])
+        .insert([completeAnalysisData])
         .select()
         .single();
 
@@ -230,9 +256,18 @@ class SecurityAPIService {
   // Encryption Key Management
   async createEncryptionKey(keyData: Partial<EncryptionKey>) {
     try {
+      // Ensure required fields are present
+      const completeKeyData = {
+        algorithm: keyData.algorithm || 'AES-256',
+        key_name: keyData.key_name || 'default_key',
+        key_size: keyData.key_size || 256,
+        user_id: keyData.user_id,
+        ...keyData
+      };
+
       const { data, error } = await supabase
         .from('encryption_keys')
-        .insert([keyData])
+        .insert([completeKeyData])
         .select()
         .single();
 

@@ -18,7 +18,6 @@ import {
 interface SubscriptionFeature {
   name: string;
   included: boolean;
-  premium?: boolean;
 }
 
 interface SubscriptionTier {
@@ -32,11 +31,19 @@ interface SubscriptionTier {
   borderColor: string;
   bgGradient: string;
   features: SubscriptionFeature[];
-  popular?: boolean;
-  stripePriceId?: string;
+  buttonText: string;
+  buttonClass: string;
+  buttonIcon: React.ReactNode;
+  badge?: string;
+  badgeColor?: string;
 }
 
-export const SubscriptionTiers = () => {
+interface SubscriptionTiersProps {
+  onSubscribe: (planId: string) => Promise<void>;
+  isLoading: boolean;
+}
+
+const SubscriptionTiers = ({ onSubscribe, isLoading }: SubscriptionTiersProps) => {
   const [selectedTier, setSelectedTier] = useState<string>('premium');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -59,24 +66,28 @@ export const SubscriptionTiers = () => {
         { name: 'AI assistant (5 queries/day)', included: true },
         { name: 'Advanced penetration testing', included: false },
         { name: 'Real-time threat monitoring', included: false },
-        { name: 'Quantum encryption', included: false },
-        { name: 'Elite development team', included: false },
-        { name: 'Blockchain verification', included: false }
-      ]
+        { name: 'Custom security reports', included: false },
+        { name: 'Priority support', included: false },
+        { name: 'Quantum encryption', included: false }
+      ],
+      buttonText: 'Current Plan',
+      buttonClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+      buttonIcon: <Shield className="w-4 h-4 mr-2" />
     },
     {
       id: 'premium',
       name: 'SHADOW OPERATIVE',
       price: 29.99,
       period: 'month',
-      description: 'Professional-grade security arsenal',
-      icon: <Zap className="h-8 w-8" />,
+      description: 'Advanced tools for professional hackers',
+      icon: <Crown className="h-8 w-8" />,
       color: 'text-purple-400',
       borderColor: 'border-purple-400/50',
       bgGradient: 'from-purple-500/10 to-pink-500/10',
-      popular: true,
-      stripePriceId: 'price_premium_monthly',
+      badge: 'MOST POPULAR',
+      badgeColor: 'bg-purple-600',
       features: [
+        { name: 'All Ghost Access features', included: true },
         { name: 'Advanced vulnerability scanner', included: true },
         { name: 'Premium threat intelligence', included: true },
         { name: 'Quantum-ready encryption', included: true },
@@ -85,22 +96,26 @@ export const SubscriptionTiers = () => {
         { name: 'Real-time threat monitoring', included: true },
         { name: 'Penetration testing suite', included: true },
         { name: 'Custom security reports', included: true },
-        { name: 'Elite development team', included: false },
-        { name: 'Blockchain verification', included: false }
-      ]
+        { name: 'Priority support', included: true }
+      ],
+      buttonText: 'Upgrade to Shadow',
+      buttonClass: 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/25',
+      buttonIcon: <Crown className="w-4 h-4 mr-2" />
     },
     {
       id: 'elite',
       name: 'CYBER OVERLORD',
       price: 99.99,
       period: 'month',
-      description: 'Ultimate cybersecurity dominance',
-      icon: <Crown className="h-8 w-8" />,
+      description: 'Ultimate power for cybersecurity masters',
+      icon: <Diamond className="h-8 w-8" />,
       color: 'text-orange-400',
       borderColor: 'border-orange-400/50',
       bgGradient: 'from-orange-500/10 to-red-500/10',
-      stripePriceId: 'price_elite_monthly',
+      badge: 'ULTIMATE',
+      badgeColor: 'bg-gradient-to-r from-orange-500 to-red-500',
       features: [
+        { name: 'All Shadow Operative features', included: true },
         { name: 'Enterprise vulnerability lab', included: true },
         { name: 'Classified threat intelligence', included: true },
         { name: 'Military-grade encryption', included: true },
@@ -109,148 +124,141 @@ export const SubscriptionTiers = () => {
         { name: '24/7 threat monitoring', included: true },
         { name: 'Advanced exploit simulations', included: true },
         { name: 'White-label solutions', included: true },
-        { name: 'Elite development team', included: true },
-        { name: 'Blockchain verification', included: true, premium: true }
-      ]
+        { name: 'Elite development team', included: true }
+      ],
+      buttonText: 'Become Overlord',
+      buttonClass: 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg shadow-orange-500/25',
+      buttonIcon: <Diamond className="w-4 h-4 mr-2" />
     }
   ];
 
   const handleSubscribe = async (tierId: string) => {
-    const tier = tiers.find(t => t.id === tierId);
-    if (!tier || tier.price === 0) return;
-
-    setIsProcessing(true);
+    if (tierId === 'free') return; // Free tier doesn't need subscription
     
+    setIsProcessing(true);
     try {
-      // Simulate Stripe checkout process
-      console.log(`Initiating Stripe checkout for ${tier.name} - ${tier.stripePriceId}`);
-      
-      // In real implementation, this would redirect to Stripe Checkout
-      // const stripe = await loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
-      // const { error } = await stripe.redirectToCheckout({
-      //   lineItems: [{ price: tier.stripePriceId, quantity: 1 }],
-      //   mode: 'subscription',
-      //   successUrl: `${window.location.origin}/dashboard?subscription=success`,
-      //   cancelUrl: `${window.location.origin}/pricing?subscription=cancelled`,
-      // });
-      
-      setTimeout(() => {
-        setIsProcessing(false);
-        alert(`Stripe checkout would be initiated for ${tier.name}`);
-      }, 2000);
-      
+      await onSubscribe(tierId);
     } catch (error) {
       console.error('Subscription error:', error);
+    } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="text-center mb-12">
-        <h2 className="text-4xl md:text-5xl font-bold mb-4 text-primary glitch" data-text="CHOOSE YOUR LEVEL">
-          CHOOSE YOUR LEVEL
-        </h2>
-        <p className="text-muted-foreground text-lg">
-          Unlock the full potential of the digital underground
-        </p>
-      </div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+      {tiers.map((tier) => (
+        <Card
+          key={tier.id}
+          className={`relative overflow-hidden bg-gradient-to-br ${tier.bgGradient} border-2 ${tier.borderColor} hover:shadow-2xl transition-all duration-300 transform hover:scale-105 ${
+            selectedTier === tier.id ? 'ring-2 ring-primary' : ''
+          }`}
+          onClick={() => setSelectedTier(tier.id)}
+        >
+          {/* Badge */}
+          {tier.badge && (
+            <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold text-white ${tier.badgeColor} shadow-lg`}>
+              {tier.badge}
+            </div>
+          )}
 
-      <div className="grid md:grid-cols-3 gap-8">
-        {tiers.map((tier) => (
-          <Card
-            key={tier.id}
-            className={`relative p-6 transition-all duration-500 hover:scale-105 cursor-pointer ${
-              tier.borderColor
-            } ${
-              selectedTier === tier.id ? 'ring-2 ring-primary' : ''
-            } ${
-              tier.popular ? 'ring-2 ring-purple-400 animate-pulse-glow' : ''
-            } bg-gradient-to-br ${tier.bgGradient} backdrop-blur-sm`}
-            onClick={() => setSelectedTier(tier.id)}
-          >
-            {tier.popular && (
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <Badge className="bg-purple-500 text-white px-4 py-1 animate-bounce">
-                  <Star className="h-3 w-3 mr-1" />
-                  MOST POPULAR
-                </Badge>
-              </div>
-            )}
-
+          <div className="p-8">
+            {/* Header */}
             <div className="text-center mb-6">
-              <div className={`${tier.color} mb-4 flex justify-center animate-float`}>
-                {tier.icon}
+              <div className={`mx-auto w-16 h-16 rounded-full bg-gradient-to-br ${tier.bgGradient} border ${tier.borderColor} flex items-center justify-center mb-4`}>
+                <span className={tier.color}>{tier.icon}</span>
               </div>
-              <h3 className={`text-xl font-bold ${tier.color} mb-2 neon-text`}>
-                {tier.name}
-              </h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                {tier.description}
-              </p>
+              <h3 className="text-2xl font-bold text-foreground mb-2">{tier.name}</h3>
+              <p className="text-sm text-muted-foreground">{tier.description}</p>
+            </div>
+
+            {/* Price */}
+            <div className="text-center mb-8">
               <div className="flex items-baseline justify-center">
-                <span className={`text-4xl font-bold ${tier.color}`}>
+                <span className="text-4xl font-bold text-foreground">
                   ${tier.price}
                 </span>
                 {tier.price > 0 && (
-                  <span className="text-muted-foreground ml-1">/{tier.period}</span>
+                  <span className="text-muted-foreground ml-2">/{tier.period}</span>
                 )}
               </div>
+              {tier.price === 0 && (
+                <p className="text-sm text-muted-foreground mt-1">Always free</p>
+              )}
             </div>
 
-            <div className="space-y-3 mb-6">
+            {/* Features */}
+            <div className="space-y-3 mb-8">
               {tier.features.map((feature, index) => (
-                <div key={index} className="flex items-center space-x-3">
+                <div key={index} className="flex items-center gap-3">
                   {feature.included ? (
-                    <Check className={`h-4 w-4 ${feature.premium ? 'text-orange-400' : 'text-green-400'}`} />
+                    <Check className="w-5 h-5 text-green-400 flex-shrink-0" />
                   ) : (
-                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    <Lock className="w-5 h-5 text-red-400 flex-shrink-0" />
                   )}
-                  <span className={`text-sm ${
-                    feature.included 
-                      ? feature.premium 
-                        ? 'text-orange-400 font-medium' 
-                        : 'text-foreground' 
-                      : 'text-muted-foreground'
-                  }`}>
+                  <span className={`text-sm ${feature.included ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
                     {feature.name}
                   </span>
-                  {feature.premium && (
-                    <Diamond className="h-3 w-3 text-orange-400 animate-pulse" />
-                  )}
                 </div>
               ))}
             </div>
 
-            <Button
-              onClick={() => handleSubscribe(tier.id)}
-              disabled={isProcessing}
-              className={`w-full ${
-                tier.price === 0
-                  ? 'bg-card hover:bg-card/80 text-foreground border border-primary/30'
-                  : selectedTier === tier.id
-                  ? 'bg-primary hover:bg-primary/80 text-primary-foreground neon-border animate-pulse-glow'
-                  : 'bg-card hover:bg-primary/20 text-foreground border border-primary/30'
-              } transition-all duration-300`}
-            >
-              {tier.price === 0 ? (
-                <>
-                  <Unlock className="mr-2 h-4 w-4" />
-                  Access Now
-                </>
+            {/* Button */}
+            <div className="space-y-4">
+              {tier.id === 'free' ? (
+                <Button
+                  disabled
+                  className="w-full bg-muted text-muted-foreground cursor-not-allowed"
+                  size="lg"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Current Plan
+                </Button>
               ) : (
-                <>
-                  <Skull className="mr-2 h-4 w-4" />
-                  {isProcessing ? 'Processing...' : 'Initiate Protocol'}
-                </>
+                <Button
+                  onClick={() => handleSubscribe(tier.id)}
+                  disabled={isLoading || isProcessing}
+                  className={`w-full ${tier.buttonClass} relative overflow-hidden group`}
+                  size="lg"
+                >
+                  {(isLoading || isProcessing) ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                      Processing...
+                    </div>
+                  ) : (
+                    <>
+                      {tier.buttonIcon}
+                      {tier.buttonText}
+                    </>
+                  )}
+                  <div className="absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </Button>
               )}
-            </Button>
-          </Card>
-        ))}
-      </div>
+            </div>
+
+            {/* Additional Info */}
+            {tier.id === 'premium' && (
+              <div className="mt-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  ⚡ Most chosen by professionals
+                </p>
+              </div>
+            )}
+            
+            {tier.id === 'elite' && (
+              <div className="mt-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  🔥 For the ultimate hackers
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+      ))}
 
       {/* Additional Features Section */}
-      <div className="mt-16 text-center">
+      <div className="col-span-full mt-16 text-center">
         <h3 className="text-2xl font-bold text-primary mb-8">
           All Tiers Include
         </h3>
@@ -277,3 +285,4 @@ export const SubscriptionTiers = () => {
   );
 };
 
+export default SubscriptionTiers;

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SubscriptionTiers } from '@/components/enhanced/SubscriptionTiers';
+import SubscriptionTiers from '@/components/enhanced/SubscriptionTiers';
 import { stripeService, SubscriptionPlan } from '@/lib/enhanced/stripeService';
 import { 
   Crown, 

@@ -196,13 +196,14 @@ export class SupabaseAPI {
       const submission: Partial<ContactSubmission> = {
         ...formData,
         status: 'new',
-        user_agent: navigator.userAgent,
-        ip_address: await this.getClientIP(),
-        metadata: {
-          timestamp: Date.now(),
-          page_url: window.location.href,
-          referrer: document.referrer
-        }
+        // Remove user_agent as it's not in the table schema
+        // user_agent: navigator.userAgent,
+        // ip_address: await this.getClientIP(),
+        // metadata: {
+        //   timestamp: Date.now(),
+        //   page_url: window.location.href,
+        //   referrer: document.referrer
+        // }
       };
 
       const { data, error } = await supabase
