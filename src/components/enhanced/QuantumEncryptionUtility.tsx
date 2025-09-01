@@ -239,7 +239,6 @@ export const QuantumEncryptionUtility = () => {
                       onChange={(e) => setPlaintext(e.target.value)}
                       placeholder="Enter sensitive data to encrypt..."
                       className="bg-background/50 border-primary/30 min-h-32 pr-10"
-                      type={showPlaintext ? 'text' : 'password'}
                     />
                     <Button
                       variant="ghost"
