@@ -40,6 +40,11 @@ const MobileDevelopment = lazy(() => import("./pages/MobileDevelopment"));
 const CloudSolutions = lazy(() => import("./pages/CloudSolutions"));
 const PerformanceOptimization = lazy(() => import("./pages/PerformanceOptimization"));
 const CustomSolutions = lazy(() => import("./pages/CustomSolutions"));
+const BugReport = lazy(() => import("./pages/BugReport"));
+
+// Tool pages
+const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
+const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
 
 // Enhanced platform pages
 const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"));
@@ -305,7 +310,7 @@ const App = () => {
                   <Header />
                   <div className="flex">
                     <Sidebar />
-                    <main className="flex-1 p-4 pt-20 lg:ml-64">
+                    <main className="flex-1 p-4 pt-32 lg:ml-64 md:ml-16 transition-all duration-300">
                       <Suspense fallback={
                         <div className="min-h-screen bg-background flex items-center justify-center">
                           <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
@@ -341,6 +346,9 @@ const App = () => {
                           <Route path="/innovation" element={<Innovation />} />
                           <Route path="/killer-edge" element={<KillerEdge />} />
                           <Route path="/premium" element={<Premium />} />
+                          <Route path="/bug-report" element={<BugReport />} />
+                          <Route path="/tools/network-scanner" element={<NetworkScanner />} />
+                          <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                           <Route path="*" element={<NotFound />} />
                         </Routes>

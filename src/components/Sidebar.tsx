@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Home, Zap, Shield, Book, Settings, User, Compass, Layers, Gem, Bell, Code, Cloud, Smartphone, TrendingUp, Puzzle } from 'lucide-react';
+import { Home, Zap, Shield, Book, Settings, User, Compass, Layers, Gem, Bell, Code, Cloud, Smartphone, TrendingUp, Puzzle, Bug } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { Separator } from "./ui/separator";
 
@@ -48,7 +48,7 @@ const Sidebar: React.FC = () => {
   // const isActive = (path: string) => location.pathname === path;
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-16 lg:w-64 bg-black/70 backdrop-blur-md border-r border-cyber-cyan/30 shadow-lg pt-20 pb-4 flex flex-col justify-between z-30">
+    <aside className="fixed left-0 top-0 h-full w-16 lg:w-64 bg-black/70 backdrop-blur-md border-r border-cyber-cyan/30 shadow-lg pt-32 pb-4 flex flex-col justify-between z-30 transform transition-transform duration-300 ease-in-out lg:translate-x-0 -translate-x-full md:translate-x-0">
       <nav className="flex flex-col items-center lg:items-stretch space-y-2 px-2 lg:px-4">
         <SidebarLink to="/cyber-dashboard" icon={<Home className="h-5 w-5" />} label="Dashboard" active={true} xp={1250} />
         <SidebarLink to="/arsenal" icon={<Zap className="h-5 w-5" />} label="Cyber Arsenal" xp={800} />
@@ -75,6 +75,7 @@ const Sidebar: React.FC = () => {
         <SidebarLink to="/profile" icon={<User className="h-5 w-5" />} label="Profile" />
         <SidebarLink to="/settings" icon={<Settings className="h-5 w-5" />} label="Settings" />
         <SidebarLink to="/notifications" icon={<Bell className="h-5 w-5" />} label="Notifications" />
+        <SidebarLink to="/bug-report" icon={<Bug className="h-5 w-5" />} label="Bug Report" />
       </div>
     </aside>
   );
