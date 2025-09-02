@@ -27,7 +27,10 @@ import {
   Phone,
   Building,
   DollarSign,
-  Clock
+  Clock,
+  Play,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuthStore } from "@/store/authStore";
@@ -68,6 +71,8 @@ const Index = () => {
   const { announceToScreenReader } = useAccessibility();
   
   const [isLoading, setIsLoading] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     // Simulate loading time or actual data fetching
@@ -80,6 +85,16 @@ const Index = () => {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Cursor tracking for parallax effect
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setCursorPosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   const openAuthModal = (mode: 'login' | 'signup') => {
     setAuthMode(mode);

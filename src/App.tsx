@@ -9,6 +9,9 @@ import { AccessibilityProvider } from "@/components/AccessibilityProvider";
 import NotificationSystem from "@/components/NotificationSystem";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import Header from "@/components/Header";
+import Sidebar from "@/components/Sidebar";
+import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
 
 // Lazy load pages for better performance
@@ -298,44 +301,51 @@ const App = () => {
                 <NotificationSystem />
                 <PWAInstallPrompt />
                 <BrowserRouter>
-                <Suspense fallback={
-                  <div className="min-h-screen bg-background flex items-center justify-center">
-                    <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
+                  <Header />
+                  <div className="flex">
+                    <Sidebar />
+                    <main className="flex-1 p-4 pt-20 lg:ml-64">
+                      <Suspense fallback={
+                        <div className="min-h-screen bg-background flex items-center justify-center">
+                          <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
+                        </div>
+                      }>
+                        <Routes>
+                          <Route path="/" element={<Index />} />
+                          <Route path="/dashboard" element={<Dashboard />} />
+                          <Route path="/enhanced-dashboard" element={<EnhancedDashboard />} />
+                          <Route path="/arsenal" element={<CyberArsenal />} />
+                          <Route path="/subscriptions" element={<SubscriptionHub />} />
+                          <Route path="/knowledge" element={<KnowledgeHub />} />
+                          <Route path="/profile" element={<Profile />} />
+                          <Route path="/settings" element={<Settings />} />
+                          <Route path="/help" element={<Help />} />
+                          <Route path="/hacked" element={<Hacked />} />
+                          <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
+                          <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
+                          <Route path="/quantum-encryption" element={<QuantumEncryption />} />
+                          <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
+                          <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
+                          <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
+                          <Route path="/services" element={<Services />} />
+                          <Route path="/tools" element={<Tools />} />
+                          <Route path="/development" element={<Development />} />
+                          <Route path="/frontend-development" element={<FrontendDevelopment />} />
+                          <Route path="/backend-development" element={<BackendDevelopment />} />
+                          <Route path="/mobile-development" element={<MobileDevelopment />} />
+                          <Route path="/cloud-solutions" element={<CloudSolutions />} />
+                          <Route path="/performance-optimization" element={<PerformanceOptimization />} />
+                          <Route path="/custom-solutions" element={<CustomSolutions />} />
+                          <Route path="/innovation" element={<Innovation />} />
+                          <Route path="/killer-edge" element={<KillerEdge />} />
+                          <Route path="/premium" element={<Premium />} />
+                          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                          <Route path="*" element={<NotFound />} />
+                        </Routes>
+                      </Suspense>
+                    </main>
                   </div>
-                }>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/enhanced-dashboard" element={<EnhancedDashboard />} />
-                    <Route path="/arsenal" element={<CyberArsenal />} />
-                    <Route path="/subscriptions" element={<SubscriptionHub />} />
-                    <Route path="/knowledge" element={<KnowledgeHub />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/help" element={<Help />} />
-                    <Route path="/hacked" element={<Hacked />} />
-                    <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
-                    <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
-                    <Route path="/quantum-encryption" element={<QuantumEncryption />} />
-                    <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
-                    <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
-                    <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
-                    <Route path="/services" element={<Services />} />
-                    <Route path="/tools" element={<Tools />} />
-                    <Route path="/development" element={<Development />} />
-                    <Route path="/frontend-development" element={<FrontendDevelopment />} />
-                    <Route path="/backend-development" element={<BackendDevelopment />} />
-                    <Route path="/mobile-development" element={<MobileDevelopment />} />
-                    <Route path="/cloud-solutions" element={<CloudSolutions />} />
-                    <Route path="/performance-optimization" element={<PerformanceOptimization />} />
-                    <Route path="/custom-solutions" element={<CustomSolutions />} />
-                    <Route path="/innovation" element={<Innovation />} />
-                    <Route path="/killer-edge" element={<KillerEdge />} />
-                    <Route path="/premium" element={<Premium />} />
-                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </Suspense>
+                  <Footer />
                 </BrowserRouter>
               </TooltipProvider>
             </AccessibilityProvider>

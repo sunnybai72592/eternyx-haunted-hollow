@@ -36,7 +36,7 @@ export default {
 			'desktop': '1024px',
 			'wide': '1440px',
 		},
-		extend: {
+        extend: {
 			spacing: {
 				'safe-top': 'env(safe-area-inset-top)',
 				'safe-bottom': 'env(safe-area-inset-bottom)',
@@ -89,7 +89,18 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
-				}
+				},
+				'cyber-green': 'hsl(145 80% 45%)',
+				'cyber-cyan': 'hsl(180 80% 50%)',
+				'cyber-pink': 'hsl(330 80% 60%)',
+				'cyber-orange': 'hsl(30 80% 55%)',
+				'cyber-purple': 'hsl(270 70% 50%)',
+				'cyber-red': 'hsl(0 70% 50%)',
+				'neon-blue': 'hsl(220 90% 60%)',
+				'neon-green': 'hsl(140 90% 60%)',
+				'neon-pink': 'hsl(330 90% 70%)',
+				'neon-purple': 'hsl(270 80% 65%)',
+				'neon-yellow': 'hsl(50 90% 60%)',
 			},
 			fontSize: {
 				'xs': ['0.75rem', { lineHeight: '1rem' }],
@@ -172,6 +183,32 @@ export default {
 						boxShadow: '0 0 20px hsl(var(--neon-green) / 0.8), 0 0 30px hsl(var(--neon-green) / 0.4)',
 					},
 				},
+				'data-stream': {
+					'0%': { transform: 'translateY(-100%)' },
+					'100%': { transform: 'translateY(100%)' },
+				},
+				'matrix-rain': {
+					'0%': { transform: 'translateY(-100%)' },
+					'100%': { transform: 'translateY(100%)' },
+				},
+				'scan': {
+					'0%': { transform: 'translateY(-100%)' },
+					'100%': { transform: 'translateY(200vh)' },
+				},
+				'float-effect': {
+					'0%, 100%': { transform: 'translateY(0) translateX(0)' },
+					'25%': { transform: 'translateY(-5px) translateX(5px)' },
+					'50%': { transform: 'translateY(0) translateX(0)' },
+					'75%': { transform: 'translateY(5px) translateX(-5px)' },
+				},
+				'pulse-soft': {
+					'0%, 100%': { transform: 'scale(1)' },
+					'50%': { transform: 'scale(1.03)' },
+				},
+				'neon-pulse': {
+					'0%, 100%': { boxShadow: '0 0 5px var(--neon-color)' },
+					'50%': { boxShadow: '0 0 20px var(--neon-color), 0 0 30px var(--neon-color)' },
+				},
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
@@ -182,6 +219,12 @@ export default {
 				'typing': 'typing 3.5s steps(40, end)',
 				'float': 'float 6s ease-in-out infinite',
 				'pulse-glow': 'pulse-glow 2s ease-in-out infinite alternate',
+				'data-stream': 'data-stream 10s linear infinite',
+				'matrix-rain': 'matrix-rain 15s linear infinite',
+				'scan': 'scan 3s linear infinite',
+				'float-effect': 'float-effect 4s ease-in-out infinite',
+				'pulse-soft': 'pulse-soft 1.5s ease-in-out infinite',
+				'neon-pulse': 'neon-pulse 2s ease-in-out infinite alternate',
 			}
 		}
 	},
