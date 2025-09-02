@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navigation from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import {
   MemoryStick, HardDrive, Radio, Gamepad2, PlayCircle, CheckCircle,
   Grid, List
 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 const Tools = () => {
   const [activeCategory, setActiveCategory] = useState('cybersecurity');
@@ -30,33 +31,111 @@ const Tools = () => {
     { id: 'infrastructure', name: 'Infrastructure & DevOps', icon: <Server className="w-4 h-4" /> }
   ];
 
-  const simulateToolExecution = (toolId: string) => {
+  const simulateToolExecution = async (toolId: string, target?: string) => {
     const allToolsData = [...cybersecurityTools, ...webDevelopmentTools, ...innovationTools];
     const tool = allToolsData.find(t => t.id === toolId);
     const executionTime = tool?.executionTime || '5-15 minutes';
     
     setRunningScans(prev => ({ ...prev, [toolId]: 0 }));
-    
-    const interval = setInterval(() => {
-      setRunningScans(prev => {
-        const current = prev[toolId] || 0;
-        if (current >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || crypto.randomUUID(); // Generate a UUID for anonymous users
+
+    try {
+      let response;
+      let functionName;
+      let payload: any = { user_id: userId };
+
+      switch (toolId) {
+        case 'vuln-scanner':
+          functionName = 'vulnerability-scanner';
+          payload.target_url = target || 'https://example.com'; // Default target if not provided
+          payload.scan_type = 'full';
+          break;
+        case 'port-scanner':
+          functionName = 'port-scanner';
+          payload.target = target || 'scanme.nmap.org'; // Default target if not provided
+          payload.scan_type = 'stealth';
+          break;
+        case 'ssl-analyzer':
+          functionName = 'ssl-analyzer';
+          payload.hostname = target || 'example.com'; // Default target if not provided
+          break;
+        default:
+          // Fallback to simulation for other tools
+          const interval = setInterval(() => {
             setRunningScans(prev => {
-              const { [toolId]: removed, ...rest } = prev;
-              return rest;
+              const current = prev[toolId] || 0;
+              if (current >= 100) {
+                clearInterval(interval);
+                setTimeout(() => {
+                  setRunningScans(prev => {
+                    const { [toolId]: removed, ...rest } = prev;
+                    return rest;
+                  });
+                  toast({
+                    title: "Tool Execution Complete",
+                    description: `${tool?.name || 'Tool'} execution completed successfully. Estimated time: ${executionTime}`,
+                  });
+                }, 1000);
+                return prev;
+              }
+              return { ...prev, [toolId]: current + Math.random() * 3 + 1 };
             });
-            toast({
-              title: "Tool Execution Complete",
-              description: `${tool?.name || 'Tool'} execution completed successfully. Estimated time: ${executionTime}`,
-            });
-          }, 1000);
-          return prev;
-        }
-        return { ...prev, [toolId]: current + Math.random() * 3 + 1 };
+          }, 200);
+          return;
+      }
+
+      // Simulate progress for real tools
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 5 + 1;
+        if (progress >= 95) progress = 95; // Cap before completion
+        setRunningScans(prev => ({ ...prev, [toolId]: progress }));
+      }, 500);
+
+      response = await fetch(`https://wcncuarekaofmfurbtbh.supabase.co/functions/v1/${functionName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` // Use anon key for Edge Function calls
+        },
+        body: JSON.stringify(payload),
       });
-    }, 200);
+
+      clearInterval(progressInterval);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to execute tool');
+      }
+
+      const result = await response.json();
+      
+      setRunningScans(prev => ({ ...prev, [toolId]: 100 }));
+      setTimeout(() => {
+        setRunningScans(prev => {
+          const { [toolId]: removed, ...rest } = prev;
+          return rest;
+        });
+        toast({
+          title: "Tool Execution Complete",
+          description: `${tool?.name || 'Tool'} execution completed successfully. Results: ${JSON.stringify(result.summary || result.message || result)}`,
+        });
+      }, 1000);
+
+    } catch (error: any) {
+      setRunningScans(prev => {
+        const { [toolId]: removed, ...rest } = prev;
+        return rest;
+      });
+      toast({
+        title: "Tool Execution Failed",
+        description: `Error executing ${tool?.name || 'tool'}: ${error.message}`,
+        variant: "destructive",
+      });
+      console.error(error);
+    }
   };
 
   // Combine all tools

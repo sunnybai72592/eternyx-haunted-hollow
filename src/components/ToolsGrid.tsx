@@ -1,37 +1,17 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
-import {
-  Shield, Target, Code, Server, Brain, Smartphone, FileSearch, Network,
-  Scan, Key, Globe, Bot, Crosshair, Wifi, Database, Layers, Cloud,
-  MemoryStick, HardDrive, Radio, Gamepad2, PlayCircle, CheckCircle,
-  Search, Filter, X
-} from 'lucide-react';
-
-interface Tool {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  icon: React.ReactNode;
-  features: string[];
-  tier: string;
-}
+import { ToolCard } from './tools/ToolCard';
+import { CyberTool } from '@/data/cybersecurityTools';
 
 interface ToolsGridProps {
-  tools: Tool[];
+  tools: CyberTool[];
   runningScans: { [key: string]: number };
-  onExecuteTool: (toolId: string) => void;
+  onExecuteTool: (toolId: string, target?: string) => void;
 }
 
 export const ToolsGrid: React.FC<ToolsGridProps> = ({ tools, runningScans, onExecuteTool }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedTier, setSelectedTier] = useState('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedTier, setSelectedTier] = useState("all");
+  const [targetInput, setTargetInput] = useState<{ [key: string]: string }>({}); // State for target input per tool
   const { toast } = useToast();
 
   const categories = [
@@ -136,65 +116,12 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ tools, runningScans, onExe
       {/* Tools Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredTools.map((tool, index) => (
-          <Card 
-            key={tool.id} 
-            className="group hover-glow gradient-border transition-all animate-fade-in"
+          <ToolCard
+            key={tool.id}
+            tool={tool}
+            className="animate-fade-in"
             style={{ animationDelay: `${index * 0.1}s` }}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 rounded-lg bg-primary/10 text-primary animate-float">
-                  {tool.icon}
-                </div>
-                <Badge 
-                  variant={tool.tier === 'free' ? 'secondary' : 'default'}
-                  className={`
-                    ${tool.tier === 'elite' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black' : ''}
-                    ${tool.tier === 'premium' ? 'bg-gradient-to-r from-purple-400 to-pink-500' : ''}
-                  `}
-                >
-                  {tool.tier}
-                </Badge>
-              </div>
-              <CardTitle className="text-lg leading-tight">{tool.name}</CardTitle>
-              <p className="text-sm text-muted-foreground line-clamp-2">{tool.description}</p>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-primary">Key Features:</h4>
-                <ul className="text-xs space-y-1 text-muted-foreground">
-                  {tool.features.slice(0, 3).map((feature, index) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />
-                      <span className="truncate">{feature}</span>
-                    </li>
-                  ))}
-                  {tool.features.length > 3 && (
-                    <li className="text-xs text-primary">+{tool.features.length - 3} more features</li>
-                  )}
-                </ul>
-              </div>
-
-              {runningScans[tool.id] !== undefined ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-primary">Running...</span>
-                    <span className="text-primary font-mono">{runningScans[tool.id]}%</span>
-                  </div>
-                  <Progress value={runningScans[tool.id]} className="w-full animate-pulse-glow" />
-                </div>
-              ) : (
-                <Button 
-                  onClick={() => onExecuteTool(tool.id)}
-                  className="w-full hover-glow gradient-border group-hover:scale-105 transition-all"
-                >
-                  <PlayCircle className="w-4 h-4 mr-2" />
-                  Execute Tool
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          />
         ))}
       </div>
 

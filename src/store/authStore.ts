@@ -45,10 +45,9 @@ interface AuthState {
 }
 
 async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', userId)
+  const { data, error } = await supabase.from("users")
+    .select("*")
+    .eq("id", userId)
     .maybeSingle();
 
   if (error) {
@@ -78,9 +77,9 @@ async function createDefaultProfile(user: User, username?: string): Promise<User
     last_login: new Date().toISOString(),
   };
 
-  const { error } = await supabase.from('user_profiles').insert([profile]);
+  const { error } = await supabase.from("users").insert([profile]);
   if (error) {
-    console.error('createDefaultProfile error', error);
+   console.error('createDefaultProfile error', error);
     return null;
   }
   return profile;
@@ -173,9 +172,9 @@ export const useAuthStore = create<AuthState>()(
           if (!currentUser) return { success: false, error: 'Not authenticated' };
 
           const { data, error } = await supabase
-            .from('user_profiles')
+            .from("users")
             .update(updates)
-            .eq('id', currentUser.id)
+            .eq("id", currentUser.id)
             .select()
             .maybeSingle();
 
