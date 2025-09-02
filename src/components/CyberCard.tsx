@@ -10,7 +10,7 @@ interface CyberCardProps {
 
 export const CyberCard = ({ title, description, icon, className = "" }: CyberCardProps) => {
   return (
-    <Card className={`cyber-card p-6 transition-all duration-300 hover:animate-pulse-glow hover:scale-105 ${className}`}>
+    <Card className={`cyber-card p-6 transition-all duration-300 hover-glow gradient-border ${className}`}>
       <div className="flex items-start space-x-4">
         {icon && (
           <div className="text-primary text-2xl animate-float">

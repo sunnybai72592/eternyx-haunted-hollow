@@ -1388,3 +1388,59 @@ input:focus, textarea:focus, select:focus {
   }
 }
 
+
+
+/* Hover Glow Animation */
+.hover-glow {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease-in-out;
+}
+
+.hover-glow::before {
+  content: ";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, rgba(0, 255, 255, 0.3) 0%, transparent 70%);
+  transform: scale(0);
+  opacity: 0;
+  transition: all 0.5s ease-in-out;
+  z-index: -1;
+}
+
+.hover-glow:hover::before {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Gradient Animated Border */
+.gradient-border {
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  background-origin: border-box;
+}
+
+.gradient-border::before {
+  content: ";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(45deg, hsl(var(--neon-green)), hsl(var(--neon-blue)), hsl(var(--neon-purple)));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rotate-gradient 3s linear infinite;
+}
+
+@keyframes rotate-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+

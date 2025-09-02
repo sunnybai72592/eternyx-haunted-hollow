@@ -311,3 +311,5 @@ export const Navigation = ({ className = '' }: NavigationProps) => {
   );
 };
 
+export default Navigation;
+
