@@ -50,7 +50,7 @@ const Sidebar: React.FC = () => {
   return (
     <aside className="fixed left-0 top-0 h-full w-16 lg:w-64 bg-black/70 backdrop-blur-md border-r border-cyber-cyan/30 shadow-lg pt-20 pb-4 flex flex-col justify-between z-30">
       <nav className="flex flex-col items-center lg:items-stretch space-y-2 px-2 lg:px-4">
-        <SidebarLink to="/dashboard" icon={<Home className="h-5 w-5" />} label="Dashboard" active={true} xp={1250} />
+        <SidebarLink to="/cyber-dashboard" icon={<Home className="h-5 w-5" />} label="Dashboard" active={true} xp={1250} />
         <SidebarLink to="/arsenal" icon={<Zap className="h-5 w-5" />} label="Cyber Arsenal" xp={800} />
         <SidebarLink to="/subscriptions" icon={<Gem className="h-5 w-5" />} label="Subscriptions" />
         <SidebarLink to="/knowledge" icon={<Book className="h-5 w-5" />} label="Knowledge Hub" />

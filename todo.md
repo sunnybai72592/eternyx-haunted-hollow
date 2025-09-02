@@ -110,7 +110,7 @@ The platform now represents a living, evolving digital underground for elite cyb
 - [x] Implement Supabase authentication (if necessary).
 
 ## Phase 4: Implement core functionality and features
-- [ ] Develop Landing/Home Page with animated background and hero section.
+- [x] Develop Landing/Home Page with animated background and hero section.
 - [ ] Build Dashboard/Tool Hub with interactive cards.
 - [ ] Implement interactive elements (Buttons, Forms, Modals).
 - [ ] Integrate gamification and feedback mechanisms (Progress Bars, Notifications, Easter Eggs).

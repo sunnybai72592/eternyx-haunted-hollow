@@ -46,6 +46,7 @@ const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"
 const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
 const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
+const CyberDashboard = lazy(() => import("./pages/CyberDashboard"));
 
 import { AdminGuard } from "@/components/AdminGuard";
 
@@ -313,6 +314,7 @@ const App = () => {
                         <Routes>
                           <Route path="/" element={<Index />} />
                           <Route path="/dashboard" element={<Dashboard />} />
+                          <Route path="/cyber-dashboard" element={<CyberDashboard />} />
                           <Route path="/enhanced-dashboard" element={<EnhancedDashboard />} />
                           <Route path="/arsenal" element={<CyberArsenal />} />
                           <Route path="/subscriptions" element={<SubscriptionHub />} />
