@@ -25,6 +25,7 @@ const Services = lazy(() => import("./pages/Services"));
 const Tools = lazy(() => import("./pages/Tools"));
 const Development = lazy(() => import("./pages/Development"));
 const Innovation = lazy(() => import("./pages/Innovation"));
+const KillerEdge = lazy(() => import("./pages/KillerEdge"));
 const Premium = lazy(() => import("./pages/Premium"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
@@ -99,6 +100,7 @@ const App = () => {
                   <Route path="/performance-optimization" element={<PerformanceOptimization />} />
                   <Route path="/custom-solutions" element={<CustomSolutions />} />
                   <Route path="/innovation" element={<Innovation />} />
+                  <Route path="/killer-edge" element={<KillerEdge />} />
                   <Route path="/premium" element={<Premium />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />

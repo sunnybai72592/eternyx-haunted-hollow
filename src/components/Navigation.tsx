@@ -74,6 +74,13 @@ export const Navigation = ({ className = '' }: NavigationProps) => {
       hoverColor: 'hover:text-yellow-400'
     },
     { 
+      name: 'Killer Edge', 
+      path: '/killer-edge', 
+      icon: Crown, 
+      color: 'text-pink-400',
+      hoverColor: 'hover:text-pink-400'
+    },
+    { 
       name: 'Tools Hub', 
       path: '/tools', 
       icon: Wrench, 
