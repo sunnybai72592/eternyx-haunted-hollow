@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ToolsGrid } from '@/components/ToolsGrid';
 import { cybersecurityTools } from '@/data/cybersecurityTools';
 import { webDevelopmentTools } from '@/data/webDevelopmentTools';
+import { innovationTools } from '@/data/innovationTools';
 import {
   Shield, Target, Code, Server, Brain, Smartphone, FileSearch, Network,
   Scan, Key, Globe, Bot, Crosshair, Wifi, Database, Layers, Cloud,
@@ -30,7 +31,7 @@ const Tools = () => {
   ];
 
   const simulateToolExecution = (toolId: string) => {
-    const allToolsData = [...cybersecurityTools, ...webDevelopmentTools];
+    const allToolsData = [...cybersecurityTools, ...webDevelopmentTools, ...innovationTools];
     const tool = allToolsData.find(t => t.id === toolId);
     const executionTime = tool?.executionTime || '5-15 minutes';
     
@@ -59,7 +60,7 @@ const Tools = () => {
   };
 
   // Combine all tools
-  const allTools = [...cybersecurityTools, ...webDevelopmentTools];
+  const allTools = [...cybersecurityTools, ...webDevelopmentTools, ...innovationTools];
 
   const filteredTools = allTools.filter(tool => tool.category === activeCategory);
 
