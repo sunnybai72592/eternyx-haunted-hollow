@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ToolsGrid } from '@/components/ToolsGrid';
 import { cybersecurityTools } from '@/data/cybersecurityTools';
+import { webDevelopmentTools } from '@/data/webDevelopmentTools';
 import {
   Shield, Target, Code, Server, Brain, Smartphone, FileSearch, Network,
   Scan, Key, Globe, Bot, Crosshair, Wifi, Database, Layers, Cloud,
@@ -29,7 +30,8 @@ const Tools = () => {
   ];
 
   const simulateToolExecution = (toolId: string) => {
-    const tool = cybersecurityTools.find(t => t.id === toolId);
+    const allToolsData = [...cybersecurityTools, ...webDevelopmentTools];
+    const tool = allToolsData.find(t => t.id === toolId);
     const executionTime = tool?.executionTime || '5-15 minutes';
     
     setRunningScans(prev => ({ ...prev, [toolId]: 0 }));
@@ -45,7 +47,7 @@ const Tools = () => {
               return rest;
             });
             toast({
-              title: "Scan Complete",
+              title: "Tool Execution Complete",
               description: `${tool?.name || 'Tool'} execution completed successfully. Estimated time: ${executionTime}`,
             });
           }, 1000);
@@ -56,11 +58,8 @@ const Tools = () => {
     }, 200);
   };
 
-  // Convert cybersecurity tools to the format expected by ToolsGrid
-  const allTools = cybersecurityTools.map(tool => ({
-    ...tool,
-    icon: tool.icon
-  }));
+  // Combine all tools
+  const allTools = [...cybersecurityTools, ...webDevelopmentTools];
 
   const filteredTools = allTools.filter(tool => tool.category === activeCategory);
 

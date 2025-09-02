@@ -296,6 +296,128 @@ export const cybersecurityTools: CyberTool[] = [
     difficulty: 'advanced',
     executionTime: '30 minutes - 4 hours',
     tags: ['incident-response', 'containment', 'evidence', 'reporting']
+  },
+
+  // Additional Specialized Tools
+  {
+    id: 'dns-analyzer',
+    name: 'DNS Security Analyzer',
+    description: 'Comprehensive DNS configuration and security assessment',
+    category: 'cybersecurity',
+    icon: React.createElement(Globe),
+    features: ['DNS enumeration', 'Zone transfer testing', 'DNS poisoning detection', 'DNSSEC validation'],
+    tier: 'free',
+    difficulty: 'beginner',
+    executionTime: '2-8 minutes',
+    tags: ['dns', 'enumeration', 'security', 'dnssec']
+  },
+  {
+    id: 'whois-lookup',
+    name: 'Advanced WHOIS Analyzer',
+    description: 'Domain and IP intelligence gathering tool',
+    category: 'cybersecurity',
+    icon: React.createElement(Search),
+    features: ['Domain registration info', 'Historical data', 'Registrar analysis', 'Contact information'],
+    tier: 'free',
+    difficulty: 'beginner',
+    executionTime: '1-3 minutes',
+    tags: ['whois', 'domain', 'intelligence', 'osint']
+  },
+  {
+    id: 'http-analyzer',
+    name: 'HTTP Headers Analyzer',
+    description: 'Security-focused HTTP headers and response analysis',
+    category: 'cybersecurity',
+    icon: React.createElement(Monitor),
+    features: ['Security headers check', 'Response analysis', 'Cookie security', 'CORS validation'],
+    tier: 'free',
+    difficulty: 'beginner',
+    executionTime: '1-2 minutes',
+    tags: ['http', 'headers', 'security', 'cors']
+  },
+  {
+    id: 'email-spoof-test',
+    name: 'Email Spoofing Tester',
+    description: 'Email security and spoofing vulnerability assessment',
+    category: 'penetration',
+    icon: React.createElement(Bot),
+    features: ['SPF record check', 'DKIM validation', 'DMARC analysis', 'Spoofing simulation'],
+    tier: 'premium',
+    difficulty: 'intermediate',
+    executionTime: '3-10 minutes',
+    tags: ['email', 'spoofing', 'spf', 'dkim', 'dmarc']
+  },
+  {
+    id: 'subdomain-finder',
+    name: 'Subdomain Discovery Engine',
+    description: 'Advanced subdomain enumeration and discovery',
+    category: 'cybersecurity',
+    icon: React.createElement(Network),
+    features: ['Brute force enumeration', 'Certificate transparency', 'DNS zone walking', 'Passive discovery'],
+    tier: 'premium',
+    difficulty: 'intermediate',
+    executionTime: '5-30 minutes',
+    tags: ['subdomains', 'enumeration', 'discovery', 'reconnaissance']
+  },
+  {
+    id: 'malware-url-scanner',
+    name: 'Malware URL Scanner',
+    description: 'Real-time URL reputation and malware detection',
+    category: 'cybersecurity',
+    icon: React.createElement(ShieldCheck),
+    features: ['URL reputation check', 'Malware detection', 'Phishing analysis', 'Threat intelligence'],
+    tier: 'premium',
+    difficulty: 'beginner',
+    executionTime: '1-5 minutes',
+    tags: ['malware', 'url', 'reputation', 'phishing']
+  },
+  {
+    id: 'password-tester',
+    name: 'Password Strength Analyzer',
+    description: 'Advanced password security and strength assessment',
+    category: 'cybersecurity',
+    icon: React.createElement(Key),
+    features: ['Entropy calculation', 'Dictionary attacks', 'Pattern analysis', 'Breach database check'],
+    tier: 'free',
+    difficulty: 'beginner',
+    executionTime: '1-2 minutes',
+    tags: ['password', 'strength', 'security', 'entropy']
+  },
+  {
+    id: 'hash-generator',
+    name: 'Multi-Hash Generator',
+    description: 'Comprehensive hash generation and verification tool',
+    category: 'cybersecurity',
+    icon: React.createElement(Fingerprint),
+    features: ['Multiple algorithms', 'File hashing', 'Hash verification', 'HMAC generation'],
+    tier: 'free',
+    difficulty: 'beginner',
+    executionTime: '1-3 minutes',
+    tags: ['hashing', 'md5', 'sha', 'verification']
+  },
+  {
+    id: 'file-integrity',
+    name: 'File Integrity Monitor',
+    description: 'Advanced file integrity checking and monitoring',
+    category: 'cybersecurity',
+    icon: React.createElement(FileSearch),
+    features: ['Checksum verification', 'Change detection', 'Baseline creation', 'Integrity reports'],
+    tier: 'premium',
+    difficulty: 'intermediate',
+    executionTime: '2-15 minutes',
+    tags: ['integrity', 'monitoring', 'checksum', 'verification']
+  },
+  {
+    id: 'api-security-scanner',
+    name: 'API Security Scanner',
+    description: 'REST and GraphQL API security assessment tool',
+    category: 'penetration',
+    icon: React.createElement(Database),
+    features: ['Endpoint discovery', 'Authentication testing', 'Rate limiting check', 'Input validation'],
+    tier: 'elite',
+    difficulty: 'advanced',
+    executionTime: '10-45 minutes',
+    tags: ['api', 'rest', 'graphql', 'security']
   }
 ];
 
