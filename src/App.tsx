@@ -10,7 +10,7 @@ import NotificationSystem from "@/components/NotificationSystem";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ResponsiveUnifiedNavigation from "@/components/ResponsiveUnifiedNavigation";
-import { EnhancedNavigation } from "@/components/EnhancedNavigation";
+import { MobileResponsiveNavigation } from "@/components/MobileResponsiveNavigation";
 import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
 
@@ -308,7 +308,7 @@ const App = () => {
                 <NotificationSystem />
                 <PWAInstallPrompt />
                 <BrowserRouter>
-                  <EnhancedNavigation />
+                  <MobileResponsiveNavigation />
                   <main className="flex-1 p-4 pt-32 transition-all duration-300">
                     <Suspense fallback={
                       <div className="min-h-screen bg-background flex items-center justify-center">
