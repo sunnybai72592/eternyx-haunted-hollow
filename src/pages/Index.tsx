@@ -7,10 +7,9 @@ import { TypingText } from "@/components/TypingText";
 import { CyberCard } from "@/components/CyberCard";
 import { TerminalWindow } from "@/components/TerminalWindow";
 import { UserProfile } from "@/components/auth/UserProfile";
-import { AuthModal } from "@/components/auth/AuthModal";
+import { AuthModal } from "@/components/AuthModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { MobileViewport } from "@/components/MobileViewport";
-import { Navigation } from "@/components/Navigation";
 import cyberHeroBg from "@/assets/cyber-hero-bg.jpg";
 import { 
   Code, 
@@ -219,7 +218,6 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
       <MobileViewport />
-      <Navigation />
       
       {/* Authentication Modal */}
       <AuthModal

@@ -1,4 +1,3 @@
-import { Navigation } from '@/components/Navigation';
 import { MobileViewport } from '@/components/MobileViewport';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -8,7 +7,6 @@ export default function Development() {
   return (
     <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
       <MobileViewport />
-      <Navigation />
       
       <main className="pt-20 sm:pt-24">
         {/* Hero Section */}

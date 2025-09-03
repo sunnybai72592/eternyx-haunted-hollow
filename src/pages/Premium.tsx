@@ -1,4 +1,3 @@
-import { Navigation } from '@/components/Navigation';
 import { MobileViewport } from '@/components/MobileViewport';
 import { Button } from '@/components/ui/button';
 import { Crown, Check, Zap, Shield, Star, Rocket } from 'lucide-react';
@@ -7,7 +6,6 @@ export default function Premium() {
   return (
     <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
       <MobileViewport />
-      <Navigation />
       
       <main className="pt-20 sm:pt-24">
         {/* Hero Section */}

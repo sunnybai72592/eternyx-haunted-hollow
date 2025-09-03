@@ -1944,3 +1944,77 @@ input:focus, textarea:focus, select:focus {
 }
 
 
+
+/* Matrix Rain Animation for Navigation */
+.matrix-rain {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 255, 255, 0.03) 50%,
+    transparent 100%
+  );
+  animation: matrix-flow 20s linear infinite;
+}
+
+@keyframes matrix-flow {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* Enhanced Mobile Responsiveness */
+@media (max-width: 768px) {
+  .mobile-nav-item {
+    font-size: 1.1rem;
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+  
+  .mobile-dropdown {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  
+  /* Make navigation more touch-friendly */
+  nav button {
+    min-height: 48px;
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Touch-friendly buttons for mobile devices */
+@media (hover: none) and (pointer: coarse) {
+  button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem;
+  }
+}
+
+/* Enhanced cyberpunk glow effects */
+.cyber-glow {
+  box-shadow: 
+    0 0 5px rgba(0, 255, 255, 0.3),
+    0 0 10px rgba(0, 255, 255, 0.2),
+    0 0 15px rgba(0, 255, 255, 0.1);
+}
+
+.cyber-glow:hover {
+  box-shadow: 
+    0 0 10px rgba(0, 255, 255, 0.5),
+    0 0 20px rgba(0, 255, 255, 0.3),
+    0 0 30px rgba(0, 255, 255, 0.2);
+}
+
+/* Responsive grid layouts */
+@media (max-width: 640px) {
+  .grid-cols-2 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+

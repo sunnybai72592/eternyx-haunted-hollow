@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TypingText } from "@/components/TypingText";
-import { Navigation } from "@/components/Navigation";
 import { PageIndicator } from "@/components/PageIndicator";
 import { MobileViewport } from "@/components/MobileViewport";
 import {
@@ -60,7 +59,6 @@ const Services = () => {
   return (
     <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
       <MobileViewport />
-      <Navigation />
       <PageIndicator />
       
       {/* Hero Section */}

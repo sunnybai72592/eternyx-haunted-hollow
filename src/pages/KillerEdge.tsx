@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Navigation from '@/components/Navigation';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,7 +45,6 @@ const KillerEdge = () => {
 
   return (
     <div className="min-h-screen bg-black text-green-400">
-      <Navigation />
       
       <div className="container mx-auto px-4 py-8">
         {/* Hero Section */}

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Navigation } from '@/components/Navigation';
 import { MobileViewport } from '@/components/MobileViewport';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -89,7 +88,6 @@ export default function FrontendDevelopment() {
   return (
     <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
       <MobileViewport />
-      <Navigation />
       <main className="pt-20 sm:pt-24 px-4 max-w-6xl mx-auto responsive-container">
         <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 text-cyber-blue neon-text responsive-text-5xl">
           Frontend Development Tools

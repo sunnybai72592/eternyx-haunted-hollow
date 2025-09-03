@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Navigation from '@/components/Navigation';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -145,7 +145,6 @@ const Tools = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation />
       
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-12">
