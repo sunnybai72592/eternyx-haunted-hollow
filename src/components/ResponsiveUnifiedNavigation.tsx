@@ -102,8 +102,8 @@ export const ResponsiveUnifiedNavigation = ({ className = '' }: NavigationProps)
       maxXp: 15000,
       unlocked: true,
       children: [
-        { name: 'Penetration Testing', path: '/penetration-testing', description: 'Advanced security testing', level: 12 },
-        { name: 'Vulnerability Assessment', path: '/vulnerability-assessment', description: 'System security analysis', level: 10 },
+        { name: 'Penetration Testing', path: '/black-hat-pentesting', description: 'Advanced security testing', level: 12 },
+        { name: 'Vulnerability Assessment', path: '/zero-day-protection', description: 'System security analysis', level: 10 },
         { name: 'Security Auditing', path: '/security-auditing', description: 'Comprehensive security review', level: 14 },
         { name: 'Incident Response', path: '/incident-response', description: 'Security breach management', level: 16 }
       ]
