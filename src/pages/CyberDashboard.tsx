@@ -175,7 +175,6 @@ const CyberDashboard: React.FC = () => {
   const handleToolClick = (toolId: string) => {
     addNotification({
       type: 'info',
-      title: 'Tool Activated',
       message: `Launching ${tools.find(t => t.id === toolId)?.title}...`,
     });
     
@@ -333,7 +332,7 @@ const CyberDashboard: React.FC = () => {
               variant="outline"
               glowColor="cyan"
               className="p-6 h-auto flex-col space-y-2"
-              onClick={() => addNotification({ type: 'success', title: 'Scan initiated', message: 'Network vulnerability scan started' })}
+              onClick={() => addNotification({ type: 'success', message: 'Network vulnerability scan started' })}
             >
               <Scan className="h-8 w-8" />
               <span>Quick Scan</span>
@@ -343,7 +342,7 @@ const CyberDashboard: React.FC = () => {
               variant="outline"
               glowColor="green"
               className="p-6 h-auto flex-col space-y-2"
-              onClick={() => addNotification({ type: 'info', title: 'Analysis started', message: 'AI threat analysis in progress' })}
+              onClick={() => addNotification({ type: 'info', message: 'AI threat analysis in progress' })}
             >
               <BarChart3 className="h-8 w-8" />
               <span>Threat Analysis</span>
@@ -353,7 +352,7 @@ const CyberDashboard: React.FC = () => {
               variant="outline"
               glowColor="purple"
               className="p-6 h-auto flex-col space-y-2"
-              onClick={() => addNotification({ type: 'warning', title: 'Encryption active', message: 'Quantum encryption protocols enabled' })}
+              onClick={() => addNotification({ type: 'warning', message: 'Quantum encryption protocols enabled' })}
             >
               <Lock className="h-8 w-8" />
               <span>Secure Mode</span>

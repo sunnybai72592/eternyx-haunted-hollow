@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SubscriptionTiers from '@/components/enhanced/SubscriptionTiers';
+import { SubscriptionManager } from '@/components/SubscriptionManager';
 import { stripeService, SubscriptionPlan } from '@/lib/enhanced/stripeService';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   Crown, 
   Zap, 
@@ -44,6 +47,7 @@ interface UsageMetrics {
 }
 
 export default function SubscriptionHub() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('plans');
   const [currentSubscription, setCurrentSubscription] = useState<UserSubscription | null>(null);
   const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
@@ -74,14 +78,22 @@ export default function SubscriptionHub() {
   }, []);
 
   const handleSubscribe = async (planId: string) => {
+    if (!user) return;
+    
     setIsLoading(true);
     try {
-      const result = await stripeService.subscribeToPlan(planId);
-      if (result.success) {
-        console.log('Subscription successful');
-        // In real app, update UI state
-      } else {
-        console.error('Subscription failed:', result.error);
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { planId },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data.url) {
+        // Open Stripe checkout in a new tab
+        window.open(data.url, '_blank');
       }
     } catch (error) {
       console.error('Subscription error:', error);
@@ -197,6 +209,7 @@ export default function SubscriptionHub() {
           </TabsContent>
 
           <TabsContent value="current" className="space-y-6">
+            <SubscriptionManager />
             {currentSubscription && (
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Current Plan */}

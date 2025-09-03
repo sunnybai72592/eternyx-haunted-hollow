@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setLoading(false);
 
         // Handle user profile creation on sign up
-        if (event === 'SIGNED_UP' && session?.user) {
+        if (event === 'SIGNED_IN' && session?.user) {
           await createUserProfile(session.user);
         }
       }
@@ -63,12 +63,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const createUserProfile = async (user: User) => {
     try {
       const { error } = await supabase
-        .from('users')
+        .from('profiles')
         .insert({
-          id: user.id,
-          email: user.email,
+          user_id: user.id,
+          full_name: user.user_metadata?.username || user.email?.split('@')[0],
           username: user.user_metadata?.username || user.email?.split('@')[0],
-          role: 'user',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
@@ -152,12 +151,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Update user profile in database
       const { error } = await supabase
-        .from('users')
+        .from('profiles')
         .update({
           ...updates,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id);
+        .eq('user_id', user.id);
 
       return { error };
     } catch (error) {

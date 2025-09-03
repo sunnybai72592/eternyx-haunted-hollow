@@ -209,7 +209,6 @@ export const EnhancedToolsGrid: React.FC<EnhancedToolsGridProps> = ({
               key={tool.id}
               tool={tool}
               className={`animate-fade-in ${viewMode === 'list' ? 'max-w-none' : ''}`}
-              style={{ animationDelay: `${index * 0.1}s` } as React.CSSProperties}
             />
           ))}
         </div>

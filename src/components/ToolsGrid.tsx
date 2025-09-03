@@ -1,5 +1,19 @@
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ToolCard } from './tools/ToolCard';
 import { CyberTool } from '@/data/cybersecurityTools';
+import { useToast } from '@/hooks/use-toast';
+import { 
+  Layers, 
+  Shield, 
+  Target, 
+  Code, 
+  Server, 
+  Brain,
+  Search,
+  X
+} from 'lucide-react';
 
 interface ToolsGridProps {
   tools: CyberTool[];
@@ -120,7 +134,6 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ tools, runningScans, onExe
             key={tool.id}
             tool={tool}
             className="animate-fade-in"
-            style={{ animationDelay: `${index * 0.1}s` }}
           />
         ))}
       </div>

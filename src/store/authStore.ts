@@ -3,14 +3,24 @@ import { persist } from 'zustand/middleware';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-// Auth profile shape based on public.user_profiles
+// Auth profile shape based on public.profiles table
 export interface UserProfile {
-  id: string; // equals auth.user.id
-  email: string;
-  username: string;
+  id: string;
+  user_id: string;
+  full_name?: string | null;
+  username?: string | null;
   avatar_url?: string | null;
-  access_level?: 'basic' | 'premium' | 'elite';
+  bio?: string | null;
+  website?: string | null;
+  location?: string | null;
+  company?: string | null;
+  skills?: string[] | null;
+  role?: string | null;
   created_at?: string;
+  updated_at?: string;
+  // Additional computed fields
+  email?: string;
+  access_level?: 'basic' | 'premium' | 'elite';
   last_login?: string | null;
   preferences?: {
     theme?: 'dark' | 'cyberpunk' | 'matrix';
@@ -45,9 +55,9 @@ interface AuthState {
 }
 
 async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase.from("users")
+  const { data, error } = await supabase.from("profiles")
     .select("*")
-    .eq("id", userId)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -58,10 +68,25 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
 }
 
 async function createDefaultProfile(user: User, username?: string): Promise<UserProfile | null> {
-  const profile: UserProfile = {
-    id: user.id,
-    email: user.email || '',
+  const profile = {
+    user_id: user.id,
+    full_name: username || user.user_metadata?.username || (user.email ? user.email.split('@')[0] : 'agent'),
     username: username || user.user_metadata?.username || (user.email ? user.email.split('@')[0] : 'agent'),
+    role: 'user',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabase.from("profiles").insert([profile]);
+  if (error) {
+   console.error('createDefaultProfile error', error);
+    return null;
+  }
+  
+  return {
+    id: user.id,
+    ...profile,
+    email: user.email || '',
     access_level: 'basic',
     preferences: {
       theme: 'cyberpunk',
@@ -76,13 +101,6 @@ async function createDefaultProfile(user: User, username?: string): Promise<User
     },
     last_login: new Date().toISOString(),
   };
-
-  const { error } = await supabase.from("users").insert([profile]);
-  if (error) {
-   console.error('createDefaultProfile error', error);
-    return null;
-  }
-  return profile;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -172,9 +190,9 @@ export const useAuthStore = create<AuthState>()(
           if (!currentUser) return { success: false, error: 'Not authenticated' };
 
           const { data, error } = await supabase
-            .from("users")
+            .from("profiles")
             .update(updates)
-            .eq("id", currentUser.id)
+            .eq("user_id", currentUser.id)
             .select()
             .maybeSingle();
 
