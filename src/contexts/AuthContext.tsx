@@ -63,12 +63,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const createUserProfile = async (user: User) => {
     try {
       const { error } = await supabase
-        .from(\'users\')
+        .from('users')
         .insert({
           id: user.id,
           email: user.email,
-          username: user.user_metadata?.username || user.email?.split(\'@\')[0],
-          role: \'user\',
+          username: user.user_metadata?.username || user.email?.split('@')[0],
+          role: 'user',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
