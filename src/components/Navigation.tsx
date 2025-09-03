@@ -86,6 +86,13 @@ export const Navigation = ({ className = '' }: NavigationProps) => {
       icon: Wrench, 
       color: 'text-purple-400',
       hoverColor: 'hover:text-purple-400'
+    },
+    { 
+      name: 'Contact', 
+      path: '/contact', 
+      icon: User, 
+      color: 'text-orange-400',
+      hoverColor: 'hover:text-orange-400'
     }
   ];
 

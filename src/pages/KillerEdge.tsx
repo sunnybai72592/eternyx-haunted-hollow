@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import Navigation from '@/components/Navigation';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,6 +14,7 @@ import {
 } from 'lucide-react';
 
 const KillerEdge = () => {
+  const navigate = useNavigate();
   const [activeFeature, setActiveFeature] = useState('overview');
 
   const features = [
@@ -107,6 +110,10 @@ const KillerEdge = () => {
                   
                   <Button 
                     className="w-full mt-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold"
+                    onClick={() => {
+                      setActiveFeature(feature.id);
+                      toast.success(`Launching ${feature.name}...`);
+                    }}
                   >
                     Launch Feature
                   </Button>

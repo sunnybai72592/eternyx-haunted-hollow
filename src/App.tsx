@@ -41,6 +41,7 @@ const CloudSolutions = lazy(() => import("./pages/CloudSolutions"));
 const PerformanceOptimization = lazy(() => import("./pages/PerformanceOptimization"));
 const CustomSolutions = lazy(() => import("./pages/CustomSolutions"));
 const BugReport = lazy(() => import("./pages/BugReport"));
+const Contact = lazy(() => import("./pages/Contact"));
 
 // Tool pages
 const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
@@ -347,6 +348,7 @@ const App = () => {
                           <Route path="/killer-edge" element={<KillerEdge />} />
                           <Route path="/premium" element={<Premium />} />
                           <Route path="/bug-report" element={<BugReport />} />
+                          <Route path="/contact" element={<Contact />} />
                           <Route path="/tools/network-scanner" element={<NetworkScanner />} />
                           <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

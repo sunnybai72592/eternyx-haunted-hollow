@@ -33,7 +33,12 @@ export default function Innovation() {
               <p className="text-muted-foreground mb-4">
                 Advanced AI solutions including machine learning, natural language processing, and computer vision.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-yellow-400/20 hover:bg-yellow-400/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full border-yellow-400/20 hover:bg-yellow-400/10"
+                onClick={() => window.open('https://openai.com', '_blank')}
+              >
                 Explore AI
               </Button>
             </div>
@@ -46,7 +51,12 @@ export default function Innovation() {
               <p className="text-muted-foreground mb-4">
                 Internet of Things implementations for smart homes, cities, and industrial automation.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-purple-400/20 hover:bg-purple-400/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full border-purple-400/20 hover:bg-purple-400/10"
+                onClick={() => window.open('https://www.ibm.com/internet-of-things', '_blank')}
+              >
                 Discover IoT
               </Button>
             </div>
@@ -59,7 +69,12 @@ export default function Innovation() {
               <p className="text-muted-foreground mb-4">
                 Immersive augmented and virtual reality experiences for training, entertainment, and business.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-blue-400/20 hover:bg-blue-400/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full border-blue-400/20 hover:bg-blue-400/10"
+                onClick={() => window.open('https://www.oculus.com', '_blank')}
+              >
                 Enter VR
               </Button>
             </div>
@@ -72,7 +87,12 @@ export default function Innovation() {
               <p className="text-muted-foreground mb-4">
                 Decentralized applications, smart contracts, and cryptocurrency solutions for modern businesses.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-green-400/20 hover:bg-green-400/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full border-green-400/20 hover:bg-green-400/10"
+                onClick={() => window.open('https://ethereum.org', '_blank')}
+              >
                 Explore Blockchain
               </Button>
             </div>
@@ -85,7 +105,12 @@ export default function Innovation() {
               <p className="text-muted-foreground mb-4">
                 Low-latency computing solutions bringing processing power closer to data sources.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-red-400/20 hover:bg-red-400/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full border-red-400/20 hover:bg-red-400/10"
+                onClick={() => window.open('https://aws.amazon.com/edge/', '_blank')}
+              >
                 Learn Edge
               </Button>
             </div>
@@ -98,7 +123,12 @@ export default function Innovation() {
               <p className="text-muted-foreground mb-4">
                 Strategic guidance for digital transformation and emerging technology adoption.
               </p>
-              <Button variant="outline" size="sm" className="w-full border-cyan-400/20 hover:bg-cyan-400/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full border-cyan-400/20 hover:bg-cyan-400/10"
+                onClick={() => window.location.href = 'mailto:consulting@eternyx.com?subject=Innovation Consulting Inquiry'}
+              >
                 Get Consulting
               </Button>
             </div>
