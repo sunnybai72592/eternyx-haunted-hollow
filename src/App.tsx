@@ -50,6 +50,7 @@ const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessme
 // Tool pages
 const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
 const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
+const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
 // Enhanced platform pages
 const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"));
@@ -110,6 +111,7 @@ const App = () => {
                         <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
                       </div>
                     }>
+                      <AdminGuard>
                         <Routes>
                           <Route path="/" element={<Index />} />
                           <Route path="/dashboard" element={<Dashboard />} />
@@ -128,6 +130,7 @@ const App = () => {
                           <Route path="/incident-response" element={<IncidentResponse />} />
                           <Route path="/penetration-testing" element={<PenetrationTesting />} />
                           <Route path="/vulnerability-assessment" element={<VulnerabilityAssessment />} />
+                          <Route path="/vulnerability-scanner" element={<VulnerabilityScanner />} />
                           <Route path="/quantum-encryption" element={<QuantumEncryption />} />
                           <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
                           <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
@@ -151,6 +154,7 @@ const App = () => {
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                           <Route path="*" element={<NotFound />} />
                         </Routes>
+                      </AdminGuard>
                       </Suspense>
                     </main>
                   <Footer />

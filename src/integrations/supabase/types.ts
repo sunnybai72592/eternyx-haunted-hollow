@@ -1341,6 +1341,10 @@ export type Database = {
           total_threats: number
         }[]
       }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       access_level: "basic" | "premium" | "elite"

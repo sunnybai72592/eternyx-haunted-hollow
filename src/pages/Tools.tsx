@@ -31,6 +31,15 @@ const Tools = () => {
     { id: 'infrastructure', name: 'Infrastructure & DevOps', icon: <Server className="w-4 h-4" /> }
   ];
 
+  const navigateToTool = (toolId: string) => {
+    if (toolId === 'vuln-scanner') {
+      window.location.href = '/vulnerability-scanner';
+      return;
+    }
+    // For other tools, execute them
+    simulateToolExecution(toolId);
+  };
+
   const simulateToolExecution = async (toolId: string, target?: string) => {
     const allToolsData = [...cybersecurityTools, ...webDevelopmentTools, ...innovationTools];
     const tool = allToolsData.find(t => t.id === toolId);
@@ -258,11 +267,11 @@ const Tools = () => {
           </div>
         ) : (
           <Button 
-            onClick={() => simulateToolExecution(tool.id)}
+            onClick={() => navigateToTool(tool.id)}
             className="w-full hover-glow gradient-border group-hover:scale-105 transition-all"
           >
             <PlayCircle className="w-4 h-4 mr-2" />
-            Execute Tool
+            {tool.id === 'vuln-scanner' ? 'Launch Scanner' : 'Execute Tool'}
           </Button>
         )}
                       </CardContent>
