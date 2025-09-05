@@ -76,7 +76,6 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({ children }) => {
               .upsert({ 
                 user_id: currentUser.id,
                 role: 'admin',
-                email: credentials.email,
                 full_name: 'Naimat Ullah',
                 username: 'admin'
               });
@@ -91,8 +90,11 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({ children }) => {
             description: "Welcome to ETERNYX Admin Panel",
           });
           
-          // Recheck admin status
+          // Recheck admin status and force re-render
           await checkAdminStatus();
+          
+          // Navigate to dashboard instead of reloading
+          window.location.href = '/dashboard';
         }
       } else {
         toast({
