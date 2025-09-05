@@ -19,17 +19,17 @@ interface ResponsiveMainContentProps {
 export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentProps) => {
   const navigate = useNavigate();
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
   const handleInitializeConnection = () => {
     console.log('Initialize Connection clicked');
-    setAuthMode('login');
+    setAuthMode('signin');
     setAuthModalOpen(true);
   };
 
   const handleJoinNetwork = () => {
     console.log('Join Network clicked');
-    setAuthMode('register');
+    setAuthMode('signup');
     setAuthModalOpen(true);
   };
 
@@ -197,7 +197,7 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        initialMode={authMode === 'login' ? 'signin' : 'signup'}
+        initialMode={authMode}
       />
     </div>
   );
