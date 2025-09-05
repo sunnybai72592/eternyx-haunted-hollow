@@ -197,8 +197,7 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        mode={authMode}
-        onModeChange={setAuthMode}
+        initialMode={authMode === 'login' ? 'signin' : 'signup'}
       />
     </div>
   );
