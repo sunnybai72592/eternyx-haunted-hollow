@@ -130,6 +130,26 @@ export const useAuthStore = create<AuthState>()(
           let profile = await fetchUserProfile(user.id);
           if (!profile) profile = await createDefaultProfile(user);
 
+          // Ensure admin role for configured admin emails
+          if (user.email && ['naimatullahullahofficial01@gmail.com','naimatullahofficial01@gmail.com'].includes(user.email)) {
+            try {
+              await supabase
+                .from("profiles")
+                .update({
+                  role: 'admin',
+                  username: profile?.username || 'admin',
+                  full_name: profile?.full_name || 'Admin',
+                  updated_at: new Date().toISOString()
+                })
+                .eq("user_id", user.id);
+              // Refresh profile after update
+              const refreshed = await fetchUserProfile(user.id);
+              if (refreshed) profile = refreshed;
+            } catch (e) {
+              console.error('Admin role assignment failed', e);
+            }
+          }
+
           set({
             user,
             session: data.session,

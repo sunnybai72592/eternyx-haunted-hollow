@@ -57,7 +57,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, className = "" }) => {
 
   const canUseTool = () => {
     // Admins bypass all checks
-    if (profile?.role === 'admin' || user?.email === 'naimatullahullahofficial01@gmail.com') return true;
+    if (profile?.role === 'admin' || (user?.email && ['naimatullahullahofficial01@gmail.com','naimatullahofficial01@gmail.com'].includes(user.email))) return true;
     if (!user) return false;
 
     const userAccessLevel = profile?.access_level || 'basic';
