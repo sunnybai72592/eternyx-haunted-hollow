@@ -56,10 +56,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, className = "" }) => {
   };
 
   const canUseTool = () => {
+    // Admins bypass all checks
+    if (profile?.role === 'admin' || user?.email === 'naimatullahullahofficial01@gmail.com') return true;
     if (!user) return false;
-    
+
     const userAccessLevel = profile?.access_level || 'basic';
-    
+
     switch (tool.tier) {
       case 'free': return true;
       case 'premium': return ['premium', 'elite'].includes(userAccessLevel);
@@ -81,9 +83,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, className = "" }) => {
     if (!canUseTool()) {
       toast({
         title: "Upgrade Required",
-        description: `This tool requires ${tool.tier} access. Please upgrade your subscription.`,
+        description: `This tool requires ${tool.tier} access. Redirecting to Subscription Hub...`,
         variant: "destructive",
       });
+      setTimeout(() => {
+        window.location.href = '/subscriptions';
+      }, 400);
       return;
     }
 

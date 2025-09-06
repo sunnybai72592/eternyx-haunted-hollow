@@ -59,7 +59,6 @@ const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 const CyberDashboard = lazy(() => import("./pages/CyberDashboard"));
 
-import { AdminGuard } from "@/components/AdminGuard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -111,7 +110,6 @@ const App = () => {
                         <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
                       </div>
                     }>
-                      <AdminGuard>
                         <Routes>
                           <Route path="/" element={<Index />} />
                           <Route path="/dashboard" element={<Dashboard />} />
@@ -154,7 +152,6 @@ const App = () => {
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                           <Route path="*" element={<NotFound />} />
                         </Routes>
-                      </AdminGuard>
                       </Suspense>
                     </main>
                   <Footer />

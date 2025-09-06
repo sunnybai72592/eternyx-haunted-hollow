@@ -57,7 +57,7 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({ children }) => {
 
     try {
       // Special handling for admin account
-      if (credentials.email === 'naimatullah@gmail.com') {
+      if (credentials.email === 'naimatullahullahofficial01@gmail.com') {
         const { error } = await signIn(credentials.email, credentials.password);
         
         if (error) {

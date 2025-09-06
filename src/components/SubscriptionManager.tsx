@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { 
   Crown, 
@@ -21,7 +21,7 @@ interface SubscriptionData {
 }
 
 export function SubscriptionManager() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

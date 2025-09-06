@@ -8,7 +8,7 @@ import SubscriptionTiers from '@/components/enhanced/SubscriptionTiers';
 import { SubscriptionManager } from '@/components/SubscriptionManager';
 import { stripeService, SubscriptionPlan } from '@/lib/enhanced/stripeService';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { 
   Crown, 
   Zap, 
@@ -47,7 +47,7 @@ interface UsageMetrics {
 }
 
 export default function SubscriptionHub() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('plans');
   const [currentSubscription, setCurrentSubscription] = useState<UserSubscription | null>(null);
   const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
