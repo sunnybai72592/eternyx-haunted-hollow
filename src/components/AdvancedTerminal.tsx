@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Terminal, Minimize2, Maximize2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
 
 interface TerminalCommand {
   command: string;
@@ -24,6 +25,7 @@ const AdvancedTerminal: React.FC<AdvancedTerminalProps> = ({
   initialCommands = [],
   onCommand
 }) => {
+  const { profile } = useAuthStore();
   const [commands, setCommands] = useState<TerminalCommand[]>(initialCommands);
   const [currentInput, setCurrentInput] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -32,6 +34,9 @@ const AdvancedTerminal: React.FC<AdvancedTerminalProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Get username for terminal prompt
+  const username = profile?.username || profile?.full_name || 'eternyx';
 
   // Auto-scroll to bottom when new commands are added
   useEffect(() => {
@@ -306,7 +311,7 @@ const AdvancedTerminal: React.FC<AdvancedTerminalProps> = ({
               <div key={index} className="space-y-1">
                 <div className="flex items-center space-x-2 text-cyber-green">
                   <span className="text-cyber-blue">[{formatTime(cmd.timestamp)}]</span>
-                  <span className="text-yellow-400">eternyx@system:</span>
+                  <span className="text-yellow-400">Eternyx@{username}:</span>
                   <span className="text-purple-400">{currentPath}$</span>
                   <span className="text-white">{cmd.command}</span>
                 </div>
@@ -328,7 +333,7 @@ const AdvancedTerminal: React.FC<AdvancedTerminalProps> = ({
           <form onSubmit={handleSubmit} className="mt-4">
             <div className="flex items-center space-x-2">
               <span className="text-cyber-blue text-sm">[{formatTime(new Date())}]</span>
-              <span className="text-yellow-400 text-sm">eternyx@system:</span>
+              <span className="text-yellow-400 text-sm">Eternyx@{username}:</span>
               <span className="text-purple-400 text-sm">{currentPath}$</span>
               <Input
                 ref={inputRef}

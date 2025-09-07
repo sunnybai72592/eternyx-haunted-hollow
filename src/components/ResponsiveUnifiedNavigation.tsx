@@ -329,9 +329,13 @@ export const ResponsiveUnifiedNavigation = ({ className = '' }: NavigationProps)
               <span>{isMobile ? 'Mobile' : 'Desktop'}</span>
             </div>
 
-            {/* Auth Button */}
+            {/* User Profile or Auth Button */}
             <div className="hidden md:block">
-              <CombinedAuthButton />
+              {isAuthenticated ? (
+                <UserProfile className="scale-90" />
+              ) : (
+                <CombinedAuthButton />
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -416,7 +420,11 @@ export const ResponsiveUnifiedNavigation = ({ className = '' }: NavigationProps)
 
               {/* Mobile Auth Button */}
               <div className="pt-4 border-t border-gray-800">
-                <CombinedAuthButton />
+                {isAuthenticated ? (
+                  <UserProfile />
+                ) : (
+                  <CombinedAuthButton />
+                )}
               </div>
             </div>
           </div>

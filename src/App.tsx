@@ -58,6 +58,7 @@ const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
 const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 const CyberDashboard = lazy(() => import("./pages/CyberDashboard"));
+const CyberArena = lazy(() => import("./pages/CyberArena"));
 
 
 const queryClient = new QueryClient({
@@ -114,6 +115,7 @@ const App = () => {
                           <Route path="/" element={<Index />} />
                           <Route path="/dashboard" element={<Dashboard />} />
                           <Route path="/cyber-dashboard" element={<CyberDashboard />} />
+                          <Route path="/cyber-arena" element={<CyberArena />} />
                           <Route path="/enhanced-dashboard" element={<EnhancedDashboard />} />
                           <Route path="/arsenal" element={<CyberArsenal />} />
                           <Route path="/subscriptions" element={<SubscriptionHub />} />
