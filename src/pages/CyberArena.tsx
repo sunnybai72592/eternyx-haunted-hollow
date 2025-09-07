@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import AdvancedTerminal from '@/components/AdvancedTerminal';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Terminal, 
   Shield, 
@@ -39,7 +41,8 @@ interface Tool {
   requiresAuth: boolean;
   isPremium: boolean;
   isElite: boolean;
-  action: () => void;
+  inputPlaceholder?: string;
+  inputLabel?: string;
 }
 
 const CyberArena = () => {
@@ -49,6 +52,8 @@ const CyberArena = () => {
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [scanResults, setScanResults] = useState<any>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [toolInputs, setToolInputs] = useState<{[key: string]: string}>({});
+  const [activeTool, setActiveTool] = useState<string | null>(null);
 
   const username = profile?.username || profile?.full_name || 'Agent';
 
@@ -59,82 +64,60 @@ const CyberArena = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  const executePortScan = async (target: string) => {
+  const executeToolAction = async (toolId: string, input: string) => {
+    if (!input.trim()) return;
+    
     setIsScanning(true);
+    setActiveTool(toolId);
+    setScanResults(null);
+    
     try {
-      const response = await fetch('/functions/v1/port-scanner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target })
-      });
-      const result = await response.json();
-      setScanResults(result);
-    } catch (error) {
-      console.error('Port scan failed:', error);
-    }
-    setIsScanning(false);
-  };
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let functionName = '';
+      let payload: any = { user_id: user?.id };
+      
+      switch (toolId) {
+        case 'port-scanner':
+          functionName = 'port-scanner';
+          payload.target = input;
+          payload.scan_type = 'tcp';
+          break;
+        case 'vuln-scanner':
+          functionName = 'vulnerability-scanner';
+          payload.target_url = input;
+          payload.scan_type = 'basic';
+          break;
+        case 'dns-analyzer':
+          functionName = 'dns-analyzer';
+          payload.domain = input;
+          break;
+        case 'ssl-analyzer':
+          functionName = 'ssl-analyzer';
+          payload.hostname = input;
+          break;
+        case 'web-scanner':
+          functionName = 'web-scanner';
+          payload.target_url = input;
+          payload.scan_depth = 1;
+          break;
+        default:
+          throw new Error('Unknown tool');
+      }
 
-  const executeVulnScan = async (target: string) => {
-    setIsScanning(true);
-    try {
-      const response = await fetch('/functions/v1/vulnerability-scanner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target })
+      const { data, error } = await supabase.functions.invoke(functionName, {
+        body: payload
       });
-      const result = await response.json();
-      setScanResults(result);
-    } catch (error) {
-      console.error('Vulnerability scan failed:', error);
-    }
-    setIsScanning(false);
-  };
 
-  const executeDNSAnalysis = async (domain: string) => {
-    setIsScanning(true);
-    try {
-      const response = await fetch('/functions/v1/dns-analyzer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain })
+      if (error) throw error;
+      
+      setScanResults(data);
+    } catch (error) {
+      console.error(`${toolId} failed:`, error);
+      setScanResults({
+        error: true,
+        message: error instanceof Error ? error.message : 'Tool execution failed'
       });
-      const result = await response.json();
-      setScanResults(result);
-    } catch (error) {
-      console.error('DNS analysis failed:', error);
-    }
-    setIsScanning(false);
-  };
-
-  const executeSSLAnalysis = async (domain: string) => {
-    setIsScanning(true);
-    try {
-      const response = await fetch('/functions/v1/ssl-analyzer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain })
-      });  
-      const result = await response.json();
-      setScanResults(result);
-    } catch (error) {
-      console.error('SSL analysis failed:', error);
-    }
-    setIsScanning(false);
-  };
-
-  const executeWebScan = async (url: string) => {
-    setIsScanning(true);
-    try {
-      const response = await fetch('/functions/v1/web-scanner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-      const result = await response.json();
-      setScanResults(result);
-    } catch (error) {
-      console.error('Web scan failed:', error);
     }
     setIsScanning(false);
   };
@@ -151,10 +134,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => {
-        const target = prompt('Enter target IP or hostname:');
-        if (target) executePortScan(target);
-      }
+      inputPlaceholder: 'Enter target IP or hostname',
+      inputLabel: 'Target'
     },
     {
       id: 'vuln-scanner',
@@ -166,10 +147,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => {
-        const target = prompt('Enter target URL or IP:');
-        if (target) executeVulnScan(target);
-      }
+      inputPlaceholder: 'Enter target URL or IP',
+      inputLabel: 'Target'
     },
     {
       id: 'dns-analyzer',
@@ -181,10 +160,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => {
-        const domain = prompt('Enter domain name:');
-        if (domain) executeDNSAnalysis(domain);
-      }
+      inputPlaceholder: 'Enter domain name',
+      inputLabel: 'Domain'
     },
     {
       id: 'ssl-analyzer',
@@ -196,10 +173,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => {
-        const domain = prompt('Enter domain name:');
-        if (domain) executeSSLAnalysis(domain);
-      }
+      inputPlaceholder: 'Enter domain name',
+      inputLabel: 'Domain'
     },
     {
       id: 'web-scanner',
@@ -211,10 +186,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => {
-        const url = prompt('Enter web application URL:');
-        if (url) executeWebScan(url);
-      }
+      inputPlaceholder: 'Enter web application URL',
+      inputLabel: 'URL'
     },
     // Premium Tools
     {
@@ -227,7 +200,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: true,
       isElite: false,
-      action: () => alert('Advanced Reconnaissance - Premium Feature')
+      inputPlaceholder: 'Enter target domain or IP',
+      inputLabel: 'Target'
     },
     {
       id: 'exploit-framework',
@@ -239,7 +213,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: true,
       isElite: false,
-      action: () => alert('Exploit Framework - Premium Feature')
+      inputPlaceholder: 'Enter target IP or service',
+      inputLabel: 'Target'
     },
     {
       id: 'crypto-analyzer',
@@ -251,7 +226,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: true,
       isElite: false,
-      action: () => alert('Crypto Analyzer - Premium Feature')
+      inputPlaceholder: 'Enter cipher text or key',
+      inputLabel: 'Input'
     },
     {
       id: 'social-engineering',
@@ -263,7 +239,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: true,
       isElite: false,
-      action: () => alert('Social Engineering Toolkit - Premium Feature')
+      inputPlaceholder: 'Enter email or domain',
+      inputLabel: 'Target'
     },
     {
       id: 'wireless-auditor',
@@ -275,7 +252,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: true,
       isElite: false,
-      action: () => alert('Wireless Auditor - Premium Feature')
+      inputPlaceholder: 'Enter BSSID or ESSID',
+      inputLabel: 'Network'
     },
     // Elite Tools
     {
@@ -288,7 +266,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: true,
-      action: () => alert('Zero-Day Hunter - Elite Feature')
+      inputPlaceholder: 'Enter binary or service',
+      inputLabel: 'Target'
     },
     {
       id: 'advanced-persistent-threat',
@@ -300,7 +279,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: true,
-      action: () => alert('APT Simulator - Elite Feature')
+      inputPlaceholder: 'Enter campaign name',
+      inputLabel: 'Campaign'
     },
     {
       id: 'quantum-cryptanalysis',
@@ -312,7 +292,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: true,
-      action: () => alert('Quantum Cryptanalysis - Elite Feature')
+      inputPlaceholder: 'Enter quantum algorithm',
+      inputLabel: 'Algorithm'
     },
     {
       id: 'ai-threat-prediction',
@@ -324,7 +305,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: true,
-      action: () => alert('AI Threat Prediction - Elite Feature')
+      inputPlaceholder: 'Enter data source',
+      inputLabel: 'Source'
     },
     {
       id: 'blockchain-auditor',
@@ -336,7 +318,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: true,
-      action: () => alert('Blockchain Auditor - Elite Feature')
+      inputPlaceholder: 'Enter contract address',
+      inputLabel: 'Contract'
     },
     // Additional Basic Tools
     {
@@ -349,7 +332,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => alert('Hash Cracker - Basic Tool')
+      inputPlaceholder: 'Enter hash to crack',
+      inputLabel: 'Hash'
     },
     {
       id: 'network-monitor',
@@ -361,7 +345,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => alert('Network Monitor - Basic Tool')
+      inputPlaceholder: 'Enter network interface',
+      inputLabel: 'Interface'
     },
     {
       id: 'payload-generator',
@@ -373,7 +358,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => alert('Payload Generator - Advanced Tool')
+      inputPlaceholder: 'Enter payload type',
+      inputLabel: 'Type'
     },
     {
       id: 'security-scanner',
@@ -385,7 +371,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => alert('Security Scanner - Basic Tool')
+      inputPlaceholder: 'Enter system IP',
+      inputLabel: 'Target'
     },
     {
       id: 'threat-intel',
@@ -397,7 +384,8 @@ const CyberArena = () => {
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      action: () => alert('Threat Intelligence - Advanced Tool')
+      inputPlaceholder: 'Enter IOC or hash',
+      inputLabel: 'IOC'
     }
   ];
 
@@ -524,13 +512,13 @@ const CyberArena = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
           {filteredTools.map((tool) => {
             const hasAccess = canAccessTool(tool);
+            const isActive = activeTool === tool.id && isScanning;
             return (
               <Card 
                 key={tool.id}
                 className={`relative bg-gray-900/50 border-gray-700 hover:border-cyan-500/50 transition-all duration-300 group ${
-                  hasAccess ? 'cursor-pointer hover:scale-105' : 'opacity-60'
-                }`}
-                onClick={hasAccess ? tool.action : () => {}}
+                  hasAccess ? 'hover:scale-105' : 'opacity-60'
+                } ${isActive ? 'border-cyan-400 bg-gray-800/70' : ''}`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
@@ -547,6 +535,53 @@ const CyberArena = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-gray-400 text-sm mb-4">{tool.description}</p>
+                  
+                  {/* Integrated Input Field */}
+                  {hasAccess && tool.inputPlaceholder && (
+                    <div className="space-y-3 mb-4">
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          placeholder={tool.inputPlaceholder}
+                          value={toolInputs[tool.id] || ''}
+                          onChange={(e) => setToolInputs(prev => ({
+                            ...prev,
+                            [tool.id]: e.target.value
+                          }))}
+                          className="bg-black/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400"
+                          disabled={isScanning}
+                        />
+                        <span className="absolute -top-2 left-2 text-xs text-gray-500 bg-gray-900 px-1">
+                          {tool.inputLabel}
+                        </span>
+                      </div>
+                      <Button
+                        onClick={() => executeToolAction(tool.id, toolInputs[tool.id] || '')}
+                        disabled={isScanning || !toolInputs[tool.id]?.trim()}
+                        className={`w-full ${
+                          ['port-scanner', 'vuln-scanner', 'dns-analyzer', 'ssl-analyzer', 'web-scanner'].includes(tool.id)
+                            ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500'
+                            : tool.isPremium
+                            ? 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500'
+                            : tool.isElite
+                            ? 'bg-gradient-to-r from-pink-500 to-red-600 hover:from-pink-400 hover:to-red-500'
+                            : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600'
+                        } transition-all duration-300`}
+                      >
+                        {isActive ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Executing...
+                          </>
+                        ) : (
+                          <>
+                            <Terminal className="w-4 h-4 mr-2" />
+                            Execute
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                   
                   <div className="flex justify-between items-center">
                     <Badge variant="outline" className="text-xs">
