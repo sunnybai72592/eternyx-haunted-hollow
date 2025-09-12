@@ -1,332 +1,496 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { 
+  Zap, ExternalLink, Download, Copy, CheckCircle, Sparkles, 
+  Brain, BarChart3, Coins, FileText, Video, Cpu, 
+  TrendingUp, Palette, Code2, Layers, Atom, Rocket
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
+import CyberCard from '@/components/ui/cyber-card';
+import CyberGrid, { CyberGridItem } from '@/components/ui/cyber-grid';
+import CyberSection from '@/components/ui/cyber-section';
+import { ResponsiveText } from '@/components/ui/responsive-text';
+import { EnhancedButton } from '@/components/ui/enhanced-button';
 import ChartGenerator from '@/components/tools/ChartGenerator';
 import QRCodeTool from '@/components/tools/QRCodeTool';
-import {
-  Brain, BarChart, Coins, FileText, Video, 
-  Zap, ExternalLink, FileCode, TrendingUp, Cpu, QrCode, Sparkles
-} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface InnovationTool {
   id: string;
   name: string;
+  category: string;
+  type: string;
+  pricing: string;
   description: string;
-  type: 'API' | 'Library' | 'Service';
-  category: 'AI/ML' | 'Data Visualization' | 'Blockchain' | 'Media Processing' | 'Analytics';
-  icon: React.ReactNode;
   features: string[];
-  link?: string;
-  documentation?: string;
-  installation?: string;
-  pricing: 'Free' | 'Freemium' | 'Paid';
+  installation: string;
+  link: string;
+  icon: React.ComponentType<any>;
+  color: string;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  innovationLevel: 'Standard' | 'Advanced' | 'Cutting-Edge' | 'Revolutionary';
+  popularity: number;
 }
 
-const innovationTools: InnovationTool[] = [
-  {
-    id: 'huggingface-api',
-    name: 'Hugging Face API',
-    description: 'Access thousands of pre-trained AI models for NLP, computer vision, and more',
-    type: 'API',
-    category: 'AI/ML',
-    icon: React.createElement(Brain),
-    features: ['Pre-trained models', 'NLP tasks', 'Computer vision', 'Audio processing', 'Model hosting'],
-    link: 'https://huggingface.co/',
-    documentation: 'https://huggingface.co/docs',
-    installation: 'pip install transformers',
-    pricing: 'Freemium'
-  },
-  {
-    id: 'tensorflowjs',
-    name: 'TensorFlow.js',
-    description: 'Machine learning library for JavaScript - run ML models in the browser',
-    type: 'Library',
-    category: 'AI/ML',
-    icon: React.createElement(Cpu),
-    features: ['Browser ML', 'Pre-trained models', 'Custom training', 'Node.js support', 'GPU acceleration'],
-    link: 'https://www.tensorflow.org/js',
-    documentation: 'https://www.tensorflow.org/js/guide',
-    installation: 'npm install @tensorflow/tfjs',
-    pricing: 'Free'
-  },
-  {
-    id: 'chartjs',
-    name: 'Chart.js',
-    description: 'Simple yet flexible JavaScript charting library for responsive charts',
-    type: 'Library',
-    category: 'Data Visualization',
-    icon: React.createElement(BarChart),
-    features: ['8 chart types', 'Responsive design', 'Animation', 'Plugins', 'Canvas rendering'],
-    link: 'https://www.chartjs.org/',
-    documentation: 'https://www.chartjs.org/docs/',
-    installation: 'npm install chart.js',
-    pricing: 'Free'
-  },
-  {
-    id: 'recharts',
-    name: 'Recharts',
-    description: 'Composable charting library built on React components and D3',
-    type: 'Library',
-    category: 'Data Visualization',
-    icon: React.createElement(TrendingUp),
-    features: ['React components', 'Responsive charts', 'Composable', 'SVG rendering', 'Animation support'],
-    link: 'https://recharts.org/',
-    documentation: 'https://recharts.org/en-US/guide',
-    installation: 'npm install recharts',
-    pricing: 'Free'
-  },
-  {
-    id: 'd3js',
-    name: 'D3.js',
-    description: 'Data-driven documents library for creating dynamic, interactive data visualizations',
-    type: 'Library',
-    category: 'Data Visualization',
-    icon: React.createElement(Zap),
-    features: ['Data binding', 'DOM manipulation', 'SVG/Canvas', 'Animations', 'Extensive ecosystem'],
-    link: 'https://d3js.org/',
-    documentation: 'https://github.com/d3/d3/wiki',
-    installation: 'npm install d3',
-    pricing: 'Free'
-  },
-  {
-    id: 'web3js',
-    name: 'Web3.js',
-    description: 'Ethereum JavaScript API for interacting with blockchain networks',
-    type: 'Library',
-    category: 'Blockchain',
-    icon: React.createElement(Coins),
-    features: ['Ethereum interaction', 'Smart contracts', 'Wallet integration', 'Transaction handling', 'Event listening'],
-    link: 'https://web3js.readthedocs.io/',
-    documentation: 'https://web3js.readthedocs.io/en/v1.10.0/',
-    installation: 'npm install web3',
-    pricing: 'Free'
-  },
-  {
-    id: 'coingecko-api',
-    name: 'CoinGecko API',
-    description: 'Comprehensive cryptocurrency data API with market information',
-    type: 'API',
-    category: 'Blockchain',
-    icon: React.createElement(Coins),
-    features: ['Price data', 'Market cap', 'Trading volume', 'Historical data', 'Exchange info'],
-    link: 'https://www.coingecko.com/en/api',
-    documentation: 'https://www.coingecko.com/en/api/documentation',
-    installation: 'REST API - No installation required',
-    pricing: 'Freemium'
-  },
-  {
-    id: 'pdfjs',
-    name: 'PDF.js',
-    description: 'JavaScript PDF viewer and parser built by Mozilla',
-    type: 'Library',
-    category: 'Media Processing',
-    icon: React.createElement(FileText),
-    features: ['PDF rendering', 'Text extraction', 'Annotation support', 'Cross-platform', 'No plugins required'],
-    link: 'https://mozilla.github.io/pdf.js/',
-    documentation: 'https://github.com/mozilla/pdf.js/wiki',
-    installation: 'npm install pdfjs-dist',
-    pricing: 'Free'
-  },
-  {
-    id: 'ffmpeg-wasm',
-    name: 'FFmpeg.wasm',
-    description: 'WebAssembly port of FFmpeg for browser-based video/audio processing',
-    type: 'Library',
-    category: 'Media Processing',
-    icon: React.createElement(Video),
-    features: ['Video processing', 'Audio conversion', 'Format support', 'Browser-based', 'No server required'],
-    link: 'https://ffmpegwasm.netlify.app/',
-    documentation: 'https://github.com/ffmpegwasm/ffmpeg.wasm',
-    installation: 'npm install @ffmpeg/ffmpeg @ffmpeg/core',
-    pricing: 'Free'
-  }
-];
-
-const DigitalInnovationTools = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+const DigitalInnovationToolsEnhanced = () => {
+  const [activeCategory, setActiveCategory] = useState('All Tools');
+  const [copiedTool, setCopiedTool] = useState<string | null>(null);
   const { toast } = useToast();
 
   const categories = [
-    { id: 'all', name: 'All Tools', icon: <Zap className="w-4 h-4" /> },
-    { id: 'AI/ML', name: 'AI/ML', icon: <Brain className="w-4 h-4" /> },
-    { id: 'Data Visualization', name: 'Data Viz', icon: <BarChart className="w-4 h-4" /> },
-    { id: 'Blockchain', name: 'Blockchain', icon: <Coins className="w-4 h-4" /> },
-    { id: 'Media Processing', name: 'Media', icon: <Video className="w-4 h-4" /> }
+    { id: 'All Tools', name: 'All Tools', icon: Sparkles, count: 9, color: 'purple' },
+    { id: 'AI & ML', name: 'AI & Machine Learning', icon: Brain, count: 2, color: 'pink' },
+    { id: 'Data Visualization', name: 'Data Visualization', icon: BarChart3, count: 3, color: 'blue' },
+    { id: 'Blockchain', name: 'Blockchain & Web3', icon: Coins, count: 2, color: 'yellow' },
+    { id: 'Media Processing', name: 'Media Processing', icon: Video, count: 2, color: 'green' }
   ];
 
-  const filteredTools = selectedCategory === 'all' 
-    ? innovationTools 
-    : innovationTools.filter(tool => tool.category === selectedCategory);
-
-  const handleToolAction = (tool: InnovationTool) => {
-    if (tool.link) {
-      window.open(tool.link, '_blank');
+  const tools: InnovationTool[] = [
+    {
+      id: 'huggingface-api',
+      name: 'Hugging Face API',
+      category: 'AI & ML',
+      type: 'API',
+      pricing: 'Freemium',
+      description: 'State-of-the-art machine learning models and datasets for NLP, computer vision, and more',
+      features: ['Pre-trained models', 'Natural language processing', 'Computer vision', 'Audio processing', 'Model hosting'],
+      installation: 'pip install transformers or REST API',
+      link: 'https://huggingface.co/',
+      icon: Brain,
+      color: 'pink',
+      difficulty: 'Intermediate',
+      innovationLevel: 'Revolutionary',
+      popularity: 97
+    },
+    {
+      id: 'tensorflowjs',
+      name: 'TensorFlow.js',
+      category: 'AI & ML',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'Machine learning library for JavaScript that runs in browsers and Node.js',
+      features: ['Browser ML', 'Pre-trained models', 'Custom training', 'GPU acceleration', 'Real-time inference'],
+      installation: 'npm install @tensorflow/tfjs',
+      link: 'https://www.tensorflow.org/js',
+      icon: Cpu,
+      color: 'pink',
+      difficulty: 'Advanced',
+      innovationLevel: 'Cutting-Edge',
+      popularity: 94
+    },
+    {
+      id: 'chartjs',
+      name: 'Chart.js',
+      category: 'Data Visualization',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'Simple yet flexible JavaScript charting library for designers and developers',
+      features: ['8 chart types', 'Responsive design', 'Animation', 'Plugins', 'Canvas rendering'],
+      installation: 'npm install chart.js',
+      link: 'https://www.chartjs.org/',
+      icon: BarChart3,
+      color: 'blue',
+      difficulty: 'Beginner',
+      innovationLevel: 'Standard',
+      popularity: 92
+    },
+    {
+      id: 'recharts',
+      name: 'Recharts',
+      category: 'Data Visualization',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'Composable charting library built on React components and D3.js',
+      features: ['React components', 'Responsive charts', 'Customizable', 'SVG rendering', 'Animation support'],
+      installation: 'npm install recharts',
+      link: 'https://recharts.org/',
+      icon: TrendingUp,
+      color: 'blue',
+      difficulty: 'Intermediate',
+      innovationLevel: 'Advanced',
+      popularity: 89
+    },
+    {
+      id: 'd3js',
+      name: 'D3.js',
+      category: 'Data Visualization',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'Data-driven documents library for creating dynamic, interactive data visualizations',
+      features: ['Data binding', 'DOM manipulation', 'SVG/Canvas', 'Animations', 'Geo projections'],
+      installation: 'npm install d3 or CDN',
+      link: 'https://d3js.org/',
+      icon: Atom,
+      color: 'blue',
+      difficulty: 'Expert',
+      innovationLevel: 'Revolutionary',
+      popularity: 96
+    },
+    {
+      id: 'web3js',
+      name: 'Web3.js',
+      category: 'Blockchain',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'Ethereum JavaScript API for interacting with the Ethereum blockchain',
+      features: ['Ethereum integration', 'Smart contracts', 'Wallet connection', 'Transaction handling', 'Event listening'],
+      installation: 'npm install web3',
+      link: 'https://web3js.readthedocs.io/',
+      icon: Coins,
+      color: 'yellow',
+      difficulty: 'Advanced',
+      innovationLevel: 'Cutting-Edge',
+      popularity: 88
+    },
+    {
+      id: 'coingecko-api',
+      name: 'CoinGecko API',
+      category: 'Blockchain',
+      type: 'API',
+      pricing: 'Freemium',
+      description: 'Comprehensive cryptocurrency data API with market data, prices, and analytics',
+      features: ['Price data', 'Market analytics', 'Historical data', 'Exchange info', 'DeFi protocols'],
+      installation: 'REST API - No installation required',
+      link: 'https://www.coingecko.com/en/api',
+      icon: TrendingUp,
+      color: 'yellow',
+      difficulty: 'Beginner',
+      innovationLevel: 'Standard',
+      popularity: 91
+    },
+    {
+      id: 'pdfjs',
+      name: 'PDF.js',
+      category: 'Media Processing',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'JavaScript PDF viewer and parser that works in modern browsers',
+      features: ['PDF rendering', 'Text extraction', 'Annotation support', 'Form handling', 'Print support'],
+      installation: 'npm install pdfjs-dist',
+      link: 'https://mozilla.github.io/pdf.js/',
+      icon: FileText,
+      color: 'green',
+      difficulty: 'Intermediate',
+      innovationLevel: 'Advanced',
+      popularity: 93
+    },
+    {
+      id: 'ffmpeg-wasm',
+      name: 'FFmpeg.wasm',
+      category: 'Media Processing',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'WebAssembly port of FFmpeg for browser-based video/audio processing',
+      features: ['Video processing', 'Audio conversion', 'Format support', 'Browser-based', 'No server required'],
+      installation: 'npm install @ffmpeg/ffmpeg',
+      link: 'https://ffmpegwasm.netlify.app/',
+      icon: Video,
+      color: 'green',
+      difficulty: 'Advanced',
+      innovationLevel: 'Revolutionary',
+      popularity: 85
     }
+  ];
+
+  const filteredTools = activeCategory === 'All Tools' 
+    ? tools 
+    : tools.filter(tool => tool.category === activeCategory);
+
+  const handleCopyInstallation = (installation: string, toolName: string) => {
+    navigator.clipboard.writeText(installation);
+    setCopiedTool(toolName);
     toast({
-      title: `${tool.name} Accessed`,
-      description: `Opening ${tool.name} documentation and resources`,
+      title: "Copied to clipboard!",
+      description: `Installation command for ${toolName} copied.`,
     });
+    setTimeout(() => setCopiedTool(null), 2000);
   };
 
-  const getTypeColor = (type: string) => {
-    const colors = {
-      'API': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-      'Library': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      'Service': 'bg-green-500/20 text-green-400 border-green-500/30'
-    };
-    return colors[type as keyof typeof colors] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'Beginner': return 'text-green-400';
+      case 'Intermediate': return 'text-yellow-400';
+      case 'Advanced': return 'text-orange-400';
+      case 'Expert': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
   };
 
-  const getPricingColor = (pricing: string) => {
-    const colors = {
-      'Free': 'bg-green-500/20 text-green-400 border-green-500/30',
-      'Freemium': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-      'Paid': 'bg-red-500/20 text-red-400 border-red-500/30'
-    };
-    return colors[pricing as keyof typeof colors] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+  const getInnovationLevelColor = (level: string) => {
+    switch (level) {
+      case 'Standard': return 'text-blue-400';
+      case 'Advanced': return 'text-purple-400';
+      case 'Cutting-Edge': return 'text-pink-400';
+      case 'Revolutionary': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const getPopularityWidth = (popularity: number) => {
+    return `${popularity}%`;
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent mb-4">
-            Digital Innovation Tools
-          </h1>
-          <p className="text-gray-300 text-lg">
-            Cutting-edge APIs and libraries for AI, blockchain, data visualization, and media processing
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900/20 via-black to-pink-900/20">
+      {/* Hero Section */}
+      <CyberSection
+        variant="hero"
+        title="Digital Innovation Tools"
+        subtitle="Innovation Arsenal"
+        description="Cutting-edge technologies for AI, blockchain, data visualization, and digital transformation"
+        icon={<Sparkles className="w-16 h-16" />}
+        glowColor="purple"
+        background="gradient"
+        className="min-h-[60vh]"
+      >
+        {/* Innovation Banner */}
+        <div className="bg-gradient-to-r from-purple-900/30 via-pink-900/30 to-blue-900/30 border border-purple-500/50 rounded-lg p-6 mb-8 backdrop-blur-sm">
+          <div className="flex items-center gap-3 text-purple-300">
+            <Rocket className="w-6 h-6 text-purple-400" />
+            <div>
+              <ResponsiveText variant="h6" className="text-purple-200 font-semibold mb-1">
+                🚀 Future-Ready Technologies
+              </ResponsiveText>
+              <ResponsiveText variant="body" className="text-purple-300">
+                Explore revolutionary tools that are shaping the future of digital innovation and technology.
+              </ResponsiveText>
+            </div>
+          </div>
         </div>
 
-        {/* Category Tabs */}
-        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 bg-gray-900/50 border border-purple-500/30">
-            {categories.map((category) => (
-              <TabsTrigger
-                key={category.id}
-                value={category.id}
-                className="flex items-center gap-2 data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400"
-              >
-                {category.icon}
-                <span className="hidden sm:inline">{category.name}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        {/* Stats Cards */}
+        <CyberGrid cols={4} gap="md" className="mt-12">
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="purple" className="text-center">
+              <ResponsiveText variant="h3" className="text-purple-400 font-bold">9+</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Innovation Tools</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="pink" className="text-center">
+              <ResponsiveText variant="h3" className="text-pink-400 font-bold">5</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Categories</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="blue" className="text-center">
+              <ResponsiveText variant="h3" className="text-blue-400 font-bold">97%</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Cutting-Edge</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="green" className="text-center">
+              <ResponsiveText variant="h3" className="text-green-400 font-bold">∞</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Possibilities</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+        </CyberGrid>
+      </CyberSection>
 
-        {/* Tools Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Category Filter Section */}
+      <CyberSection
+        title="Innovation Categories"
+        subtitle="Filter & Explore"
+        glowColor="purple"
+        padding="lg"
+      >
+        <CyberGrid cols={5} gap="md">
+          {categories.map((category) => (
+            <CyberGridItem key={category.id}>
+              <CyberCard
+                variant={activeCategory === category.id ? "neon" : "default"}
+                glowColor={category.color as any}
+                interactive
+                className="cursor-pointer"
+                onClick={() => setActiveCategory(category.id)}
+              >
+                <div className="text-center p-4">
+                  <category.icon className={`w-8 h-8 mx-auto mb-3 text-${category.color}-400`} />
+                  <ResponsiveText variant="h6" className="text-white font-semibold mb-1">
+                    {category.name}
+                  </ResponsiveText>
+                  <Badge variant="secondary" className="text-xs">
+                    {category.count} tools
+                  </Badge>
+                </div>
+              </CyberCard>
+            </CyberGridItem>
+          ))}
+        </CyberGrid>
+      </CyberSection>
+
+      {/* Tools Grid Section */}
+      <CyberSection
+        title={`${activeCategory} (${filteredTools.length})`}
+        subtitle="Available Tools"
+        glowColor="purple"
+        padding="lg"
+      >
+        <CyberGrid cols={3} gap="lg">
           {filteredTools.map((tool) => (
-            <Card key={tool.id} className="bg-gray-900/50 border-purple-500/30 hover:border-purple-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/20">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-500/20 rounded-lg text-purple-400">
-                      {tool.icon}
+            <CyberGridItem key={tool.id}>
+              <CyberCard
+                variant="hologram"
+                title={tool.name}
+                subtitle={`${tool.type} • ${tool.pricing}`}
+                icon={<tool.icon className="w-6 h-6" />}
+                interactive
+              >
+                <div className="space-y-4">
+                  {/* Description */}
+                  <ResponsiveText variant="body" className="text-gray-300">
+                    {tool.description}
+                  </ResponsiveText>
+
+                  {/* Difficulty, Innovation Level & Popularity */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-gray-400" />
+                      <div className="flex flex-col">
+                        <span className={`text-xs font-medium ${getDifficultyColor(tool.difficulty)}`}>
+                          {tool.difficulty}
+                        </span>
+                        <span className="text-xs text-gray-500">Difficulty</span>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-white text-lg">{tool.name}</CardTitle>
-                      <div className="flex gap-2 mt-1">
-                        <Badge className={getTypeColor(tool.type)}>
-                          {tool.type}
-                        </Badge>
-                        <Badge className={getPricingColor(tool.pricing)}>
-                          {tool.pricing}
-                        </Badge>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-gray-400" />
+                      <div className="flex flex-col">
+                        <span className={`text-xs font-medium ${getInnovationLevelColor(tool.innovationLevel)}`}>
+                          {tool.innovationLevel}
+                        </span>
+                        <span className="text-xs text-gray-500">Innovation</span>
                       </div>
                     </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-300 mb-4">{tool.description}</p>
-                
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-purple-400 mb-2">Key Features:</h4>
-                  <ul className="text-sm text-gray-300 space-y-1">
-                    {tool.features.slice(0, 3).map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <div className="w-1 h-1 bg-purple-400 rounded-full"></div>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
 
-                {tool.installation && (
-                  <div className="mb-4 p-2 bg-black/50 rounded border border-gray-700">
-                    <p className="text-xs text-gray-400 mb-1">Installation:</p>
-                    <code className="text-xs text-green-400 font-mono">{tool.installation}</code>
+                  {/* Popularity */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">Popularity</span>
+                    <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full bg-${tool.color}-400 transition-all duration-300`}
+                        style={{ width: getPopularityWidth(tool.popularity) }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-400">{tool.popularity}%</span>
                   </div>
-                )}
 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleToolAction(tool)}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Explore
-                  </Button>
-                  {tool.documentation && (
-                    <Button
-                      onClick={() => window.open(tool.documentation, '_blank')}
-                      variant="outline"
-                      className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+                  {/* Features */}
+                  <div>
+                    <ResponsiveText variant="caption" className="text-gray-400 font-medium mb-2">
+                      Key Features:
+                    </ResponsiveText>
+                    <div className="flex flex-wrap gap-1">
+                      {tool.features.slice(0, 3).map((feature, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
+                      {tool.features.length > 3 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{tool.features.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Installation */}
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <ResponsiveText variant="caption" className="text-gray-400 font-medium">
+                        Installation:
+                      </ResponsiveText>
+                      <EnhancedButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopyInstallation(tool.installation, tool.name)}
+                        className="h-6 px-2"
+                      >
+                        {copiedTool === tool.name ? (
+                          <CheckCircle className="w-3 h-3 text-green-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </EnhancedButton>
+                    </div>
+                    <code className="text-xs text-green-400 font-mono break-all">
+                      {tool.installation}
+                    </code>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <EnhancedButton
+                      variant="hologram"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => window.open(tool.link, '_blank')}
                     >
-                      <FileCode className="w-4 h-4" />
-                    </Button>
-                  )}
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Access
+                    </EnhancedButton>
+                    <EnhancedButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(tool.link, '_blank')}
+                    >
+                      <Download className="w-4 h-4" />
+                    </EnhancedButton>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </CyberCard>
+            </CyberGridItem>
           ))}
-        </div>
+        </CyberGrid>
+      </CyberSection>
 
-        {filteredTools.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">No tools found in this category.</p>
-          </div>
-        )}
-
-        {/* Embedded Functional Innovation Tools */}
-        <div className="mt-12 space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent mb-4">
-              <Sparkles className="inline-block w-8 h-8 mr-2 text-purple-400" />
-              Interactive Innovation Tools
-            </h2>
-            <p className="text-gray-300 text-lg">
-              Cutting-edge tools for data visualization, AI integration, and digital innovation
-            </p>
-          </div>
-
-          {/* Chart Generator */}
-          <div className="space-y-4">
-            <h3 className="text-2xl font-semibold text-purple-400 flex items-center gap-2">
-              <BarChart className="w-6 h-6" />
-              Interactive Chart Generator
-            </h3>
-            <ChartGenerator />
-          </div>
-
-          {/* QR Code Tool */}
-          <div className="space-y-4">
-            <h3 className="text-2xl font-semibold text-purple-400 flex items-center gap-2">
-              <QrCode className="w-6 h-6" />
-              QR Code Generator & Reader
-            </h3>
-            <QRCodeTool />
+      {/* Interactive Innovation Tools Section */}
+      <CyberSection
+        title="Interactive Innovation Tools"
+        subtitle="Embedded Tools"
+        description="Fully functional innovation tools for data visualization, QR generation, and digital transformation"
+        glowColor="purple"
+        background="dark"
+        padding="xl"
+      >
+        <div className="bg-gradient-to-r from-purple-900/20 via-pink-900/20 to-blue-900/20 border border-purple-500/30 rounded-lg p-4 mb-8">
+          <div className="flex items-center gap-2 text-purple-400">
+            <Rocket className="w-5 h-5" />
+            <ResponsiveText variant="caption" className="font-medium">
+              Innovation Lab: Experiment with cutting-edge technologies and create amazing digital experiences.
+            </ResponsiveText>
           </div>
         </div>
-      </div>
+
+        <CyberGrid cols={2} gap="xl">
+          <CyberGridItem>
+            <CyberCard
+              variant="hologram"
+              title="Interactive Chart Generator"
+              subtitle="Data visualization and analytics"
+              icon={<BarChart3 className="w-6 h-6" />}
+            >
+              <ChartGenerator />
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard
+              variant="neon"
+              glowColor="green"
+              title="QR Code Generator & Reader"
+              subtitle="Digital connectivity and sharing"
+              icon={<Code2 className="w-6 h-6" />}
+            >
+              <QRCodeTool />
+            </CyberCard>
+          </CyberGridItem>
+        </CyberGrid>
+      </CyberSection>
     </div>
   );
 };
 
-export default DigitalInnovationTools;
+export default DigitalInnovationToolsEnhanced;
 

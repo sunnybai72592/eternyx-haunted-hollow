@@ -1,355 +1,478 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { 
+  Code, ExternalLink, Download, Copy, CheckCircle, Wrench, Zap, Globe, 
+  Database, Palette, Layout, Terminal, Layers, Smartphone, FileCode, 
+  GitBranch, Monitor, Package, Play, Settings, Shield
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
+import CyberCard from '@/components/ui/cyber-card';
+import CyberGrid, { CyberGridItem } from '@/components/ui/cyber-grid';
+import CyberSection from '@/components/ui/cyber-section';
+import { ResponsiveText } from '@/components/ui/responsive-text';
+import { EnhancedButton } from '@/components/ui/enhanced-button';
 import SimpleCodeEditor from '@/components/tools/SimpleCodeEditor';
 import APITester from '@/components/tools/APITester';
-import {
-  Code, FileCode, GitBranch, Palette, Monitor, Globe, 
-  Package, Layers, Zap, ExternalLink, Download, Play
-} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface WebDevTool {
+interface Tool {
   id: string;
   name: string;
+  category: string;
+  type: string;
+  pricing: string;
   description: string;
-  type: 'Library' | 'Plugin' | 'API' | 'Service' | 'Embed' | 'Framework' | 'Tool';
-  category: 'Editor' | 'Version Control' | 'Development' | 'UI Framework' | 'Integration';
-  icon: React.ReactNode;
   features: string[];
-  link?: string;
-  documentation?: string;
-  installation?: string;
+  installation: string;
+  link: string;
+  icon: React.ComponentType<any>;
+  color: string;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  popularity: number;
 }
 
-const webDevTools: WebDevTool[] = [
-  {
-    id: 'monaco-editor',
-    name: 'Monaco Editor',
-    description: 'The code editor that powers VS Code - feature-rich JavaScript-based editor',
-    type: 'Library',
-    category: 'Editor',
-    icon: React.createElement(Code),
-    features: ['Syntax highlighting', 'IntelliSense', 'Multi-cursor editing', 'Minimap', 'Find/Replace'],
-    link: 'https://microsoft.github.io/monaco-editor/',
-    documentation: 'https://microsoft.github.io/monaco-editor/docs.html',
-    installation: 'npm install monaco-editor'
-  },
-  {
-    id: 'ace-editor',
-    name: 'Ace Editor',
-    description: 'High performance code editor for the web with syntax highlighting',
-    type: 'Library',
-    category: 'Editor',
-    icon: React.createElement(FileCode),
-    features: ['120+ languages', 'Themes', 'Auto-completion', 'Code folding', 'Search & replace'],
-    link: 'https://ace.c9.io/',
-    documentation: 'https://ace.c9.io/#nav=howto',
-    installation: 'npm install ace-builds'
-  },
-  {
-    id: 'github-api',
-    name: 'GitHub API',
-    description: 'REST API for GitHub integration and repository management',
-    type: 'API',
-    category: 'Version Control',
-    icon: React.createElement(GitBranch),
-    features: ['Repository management', 'Issue tracking', 'Pull requests', 'User management', 'Webhooks'],
-    link: 'https://docs.github.com/en/rest',
-    documentation: 'https://docs.github.com/en/rest/guides',
-    installation: 'REST API - No installation required'
-  },
-  {
-    id: 'gitea',
-    name: 'Gitea',
-    description: 'Self-hosted Git service with API for custom Git hosting solutions',
-    type: 'Service',
-    category: 'Version Control',
-    icon: React.createElement(GitBranch),
-    features: ['Self-hosted', 'Lightweight', 'API access', 'Issue tracking', 'Wiki support'],
-    link: 'https://gitea.io/',
-    documentation: 'https://docs.gitea.io/',
-    installation: 'Docker or binary installation'
-  },
-  {
-    id: 'browsersync',
-    name: 'BrowserSync',
-    description: 'Live reloading and browser synchronization tool for development',
-    type: 'Tool',
-    category: 'Development',
-    icon: React.createElement(Monitor),
-    features: ['Live reload', 'Cross-device sync', 'Network throttling', 'UI for controls', 'HTTPS support'],
-    link: 'https://browsersync.io/',
-    documentation: 'https://browsersync.io/docs',
-    installation: 'npm install -g browser-sync'
-  },
-  {
-    id: 'jsfiddle-embed',
-    name: 'JSFiddle Embed',
-    description: 'Embed interactive code snippets and demos in your applications',
-    type: 'Embed',
-    category: 'Integration',
-    icon: React.createElement(Play),
-    features: ['Live code editing', 'Multiple frameworks', 'Shareable links', 'Embed anywhere', 'Collaboration'],
-    link: 'https://jsfiddle.net/',
-    documentation: 'https://docs.jsfiddle.net/',
-    installation: 'Embed code - No installation required'
-  },
-  {
-    id: 'codesandbox-embed',
-    name: 'CodeSandbox Embed',
-    description: 'Embed full development environments in your web applications',
-    type: 'Embed',
-    category: 'Integration',
-    icon: React.createElement(Package),
-    features: ['Full IDE experience', 'NPM packages', 'Hot reloading', 'Collaboration', 'Templates'],
-    link: 'https://codesandbox.io/',
-    documentation: 'https://codesandbox.io/docs',
-    installation: 'Embed code - No installation required'
-  },
-  {
-    id: 'tailwindui-free',
-    name: 'TailwindUI Free',
-    description: 'Free UI components built with Tailwind CSS',
-    type: 'Library',
-    category: 'UI Framework',
-    icon: React.createElement(Palette),
-    features: ['Pre-built components', 'Responsive design', 'Copy-paste ready', 'Tailwind CSS', 'Accessibility'],
-    link: 'https://tailwindui.com/components',
-    documentation: 'https://tailwindcss.com/docs',
-    installation: 'npm install tailwindcss'
-  },
-  {
-    id: 'flowbite',
-    name: 'Flowbite',
-    description: 'Component library built on Tailwind CSS with interactive elements',
-    type: 'Library',
-    category: 'UI Framework',
-    icon: React.createElement(Layers),
-    features: ['50+ components', 'React/Vue/Angular', 'Dark mode', 'Interactive elements', 'Figma design'],
-    link: 'https://flowbite.com/',
-    documentation: 'https://flowbite.com/docs',
-    installation: 'npm install flowbite'
-  },
-  {
-    id: 'shadcn-ui',
-    name: 'ShadCN/UI',
-    description: 'Beautifully designed components built with Radix UI and Tailwind CSS',
-    type: 'Library',
-    category: 'UI Framework',
-    icon: React.createElement(Zap),
-    features: ['Radix UI primitives', 'Customizable', 'Accessible', 'TypeScript', 'Copy-paste components'],
-    link: 'https://ui.shadcn.com/',
-    documentation: 'https://ui.shadcn.com/docs',
-    installation: 'npx shadcn-ui@latest init'
-  },
-  {
-    id: 'bootstrap',
-    name: 'Bootstrap',
-    description: 'The world\'s most popular CSS framework for responsive web development',
-    type: 'Framework',
-    category: 'UI Framework',
-    icon: React.createElement(Globe),
-    features: ['Responsive grid', 'Pre-built components', 'JavaScript plugins', 'Sass variables', 'Extensive docs'],
-    link: 'https://getbootstrap.com/',
-    documentation: 'https://getbootstrap.com/docs',
-    installation: 'npm install bootstrap'
-  }
-];
-
-const WebDevelopmentTools = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+const WebDevelopmentToolsEnhanced = () => {
+  const [activeCategory, setActiveCategory] = useState('All Tools');
+  const [copiedTool, setCopiedTool] = useState<string | null>(null);
   const { toast } = useToast();
 
   const categories = [
-    { id: 'all', name: 'All Tools', icon: <Package className="w-4 h-4" /> },
-    { id: 'Editor', name: 'Code Editors', icon: <Code className="w-4 h-4" /> },
-    { id: 'Version Control', name: 'Version Control', icon: <GitBranch className="w-4 h-4" /> },
-    { id: 'Development', name: 'Development Tools', icon: <Monitor className="w-4 h-4" /> },
-    { id: 'UI Framework', name: 'UI Frameworks', icon: <Palette className="w-4 h-4" /> },
-    { id: 'Integration', name: 'Integrations', icon: <Layers className="w-4 h-4" /> }
+    { id: 'All Tools', name: 'All Tools', icon: Wrench, count: 11, color: 'cyan' },
+    { id: 'Editors', name: 'Code Editors', icon: Code, count: 2, color: 'blue' },
+    { id: 'APIs', name: 'APIs & Services', icon: Database, count: 3, color: 'green' },
+    { id: 'UI/UX', name: 'UI Libraries', icon: Palette, count: 4, color: 'purple' },
+    { id: 'Tools', name: 'Dev Tools', icon: Terminal, count: 2, color: 'orange' }
   ];
 
-  const filteredTools = selectedCategory === 'all' 
-    ? webDevTools 
-    : webDevTools.filter(tool => tool.category === selectedCategory);
-
-  const handleToolAction = (tool: WebDevTool) => {
-    if (tool.link) {
-      window.open(tool.link, '_blank');
+  const tools: Tool[] = [
+    {
+      id: 'monaco-editor',
+      name: 'Monaco Editor',
+      category: 'Editors',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'The code editor that powers VS Code - feature-rich JavaScript-based editor',
+      features: ['Syntax highlighting', 'IntelliSense', 'Multi-cursor editing', 'Minimap', 'Find/Replace'],
+      installation: 'npm install monaco-editor',
+      link: 'https://microsoft.github.io/monaco-editor/',
+      icon: Code,
+      color: 'blue',
+      difficulty: 'Intermediate',
+      popularity: 95
+    },
+    {
+      id: 'ace-editor',
+      name: 'Ace Editor',
+      category: 'Editors',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'High performance code editor for the web with syntax highlighting',
+      features: ['120+ languages', 'Themes', 'Auto-completion', 'Code folding', 'Search & replace'],
+      installation: 'npm install ace-builds',
+      link: 'https://ace.c9.io/',
+      icon: FileCode,
+      color: 'blue',
+      difficulty: 'Beginner',
+      popularity: 88
+    },
+    {
+      id: 'github-api',
+      name: 'GitHub API',
+      category: 'APIs',
+      type: 'API',
+      pricing: 'Freemium',
+      description: 'Comprehensive REST API for GitHub integration and repository management',
+      features: ['Repository management', 'User authentication', 'Issue tracking', 'Pull requests', 'Webhooks'],
+      installation: 'REST API - No installation required',
+      link: 'https://docs.github.com/en/rest',
+      icon: GitBranch,
+      color: 'green',
+      difficulty: 'Intermediate',
+      popularity: 92
+    },
+    {
+      id: 'gitea',
+      name: 'Gitea',
+      category: 'APIs',
+      type: 'Service',
+      pricing: 'Free',
+      description: 'Self-hosted Git service with API for custom integrations',
+      features: ['Self-hosted', 'Git repositories', 'Issue tracking', 'Wiki', 'API access'],
+      installation: 'Docker or binary installation',
+      link: 'https://gitea.io/',
+      icon: Database,
+      color: 'green',
+      difficulty: 'Advanced',
+      popularity: 75
+    },
+    {
+      id: 'browsersync',
+      name: 'BrowserSync',
+      category: 'Tools',
+      type: 'Tool',
+      pricing: 'Free',
+      description: 'Live reloading and browser synchronization for development',
+      features: ['Live reload', 'Cross-device sync', 'Network throttling', 'UI interface', 'CSS injection'],
+      installation: 'npm install -g browser-sync',
+      link: 'https://browsersync.io/',
+      icon: Monitor,
+      color: 'orange',
+      difficulty: 'Beginner',
+      popularity: 85
+    },
+    {
+      id: 'jsfiddle',
+      name: 'JSFiddle Embed',
+      category: 'Tools',
+      type: 'Embed',
+      pricing: 'Freemium',
+      description: 'Online code playground with embedding capabilities',
+      features: ['Live preview', 'Multiple frameworks', 'Sharing', 'Embedding', 'Collaboration'],
+      installation: 'Embed code snippet',
+      link: 'https://jsfiddle.net/',
+      icon: Play,
+      color: 'orange',
+      difficulty: 'Beginner',
+      popularity: 80
+    },
+    {
+      id: 'codesandbox',
+      name: 'CodeSandbox Embed',
+      category: 'Tools',
+      type: 'Embed',
+      pricing: 'Freemium',
+      description: 'Online IDE with powerful embedding and sharing features',
+      features: ['Full IDE', 'NPM packages', 'Hot reloading', 'Collaboration', 'Deployment'],
+      installation: 'Embed iframe',
+      link: 'https://codesandbox.io/',
+      icon: Layers,
+      color: 'orange',
+      difficulty: 'Intermediate',
+      popularity: 90
+    },
+    {
+      id: 'tailwindui',
+      name: 'TailwindUI Free',
+      category: 'UI/UX',
+      type: 'Library',
+      pricing: 'Freemium',
+      description: 'Beautiful UI components built with Tailwind CSS',
+      features: ['Pre-built components', 'Responsive design', 'Accessibility', 'Copy-paste ready', 'React/Vue/HTML'],
+      installation: 'Copy component code',
+      link: 'https://tailwindui.com/components',
+      icon: Palette,
+      color: 'purple',
+      difficulty: 'Beginner',
+      popularity: 93
+    },
+    {
+      id: 'flowbite',
+      name: 'Flowbite',
+      category: 'UI/UX',
+      type: 'Library',
+      pricing: 'Freemium',
+      description: 'Component library built on Tailwind CSS with interactive elements',
+      features: ['40+ components', 'Dark mode', 'Interactive JS', 'Multiple frameworks', 'Figma design'],
+      installation: 'npm install flowbite',
+      link: 'https://flowbite.com/',
+      icon: Layout,
+      color: 'purple',
+      difficulty: 'Beginner',
+      popularity: 87
+    },
+    {
+      id: 'shadcn-ui',
+      name: 'ShadCN/UI',
+      category: 'UI/UX',
+      type: 'Library',
+      pricing: 'Free',
+      description: 'Beautifully designed components built with Radix UI and Tailwind CSS',
+      features: ['Copy & paste', 'Customizable', 'Accessible', 'TypeScript', 'Radix primitives'],
+      installation: 'npx shadcn-ui@latest init',
+      link: 'https://ui.shadcn.com/',
+      icon: Zap,
+      color: 'purple',
+      difficulty: 'Intermediate',
+      popularity: 96
+    },
+    {
+      id: 'bootstrap',
+      name: 'Bootstrap',
+      category: 'UI/UX',
+      type: 'Framework',
+      pricing: 'Free',
+      description: 'Popular CSS framework for responsive, mobile-first web development',
+      features: ['Grid system', 'Components', 'Utilities', 'JavaScript plugins', 'Theming'],
+      installation: 'npm install bootstrap',
+      link: 'https://getbootstrap.com/',
+      icon: Globe,
+      color: 'purple',
+      difficulty: 'Beginner',
+      popularity: 89
     }
+  ];
+
+  const filteredTools = activeCategory === 'All Tools' 
+    ? tools 
+    : tools.filter(tool => tool.category === activeCategory);
+
+  const handleCopyInstallation = (installation: string, toolName: string) => {
+    navigator.clipboard.writeText(installation);
+    setCopiedTool(toolName);
     toast({
-      title: `${tool.name} Accessed`,
-      description: `Opening ${tool.name} documentation and resources`,
+      title: "Copied to clipboard!",
+      description: `Installation command for ${toolName} copied.`,
     });
+    setTimeout(() => setCopiedTool(null), 2000);
   };
 
-  const getTypeColor = (type: string) => {
-    const colors = {
-      'Library': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      'Plugin': 'bg-green-500/20 text-green-400 border-green-500/30',
-      'API': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-      'Service': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-      'Embed': 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-      'Framework': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-      'Tool': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-    };
-    return colors[type as keyof typeof colors] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'Beginner': return 'text-green-400';
+      case 'Intermediate': return 'text-yellow-400';
+      case 'Advanced': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const getPopularityWidth = (popularity: number) => {
+    return `${popularity}%`;
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-4">
-            Web Development Tools
-          </h1>
-          <p className="text-gray-300 text-lg">
-            Essential tools, libraries, and frameworks for modern web development
-          </p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+      {/* Hero Section */}
+      <CyberSection
+        variant="hero"
+        title="Web Development Tools"
+        subtitle="Development Arsenal"
+        description="Professional development tools and libraries - Build faster, code smarter, deploy better"
+        icon={<Code className="w-16 h-16" />}
+        glowColor="cyan"
+        background="gradient"
+        className="min-h-[60vh]"
+      >
+        {/* Stats Cards */}
+        <CyberGrid cols={4} gap="md" className="mt-12">
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="cyan" className="text-center">
+              <ResponsiveText variant="h3" className="text-cyan-400 font-bold">11+</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Tools & Libraries</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="blue" className="text-center">
+              <ResponsiveText variant="h3" className="text-blue-400 font-bold">5</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Categories</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="green" className="text-center">
+              <ResponsiveText variant="h3" className="text-green-400 font-bold">100%</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Free & Open Source</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard variant="neon" glowColor="purple" className="text-center">
+              <ResponsiveText variant="h3" className="text-purple-400 font-bold">24/7</ResponsiveText>
+              <ResponsiveText variant="caption" className="text-gray-300">Available</ResponsiveText>
+            </CyberCard>
+          </CyberGridItem>
+        </CyberGrid>
+      </CyberSection>
 
-        {/* Category Tabs */}
-        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 bg-gray-900/50 border border-cyan-500/30">
-            {categories.map((category) => (
-              <TabsTrigger
-                key={category.id}
-                value={category.id}
-                className="flex items-center gap-2 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
+      {/* Category Filter Section */}
+      <CyberSection
+        title="Tool Categories"
+        subtitle="Filter & Explore"
+        glowColor="cyan"
+        padding="lg"
+      >
+        <CyberGrid cols={5} gap="md">
+          {categories.map((category) => (
+            <CyberGridItem key={category.id}>
+              <CyberCard
+                variant={activeCategory === category.id ? "neon" : "default"}
+                glowColor={category.color as any}
+                interactive
+                className="cursor-pointer"
+                onClick={() => setActiveCategory(category.id)}
               >
-                {category.icon}
-                <span className="hidden sm:inline">{category.name}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        {/* Tools Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTools.map((tool) => (
-            <Card key={tool.id} className="bg-gray-900/50 border-cyan-500/30 hover:border-cyan-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/20">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-cyan-500/20 rounded-lg text-cyan-400">
-                      {tool.icon}
-                    </div>
-                    <div>
-                      <CardTitle className="text-white text-lg">{tool.name}</CardTitle>
-                      <Badge className={`mt-1 ${getTypeColor(tool.type)}`}>
-                        {tool.type}
-                      </Badge>
-                    </div>
-                  </div>
+                <div className="text-center p-4">
+                  <category.icon className={`w-8 h-8 mx-auto mb-3 text-${category.color}-400`} />
+                  <ResponsiveText variant="h6" className="text-white font-semibold mb-1">
+                    {category.name}
+                  </ResponsiveText>
+                  <Badge variant="secondary" className="text-xs">
+                    {category.count} tools
+                  </Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-300 mb-4">{tool.description}</p>
-                
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-cyan-400 mb-2">Key Features:</h4>
-                  <ul className="text-sm text-gray-300 space-y-1">
-                    {tool.features.slice(0, 3).map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <div className="w-1 h-1 bg-cyan-400 rounded-full"></div>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {tool.installation && (
-                  <div className="mb-4 p-2 bg-black/50 rounded border border-gray-700">
-                    <p className="text-xs text-gray-400 mb-1">Installation:</p>
-                    <code className="text-xs text-green-400 font-mono">{tool.installation}</code>
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleToolAction(tool)}
-                    className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Open
-                  </Button>
-                  {tool.documentation && (
-                    <Button
-                      onClick={() => window.open(tool.documentation, '_blank')}
-                      variant="outline"
-                      className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                    >
-                      <FileCode className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+              </CyberCard>
+            </CyberGridItem>
           ))}
+        </CyberGrid>
+      </CyberSection>
+
+      {/* Tools Grid Section */}
+      <CyberSection
+        title={`${activeCategory} (${filteredTools.length})`}
+        subtitle="Available Tools"
+        glowColor="cyan"
+        padding="lg"
+      >
+        <CyberGrid cols={3} gap="lg">
+          {filteredTools.map((tool) => (
+            <CyberGridItem key={tool.id}>
+              <CyberCard
+                variant="neon"
+                glowColor={tool.color as any}
+                title={tool.name}
+                subtitle={`${tool.type} • ${tool.pricing}`}
+                icon={<tool.icon className="w-6 h-6" />}
+                interactive
+              >
+                <div className="space-y-4">
+                  {/* Description */}
+                  <ResponsiveText variant="body" className="text-gray-300">
+                    {tool.description}
+                  </ResponsiveText>
+
+                  {/* Difficulty & Popularity */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-gray-400" />
+                      <span className={`text-sm font-medium ${getDifficultyColor(tool.difficulty)}`}>
+                        {tool.difficulty}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">Popularity</span>
+                      <div className="w-16 h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full bg-${tool.color}-400 transition-all duration-300`}
+                          style={{ width: getPopularityWidth(tool.popularity) }}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-400">{tool.popularity}%</span>
+                    </div>
+                  </div>
+
+                  {/* Features */}
+                  <div>
+                    <ResponsiveText variant="caption" className="text-gray-400 font-medium mb-2">
+                      Key Features:
+                    </ResponsiveText>
+                    <div className="flex flex-wrap gap-1">
+                      {tool.features.slice(0, 3).map((feature, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
+                      {tool.features.length > 3 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{tool.features.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Installation */}
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <ResponsiveText variant="caption" className="text-gray-400 font-medium">
+                        Installation:
+                      </ResponsiveText>
+                      <EnhancedButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopyInstallation(tool.installation, tool.name)}
+                        className="h-6 px-2"
+                      >
+                        {copiedTool === tool.name ? (
+                          <CheckCircle className="w-3 h-3 text-green-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </EnhancedButton>
+                    </div>
+                    <code className="text-xs text-green-400 font-mono break-all">
+                      {tool.installation}
+                    </code>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <EnhancedButton
+                      variant="cyber"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => window.open(tool.link, '_blank')}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Access
+                    </EnhancedButton>
+                    <EnhancedButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(tool.link, '_blank')}
+                    >
+                      <Download className="w-4 h-4" />
+                    </EnhancedButton>
+                  </div>
+                </div>
+              </CyberCard>
+            </CyberGridItem>
+          ))}
+        </CyberGrid>
+      </CyberSection>
+
+      {/* Interactive Tools Section */}
+      <CyberSection
+        title="Interactive Development Tools"
+        subtitle="Embedded Tools"
+        description="Fully functional development tools for testing, analysis, and education"
+        glowColor="cyan"
+        background="dark"
+        padding="xl"
+      >
+        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-8">
+          <div className="flex items-center gap-2 text-red-400">
+            <Shield className="w-5 h-5" />
+            <ResponsiveText variant="caption" className="font-medium">
+              Professional Use Only: These tools are for authorized development and educational purposes only.
+            </ResponsiveText>
+          </div>
         </div>
 
-        {filteredTools.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">No tools found in this category.</p>
-          </div>
-        )}
-
-        {/* Embedded Functional Tools */}
-        <div className="mt-12 space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-4">
-              <Monitor className="inline-block w-8 h-8 mr-2 text-cyan-400" />
-              Interactive Development Tools
-            </h2>
-            <p className="text-gray-300 text-lg">
-              Fully functional, embedded tools you can use right here in your browser
-            </p>
-          </div>
-
-          {/* Interactive Code Editor */}
-          <div className="space-y-4">
-            <h3 className="text-2xl font-semibold text-cyan-400 flex items-center gap-2">
-              <Code className="w-6 h-6" />
-              Interactive Code Editor - Live Demo
-            </h3>
-            <SimpleCodeEditor 
-              initialCode={`// Welcome to the Interactive Code Editor!
-// Try editing this code and run it
-
-function fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-// Calculate fibonacci numbers
-for (let i = 0; i <= 10; i++) {
-  console.log(\`fibonacci(\${i}) = \${fibonacci(i)}\`);
-}
-
-// You can change the language and more!
-console.log("Interactive Code Editor is fully functional!");`}
-              language="javascript"
-              height="500px"
-            />
-          </div>
-
-          {/* API Tester */}
-          <div className="space-y-4">
-            <h3 className="text-2xl font-semibold text-cyan-400 flex items-center gap-2">
-              <Globe className="w-6 h-6" />
-              API Tester - Test REST APIs Live
-            </h3>
-            <APITester />
-          </div>
-        </div>
-      </div>
+        <CyberGrid cols={2} gap="xl">
+          <CyberGridItem>
+            <CyberCard
+              variant="neon"
+              glowColor="cyan"
+              title="Interactive Code Editor"
+              subtitle="Real-time JavaScript execution"
+              icon={<Code className="w-6 h-6" />}
+            >
+              <SimpleCodeEditor />
+            </CyberCard>
+          </CyberGridItem>
+          <CyberGridItem>
+            <CyberCard
+              variant="neon"
+              glowColor="green"
+              title="API Testing Tool"
+              subtitle="Live HTTP request testing"
+              icon={<Database className="w-6 h-6" />}
+            >
+              <APITester />
+            </CyberCard>
+          </CyberGridItem>
+        </CyberGrid>
+      </CyberSection>
     </div>
   );
 };
 
-export default WebDevelopmentTools;
+export default WebDevelopmentToolsEnhanced;
 

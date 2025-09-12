@@ -210,6 +210,12 @@ All colors MUST be HSL.
   100% { transform: translateY(4px); }
 }
 
+@keyframes scan-line {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.3; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
 @keyframes energyPulse {
   0%, 100% { 
     box-shadow: 0 0 5px hsl(var(--cyber-cyan) / 0.5);
@@ -283,6 +289,10 @@ All colors MUST be HSL.
 
   .animate-data-stream {
     animation: dataStream 4s linear infinite;
+  }
+
+  .animate-scan-line {
+    animation: scan-line 3s linear infinite;
   }
 }
 
