@@ -52,6 +52,12 @@ const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
 const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
 const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
+// New specialized tool pages
+const WebDevelopmentTools = lazy(() => import("./pages/WebDevelopmentTools"));
+const CybersecurityTools = lazy(() => import("./pages/CybersecurityTools"));
+const DigitalInnovationTools = lazy(() => import("./pages/DigitalInnovationTools"));
+const UniversalWebAppUtilities = lazy(() => import("./pages/UniversalWebAppUtilities"));
+
 // Enhanced platform pages
 const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"));
 const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
@@ -151,6 +157,10 @@ const App = () => {
                           <Route path="/contact" element={<Contact />} />
                           <Route path="/tools/network-scanner" element={<NetworkScanner />} />
                           <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
+                          <Route path="/web-development-tools" element={<WebDevelopmentTools />} />
+                          <Route path="/cybersecurity-tools" element={<CybersecurityTools />} />
+                          <Route path="/digital-innovation-tools" element={<DigitalInnovationTools />} />
+                          <Route path="/universal-web-app-utilities" element={<UniversalWebAppUtilities />} />
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                           <Route path="*" element={<NotFound />} />
                         </Routes>

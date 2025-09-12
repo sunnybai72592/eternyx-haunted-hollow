@@ -83,6 +83,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       level: 15,
       xp: 12750,
       children: [
+        { name: 'Cybersecurity Tools', path: '/cybersecurity-tools', description: 'Professional security testing tools' },
         { name: 'Penetration Testing', path: '/penetration-testing', description: 'Advanced security testing' },
         { name: 'Vulnerability Assessment', path: '/vulnerability-assessment', description: 'System security analysis' },
         { name: 'Security Auditing', path: '/security-auditing', description: 'Comprehensive security review' }
@@ -97,6 +98,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       level: 12,
       xp: 8900,
       children: [
+        { name: 'Web Development Tools', path: '/web-development-tools', description: 'Essential development tools and libraries' },
         { name: 'Frontend Development', path: '/frontend-development', description: 'Modern UI/UX solutions' },
         { name: 'Backend Development', path: '/backend-development', description: 'Server-side architecture' },
         { name: 'Full Stack Solutions', path: '/full-stack', description: 'End-to-end development' }
@@ -111,6 +113,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       level: 8,
       xp: 4500,
       children: [
+        { name: 'Digital Innovation Tools', path: '/digital-innovation-tools', description: 'AI, blockchain, and data visualization tools' },
         { name: 'AI Integration', path: '/ai-integration', description: 'Artificial intelligence solutions' },
         { name: 'Blockchain Development', path: '/blockchain', description: 'Decentralized applications' },
         { name: 'Cloud Architecture', path: '/cloud-solutions', description: 'Scalable cloud systems' }
@@ -123,7 +126,12 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       icon: Wrench,
       color: 'from-cyan-400 to-teal-600',
       level: 18,
-      xp: 14200
+      xp: 14200,
+      children: [
+        { name: 'Universal Web App Utilities', path: '/universal-web-app-utilities', description: 'Essential services and APIs for web apps' },
+        { name: 'Network Scanner', path: '/tools/network-scanner', description: 'Advanced network analysis' },
+        { name: 'Code Analyzer', path: '/tools/code-analyzer', description: 'Code quality assessment' }
+      ]
     },
     {
       id: 'dashboard',
