@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import ChartGenerator from '@/components/tools/ChartGenerator';
+import QRCodeTool from '@/components/tools/QRCodeTool';
 import {
   Brain, BarChart, Coins, FileText, Video, 
-  Zap, ExternalLink, FileCode, TrendingUp, Cpu
+  Zap, ExternalLink, FileCode, TrendingUp, Cpu, QrCode, Sparkles
 } from 'lucide-react';
 
 interface InnovationTool {
@@ -290,6 +292,37 @@ const DigitalInnovationTools = () => {
             <p className="text-gray-400 text-lg">No tools found in this category.</p>
           </div>
         )}
+
+        {/* Embedded Functional Innovation Tools */}
+        <div className="mt-12 space-y-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent mb-4">
+              <Sparkles className="inline-block w-8 h-8 mr-2 text-purple-400" />
+              Interactive Innovation Tools
+            </h2>
+            <p className="text-gray-300 text-lg">
+              Cutting-edge tools for data visualization, AI integration, and digital innovation
+            </p>
+          </div>
+
+          {/* Chart Generator */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-semibold text-purple-400 flex items-center gap-2">
+              <BarChart className="w-6 h-6" />
+              Interactive Chart Generator
+            </h3>
+            <ChartGenerator />
+          </div>
+
+          {/* QR Code Tool */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-semibold text-purple-400 flex items-center gap-2">
+              <QrCode className="w-6 h-6" />
+              QR Code Generator & Reader
+            </h3>
+            <QRCodeTool />
+          </div>
+        </div>
       </div>
     </div>
   );

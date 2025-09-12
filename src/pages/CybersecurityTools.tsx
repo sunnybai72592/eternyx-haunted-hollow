@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import CyberpunkBackground from '@/components/CyberpunkBackground';
+import CryptoTool from '@/components/tools/CryptoTool';
+import NetworkScanner from '@/components/tools/NetworkScanner';
 import {
   Shield, Scan, Database, Key, Lock, Globe, 
   Terminal, ExternalLink, FileCode, AlertTriangle, Search, Zap
@@ -299,6 +301,42 @@ const CybersecurityTools = () => {
             <p className="text-gray-400 text-lg">No tools found in this category.</p>
           </div>
         )}
+
+        {/* Embedded Functional Security Tools */}
+        <div className="mt-12 space-y-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-red-400 to-orange-500 bg-clip-text text-transparent mb-4">
+              <Shield className="inline-block w-8 h-8 mr-2 text-red-400" />
+              Interactive Security Tools
+            </h2>
+            <p className="text-gray-300 text-lg">
+              Fully functional security tools for testing, analysis, and education
+            </p>
+            <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-lg backdrop-blur-sm">
+              <p className="text-red-400 text-sm animate-pulse">
+                ⚠️ <strong>Ethical Use Only:</strong> These tools are for authorized testing and educational purposes only.
+              </p>
+            </div>
+          </div>
+
+          {/* Cryptography Tool */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-semibold text-red-400 flex items-center gap-2">
+              <Lock className="w-6 h-6" />
+              Cryptography & Hashing Tool
+            </h3>
+            <CryptoTool />
+          </div>
+
+          {/* Network Scanner */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-semibold text-red-400 flex items-center gap-2">
+              <Scan className="w-6 h-6" />
+              Network Scanner & Analyzer
+            </h3>
+            <NetworkScanner />
+          </div>
+        </div>
       </div>
       
       {/* Add custom CSS for scanning animation */}

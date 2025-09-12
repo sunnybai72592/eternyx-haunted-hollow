@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import SimpleCodeEditor from '@/components/tools/SimpleCodeEditor';
+import APITester from '@/components/tools/APITester';
 import {
   Code, FileCode, GitBranch, Palette, Monitor, Globe, 
   Package, Layers, Zap, ExternalLink, Download, Play
@@ -295,6 +297,55 @@ const WebDevelopmentTools = () => {
             <p className="text-gray-400 text-lg">No tools found in this category.</p>
           </div>
         )}
+
+        {/* Embedded Functional Tools */}
+        <div className="mt-12 space-y-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-4">
+              <Monitor className="inline-block w-8 h-8 mr-2 text-cyan-400" />
+              Interactive Development Tools
+            </h2>
+            <p className="text-gray-300 text-lg">
+              Fully functional, embedded tools you can use right here in your browser
+            </p>
+          </div>
+
+          {/* Interactive Code Editor */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-semibold text-cyan-400 flex items-center gap-2">
+              <Code className="w-6 h-6" />
+              Interactive Code Editor - Live Demo
+            </h3>
+            <SimpleCodeEditor 
+              initialCode={`// Welcome to the Interactive Code Editor!
+// Try editing this code and run it
+
+function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+// Calculate fibonacci numbers
+for (let i = 0; i <= 10; i++) {
+  console.log(\`fibonacci(\${i}) = \${fibonacci(i)}\`);
+}
+
+// You can change the language and more!
+console.log("Interactive Code Editor is fully functional!");`}
+              language="javascript"
+              height="500px"
+            />
+          </div>
+
+          {/* API Tester */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-semibold text-cyan-400 flex items-center gap-2">
+              <Globe className="w-6 h-6" />
+              API Tester - Test REST APIs Live
+            </h3>
+            <APITester />
+          </div>
+        </div>
       </div>
     </div>
   );
