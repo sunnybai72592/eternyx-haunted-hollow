@@ -342,3 +342,235 @@ All colors MUST be HSL.
   }
 }
 
+
+/* Advanced Cyberpunk Animations for God Mode Dashboard */
+@keyframes scan-horizontal {
+  0% { transform: translateX(-100vw); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateX(100vw); opacity: 0; }
+}
+
+@keyframes scan-vertical {
+  0% { transform: translateY(-100vh); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+@keyframes neural-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor;
+    opacity: 1;
+  }
+  50% { 
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+    opacity: 0.8;
+  }
+}
+
+@keyframes data-flow {
+  0% { transform: translateX(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes glitch {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+}
+
+@keyframes hologram-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes quantum-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes energy-wave {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+@keyframes neural-network {
+  0%, 100% { 
+    background-position: 0% 50%;
+  }
+  50% { 
+    background-position: 100% 50%;
+  }
+}
+
+/* Animation Classes */
+.animate-scan-horizontal {
+  animation: scan-horizontal 4s linear infinite;
+}
+
+.animate-scan-vertical {
+  animation: scan-vertical 6s linear infinite;
+}
+
+.animate-neural-pulse {
+  animation: neural-pulse 2s ease-in-out infinite;
+}
+
+.animate-data-flow {
+  animation: data-flow 3s linear infinite;
+}
+
+.animate-glitch {
+  animation: glitch 0.3s ease-in-out infinite;
+}
+
+.animate-hologram {
+  animation: hologram-flicker 1.5s ease-in-out infinite;
+}
+
+.animate-quantum {
+  animation: quantum-spin 4s ease-in-out infinite;
+}
+
+.animate-energy-wave {
+  animation: energy-wave 2s ease-out infinite;
+}
+
+.animate-neural-network {
+  background: linear-gradient(-45deg, transparent, rgba(0, 255, 136, 0.1), transparent);
+  background-size: 400% 400%;
+  animation: neural-network 3s ease infinite;
+}
+
+.animate-reverse {
+  animation-direction: reverse;
+}
+
+/* Cyberpunk Glow Effects */
+.neon-glow {
+  filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor);
+}
+
+.neon-glow-strong {
+  filter: drop-shadow(0 0 10px currentColor) drop-shadow(0 0 20px currentColor) drop-shadow(0 0 30px currentColor);
+}
+
+.cyber-border {
+  border-image: linear-gradient(45deg, transparent, currentColor, transparent) 1;
+}
+
+.holographic-bg {
+  background: linear-gradient(45deg, 
+    rgba(0, 255, 136, 0.1) 0%, 
+    rgba(0, 191, 255, 0.1) 25%, 
+    rgba(138, 43, 226, 0.1) 50%, 
+    rgba(255, 20, 147, 0.1) 75%, 
+    rgba(0, 255, 136, 0.1) 100%);
+  background-size: 400% 400%;
+  animation: neural-network 6s ease infinite;
+}
+
+/* Matrix Background Effect */
+.matrix-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(0, 191, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(138, 43, 226, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Neural Grid Pattern */
+.neural-grid {
+  background-image: 
+    linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Quantum Particle Effect */
+.quantum-particles::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(0, 255, 136, 0.3) 1px, transparent 1px),
+    radial-gradient(circle at 80% 20%, rgba(0, 191, 255, 0.3) 1px, transparent 1px),
+    radial-gradient(circle at 40% 40%, rgba(138, 43, 226, 0.3) 1px, transparent 1px);
+  background-size: 50px 50px, 80px 80px, 60px 60px;
+  animation: matrix-rain 10s linear infinite;
+  pointer-events: none;
+}
+
+/* Enhanced Scrollbar */
+.android-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.android-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.android-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #00ff88, #00bfff);
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.android-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #00bfff, #8a2be2);
+  box-shadow: 0 0 15px rgba(0, 191, 255, 0.7);
+}
+
+/* Preserve Cyberpunk Theme */
+.preserve-cyberpunk {
+  color-scheme: dark;
+}
+
+/* God Mode Dashboard Specific Styles */
+.cyber-blue {
+  color: #00bfff;
+}
+
+.text-cyber-blue {
+  color: #00bfff;
+}
+
+.border-cyber-blue {
+  border-color: #00bfff;
+}
+
+.border-cyber-blue\/30 {
+  border-color: rgba(0, 191, 255, 0.3);
+}
+
+.border-cyber-blue\/40 {
+  border-color: rgba(0, 191, 255, 0.4);
+}
+
+.bg-cyber-blue\/10 {
+  background-color: rgba(0, 191, 255, 0.1);
+}
+
+.bg-cyber-blue\/20 {
+  background-color: rgba(0, 191, 255, 0.2);
+}
+
+.bg-cyber-blue\/30 {
+  background-color: rgba(0, 191, 255, 0.3);
+}
+
