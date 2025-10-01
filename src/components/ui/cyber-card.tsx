@@ -5,12 +5,13 @@ interface CyberCardProps {
   className?: string;
   children: React.ReactNode;
   variant?: 'default' | 'neon' | 'glitch' | 'matrix' | 'hologram';
-  glowColor?: 'cyan' | 'red' | 'green' | 'purple' | 'orange' | 'blue' | 'pink';
+  glowColor?: 'cyan' | 'red' | 'green' | 'purple' | 'orange' | 'blue' | 'pink' | 'yellow';
   animated?: boolean;
   interactive?: boolean;
   title?: string;
   subtitle?: string;
   icon?: React.ReactNode;
+  onClick?: () => void;
 }
 
 export const CyberCard: React.FC<CyberCardProps> = ({
@@ -23,6 +24,7 @@ export const CyberCard: React.FC<CyberCardProps> = ({
   title,
   subtitle,
   icon,
+  onClick,
   ...props
 }) => {
   const getVariantClasses = () => {
@@ -111,6 +113,7 @@ export const CyberCard: React.FC<CyberCardProps> = ({
   return (
     <div
       className={cn(getVariantClasses(), className)}
+      onClick={onClick}
       {...props}
     >
       {getGlowEffect()}

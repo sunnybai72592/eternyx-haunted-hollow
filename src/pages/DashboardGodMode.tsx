@@ -51,7 +51,7 @@ import {
   Network,
   Brain,
   Rocket,
-  Lightning,
+  Bolt,
   Flame,
   Sparkles,
   Layers,
