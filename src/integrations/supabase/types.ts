@@ -251,6 +251,42 @@ export type Database = {
         }
         Relationships: []
       }
+      cyber_profiles: {
+        Row: {
+          created_at: string | null
+          current_streak: number | null
+          cyberpunk_handle: string | null
+          favorite_tools: string[] | null
+          id: string
+          level: number | null
+          total_xp: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_streak?: number | null
+          cyberpunk_handle?: string | null
+          favorite_tools?: string[] | null
+          id?: string
+          level?: number | null
+          total_xp?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_streak?: number | null
+          cyberpunk_handle?: string | null
+          favorite_tools?: string[] | null
+          id?: string
+          level?: number | null
+          total_xp?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       dashboard_stats: {
         Row: {
           access_level: Database["public"]["Enums"]["access_level"] | null
@@ -1149,6 +1185,54 @@ export type Database = {
         }
         Relationships: []
       }
+      tool_usage: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_used: string | null
+          tool_id: string
+          usage_count: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_used?: string | null
+          tool_id: string
+          usage_count?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_used?: string | null
+          tool_id?: string
+          usage_count?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_achievements: {
+        Row: {
+          achievement_id: string
+          id: string
+          unlocked_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          achievement_id: string
+          id?: string
+          unlocked_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          achievement_id?: string
+          id?: string
+          unlocked_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           access_level: Database["public"]["Enums"]["access_level"] | null
@@ -1313,8 +1397,8 @@ export type Database = {
             foreignKeyName: "vulnerability_scans_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
