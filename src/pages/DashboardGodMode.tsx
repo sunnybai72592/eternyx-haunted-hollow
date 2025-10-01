@@ -545,7 +545,7 @@ const DashboardGodMode = () => {
                     </div>
                     <p className="text-sm text-muted-foreground">Neural Efficiency</p>
                     <div className="flex items-center mt-2">
-                      <Lightning className="h-3 w-3 text-emerald-400 mr-1" />
+                      <Bolt className="h-3 w-3 text-emerald-400 mr-1" />
                       <span className="text-xs text-emerald-400">Optimized</span>
                     </div>
                   </div>

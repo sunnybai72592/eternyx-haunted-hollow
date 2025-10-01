@@ -6,7 +6,7 @@ interface ResponsiveTextProps {
   className?: string;
   children: React.ReactNode;
   cyberpunk?: boolean;
-  glowColor?: 'cyan' | 'red' | 'green' | 'purple' | 'orange' | 'blue';
+  glowColor?: 'cyan' | 'red' | 'green' | 'purple' | 'orange' | 'blue' | 'pink' | 'yellow';
 }
 
 export const ResponsiveText: React.FC<ResponsiveTextProps> = ({
