@@ -10,7 +10,7 @@ interface CyberSectionProps {
   description?: string;
   icon?: React.ReactNode;
   variant?: 'default' | 'hero' | 'feature' | 'tools' | 'footer';
-  glowColor?: 'cyan' | 'red' | 'green' | 'purple' | 'orange' | 'blue' | 'pink';
+  glowColor?: 'cyan' | 'red' | 'green' | 'purple' | 'orange' | 'blue' | 'pink' | 'yellow';
   background?: 'transparent' | 'dark' | 'gradient' | 'matrix';
   padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
 }
