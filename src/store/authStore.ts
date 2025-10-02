@@ -14,8 +14,16 @@ export interface UserProfile {
   website?: string | null;
   location?: string | null;
   company?: string | null;
+  job_title?: string | null;
+  phone?: string | null;
+  github_url?: string | null;
+  twitter_url?: string | null;
+  linkedin_url?: string | null;
   skills?: string[] | null;
   role?: string | null;
+  is_profile_public?: boolean;
+  show_email?: boolean;
+  show_phone?: boolean;
   created_at?: string;
   updated_at?: string;
   // Additional computed fields
@@ -64,7 +72,28 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
     console.error('fetchUserProfile error', error);
     return null;
   }
-  return data as UserProfile | null;
+  
+  if (data) {
+    // Add computed fields
+    return {
+      ...data,
+      email: data.email || '',
+      access_level: data.access_level || 'basic',
+      preferences: data.preferences || {
+        theme: 'cyberpunk',
+        notifications: true,
+        sound_effects: true,
+        analytics: true
+      },
+      stats: data.stats || {
+        login_count: 0,
+        projects_created: 0,
+        last_activity: null
+      }
+    } as UserProfile;
+  }
+  
+  return null;
 }
 
 async function createDefaultProfile(user: User, username?: string): Promise<UserProfile | null> {

@@ -12,6 +12,7 @@ import CyberMetrics from '@/components/CyberMetrics';
 import HolographicCard from '@/components/HolographicCard';
 import AdvancedTerminal from '@/components/AdvancedTerminal';
 import { MobileViewport } from '@/components/MobileViewport';
+import ProfileSettings from '@/components/ProfileSettings';
 import { useAuthStore } from '@/store/authStore';
 import { useAppStore } from '@/store/useAppStore';
 import {
@@ -408,42 +409,64 @@ const Dashboard = () => {
           {/* Projects Tab */}
           <TabsContent value="projects" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <HolographicCard title="CyberDefense Suite" variant="primary" animated>
+              <HolographicCard title="Active Projects" variant="primary" animated>
                 <div className="space-y-3">
-                  <Badge className="bg-cyber-green/20 text-cyber-green">ACTIVE</Badge>
-                  <p className="text-sm text-muted-foreground">Advanced threat detection and response system</p>
-                  <div className="flex items-center justify-between text-xs">
-                    <span>Progress</span>
-                    <span>85%</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Cyber Defense System</span>
+                    <Badge className="bg-cyber-green/20 text-cyber-green">ACTIVE</Badge>
                   </div>
-                  <Progress value={85} className="h-2" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Network Scanner</span>
+                    <Badge className="bg-cyber-blue/20 text-cyber-blue">TESTING</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Encryption Tool</span>
+                    <Badge className="bg-yellow-400/20 text-yellow-400">DEVELOPMENT</Badge>
+                  </div>
                 </div>
               </HolographicCard>
 
-              <HolographicCard title="Neural Network AI" variant="secondary" animated>
+              <HolographicCard title="Recent Deployments" variant="secondary" animated>
                 <div className="space-y-3">
-                  <Badge className="bg-cyber-blue/20 text-cyber-blue">DEVELOPMENT</Badge>
-                  <p className="text-sm text-muted-foreground">Machine learning security analysis</p>
-                  <div className="flex items-center justify-between text-xs">
-                    <span>Progress</span>
-                    <span>62%</span>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-cyber-blue font-mono">3</div>
+                    <p className="text-xs text-muted-foreground">This Week</p>
                   </div>
-                  <Progress value={62} className="h-2" />
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-cyber-green font-mono">12</div>
+                    <p className="text-xs text-muted-foreground">This Month</p>
+                  </div>
                 </div>
               </HolographicCard>
 
-              <HolographicCard title="Quantum Encryption" variant="success" animated>
+              <HolographicCard title="Code Quality" variant="success" animated>
                 <div className="space-y-3">
-                  <Badge className="bg-emerald-400/20 text-emerald-400">TESTING</Badge>
-                  <p className="text-sm text-muted-foreground">Next-gen quantum-resistant encryption</p>
-                  <div className="flex items-center justify-between text-xs">
-                    <span>Progress</span>
-                    <span>94%</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Test Coverage</span>
+                    <span className="text-sm text-cyber-green">94%</span>
                   </div>
-                  <Progress value={94} className="h-2" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Code Quality</span>
+                    <span className="text-sm text-cyber-blue">A+</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Security Score</span>
+                    <span className="text-sm text-emerald-400">98%</span>
+                  </div>
                 </div>
               </HolographicCard>
             </div>
+
+            <HolographicCard title="Project Timeline" animated>
+              <TerminalWindow title="project-status.log">
+                <div className="space-y-1 text-xs">
+                  <div className="text-cyber-green">[{new Date().toLocaleTimeString()}] Project: Cyber Defense System - Deployment successful</div>
+                  <div className="text-cyber-blue">[{new Date(Date.now() - 3600000).toLocaleTimeString()}] Project: Network Scanner - Testing phase completed</div>
+                  <div className="text-yellow-400">[{new Date(Date.now() - 7200000).toLocaleTimeString()}] Project: Encryption Tool - Development milestone reached</div>
+                  <div className="text-purple-400">[{new Date(Date.now() - 10800000).toLocaleTimeString()}] Project: New security module initialized</div>
+                </div>
+              </TerminalWindow>
+            </HolographicCard>
           </TabsContent>
 
           {/* Terminal Tab */}
@@ -461,66 +484,7 @@ const Dashboard = () => {
 
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <HolographicCard title="System Preferences" variant="primary" animated>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Dark Mode</span>
-                    <Badge className="bg-cyber-green/20 text-cyber-green">ENABLED</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Animations</span>
-                    <Badge className="bg-cyber-blue/20 text-cyber-blue">ENABLED</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Sound Effects</span>
-                    <Badge className="bg-yellow-400/20 text-yellow-400">DISABLED</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Auto-Save</span>
-                    <Badge className="bg-cyber-green/20 text-cyber-green">ENABLED</Badge>
-                  </div>
-                </div>
-              </HolographicCard>
-
-              <HolographicCard title="Security Settings" variant="danger" animated>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Two-Factor Auth</span>
-                    <Badge className="bg-cyber-green/20 text-cyber-green">ENABLED</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Session Timeout</span>
-                    <span className="text-xs text-muted-foreground">30 minutes</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Login Notifications</span>
-                    <Badge className="bg-cyber-blue/20 text-cyber-blue">ENABLED</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">API Access</span>
-                    <Badge className="bg-red-400/20 text-red-400">RESTRICTED</Badge>
-                  </div>
-                </div>
-              </HolographicCard>
-            </div>
-
-            <HolographicCard title="Advanced Configuration" animated>
-              <TerminalWindow title="config.json">
-                <pre className="text-xs text-cyber-green">
-{`{
-  "theme": "cyberpunk",
-  "security_level": "maximum",
-  "encryption": "AES-256",
-  "logging": "verbose",
-  "auto_backup": true,
-  "session_timeout": 1800,
-  "max_login_attempts": 3,
-  "firewall_enabled": true
-}`}
-                </pre>
-              </TerminalWindow>
-            </HolographicCard>
+            <ProfileSettings />
           </TabsContent>
         </Tabs>
       </div>
@@ -529,4 +493,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
