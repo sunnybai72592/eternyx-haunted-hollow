@@ -25,10 +25,7 @@ const QuantumEncryption = lazy(() => import("./pages/QuantumEncryption"));
 const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
 const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
 const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
-const Services = lazy(() => import("./pages/Services"));
-const Tools = lazy(() => import("./pages/Tools"));
-const Development = lazy(() => import("./pages/Development"));
-const Innovation = lazy(() => import("./pages/Innovation"));
+const ServicesHub = lazy(() => import("./pages/ServicesHub"));
 const KillerEdge = lazy(() => import("./pages/KillerEdge"));
 const Premium = lazy(() => import("./pages/Premium"));
 const BugReport = lazy(() => import("./pages/BugReport"));
@@ -132,16 +129,17 @@ const App = () => {
                           <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
                           <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
                           <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
-                          <Route path="/services" element={<Services />} />
+                          <Route path="/services-hub" element={<ServicesHub />} />
+
                           <Route path="/tools" element={<Tools />} />
-                          <Route path="/development" element={<Development />} />
+
                           <Route path="/frontend-development" element={<FrontendDevelopment />} />
                           <Route path="/backend-development" element={<BackendDevelopment />} />
                           <Route path="/mobile-development" element={<MobileDevelopment />} />
                           <Route path="/cloud-solutions" element={<CloudSolutions />} />
                           <Route path="/performance-optimization" element={<PerformanceOptimization />} />
                           <Route path="/custom-solutions" element={<CustomSolutions />} />
-                          <Route path="/innovation" element={<Innovation />} />
+
                           <Route path="/killer-edge" element={<KillerEdge />} />
                           <Route path="/premium" element={<Premium />} />
                           <Route path="/bug-report" element={<BugReport />} />

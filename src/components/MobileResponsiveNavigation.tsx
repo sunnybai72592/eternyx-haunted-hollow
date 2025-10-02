@@ -74,6 +74,15 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       level: 1,
       xp: 100
     },
+    {
+      id: 'services-hub',
+      name: 'Services Hub',
+      path: '/services-hub',
+      icon: Zap,
+      color: 'from-purple-400 to-indigo-600',
+      level: 10,
+      xp: 6000
+    },
 
     {
       id: 'tools-hub',
