@@ -7,9 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ToolsGrid } from '@/components/ToolsGrid';
-import { cybersecurityTools } from '@/data/cybersecurityTools';
-import { webDevelopmentTools } from '@/data/webDevelopmentTools';
-import { innovationTools } from '@/data/innovationTools';
+import { allTools, getToolsByCategory, getToolsByTier, searchTools } from '@/data/allTools';
 import {
   Shield, Target, Code, Server, Brain, Smartphone, FileSearch, Network,
   Scan, Key, Globe, Bot, Crosshair, Wifi, Database, Layers, Cloud,
@@ -24,12 +22,36 @@ const Tools = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'tabs'>('grid');
   const { toast } = useToast();
 
-  const categories = [
-    { id: 'cybersecurity', name: 'Cybersecurity Arsenal', icon: <Shield className="w-4 h-4" /> },
-    { id: 'penetration', name: 'Penetration Testing', icon: <Target className="w-4 h-4" /> },
-    { id: 'development', name: 'Full Stack Development', icon: <Code className="w-4 h-4" /> },
-    { id: 'infrastructure', name: 'Infrastructure & DevOps', icon: <Server className="w-4 h-4" /> }
-  ];
+  const categories = Array.from(new Set(allTools.map(tool => tool.category))).map(category => {
+    let icon;
+    let name;
+    switch (category) {
+      case 'cybersecurity':
+        icon = <Shield className="w-4 h-4" />;
+        name = 'Cybersecurity Arsenal';
+        break;
+      case 'penetration':
+        icon = <Target className="w-4 h-4" />;
+        name = 'Penetration Testing';
+        break;
+      case 'development':
+        icon = <Code className="w-4 h-4" />;
+        name = 'Full Stack Development';
+        break;
+      case 'infrastructure':
+        icon = <Server className="w-4 h-4" />;
+        name = 'Infrastructure & DevOps';
+        break;
+      case 'innovation':
+        icon = <Lightbulb className="w-4 h-4" />;
+        name = 'Digital Innovation';
+        break;
+      default:
+        icon = <Wrench className="w-4 h-4" />;
+        name = category;
+    }
+    return { id: category, name, icon };
+  });
 
   const navigateToTool = (toolId: string) => {
     if (toolId === 'vuln-scanner') {
@@ -41,7 +63,7 @@ const Tools = () => {
   };
 
   const simulateToolExecution = async (toolId: string, target?: string) => {
-    const allToolsData = [...cybersecurityTools, ...webDevelopmentTools, ...innovationTools];
+    const allToolsData = allTools;
     const tool = allToolsData.find(t => t.id === toolId);
     const executionTime = tool?.executionTime || '5-15 minutes';
     
@@ -147,10 +169,10 @@ const Tools = () => {
     }
   };
 
-  // Combine all tools
-  const allTools = [...cybersecurityTools, ...webDevelopmentTools, ...innovationTools];
+  // Use combined tools
 
-  const filteredTools = allTools.filter(tool => tool.category === activeCategory);
+
+    const filteredTools = getToolsByCategory(activeCategory);
 
   return (
     <div className="min-h-screen bg-background">
