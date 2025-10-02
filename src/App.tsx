@@ -16,7 +16,7 @@ import { useAuthStore } from "@/store/authStore";
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
+const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const BlackHatPentesting = lazy(() => import("./pages/BlackHatPentesting"));
@@ -59,12 +59,9 @@ const DigitalInnovationTools = lazy(() => import("./pages/DigitalInnovationTools
 const UniversalWebAppUtilities = lazy(() => import("./pages/UniversalWebAppUtilities"));
 
 // Enhanced platform pages
-const EnhancedDashboard = lazy(() => import("./pages/enhanced/EnhancedDashboard"));
 const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
 const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
-const CyberDashboard = lazy(() => import("./pages/CyberDashboard"));
-const CyberArena = lazy(() => import("./pages/CyberArena"));
 
 
 const queryClient = new QueryClient({
@@ -119,10 +116,7 @@ const App = () => {
                     }>
                         <Routes>
                           <Route path="/" element={<Index />} />
-                          <Route path="/dashboard" element={<Dashboard />} />
-                          <Route path="/cyber-dashboard" element={<CyberDashboard />} />
-                          <Route path="/cyber-arena" element={<CyberArena />} />
-                          <Route path="/enhanced-dashboard" element={<EnhancedDashboard />} />
+                          <Route path="/dashboard" element={<UnifiedDashboard />} />
                           <Route path="/arsenal" element={<CyberArsenal />} />
                           <Route path="/subscriptions" element={<SubscriptionHub />} />
                           <Route path="/knowledge" element={<KnowledgeHub />} />
