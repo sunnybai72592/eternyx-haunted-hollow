@@ -203,17 +203,16 @@ export default function Contact() {
                     <Mail className="h-5 w-5 text-primary mt-1" />
                     <div>
                       <p className="font-medium">Email</p>
-                      <p className="text-muted-foreground">contact@eternyx.com</p>
-                      <p className="text-muted-foreground">security@eternyx.com</p>
+                      <p className="text-muted-foreground">Sunnybai73362@gmail.com</p>
                     </div>
                   </div>
 
                   <div className="flex items-start space-x-3">
                     <Phone className="h-5 w-5 text-primary mt-1" />
                     <div>
-                      <p className="font-medium">Phone</p>
-                      <p className="text-muted-foreground">+1 (555) 123-4567</p>
-                      <p className="text-muted-foreground">24/7 Emergency: +1 (555) 987-6543</p>
+                      <p className="font-medium">Phone (WhatsApp)</p>
+                      <p className="text-muted-foreground">+966575158062</p>
+                      <p className="text-muted-foreground">+923499170421</p>
                     </div>
                   </div>
 
@@ -222,9 +221,8 @@ export default function Contact() {
                     <div>
                       <p className="font-medium">Address</p>
                       <p className="text-muted-foreground">
-                        123 Cyber Street<br />
-                        Digital District, Tech City 12345<br />
-                        United States
+                        Al Jubail, 35514<br />
+                        Kingdom of Saudi Arabia
                       </p>
                     </div>
                   </div>
@@ -275,7 +273,7 @@ export default function Contact() {
                 </p>
                 <Button 
                   className="w-full bg-red-500 hover:bg-red-600 text-white"
-                  onClick={() => window.location.href = 'tel:+15559876543'}
+                  onClick={() => window.location.href = 'tel:+966575158062'}
                 >
                   <Phone className="h-4 w-4 mr-2" />
                   Emergency Hotline
