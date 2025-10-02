@@ -74,18 +74,18 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   }
   
   if (data) {
-    // Add computed fields
+    // Add computed fields - cast to any first to allow adding computed properties
     return {
-      ...data,
-      email: data.email || '',
-      access_level: data.access_level || 'basic',
-      preferences: data.preferences || {
+      ...(data as any),
+      email: (data as any).email || '',
+      access_level: (data as any).access_level || 'basic',
+      preferences: (data as any).preferences || {
         theme: 'cyberpunk',
         notifications: true,
         sound_effects: true,
         analytics: true
       },
-      stats: data.stats || {
+      stats: (data as any).stats || {
         login_count: 0,
         projects_created: 0,
         last_activity: null

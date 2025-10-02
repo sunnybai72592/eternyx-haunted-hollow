@@ -246,9 +246,9 @@ export const ProfileSettings = ({ className = '' }: ProfileSettingsProps) => {
             <HolographicCard title="Profile Picture" animated>
               <div className="flex flex-col items-center space-y-4">
                 <Avatar className="h-24 w-24 ring-4 ring-primary/50">
-                  <AvatarImage src={formData.avatar_url} alt={formData.username} />
+                  <AvatarImage src={formData.avatar_url} alt={formData.username || 'User'} />
                   <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
-                    {formData.username.slice(0, 2).toUpperCase()}
+                    {(formData.username || 'User').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 
