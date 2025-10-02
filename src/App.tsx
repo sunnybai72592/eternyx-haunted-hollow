@@ -33,12 +33,7 @@ const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
-const FrontendDevelopment = lazy(() => import("./pages/FrontendDevelopment"));
-const BackendDevelopment = lazy(() => import("./pages/BackendDevelopment"));
-const MobileDevelopment = lazy(() => import("./pages/MobileDevelopment"));
-const CloudSolutions = lazy(() => import("./pages/CloudSolutions"));
-const PerformanceOptimization = lazy(() => import("./pages/PerformanceOptimization"));
-const CustomSolutions = lazy(() => import("./pages/CustomSolutions"));
+
 const SecurityAuditing = lazy(() => import("./pages/SecurityAuditing"));
 const IncidentResponse = lazy(() => import("./pages/IncidentResponse"));
 const PenetrationTesting = lazy(() => import("./pages/PenetrationTesting"));
@@ -133,12 +128,7 @@ const App = () => {
 
                           <Route path="/tools" element={<Tools />} />
 
-                          <Route path="/frontend-development" element={<FrontendDevelopment />} />
-                          <Route path="/backend-development" element={<BackendDevelopment />} />
-                          <Route path="/mobile-development" element={<MobileDevelopment />} />
-                          <Route path="/cloud-solutions" element={<CloudSolutions />} />
-                          <Route path="/performance-optimization" element={<PerformanceOptimization />} />
-                          <Route path="/custom-solutions" element={<CustomSolutions />} />
+
 
                           <Route path="/killer-edge" element={<KillerEdge />} />
                           <Route path="/premium" element={<Premium />} />
