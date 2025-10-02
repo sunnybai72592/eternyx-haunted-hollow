@@ -297,16 +297,17 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  /* Semantic color utilities - use these instead of hardcoded colors */
   .text-cyber-cyan {
-    color: hsl(var(--cyber-cyan));
+    color: hsl(var(--primary));
   }
   
   .text-cyber-pink {
-    color: hsl(var(--cyber-pink));
+    color: hsl(var(--secondary));
   }
   
   .text-cyber-green {
-    color: hsl(var(--cyber-green));
+    color: hsl(var(--accent));
   }
 
   .text-cyber-orange {
@@ -323,6 +324,35 @@ All colors MUST be HSL.
 
   .bg-hologram-gradient {
     background: var(--gradient-hologram);
+  }
+
+  /* Professional typography scale */
+  .text-display {
+    @apply text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight;
+  }
+
+  .text-heading-1 {
+    @apply text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight;
+  }
+
+  .text-heading-2 {
+    @apply text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight;
+  }
+
+  .text-heading-3 {
+    @apply text-lg sm:text-xl md:text-2xl font-semibold;
+  }
+
+  .text-body-large {
+    @apply text-base sm:text-lg leading-relaxed;
+  }
+
+  .text-body {
+    @apply text-sm sm:text-base leading-normal;
+  }
+
+  .text-body-small {
+    @apply text-xs sm:text-sm leading-normal;
   }
 
   /* Skip link for screen readers */

@@ -161,19 +161,19 @@ const Dashboard = () => {
 
   const getAccessLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
-      case 'elite': return 'text-cyber-green border-cyber-green';
-      case 'premium': return 'text-cyber-blue border-cyber-blue';
-      case 'basic': return 'text-yellow-400 border-yellow-400';
+      case 'elite': return 'text-accent border-accent';
+      case 'premium': return 'text-primary border-primary';
+      case 'basic': return 'text-secondary border-secondary';
       default: return 'text-muted-foreground border-muted-foreground';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'success': return <Shield className="h-4 w-4 text-cyber-green" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4 text-yellow-400" />;
-      case 'error': return <Bug className="h-4 w-4 text-red-400" />;
-      default: return <Activity className="h-4 w-4 text-cyber-blue" />;
+      case 'success': return <Shield className="h-4 w-4 text-accent" />;
+      case 'warning': return <AlertTriangle className="h-4 w-4 text-secondary" />;
+      case 'error': return <Bug className="h-4 w-4 text-destructive" />;
+      default: return <Activity className="h-4 w-4 text-primary" />;
     }
   };
 
@@ -209,133 +209,135 @@ const Dashboard = () => {
       <MobileViewport />
       
       {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-20 sm:top-24 z-40 mt-20 sm:mt-24">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-cyber-green neon-text">
-                ETERNYX DASHBOARD
-              </h1>
-              <Badge className={`${getAccessLevelColor(stats.accessLevel)} bg-transparent`}>
-                <Crown className="h-3 w-3 mr-1" />
-                {stats.accessLevel.toUpperCase()}
-              </Badge>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <UserProfile />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSignOut}
-                className="border-red-400/40 text-red-400 hover:bg-red-400/10"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Exit
-              </Button>
+      <div className="pt-20 sm:pt-24">
+        <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-16 z-40">
+          <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary">
+                  ETERNYX DASHBOARD
+                </h1>
+                <Badge className={`${getAccessLevelColor(stats.accessLevel)} bg-transparent text-xs sm:text-sm`}>
+                  <Crown className="h-3 w-3 mr-1" />
+                  {stats.accessLevel.toUpperCase()}
+                </Badge>
+              </div>
+              
+              <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                <UserProfile />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Exit</span>
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 bg-card/50 backdrop-blur-sm">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-cyber-green/20 data-[state=active]:text-cyber-green">
-              <Monitor className="h-4 w-4 mr-2" />
-              Overview
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-card/50 backdrop-blur-sm p-2">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-xs sm:text-sm">
+              <Monitor className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="metrics" className="data-[state=active]:bg-cyber-blue/20 data-[state=active]:text-cyber-blue">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Metrics
+            <TabsTrigger value="metrics" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent text-xs sm:text-sm">
+              <BarChart3 className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Metrics</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-red-400/20 data-[state=active]:text-red-400">
-              <Shield className="h-4 w-4 mr-2" />
-              Security
+            <TabsTrigger value="security" className="data-[state=active]:bg-destructive/20 data-[state=active]:text-destructive text-xs sm:text-sm">
+              <Shield className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Security</span>
             </TabsTrigger>
-            <TabsTrigger value="projects" className="data-[state=active]:bg-purple-400/20 data-[state=active]:text-purple-400">
-              <Code className="h-4 w-4 mr-2" />
-              Projects
+            <TabsTrigger value="projects" className="data-[state=active]:bg-secondary/20 data-[state=active]:text-secondary text-xs sm:text-sm">
+              <Code className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Projects</span>
             </TabsTrigger>
-            <TabsTrigger value="terminal" className="data-[state=active]:bg-yellow-400/20 data-[state=active]:text-yellow-400">
-              <Terminal className="h-4 w-4 mr-2" />
-              Terminal
+            <TabsTrigger value="terminal" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent text-xs sm:text-sm">
+              <Terminal className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Terminal</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-cyan-400/20 data-[state=active]:text-cyan-400">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
+            <TabsTrigger value="settings" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-xs sm:text-sm">
+              <Settings className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Settings</span>
             </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <HolographicCard title="Projects" variant="primary" animated>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-cyber-green font-mono">
+                    <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">
                       {stats.projectsCreated}
                     </div>
-                    <p className="text-sm text-muted-foreground">Active Projects</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Active Projects</p>
                   </div>
-                  <Code className="h-8 w-8 text-cyber-green/60" />
+                  <Code className="h-6 w-6 sm:h-8 sm:w-8 text-accent/60" />
                 </div>
               </HolographicCard>
 
               <HolographicCard title="Security Score" variant="secondary" animated>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-cyber-blue font-mono">
+                    <div className="text-2xl sm:text-3xl font-bold text-primary font-mono">
                       {stats.securityScore}%
                     </div>
-                    <p className="text-sm text-muted-foreground">System Security</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">System Security</p>
                   </div>
-                  <Shield className="h-8 w-8 text-cyber-blue/60" />
+                  <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary/60" />
                 </div>
               </HolographicCard>
 
               <HolographicCard title="Performance" variant="success" animated>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-emerald-400 font-mono">
+                    <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">
                       {stats.performanceRating}%
                     </div>
-                    <p className="text-sm text-muted-foreground">System Performance</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">System Performance</p>
                   </div>
-                  <Zap className="h-8 w-8 text-emerald-400/60" />
+                  <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-accent/60" />
                 </div>
               </HolographicCard>
 
               <HolographicCard title="Total Logins" variant="danger" animated>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-red-400 font-mono">
+                    <div className="text-2xl sm:text-3xl font-bold text-secondary font-mono">
                       {stats.totalLogins}
                     </div>
-                    <p className="text-sm text-muted-foreground">Access Count</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Access Count</p>
                   </div>
-                  <Users className="h-8 w-8 text-red-400/60" />
+                  <Users className="h-6 w-6 sm:h-8 sm:w-8 text-secondary/60" />
                 </div>
               </HolographicCard>
             </div>
 
             {/* Recent Activity */}
             <HolographicCard title="Recent Activity" animated>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {recentActivity && recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between p-3 bg-card/30 rounded border border-primary/20">
-                    <div className="flex items-center space-x-3">
+                  <div key={activity.id} className="flex items-center justify-between p-3 bg-card/30 rounded-lg border border-primary/20 hover:border-primary/40 transition-colors">
+                    <div className="flex items-center gap-3">
                       {getStatusIcon(activity.status)}
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm font-medium text-foreground">{activity.description}</p>
                         <p className="text-xs text-muted-foreground">{formatTimestamp(activity.timestamp)}</p>
                       </div>
                     </div>
-                    <Badge variant="outline" className={`text-xs ${
-                      activity.status === 'success' ? 'border-cyber-green text-cyber-green' :
-                      activity.status === 'warning' ? 'border-yellow-400 text-yellow-400' :
-                      'border-red-400 text-red-400'
+                    <Badge variant="outline" className={`text-xs shrink-0 ${
+                      activity.status === 'success' ? 'border-accent text-accent' :
+                      activity.status === 'warning' ? 'border-secondary text-secondary' :
+                      'border-destructive text-destructive'
                     }`}>
                       {activity.status.toUpperCase()}
                     </Badge>
@@ -352,23 +354,23 @@ const Dashboard = () => {
 
           {/* Security Tab */}
           <TabsContent value="security" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <HolographicCard title="Security Status" variant="danger" animated>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Firewall Status</span>
-                    <Badge className="bg-cyber-green/20 text-cyber-green">ACTIVE</Badge>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm sm:text-base">
+                    <span>Firewall Status</span>
+                    <Badge className="bg-accent/20 text-accent text-xs">ACTIVE</Badge>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Intrusion Detection</span>
-                    <Badge className="bg-cyber-blue/20 text-cyber-blue">MONITORING</Badge>
+                  <div className="flex items-center justify-between text-sm sm:text-base">
+                    <span>Intrusion Detection</span>
+                    <Badge className="bg-primary/20 text-primary text-xs">MONITORING</Badge>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Encryption Level</span>
-                    <Badge className="bg-purple-400/20 text-purple-400">AES-256</Badge>
+                  <div className="flex items-center justify-between text-sm sm:text-base">
+                    <span>Encryption Level</span>
+                    <Badge className="bg-secondary/20 text-secondary text-xs">AES-256</Badge>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Last Security Scan</span>
+                  <div className="flex items-center justify-between text-sm sm:text-base">
+                    <span>Last Security Scan</span>
                     <span className="text-xs text-muted-foreground">2 hours ago</span>
                   </div>
                 </div>
@@ -377,16 +379,16 @@ const Dashboard = () => {
               <HolographicCard title="Threat Analysis" variant="danger" animated>
                 <div className="space-y-4">
                   <div className="text-center">
-                    <div className="text-4xl font-bold text-cyber-green font-mono mb-2">0</div>
-                    <p className="text-sm text-muted-foreground">Active Threats</p>
+                    <div className="text-3xl sm:text-4xl font-bold text-accent font-mono mb-2">0</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Active Threats</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-center">
                     <div>
-                      <div className="text-2xl font-bold text-cyber-blue font-mono">1,247</div>
+                      <div className="text-xl sm:text-2xl font-bold text-primary font-mono">1,247</div>
                       <p className="text-xs text-muted-foreground">Blocked</p>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-yellow-400 font-mono">23</div>
+                      <div className="text-xl sm:text-2xl font-bold text-secondary font-mono">23</div>
                       <p className="text-xs text-muted-foreground">Quarantined</p>
                     </div>
                   </div>
@@ -397,10 +399,10 @@ const Dashboard = () => {
             <HolographicCard title="Security Logs" animated>
               <TerminalWindow title="security-monitor.log">
                 <div className="space-y-1 text-xs">
-                  <div className="text-cyber-green">[{new Date().toLocaleTimeString()}] Firewall: Connection blocked from 192.168.1.100</div>
-                  <div className="text-cyber-blue">[{new Date(Date.now() - 60000).toLocaleTimeString()}] IDS: Scanning network traffic...</div>
-                  <div className="text-yellow-400">[{new Date(Date.now() - 120000).toLocaleTimeString()}] Auth: Failed login attempt detected</div>
-                  <div className="text-cyber-green">[{new Date(Date.now() - 180000).toLocaleTimeString()}] System: Security scan completed successfully</div>
+                  <div className="text-accent">[{new Date().toLocaleTimeString()}] Firewall: Connection blocked from 192.168.1.100</div>
+                  <div className="text-primary">[{new Date(Date.now() - 60000).toLocaleTimeString()}] IDS: Scanning network traffic...</div>
+                  <div className="text-secondary">[{new Date(Date.now() - 120000).toLocaleTimeString()}] Auth: Failed login attempt detected</div>
+                  <div className="text-accent">[{new Date(Date.now() - 180000).toLocaleTimeString()}] System: Security scan completed successfully</div>
                 </div>
               </TerminalWindow>
             </HolographicCard>
@@ -408,20 +410,20 @@ const Dashboard = () => {
 
           {/* Projects Tab */}
           <TabsContent value="projects" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <HolographicCard title="Active Projects" variant="primary" animated>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Cyber Defense System</span>
-                    <Badge className="bg-cyber-green/20 text-cyber-green">ACTIVE</Badge>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Cyber Defense System</span>
+                    <Badge className="bg-accent/20 text-accent text-xs">ACTIVE</Badge>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Network Scanner</span>
-                    <Badge className="bg-cyber-blue/20 text-cyber-blue">TESTING</Badge>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Network Scanner</span>
+                    <Badge className="bg-primary/20 text-primary text-xs">TESTING</Badge>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Encryption Tool</span>
-                    <Badge className="bg-yellow-400/20 text-yellow-400">DEVELOPMENT</Badge>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Encryption Tool</span>
+                    <Badge className="bg-secondary/20 text-secondary text-xs">DEV</Badge>
                   </div>
                 </div>
               </HolographicCard>
@@ -429,11 +431,11 @@ const Dashboard = () => {
               <HolographicCard title="Recent Deployments" variant="secondary" animated>
                 <div className="space-y-3">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-cyber-blue font-mono">3</div>
+                    <div className="text-xl sm:text-2xl font-bold text-primary font-mono">3</div>
                     <p className="text-xs text-muted-foreground">This Week</p>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-cyber-green font-mono">12</div>
+                    <div className="text-xl sm:text-2xl font-bold text-accent font-mono">12</div>
                     <p className="text-xs text-muted-foreground">This Month</p>
                   </div>
                 </div>
@@ -441,17 +443,17 @@ const Dashboard = () => {
 
               <HolographicCard title="Code Quality" variant="success" animated>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Test Coverage</span>
-                    <span className="text-sm text-cyber-green">94%</span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Test Coverage</span>
+                    <span className="text-accent font-mono">94%</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Code Quality</span>
-                    <span className="text-sm text-cyber-blue">A+</span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Code Quality</span>
+                    <span className="text-primary font-mono">A+</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Security Score</span>
-                    <span className="text-sm text-emerald-400">98%</span>
+                  <div className="flex items-center justify-between text-sm">
+                     <span>Security Score</span>
+                    <span className="text-accent font-mono">98%</span>
                   </div>
                 </div>
               </HolographicCard>
@@ -460,10 +462,10 @@ const Dashboard = () => {
             <HolographicCard title="Project Timeline" animated>
               <TerminalWindow title="project-status.log">
                 <div className="space-y-1 text-xs">
-                  <div className="text-cyber-green">[{new Date().toLocaleTimeString()}] Project: Cyber Defense System - Deployment successful</div>
-                  <div className="text-cyber-blue">[{new Date(Date.now() - 3600000).toLocaleTimeString()}] Project: Network Scanner - Testing phase completed</div>
-                  <div className="text-yellow-400">[{new Date(Date.now() - 7200000).toLocaleTimeString()}] Project: Encryption Tool - Development milestone reached</div>
-                  <div className="text-purple-400">[{new Date(Date.now() - 10800000).toLocaleTimeString()}] Project: New security module initialized</div>
+                  <div className="text-accent">[{new Date().toLocaleTimeString()}] Project: Cyber Defense System - Deployment successful</div>
+                  <div className="text-primary">[{new Date(Date.now() - 3600000).toLocaleTimeString()}] Project: Network Scanner - Testing phase completed</div>
+                  <div className="text-secondary">[{new Date(Date.now() - 7200000).toLocaleTimeString()}] Project: Encryption Tool - Development milestone reached</div>
+                  <div className="text-secondary">[{new Date(Date.now() - 10800000).toLocaleTimeString()}] Project: New security module initialized</div>
                 </div>
               </TerminalWindow>
             </HolographicCard>
