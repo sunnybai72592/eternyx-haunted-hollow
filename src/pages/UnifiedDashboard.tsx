@@ -292,223 +292,267 @@ const UnifiedDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background matrix-bg preserve-cyberpunk android-scroll">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-card">
       <MobileViewport />
       
-      {/* Header */}
-      <div className="pt-20 sm:pt-24">
-        <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-16 z-40">
-          <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary">
-                  ETERNYX UNIFIED DASHBOARD
+      {/* Professional Header */}
+      <header className="sticky top-16 z-40 border-b border-border/40 bg-card/95 backdrop-blur-xl shadow-lg">
+        <div className="container mx-auto px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            {/* Left Section */}
+            <div className="flex items-center gap-6">
+              <div className="flex flex-col">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
+                  Unified Dashboard
                 </h1>
-                <Badge className={`${getAccessLevelColor(stats.accessLevel)} bg-transparent text-xs sm:text-sm`}>
-                  <Crown className="h-3 w-3 mr-1" />
-                  {stats.accessLevel.toUpperCase()}
-                </Badge>
+                <p className="text-sm text-muted-foreground font-mono">
+                  {profile?.username || 'Elite Operator'} • Level {stats.level}
+                </p>
               </div>
-              
-              <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
-                {/* UserProfile component would go here if available */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSignOut}
-                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">Exit</span>
-                </Button>
-              </div>
+              <Badge className={`${getAccessLevelColor(stats.accessLevel)} px-4 py-1.5`}>
+                <Crown className="h-3.5 w-3.5 mr-1.5" />
+                {stats.accessLevel.toUpperCase()}
+              </Badge>
+            </div>
+            
+            {/* Right Section */}
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/settings')}
+                className="hover:bg-primary/10"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Exit
+              </Button>
             </div>
           </div>
-        </header>
-      </div>
+        </div>
+      </header>
 
-      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-card/50 backdrop-blur-sm p-2">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-xs sm:text-sm">
-              <Monitor className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Overview</span>
+      {/* Main Content Container */}
+      <div className="container mx-auto px-6 lg:px-8 py-8 space-y-8">
+        
+        {/* XP Progress Bar - Horizontal Hero Section */}
+        <Card className="bg-gradient-to-r from-card/80 via-card/60 to-card/80 backdrop-blur-sm border-primary/20 shadow-xl">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Star className="h-5 w-5 text-primary animate-pulse" />
+                  <span className="text-lg font-bold text-primary">Level {stats.level}</span>
+                </div>
+                <span className="text-sm text-muted-foreground font-mono">
+                  {stats.xp.toLocaleString()} / {stats.maxXp.toLocaleString()} XP
+                </span>
+              </div>
+              <div className="flex items-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-accent" />
+                  <span className="text-muted-foreground">{stats.completedMissions} missions</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-secondary" />
+                  <span className="text-muted-foreground">{stats.hackingStreak} day streak</span>
+                </div>
+              </div>
+            </div>
+            <Progress 
+              value={(stats.xp / stats.maxXp) * 100} 
+              className="h-3 bg-background/50"
+            />
+          </CardContent>
+        </Card>
+
+        {/* Horizontal Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-primary/10 to-transparent border-primary/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <Code className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
+                <TrendingUp className="h-4 w-4 text-accent" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-foreground">{stats.projectsCreated}</p>
+                <p className="text-sm text-muted-foreground font-medium">Active Projects</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-accent/10 to-transparent border-accent/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <Shield className="h-8 w-8 text-accent group-hover:scale-110 transition-transform" />
+                <Badge variant="outline" className="border-accent text-accent text-xs">Excellent</Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-foreground">{stats.securityScore}%</p>
+                <p className="text-sm text-muted-foreground font-medium">Security Score</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-secondary/10 to-transparent border-secondary/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <Activity className="h-8 w-8 text-secondary group-hover:scale-110 transition-transform" />
+                <TrendingUp className="h-4 w-4 text-accent" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-foreground">{stats.performanceRating}%</p>
+                <p className="text-sm text-muted-foreground font-medium">Performance</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-purple-500/10 to-transparent border-purple-500/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <Users className="h-8 w-8 text-purple-400 group-hover:scale-110 transition-transform" />
+                <Badge variant="outline" className="border-purple-400 text-purple-400 text-xs">Active</Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-foreground">{stats.totalLogins}</p>
+                <p className="text-sm text-muted-foreground font-medium">Total Sessions</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Professional Tabbed Navigation */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="inline-flex h-12 items-center justify-center rounded-xl bg-card/50 backdrop-blur-sm p-1.5 border border-border/40 gap-2">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary rounded-lg px-6 transition-all">
+              <Monitor className="h-4 w-4 mr-2" />
+              Overview
             </TabsTrigger>
-            <TabsTrigger value="tools" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent text-xs sm:text-sm">
-              <Wrench className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Tools</span>
+            <TabsTrigger value="tools" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent rounded-lg px-6 transition-all">
+              <Wrench className="h-4 w-4 mr-2" />
+              Tools Arsenal
             </TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-destructive/20 data-[state=active]:text-destructive text-xs sm:text-sm">
-              <Shield className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Security</span>
+            <TabsTrigger value="security" className="data-[state=active]:bg-destructive/20 data-[state=active]:text-destructive rounded-lg px-6 transition-all">
+              <Shield className="h-4 w-4 mr-2" />
+              Security
             </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-xs sm:text-sm">
-              <Bot className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">AI Assistant</span>
+            <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary rounded-lg px-6 transition-all">
+              <Bot className="h-4 w-4 mr-2" />
+              AI Assistant
             </TabsTrigger>
-            <TabsTrigger value="threat-map" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent text-xs sm:text-sm">
-              <Globe className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Threat Map</span>
+            <TabsTrigger value="threat-map" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent rounded-lg px-6 transition-all">
+              <Globe className="h-4 w-4 mr-2" />
+              Threat Map
             </TabsTrigger>
-            <TabsTrigger value="terminal" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent text-xs sm:text-sm">
-              <Terminal className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Terminal</span>
+            <TabsTrigger value="terminal" className="data-[state=active]:bg-secondary/20 data-[state=active]:text-secondary rounded-lg px-6 transition-all">
+              <Terminal className="h-4 w-4 mr-2" />
+              Terminal
             </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            {/* User XP and Level */}
-            <Card className="bg-black/70 backdrop-blur-sm border-2 border-cyber-cyan/30 hover:border-cyber-cyan/60 transition-all duration-300">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-mono text-cyber-cyan">Experience Progress</span>
-                  <span className="text-sm font-mono text-neon-green">
-                    {stats.xp}/{stats.maxXp} XP
-                  </span>
-                </div>
-                <Progress 
-                  value={(stats.xp / stats.maxXp) * 100} 
-                  className="h-3 bg-gray-800"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
-                  <span>{stats.completedMissions} missions completed</span>
-                  <span>{stats.totalTools} tools unlocked</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              <HolographicCard title="Projects" variant="primary" animated>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">
-                      {stats.projectsCreated}
-                    </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Active Projects</p>
-                  </div>
-                  <Code className="h-6 w-6 sm:h-8 sm:w-8 text-accent/60" />
-                </div>
-              </HolographicCard>
-
-              <HolographicCard title="Security Score" variant="secondary" animated>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl sm:text-3xl font-bold text-primary font-mono">
-                      {stats.securityScore}%
-                    </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">System Security</p>
-                  </div>
-                  <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary/60" />
-                </div>
-              </HolographicCard>
-
-              <HolographicCard title="Performance" variant="success" animated>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">
-                      {stats.performanceRating}%
-                    </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">System Performance</p>
-                  </div>
-                  <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-accent/60" />
-                </div>
-              </HolographicCard>
-
-              <HolographicCard title="Total Logins" variant="danger" animated>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl sm:text-3xl font-bold text-secondary font-mono">
-                      {stats.totalLogins}
-                    </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Access Count</p>
-                  </div>
-                  <Users className="h-6 w-6 sm:h-8 sm:w-8 text-secondary/60" />
-                </div>
-              </HolographicCard>
-            </div>
-
-            {/* System Alerts */}
+          <TabsContent value="overview" className="space-y-6 mt-8">
+            {/* System Alerts - Horizontal Layout */}
             {systemAlerts.filter(alert => !alert.dismissed).length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-bold text-primary flex items-center">
-                  <Bell className="h-5 w-5 mr-2" />
-                  System Alerts
-                </h3>
-                {systemAlerts.filter(alert => !alert.dismissed).map((alert) => (
-                  <Card key={alert.id} className={`p-4 border ${getAlertSeverityColor(alert.severity)}`}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-primary mb-1">{alert.title}</h4>
-                        <p className="text-sm text-muted-foreground mb-2">{alert.message}</p>
-                        <div className="text-xs text-muted-foreground">
+              <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-primary animate-pulse" />
+                    System Alerts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {systemAlerts.filter(alert => !alert.dismissed).map((alert) => (
+                    <div key={alert.id} className={`flex items-center justify-between p-4 rounded-lg border ${getAlertSeverityColor(alert.severity)} transition-all hover:scale-[1.02]`}>
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="flex-shrink-0">
+                          <AlertTriangle className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-foreground mb-1">{alert.title}</h4>
+                          <p className="text-sm text-muted-foreground">{alert.message}</p>
+                        </div>
+                        <div className="flex-shrink-0 text-xs text-muted-foreground">
                           {formatTimestamp(alert.timestamp)}
                         </div>
                       </div>
-                      {/* Add dismiss functionality if needed */}
-                      <Button size="sm" variant="ghost" className="text-muted-foreground">
-                        ×
-                      </Button>
+                      <Button size="sm" variant="ghost" className="ml-4">×</Button>
                     </div>
-                  </Card>
-                ))}
-              </div>
+                  ))}
+                </CardContent>
+              </Card>
             )}
 
-            {/* Recent Activity */}
-            <HolographicCard title="Recent Activity" animated>
-              <div className="space-y-3">
+            {/* Recent Activity - Clean Horizontal List */}
+            <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-accent" />
+                  Recent Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 {recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between p-3 bg-card/30 rounded-lg border border-primary/20 hover:border-primary/40 transition-colors">
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(activity.status, activity.type)}
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">{activity.description}</p>
+                  <div key={activity.id} className="flex items-center justify-between p-4 rounded-lg bg-background/50 border border-border/40 hover:border-primary/40 transition-all">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="flex-shrink-0">
+                        {getStatusIcon(activity.status, activity.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{activity.description}</p>
                         <p className="text-xs text-muted-foreground">{formatTimestamp(activity.timestamp)}</p>
                       </div>
                     </div>
-                    <Badge variant="outline" className={`text-xs shrink-0 ${
+                    <Badge variant="outline" className={`ml-4 text-xs ${
                       activity.status === 'success' || activity.status === 'completed' ? 'border-accent text-accent' :
                       activity.status === 'warning' || activity.status === 'in-progress' ? 'border-secondary text-secondary' :
                       'border-destructive text-destructive'
                     }`}>
-                      {activity.status?.toUpperCase() || activity.severity?.toUpperCase() || 'INFO'}
+                      {activity.status?.toUpperCase() || 'INFO'}
                     </Badge>
                   </div>
                 ))}
-              </div>
-            </HolographicCard>
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          {/* Tools Tab */}
-          <TabsContent value="tools" className="space-y-6">
-            <div className="mb-8">
-              <div className="flex flex-col lg:flex-row gap-4 mb-6">
+          {/* Tools Tab - Clean Grid */}
+          <TabsContent value="tools" className="space-y-6 mt-8">
+            <Card className="bg-card/50 backdrop-blur-sm border-border/40 p-6">
+              <div className="flex flex-col lg:flex-row gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-cyber-cyan" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input
-                    placeholder="Search tools..."
+                    placeholder="Search tools by name or description..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 bg-black/70 border-cyber-cyan/30 text-cyber-cyan placeholder-cyber-cyan/50 focus:border-neon-green transition-all duration-300"
+                    className="pl-12 h-12 bg-background border-border/60 focus:border-primary"
                   />
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {toolCategories.map((category) => (
-                    <InteractiveButton
+                    <Button
                       key={category.id}
-                      variant={selectedCategory === category.id ? 'primary' : 'outline'}
+                      variant={selectedCategory === category.id ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setSelectedCategory(category.id)}
-                      className="font-mono"
+                      className="font-medium"
                     >
                       {category.label} ({category.count})
-                    </InteractiveButton>
+                    </Button>
                   ))}
                 </div>
               </div>
-            </div>
+            </Card>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading tools..." />}>
                 {filteredTools.map((tool) => (
@@ -532,55 +576,75 @@ const UnifiedDashboard: React.FC = () => {
             </div>
           </TabsContent>
 
-          {/* Security Tab */}
-          <TabsContent value="security" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {/* Security Tab - Professional Metrics */}
+          <TabsContent value="security" className="space-y-6 mt-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {securityMetrics.map((metric) => (
-                <Card key={metric.id} className={`p-4 bg-card/50 backdrop-blur-sm border ${getMetricStatusColor(metric.status)}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className={getMetricStatusColor(metric.status).split(' ')[0]}>
-                      {metric.icon}
+                <Card key={metric.id} className={`bg-card/50 backdrop-blur-sm border hover:shadow-lg transition-all ${getMetricStatusColor(metric.status)}`}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="p-2 rounded-lg bg-background/50">
+                        {metric.icon}
+                      </div>
+                      {getTrendIcon(metric.trend)}
                     </div>
-                    {getTrendIcon(metric.trend)}
-                  </div>
-                  <div className="text-2xl font-bold text-primary mb-1">
-                    {metric.value}{metric.unit}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{metric.name}</div>
+                    <p className="text-3xl font-bold text-foreground mb-1">
+                      {metric.value}{metric.unit}
+                    </p>
+                    <p className="text-sm text-muted-foreground font-medium">{metric.name}</p>
+                  </CardContent>
                 </Card>
               ))}
             </div>
-            <HolographicCard title="Security Logs" animated>
-              <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading security logs..." />}>
-            <AdvancedTerminal
-              title="security-monitor"
-            />
-              </Suspense>
-            </HolographicCard>
-            <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading cyber metrics..." />}>
+
+            <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Terminal className="h-5 w-5" />
+                  Security Monitor
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading security logs..." />}>
+                  <AdvancedTerminal title="security-monitor" />
+                </Suspense>
+              </CardContent>
+            </Card>
+
+            <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading metrics..." />}>
               <CyberMetrics />
             </Suspense>
           </TabsContent>
 
           {/* AI Assistant Tab */}
-          <TabsContent value="ai-assistant" className="space-y-6">
-            <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading AI Assistant..." />}>
+          <TabsContent value="ai-assistant" className="mt-8">
+            <Suspense fallback={<LoadingSpinner variant="cyber" text="Initializing AI Assistant..." />}>
               <AISecurityAssistant />
             </Suspense>
           </TabsContent>
 
           {/* Threat Map Tab */}
-          <TabsContent value="threat-map" className="space-y-6">
-            <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading Threat Map..." />}>
+          <TabsContent value="threat-map" className="mt-8">
+            <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading Global Threat Map..." />}>
               <ThreatMapVisualization />
             </Suspense>
           </TabsContent>
 
           {/* Terminal Tab */}
-          <TabsContent value="terminal" className="space-y-6">
-            <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading Terminal..." />}>
-              <AdvancedTerminal />
-            </Suspense>
+          <TabsContent value="terminal" className="mt-8">
+            <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Terminal className="h-5 w-5 text-accent" />
+                  ETERNYX Terminal
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Suspense fallback={<LoadingSpinner variant="cyber" text="Initializing Terminal..." />}>
+                  <AdvancedTerminal />
+                </Suspense>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
