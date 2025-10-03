@@ -43,7 +43,9 @@ import {
   Star,
   Cpu,
   Smartphone,
-  Puzzle
+  Puzzle,
+  Monitor,
+  Wrench
 } from 'lucide-react';
 
 // Lazy load components for performance
@@ -106,7 +108,7 @@ interface Tool {
   level: number;
   lastUsed: string;
   usageCount: number;
-  glowColor: 'cyan' | 'green' | 'purple' | 'orange' | 'pink' | 'red';
+  glowColor: 'cyan' | 'green' | 'purple' | 'orange' | 'pink';
   category: string;
   isLocked?: boolean;
   requiredLevel?: number;
@@ -550,15 +552,9 @@ const UnifiedDashboard: React.FC = () => {
             </div>
             <HolographicCard title="Security Logs" animated>
               <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading security logs..." />}>
-                <AdvancedTerminal title="security-monitor" initialOutput={[
-                  "[INFO] Initializing security protocols...",
-                  "[SUCCESS] Firewall active. All ports monitored.",
-                  "[WARNING] Detected 3 suspicious login attempts from 192.168.1.100.",
-                  "[SUCCESS] Threat intelligence updated. 12 new signatures added.",
-                  "[INFO] System integrity check initiated.",
-                  "[SUCCESS] System integrity check completed. No anomalies detected.",
-                  "[ERROR] Failed to connect to external threat feed. Retrying in 30s."
-                ]} />
+            <AdvancedTerminal
+              title="security-monitor"
+            />
               </Suspense>
             </HolographicCard>
             <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading cyber metrics..." />}>

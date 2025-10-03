@@ -9,7 +9,7 @@ import {
   TrendingUp, Users, Mail, Calendar, ShoppingCart, CreditCard,
   Gauge, Wrench, TestTube, Rocket,
   Brain, Cpu, Lightbulb, Atom, Gamepad2, Camera,
-  Mic, Coins, Banknote, Calculator, Settings
+  Mic, Coins, Banknote, Calculator, Settings, FileCode
 } from 'lucide-react';
 
 export interface Tool {

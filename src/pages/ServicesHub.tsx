@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TypingText } from '@/components/TypingText';
 import { MobileViewport } from '@/components/MobileViewport';
 import {
-  Shield, Code, Lightbulb, Skull, AlertTriangle, Gem, Eye, Wifi, Database, Cloud, Zap, Brain, Rocket, Cpu
+  Shield, Code, Lightbulb, Skull, AlertTriangle, Gem, Eye, Wifi, Database, Cloud, Zap, Brain, Rocket, Cpu, Globe, Smartphone, Server
 } from 'lucide-react';
 
 interface ServiceCardProps {

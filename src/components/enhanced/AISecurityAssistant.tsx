@@ -299,3 +299,4 @@ export const AISecurityAssistant = () => {
   );
 };
 
+export default AISecurityAssistant;

@@ -33,6 +33,7 @@ const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Tools = lazy(() => import("./pages/Tools"));
 
 const SecurityAuditing = lazy(() => import("./pages/SecurityAuditing"));
 const IncidentResponse = lazy(() => import("./pages/IncidentResponse"));

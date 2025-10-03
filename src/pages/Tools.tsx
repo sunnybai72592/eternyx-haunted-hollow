@@ -12,7 +12,7 @@ import {
   Shield, Target, Code, Server, Brain, Smartphone, FileSearch, Network,
   Scan, Key, Globe, Bot, Crosshair, Wifi, Database, Layers, Cloud,
   MemoryStick, HardDrive, Radio, Gamepad2, PlayCircle, CheckCircle,
-  Grid, List
+  Grid, List, Lightbulb, Wrench
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
