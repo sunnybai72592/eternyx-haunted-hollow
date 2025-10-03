@@ -209,6 +209,19 @@ export default {
 					'0%, 100%': { boxShadow: '0 0 5px var(--neon-color)' },
 					'50%': { boxShadow: '0 0 20px var(--neon-color), 0 0 30px var(--neon-color)' },
 				},
+				'twinkle': {
+					'0%, 100%': { opacity: '1', transform: 'scale(1)' },
+					'50%': { opacity: '0.3', transform: 'scale(0.8)' },
+				},
+				'shooting-star': {
+					'0%': { transform: 'translate(0, 0) rotate(45deg)', opacity: '1' },
+					'70%': { opacity: '1' },
+					'100%': { transform: 'translate(300px, 300px) rotate(45deg)', opacity: '0' },
+				},
+				'spin-slow': {
+					'from': { transform: 'rotate(0deg)' },
+					'to': { transform: 'rotate(360deg)' },
+				},
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
@@ -225,6 +238,9 @@ export default {
 				'float-effect': 'float-effect 4s ease-in-out infinite',
 				'pulse-soft': 'pulse-soft 1.5s ease-in-out infinite',
 				'neon-pulse': 'neon-pulse 2s ease-in-out infinite alternate',
+				'twinkle': 'twinkle 2s ease-in-out infinite',
+				'shooting-star': 'shooting-star 3s linear infinite',
+				'spin-slow': 'spin-slow 3s linear infinite',
 			}
 		}
 	},

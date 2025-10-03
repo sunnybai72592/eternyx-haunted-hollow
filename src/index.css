@@ -604,3 +604,140 @@ All colors MUST be HSL.
   background-color: rgba(0, 191, 255, 0.3);
 }
 
+/* Cosmic Kingdom Animations */
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes shooting-star {
+  0% {
+    transform: translate(0, 0) rotate(45deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(300px, 300px) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+@keyframes starBurst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.5),
+                0 0 40px rgba(6, 182, 212, 0.3),
+                0 0 60px rgba(6, 182, 212, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(6, 182, 212, 0.8),
+                0 0 60px rgba(6, 182, 212, 0.5),
+                0 0 90px rgba(6, 182, 212, 0.3);
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.animate-shooting-star {
+  animation: shooting-star 3s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Smooth transitions for moon-like movement */
+.smooth-moon-transition {
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Star button glow effect */
+.star-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.star-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s ease, height 0.6s ease;
+}
+
+.star-button:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Satellite glance effect */
+.satellite-glance {
+  position: absolute;
+  pointer-events: none;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.6) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: satellite-orbit 4s linear infinite;
+}
+
+@keyframes satellite-orbit {
+  0% {
+    transform: rotate(0deg) translateX(50px) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(50px) rotate(-360deg);
+  }
+}
+
