@@ -346,3 +346,44 @@ COMMENT ON TABLE project_requests IS 'Elite development team project requests';
 COMMENT ON TABLE threat_monitoring_events IS 'Real-time threat monitoring events';
 COMMENT ON TABLE network_traffic_analysis IS 'Network traffic anomaly analysis results';
 
+
+
+-- Dark Web Monitoring Logs table
+CREATE TABLE dark_web_monitoring_logs (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    search_query TEXT NOT NULL,
+    mentions_found INTEGER DEFAULT 0,
+    last_monitored_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    report_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Custom Exploit Builder Logs table
+CREATE TABLE custom_exploit_builder_logs (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    exploit_name VARCHAR(200) NOT NULL,
+    target_platform VARCHAR(100),
+    vulnerability_type VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'draft',
+    generated_code TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add RLS policies for new tables
+ALTER TABLE dark_web_monitoring_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their own dark web monitoring logs" ON dark_web_monitoring_logs
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own dark web monitoring logs" ON dark_web_monitoring_logs
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+ALTER TABLE custom_exploit_builder_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their own custom exploit builder logs" ON custom_exploit_builder_logs
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own custom exploit builder logs" ON custom_exploit_builder_logs
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+COMMENT ON TABLE dark_web_monitoring_logs IS 'Logs for dark web monitoring activities';
+COMMENT ON TABLE custom_exploit_builder_logs IS 'Logs for custom exploit generation activities';
+

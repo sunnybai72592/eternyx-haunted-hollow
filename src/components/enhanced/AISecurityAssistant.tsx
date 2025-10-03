@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -96,30 +97,32 @@ export const AISecurityAssistant = () => {
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const response = await axios.post('http://localhost:5000/chat', { message: userMessage.content });
+      const aiResponseContent = response.data.response;
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: generateAIResponse(inputValue),
+        content: aiResponseContent,
         timestamp: new Date(),
-        severity: 'medium',
-        actionable: true
+        severity: 'medium', // Determine severity based on AI response content if possible
+        actionable: true,
       };
       setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      console.error('Error communicating with AI backend:', error);
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: 'I apologize, but I am currently unable to connect to my neural network. Please try again later.',
+        timestamp: new Date(),
+        severity: 'error',
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
-  };
-
-  const generateAIResponse = (input: string): string => {
-    const responses = [
-      'Analyzing your security posture... I\'ve detected potential vulnerabilities in your network perimeter. Recommend implementing additional firewall rules.',
-      'Threat intelligence indicates increased APT activity in your sector. Suggest enabling enhanced monitoring on critical assets.',
-      'Your encryption protocols are quantum-ready. However, I recommend rotating keys every 30 days for optimal security.',
-      'Anomalous network traffic detected. Running deep packet inspection... Results show potential data exfiltration attempt blocked.',
-      'Security scan complete. Your systems show 97% compliance with NIST framework. Addressing remaining 3% will achieve elite security status.'
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
+    }
   };
 
   const getSeverityIcon = (severity: string) => {

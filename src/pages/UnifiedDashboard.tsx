@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,8 @@ import HolographicCard from '@/components/HolographicCard';
 import InteractiveButton from '@/components/InteractiveButton';
 import { useAuthStore } from '@/store/authStore';
 import { useAppStore } from '@/store/useAppStore';
+import { supabaseAPI } from '@/lib/supabase';
+import { fetchTools, toolActions, Tool } from '@/lib/tools.tsx';
 import {
   Activity,
   Shield,
@@ -98,21 +99,7 @@ interface SystemAlert {
   dismissed: boolean;
 }
 
-interface Tool {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  xp: number;
-  maxXp: number;
-  level: number;
-  lastUsed: string;
-  usageCount: number;
-  glowColor: 'cyan' | 'green' | 'purple' | 'orange' | 'pink';
-  category: string;
-  isLocked?: boolean;
-  requiredLevel?: number;
-}
+
 
 const UnifiedDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -133,54 +120,157 @@ const UnifiedDashboard: React.FC = () => {
       setIsLoading(true);
       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call delay
 
-      // Combined Mock Data
+      if (!user?.id) {
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabaseAPI.supabase
+        .from('users')
+        .select('*, profiles(*)')
+        .eq('id', user.id)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+        addNotification({ type: 'error', message: 'Failed to load user data.' });
+        setIsLoading(false);
+        return;
+      }
+
+      const profileData = userData?.profiles;
+
+      // Fetch project requests count
+      const { count: projectsCreatedCount, error: projectsError } = await supabaseAPI.supabase
+        .from('project_requests')
+        .select('*', { count: 'exact' })
+        .eq('user_id', user.id);
+
+      if (projectsError) console.error('Error fetching projects count:', projectsError);
+
+      // Fetch vulnerability scans count
+      const { count: completedMissionsCount, error: scansError } = await supabaseAPI.supabase
+        .from('vulnerability_scans')
+        .select('*', { count: 'exact' })
+        .eq('user_id', user.id)
+        .eq('status', 'completed');
+
+      if (scansError) console.error('Error fetching completed scans count:', scansError);
+
+      // Fetch total tools (mock for now, will be dynamic later)
+      const totalToolsCount = 24; // This will be dynamic when tools are implemented
+
       setStats({
-        projectsCreated: (profile as any)?.stats?.projects_created || 12,
-        totalLogins: (profile as any)?.stats?.login_count || 247,
-        lastActivity: (profile as any)?.stats?.last_activity || new Date().toISOString(),
-        securityScore: 95,
-        performanceRating: 88,
-        accessLevel: profile?.access_level || 'elite',
-        level: 15,
-        xp: 12750,
-        maxXp: 15000,
-        totalTools: 24,
-        completedMissions: 47,
-        hackingStreak: 12,
+        projectsCreated: projectsCreatedCount || 0,
+        totalLogins: profileData?.login_count || 0,
+        lastActivity: profileData?.last_activity || new Date().toISOString(),
+        securityScore: profileData?.security_score || 95, // Assuming security_score in profile
+        performanceRating: profileData?.performance_rating || 88, // Assuming performance_rating in profile
+        accessLevel: profileData?.access_level || 'elite',
+        level: profileData?.level || 15,
+        xp: profileData?.xp || 12750,
+        maxXp: profileData?.max_xp || 15000,
+        totalTools: totalToolsCount,
+        completedMissions: completedMissionsCount || 0,
+        hackingStreak: profileData?.hacking_streak || 12, // Assuming hacking_streak in profile
       });
 
-      setRecentActivity([
-        { id: '1', type: 'login', description: 'Successful login from secure terminal', timestamp: new Date().toISOString(), status: 'success' },
-        { id: '2', type: 'security', description: 'Security scan completed - No threats detected', timestamp: new Date(Date.now() - 3600000).toISOString(), status: 'success' },
-        { id: '3', type: 'system', description: 'System optimization completed', timestamp: new Date(Date.now() - 7200000).toISOString(), status: 'success' },
-        { id: '4', type: 'project', description: 'New cybersecurity project initialized', timestamp: new Date(Date.now() - 10800000).toISOString(), status: 'success' },
-        { id: '5', type: 'security', description: 'Firewall rules updated', timestamp: new Date(Date.now() - 14400000).toISOString(), status: 'warning' },
-        { id: '6', type: 'threat', description: 'DDoS attack detected and mitigated', timestamp: new Date(Date.now() - 600000), severity: 'high', status: 'completed' },
-        { id: '7', type: 'encryption', description: 'New quantum key generated for client data', timestamp: new Date(Date.now() - 900000), severity: 'low', status: 'completed' },
-      ]);
+      const { data: auditLogs, error: auditLogsError } = await supabaseAPI.supabase
+        .from("audit_logs")
+        .select("action, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (auditLogsError) console.error("Error fetching audit logs:", auditLogsError);
+
+      const { data: securityIncidents, error: incidentsError } = await supabaseAPI.supabase
+        .from("security_incidents")
+        .select("incident_type, description, detected_at, severity, status")
+        .order("detected_at", { ascending: false })
+        .limit(5);
+
+      if (incidentsError) console.error("Error fetching security incidents:", incidentsError);
+
+      const combinedActivity: RecentActivityItem[] = [];
+
+      auditLogs?.forEach((log) => {
+        combinedActivity.push({
+          id: log.created_at + log.action,
+          type: log.action.includes("login") ? "login" : "system",
+          description: log.action,
+          timestamp: log.created_at,
+          status: "success",
+        });
+      });
+
+      securityIncidents?.forEach((incident) => {
+        combinedActivity.push({
+          id: incident.detected_at + incident.incident_type,
+          type: "threat",
+          description: incident.description,
+          timestamp: incident.detected_at,
+          status: incident.status as any,
+          severity: incident.severity as any,
+        });
+      });
+
+      combinedActivity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      setRecentActivity(combinedActivity.slice(0, 7));
+
+      const { data: threatStats, error: threatStatsError } = await supabaseAPI.supabase.rpc(
+        "get_threat_statistics",
+        { days: 7 }
+      );
+      if (threatStatsError) console.error("Error fetching threat statistics:", threatStatsError);
+
+      const { count: activeScansCount, error: activeScansError } = await supabaseAPI.supabase
+        .from("vulnerability_scans")
+        .select("id", { count: "exact" })
+        .in("status", ["pending", "in-progress"]);
+      if (activeScansError) console.error("Error fetching active scans:", activeScansError);
+
+      const { count: openVulnerabilitiesCount, error: openVulnerabilitiesError } = await supabaseAPI.supabase
+        .from("vulnerability_details")
+        .select("id", { count: "exact" })
+        .neq("remediation", "completed"); // Assuming 'remediation' field indicates resolution
+      if (openVulnerabilitiesError) console.error("Error fetching open vulnerabilities:", openVulnerabilitiesError);
+
+      const { count: activeKeysCount, error: activeKeysError } = await supabaseAPI.supabase
+        .from("encryption_keys")
+        .select("id", { count: "exact" })
+        .eq("is_active", true);
+      if (activeKeysError) console.error("Error fetching active keys:", activeKeysError);
 
       setSecurityMetrics([
-        { id: 'threat-level', name: 'Threat Level', value: 23, unit: '%', trend: 'down', status: 'good', icon: <Shield className="h-5 w-5" /> },
-        { id: 'active-scans', name: 'Active Scans', value: 7, unit: '', trend: 'up', status: 'good', icon: <Eye className="h-5 w-5" /> },
-        { id: 'vulnerabilities', name: 'Open Vulnerabilities', value: 3, unit: '', trend: 'stable', status: 'warning', icon: <AlertTriangle className="h-5 w-5" /> },
-        { id: 'encryption-keys', name: 'Active Keys', value: 12, unit: '', trend: 'up', status: 'good', icon: <Lock className="h-5 w-5" /> }
+        { id: 'threat-level', name: 'Threat Level', value: threatStats?.[0]?.total_threats || 0, unit: '', trend: 'stable', status: threatStats?.[0]?.critical_threats > 0 ? 'critical' : threatStats?.[0]?.high_threats > 0 ? 'warning' : 'good', icon: <Shield className="h-5 w-5" /> },
+        { id: 'active-scans', name: 'Active Scans', value: activeScansCount || 0, unit: '', trend: 'stable', status: activeScansCount > 0 ? 'warning' : 'good', icon: <Eye className="h-5 w-5" /> },
+        { id: 'vulnerabilities', name: 'Open Vulnerabilities', value: openVulnerabilitiesCount || 0, unit: '', trend: 'stable', status: openVulnerabilitiesCount > 0 ? 'critical' : 'good', icon: <AlertTriangle className="h-5 w-5" /> },
+        { id: 'encryption-keys', name: 'Active Keys', value: activeKeysCount || 0, unit: '', trend: 'up', status: 'good', icon: <Lock className="h-5 w-5" /> }
       ]);
 
-      setSystemAlerts([
-        { id: '1', title: 'SSL Certificate Expiring', message: 'Your SSL certificate will expire in 7 days. Renew now to maintain secure connections.', severity: 'warning', timestamp: new Date(Date.now() - 3600000), dismissed: false },
-        { id: '2', title: 'New Threat Intelligence', message: 'Critical vulnerability discovered in popular web framework. Update recommended.', severity: 'error', timestamp: new Date(Date.now() - 7200000), dismissed: false }
-      ]);
+      const { data: alertsData, error: alertsError } = await supabaseAPI.supabase
+        .from("security_incidents")
+        .select("id, incident_type, description, severity, detected_at, status")
+        .order("detected_at", { ascending: false })
+        .limit(2);
 
-      setTools([
-        { id: 'vulnerability-scanner', title: 'Vulnerability Scanner', description: 'Advanced penetration testing and vulnerability assessment tools.', icon: <Shield className="h-6 w-6" />, xp: 1250, maxXp: 2000, level: 8, lastUsed: '2 hours ago', usageCount: 47, glowColor: 'cyan', category: 'security' },
-        { id: 'ai-threat-analysis', title: 'AI Threat Analysis', description: 'Machine learning powered threat detection and analysis.', icon: <Eye className="h-6 w-6" />, xp: 890, maxXp: 1500, level: 6, lastUsed: '1 day ago', usageCount: 23, glowColor: 'green', category: 'ai' },
-        { id: 'quantum-encryption', title: 'Quantum Encryption', description: 'Next-generation quantum-resistant encryption protocols.', icon: <Layers className="h-6 w-6" />, xp: 2100, maxXp: 3000, level: 12, lastUsed: '3 hours ago', usageCount: 89, glowColor: 'purple', category: 'encryption' },
-        { id: 'network-mapper', title: 'Network Mapper', description: 'Comprehensive network topology and device discovery.', icon: <Wifi className="h-6 w-6" />, xp: 670, maxXp: 1000, level: 4, lastUsed: '5 hours ago', usageCount: 31, glowColor: 'orange', category: 'network' },
-        { id: 'code-analyzer', title: 'Code Analyzer', description: 'Static and dynamic code analysis for security vulnerabilities.', icon: <Code className="h-6 w-6" />, xp: 1450, maxXp: 2000, level: 9, lastUsed: '1 hour ago', usageCount: 65, glowColor: 'cyan', category: 'development' },
-        { id: 'data-forensics', title: 'Data Forensics', description: 'Digital forensics and data recovery tools.', icon: <HardDrive className="h-6 w-6" />, xp: 980, maxXp: 1500, level: 7, lastUsed: '6 hours ago', usageCount: 42, glowColor: 'pink', category: 'forensics' },
-        { id: 'exploit-framework', title: 'Exploit Framework', description: 'Advanced exploitation and payload generation toolkit.', icon: <Bug className="h-6 w-6" />, xp: 1780, maxXp: 2500, level: 10, lastUsed: '4 hours ago', usageCount: 76, glowColor: 'green', category: 'exploitation', isLocked: false },
-        { id: 'cloud-security', title: 'Cloud Security Suite', description: 'Multi-cloud security assessment and monitoring.', icon: <Cloud className="h-6 w-6" />, xp: 0, maxXp: 1000, level: 1, lastUsed: 'Never', usageCount: 0, glowColor: 'purple', category: 'cloud', isLocked: true, requiredLevel: 20 },
-      ]);
+      if (alertsError) console.error("Error fetching system alerts:", alertsError);
+
+      const mappedAlerts: SystemAlert[] = alertsData?.map(alert => ({
+        id: alert.id,
+        title: alert.incident_type,
+        message: alert.description,
+        severity: alert.severity as SystemAlert["severity"],
+        timestamp: new Date(alert.detected_at),
+        dismissed: alert.status === "resolved",
+      })) || [];
+
+      setSystemAlerts(mappedAlerts);
+
+      const fetchedTools = await fetchTools(user.id);
+      setTools(fetchedTools);
 
       setIsLoading(false);
     };
@@ -274,11 +364,36 @@ const UnifiedDashboard: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleToolClick = (toolId: string) => {
+  const handleToolClick = async (toolId: string) => {
+    const tool = tools.find(t => t.id === toolId);
+    if (!tool) return;
+
     addNotification({
       type: 'info',
-      message: `Launching ${tools.find(t => t.id === toolId)?.title}...`,
+      message: `Launching ${tool.title}...`,
     });
+
+    if (tool.action) {
+      try {
+        const result = await tool.action();
+        addNotification({
+          type: 'success',
+          message: `${tool.title} executed successfully: ${result.message}`,
+        });
+        // Optionally, re-fetch dashboard data to update metrics after tool use
+        // loadDashboardData(); 
+      } catch (error: any) {
+        addNotification({
+          type: 'error',
+          message: `Failed to execute ${tool.title}: ${error.message || 'Unknown error'}`,
+        });
+      }
+    } else {
+      addNotification({
+        type: 'warning',
+        message: `${tool.title} has no defined action yet.`,
+      });
+    }
     // In a real app, this would navigate to the tool's specific page or open a modal
     // navigate(`/tools/${toolId}`);
   };
@@ -365,163 +480,151 @@ const UnifiedDashboard: React.FC = () => {
                   <Zap className="h-4 w-4 text-secondary" />
                   <span className="text-muted-foreground">{stats.hackingStreak} day streak</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Code className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">{stats.projectsCreated} projects</span>
+                </div>
               </div>
             </div>
-            <Progress 
-              value={(stats.xp / stats.maxXp) * 100} 
-              className="h-3 bg-background/50"
-            />
+            <Progress value={(stats.xp / stats.maxXp) * 100} className="h-2 bg-primary/20" indicatorColor="bg-primary" />
           </CardContent>
         </Card>
 
-        {/* Horizontal Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-primary/10 to-transparent border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Code className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
-                <TrendingUp className="h-4 w-4 text-accent" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-foreground">{stats.projectsCreated}</p>
-                <p className="text-sm text-muted-foreground font-medium">Active Projects</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-accent/10 to-transparent border-accent/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Shield className="h-8 w-8 text-accent group-hover:scale-110 transition-transform" />
-                <Badge variant="outline" className="border-accent text-accent text-xs">Excellent</Badge>
-              </div>
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-foreground">{stats.securityScore}%</p>
-                <p className="text-sm text-muted-foreground font-medium">Security Score</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-secondary/10 to-transparent border-secondary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Activity className="h-8 w-8 text-secondary group-hover:scale-110 transition-transform" />
-                <TrendingUp className="h-4 w-4 text-accent" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-foreground">{stats.performanceRating}%</p>
-                <p className="text-sm text-muted-foreground font-medium">Performance</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-purple-500/10 to-transparent border-purple-500/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Users className="h-8 w-8 text-purple-400 group-hover:scale-110 transition-transform" />
-                <Badge variant="outline" className="border-purple-400 text-purple-400 text-xs">Active</Badge>
-              </div>
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-foreground">{stats.totalLogins}</p>
-                <p className="text-sm text-muted-foreground font-medium">Total Sessions</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Professional Tabbed Navigation */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="inline-flex h-12 items-center justify-center rounded-xl bg-card/50 backdrop-blur-sm p-1.5 border border-border/40 gap-2">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary rounded-lg px-6 transition-all">
-              <Monitor className="h-4 w-4 mr-2" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="tools" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent rounded-lg px-6 transition-all">
-              <Wrench className="h-4 w-4 mr-2" />
-              Tools Arsenal
-            </TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-destructive/20 data-[state=active]:text-destructive rounded-lg px-6 transition-all">
-              <Shield className="h-4 w-4 mr-2" />
-              Security
-            </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary rounded-lg px-6 transition-all">
-              <Bot className="h-4 w-4 mr-2" />
-              AI Assistant
-            </TabsTrigger>
-            <TabsTrigger value="threat-map" className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent rounded-lg px-6 transition-all">
-              <Globe className="h-4 w-4 mr-2" />
-              Threat Map
-            </TabsTrigger>
-            <TabsTrigger value="terminal" className="data-[state=active]:bg-secondary/20 data-[state=active]:text-secondary rounded-lg px-6 transition-all">
-              <Terminal className="h-4 w-4 mr-2" />
-              Terminal
-            </TabsTrigger>
+        {/* Main Tabs Section */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5 bg-card/50 backdrop-blur-sm border border-border/40">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary transition-all">Overview</TabsTrigger>
+            <TabsTrigger value="security" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary transition-all">Security</TabsTrigger>
+            <TabsTrigger value="tools" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary transition-all">Tools</TabsTrigger>
+            <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary transition-all">AI Assistant</TabsTrigger>
+            <TabsTrigger value="terminal" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary transition-all">Terminal</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6 mt-8">
-            {/* System Alerts - Horizontal Layout */}
-            {systemAlerts.filter(alert => !alert.dismissed).length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Security Score Card */}
+              <HolographicCard className="lg:col-span-2">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Security Score</CardTitle>
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-accent">{stats.securityScore}%</div>
+                  <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+                  <Progress value={stats.securityScore} className="mt-4 h-2 bg-accent/20" indicatorColor="bg-accent" />
+                </CardContent>
+              </HolographicCard>
+
+              {/* Performance Rating Card */}
+              <HolographicCard>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Performance Rating</CardTitle>
+                  <Zap className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-secondary">{stats.performanceRating}%</div>
+                  <p className="text-xs text-muted-foreground">+15.3% from last month</p>
+                  <Progress value={stats.performanceRating} className="mt-4 h-2 bg-secondary/20" indicatorColor="bg-secondary" />
+                </CardContent>
+              </HolographicCard>
+            </div>
+
+            {/* Recent Activity & System Alerts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Recent Activity */}
               <Card className="bg-card/50 backdrop-blur-sm border-border/40">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="h-5 w-5 text-primary animate-pulse" />
-                    System Alerts
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Recent Activity
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {systemAlerts.filter(alert => !alert.dismissed).map((alert) => (
-                    <div key={alert.id} className={`flex items-center justify-between p-4 rounded-lg border ${getAlertSeverityColor(alert.severity)} transition-all hover:scale-[1.02]`}>
+                <CardContent className="space-y-2">
+                  {recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-center justify-between p-4 rounded-lg bg-background/50 border border-border/40 hover:border-primary/40 transition-all">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="flex-shrink-0">
-                          <AlertTriangle className="h-5 w-5" />
+                          {getStatusIcon(activity.status, activity.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-foreground mb-1">{alert.title}</h4>
-                          <p className="text-sm text-muted-foreground">{alert.message}</p>
-                        </div>
-                        <div className="flex-shrink-0 text-xs text-muted-foreground">
-                          {formatTimestamp(alert.timestamp)}
+                          <p className="text-sm font-medium text-foreground truncate">{activity.description}</p>
+                          <p className="text-xs text-muted-foreground">{formatTimestamp(activity.timestamp)}</p>
                         </div>
                       </div>
-                      <Button size="sm" variant="ghost" className="ml-4">×</Button>
+                      <Badge variant="outline" className={`ml-4 text-xs ${
+                        activity.status === 'success' || activity.status === 'completed' ? 'border-accent text-accent' :
+                        activity.status === 'warning' || activity.status === 'in-progress' ? 'border-secondary text-secondary' :
+                        'border-destructive text-destructive'
+                      }`}>
+                        {activity.status?.toUpperCase() || 'INFO'}
+                      </Badge>
                     </div>
                   ))}
                 </CardContent>
               </Card>
-            )}
 
-            {/* Recent Activity - Clean Horizontal List */}
-            <Card className="bg-card/50 backdrop-blur-sm border-border/40">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-accent" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between p-4 rounded-lg bg-background/50 border border-border/40 hover:border-primary/40 transition-all">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="flex-shrink-0">
-                        {getStatusIcon(activity.status, activity.type)}
+              {/* System Alerts */}
+              <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    System Alerts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {systemAlerts.map((alert) => (
+                    <div key={alert.id} className={`flex items-start p-4 rounded-lg border ${getAlertSeverityColor(alert.severity)}`}>
+                      <AlertTriangle className={`h-5 w-5 mr-3 flex-shrink-0 ${
+                        alert.severity === 'error' ? 'text-destructive' :
+                        alert.severity === 'warning' ? 'text-secondary' :
+                        'text-primary'
+                      }`} />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(alert.timestamp)}</p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground">{formatTimestamp(activity.timestamp)}</p>
-                      </div>
+                      {!alert.dismissed && (
+                        <Button variant="ghost" size="sm" className="ml-4 flex-shrink-0">
+                          Dismiss
+                        </Button>
+                      )}
                     </div>
-                    <Badge variant="outline" className={`ml-4 text-xs ${
-                      activity.status === 'success' || activity.status === 'completed' ? 'border-accent text-accent' :
-                      activity.status === 'warning' || activity.status === 'in-progress' ? 'border-secondary text-secondary' :
-                      'border-destructive text-destructive'
-                    }`}>
-                      {activity.status?.toUpperCase() || 'INFO'}
-                    </Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Cyber Metrics & Threat Map */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Cyber Metrics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading metrics..." />}>
+                    <CyberMetrics />
+                  </Suspense>
+                </CardContent>
+              </Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-border/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Globe className="h-5 w-5" />
+                    Global Threat Map
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Suspense fallback={<LoadingSpinner variant="cyber" text="Loading Global Threat Map..." />}>
+                    <ThreatMapVisualization />
+                  </Suspense>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Tools Tab - Clean Grid */}
