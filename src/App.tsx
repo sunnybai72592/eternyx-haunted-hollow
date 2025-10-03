@@ -33,6 +33,8 @@ const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
+
+// Tools page - arsenal of cybersecurity and development tools
 const Tools = lazy(() => import("./pages/Tools"));
 
 const SecurityAuditing = lazy(() => import("./pages/SecurityAuditing"));
