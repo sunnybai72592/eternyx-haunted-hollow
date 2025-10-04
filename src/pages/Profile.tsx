@@ -9,7 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { User as UserIcon, Upload, Save, Shield, Settings, Trash2, Eye, EyeOff } from 'lucide-react';
+import { User as UserIcon, Upload, Save, Shield, Settings, Trash2, Eye, EyeOff, Wrench, Star } from 'lucide-react';
+import { fetchTools, Tool } from '@/lib/tools';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -32,6 +33,8 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [userTools, setUserTools] = useState<Tool[]>([]);
+  const [loadingTools, setLoadingTools] = useState(true);
 
   useEffect(() => {
     document.title = 'Your Profile | ETERNYX';
@@ -46,6 +49,29 @@ const Profile = () => {
       setLocal(profile);
     }
   }, [profile]);
+
+  useEffect(() => {
+    const getTools = async () => {
+      if (user?.id) {
+        setLoadingTools(true);
+        try {
+          const tools = await fetchTools(user.id);
+          setUserTools(tools);
+        } catch (error) {
+          console.error("Failed to fetch user tools:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load your tools.",
+            variant: "destructive",
+          });
+        } finally {
+          setLoadingTools(false);
+        }
+      }
+    };
+
+    getTools();
+  }, [user]);
 
   const handleSave = async () => {
     if (!local || !user) return;
@@ -198,10 +224,14 @@ const Profile = () => {
 
       <section className="container mx-auto px-4 py-8 max-w-5xl">
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
             <TabsTrigger value="profile">
               <UserIcon className="h-4 w-4 mr-2" />
               Profile
+            </TabsTrigger>
+            <TabsTrigger value="tools">
+              <Wrench className="h-4 w-4 mr-2" />
+              Tools & Progress
             </TabsTrigger>
             <TabsTrigger value="privacy">
               <Shield className="h-4 w-4 mr-2" />
@@ -297,6 +327,106 @@ const Profile = () => {
                     <Save className="h-4 w-4 mr-2"/>
                     {saving ? 'Saving...' : 'Save Changes'}
                   </Button>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="tools" className="space-y-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Wrench className="h-5 w-5 text-cyan-400" />
+                Your Tools & Progress
+              </h3>
+              
+              {loadingTools ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
+                </div>
+              ) : userTools.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Wrench className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No tools unlocked yet. Start exploring to unlock tools!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {userTools.map((tool) => (
+                    <div 
+                      key={tool.id} 
+                      className={`p-4 rounded-lg border transition-all duration-300 hover:scale-105 ${
+                        tool.isLocked 
+                          ? 'border-gray-700 bg-gray-900/30 opacity-50' 
+                          : `border-${tool.glowColor}-500/30 bg-gradient-to-br from-${tool.glowColor}-500/5 to-transparent hover:shadow-lg hover:shadow-${tool.glowColor}-500/20`
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className={`p-2 rounded-lg bg-${tool.glowColor}-500/10`}>
+                          {tool.icon}
+                        </div>
+                        {tool.isLocked && (
+                          <div className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded">
+                            Locked
+                          </div>
+                        )}
+                      </div>
+                      
+                      <h4 className="font-semibold text-sm mb-1">{tool.title}</h4>
+                      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{tool.description}</p>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-400" />
+                            Level {tool.level}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {tool.xp}/{tool.maxXp} XP
+                          </span>
+                        </div>
+                        
+                        <div className="w-full bg-gray-700 rounded-full h-2">
+                          <div 
+                            className={`bg-gradient-to-r from-${tool.glowColor}-400 to-${tool.glowColor}-600 h-2 rounded-full transition-all duration-500`}
+                            style={{ width: `${(tool.xp / tool.maxXp) * 100}%` }}
+                          ></div>
+                        </div>
+                        
+                        {tool.usageCount > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            Used {tool.usageCount} times • Last: {tool.lastUsed}
+                          </div>
+                        )}
+                        
+                        {tool.isLocked && tool.requiredLevel && (
+                          <div className="text-xs text-red-400">
+                            Requires Level {tool.requiredLevel}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+            
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Overall Progress</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-lg bg-gradient-to-br from-cyan-500/10 to-transparent border border-cyan-500/30">
+                  <div className="text-2xl font-bold text-cyan-400">{userTools.filter(t => !t.isLocked).length}</div>
+                  <div className="text-sm text-muted-foreground">Tools Unlocked</div>
+                </div>
+                <div className="p-4 rounded-lg bg-gradient-to-br from-green-500/10 to-transparent border border-green-500/30">
+                  <div className="text-2xl font-bold text-green-400">
+                    {userTools.reduce((sum, tool) => sum + tool.usageCount, 0)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Total Tool Uses</div>
+                </div>
+                <div className="p-4 rounded-lg bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/30">
+                  <div className="text-2xl font-bold text-purple-400">
+                    {userTools.reduce((sum, tool) => sum + tool.xp, 0)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Total XP Earned</div>
                 </div>
               </div>
             </Card>
