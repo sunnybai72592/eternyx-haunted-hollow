@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ToolCard } from '../ToolCard';
+import ToolCard from './ToolCard';
 import { Tool } from '@/lib/tools';
 import { useToast } from '@/hooks/use-toast';
 import { 
