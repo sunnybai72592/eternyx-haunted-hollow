@@ -125,10 +125,10 @@ const UnifiedDashboard: React.FC = () => {
         return;
       }
 
-      const { data: userData, error: userError } = await supabaseAPI.supabase
-        .from('users')
-        .select('*, profiles(*)')
-        .eq('id', user.id)
+      const { data: userData, error: userError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
         .single();
 
       if (userError) {

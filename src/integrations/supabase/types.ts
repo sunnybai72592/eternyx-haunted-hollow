@@ -600,10 +600,18 @@ export type Database = {
           company: string | null
           created_at: string
           full_name: string | null
+          github_url: string | null
           id: string
+          is_profile_public: boolean | null
+          job_title: string | null
+          linkedin_url: string | null
           location: string | null
+          phone: string | null
           role: string | null
+          show_email: boolean | null
+          show_phone: boolean | null
           skills: string[] | null
+          twitter_url: string | null
           updated_at: string
           user_id: string
           username: string | null
@@ -615,10 +623,18 @@ export type Database = {
           company?: string | null
           created_at?: string
           full_name?: string | null
+          github_url?: string | null
           id?: string
+          is_profile_public?: boolean | null
+          job_title?: string | null
+          linkedin_url?: string | null
           location?: string | null
+          phone?: string | null
           role?: string | null
+          show_email?: boolean | null
+          show_phone?: boolean | null
           skills?: string[] | null
+          twitter_url?: string | null
           updated_at?: string
           user_id: string
           username?: string | null
@@ -630,10 +646,18 @@ export type Database = {
           company?: string | null
           created_at?: string
           full_name?: string | null
+          github_url?: string | null
           id?: string
+          is_profile_public?: boolean | null
+          job_title?: string | null
+          linkedin_url?: string | null
           location?: string | null
+          phone?: string | null
           role?: string | null
+          show_email?: boolean | null
+          show_phone?: boolean | null
           skills?: string[] | null
+          twitter_url?: string | null
           updated_at?: string
           user_id?: string
           username?: string | null

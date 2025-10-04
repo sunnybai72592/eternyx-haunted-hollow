@@ -117,7 +117,7 @@ export const AISecurityAssistant = () => {
         type: 'assistant',
         content: 'I apologize, but I am currently unable to connect to my neural network. Please try again later.',
         timestamp: new Date(),
-        severity: 'error',
+        severity: 'high',
       };
       setMessages(prev => [...prev, errorResponse]);
     } finally {

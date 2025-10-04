@@ -1,5 +1,4 @@
-
-import { supabaseAPI } from './supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { Shield, Eye, Layers, Wifi, Code, HardDrive, Bug, Cloud, Target, Zap, Brain, Smartphone, Puzzle, Monitor, Wrench } from 'lucide-react';
 import React from 'react';
 
@@ -36,7 +35,7 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
     { id: 'mobile-security-analyzer', title: 'Mobile Security Analyzer', description: 'Analyze mobile applications for vulnerabilities and privacy issues.', icon: <Smartphone className="h-6 w-6" />, xp: 900, maxXp: 1400, level: 6, lastUsed: 'N/A', usageCount: 0, glowColor: 'pink', category: 'mobile' },
     { id: 'cryptocurrency-tracer', title: 'Cryptocurrency Tracer', description: 'Trace and analyze cryptocurrency transactions for illicit activities.', icon: <Puzzle className="h-6 w-6" />, xp: 1100, maxXp: 1800, level: 7, lastUsed: 'N/A', usageCount: 0, glowColor: 'purple', category: 'blockchain' },
     { id: 'dark-web-monitor', title: 'Dark Web Monitor', description: 'Monitor dark web forums for mentions of your organization or data.', icon: <Monitor className="h-6 w-6" />, xp: 1900, maxXp: 2800, level: 12, lastUsed: 'N/A', usageCount: 0, glowColor: 'orange', category: 'intelligence' },
-    { id: 'custom-exploit-builder', title: 'Custom Exploit Builder', description: 'Develop and test custom exploits for zero-day vulnerabilities.', icon: <Wrench className="h-6 w-6" />, xp: 2500, maxXp: 3500, level: 15, lastUsed: 'N/A', usageCount: 0, glowColor: 'red', category: 'exploitation', isLocked: true, requiredLevel: 15 },
+    { id: 'custom-exploit-builder', title: 'Custom Exploit Builder', description: 'Develop and test custom exploits for zero-day vulnerabilities.', icon: <Wrench className="h-6 w-6" />, xp: 2500, maxXp: 3500, level: 15, lastUsed: 'N/A', usageCount: 0, glowColor: 'orange', category: 'exploitation', isLocked: true, requiredLevel: 15 },
   ];
 
   const toolsWithData = await Promise.all(baseTools.map(async (tool) => {
@@ -45,7 +44,7 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
 
     switch (tool.id) {
       case 'vulnerability-scanner':
-        const { data: scans, error: scansError } = await supabaseAPI.supabase
+        const { data: scans, error: scansError } = await supabase
           .from('vulnerability_scans')
           .select('started_at, completed_at')
           .eq('user_id', userId)
@@ -56,14 +55,14 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
           const lastScan = scans[0];
           lastUsed = lastScan.completed_at ? new Date(lastScan.completed_at).toLocaleString() : new Date(lastScan.started_at).toLocaleString();
         }
-        const { count: totalScans, error: totalScansError } = await supabaseAPI.supabase
+        const { count: totalScans, error: totalScansError } = await supabase
           .from('vulnerability_scans')
           .select('id', { count: 'exact' })
           .eq('user_id', userId);
         if (!totalScansError) usageCount = totalScans || 0;
         break;
       case 'ai-threat-analysis':
-        const { data: aiAnalyses, error: aiAnalysesError } = await supabaseAPI.supabase
+        const { data: aiAnalyses, error: aiAnalysesError } = await supabase
           .from('ai_security_analysis')
           .select('created_at')
           .eq('user_id', userId)
@@ -73,14 +72,14 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
         if (aiAnalyses && aiAnalyses.length > 0) {
           lastUsed = new Date(aiAnalyses[0].created_at).toLocaleString();
         }
-        const { count: totalAiAnalyses, error: totalAiAnalysesError } = await supabaseAPI.supabase
+        const { count: totalAiAnalyses, error: totalAiAnalysesError } = await supabase
           .from('ai_security_analysis')
           .select('id', { count: 'exact' })
           .eq('user_id', userId);
         if (!totalAiAnalysesError) usageCount = totalAiAnalyses || 0;
         break;
       case 'quantum-encryption':
-        const { data: encryptionKeys, error: encryptionKeysError } = await supabaseAPI.supabase
+        const { data: encryptionKeys, error: encryptionKeysError } = await supabase
           .from('encryption_keys')
           .select('created_at')
           .eq('user_id', userId)
@@ -90,14 +89,14 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
         if (encryptionKeys && encryptionKeys.length > 0) {
           lastUsed = new Date(encryptionKeys[0].created_at).toLocaleString();
         }
-        const { count: totalEncryptionKeys, error: totalEncryptionKeysError } = await supabaseAPI.supabase
+        const { count: totalEncryptionKeys, error: totalEncryptionKeysError } = await supabase
           .from('encryption_keys')
           .select('id', { count: 'exact' })
           .eq('user_id', userId);
         if (!totalEncryptionKeysError) usageCount = totalEncryptionKeys || 0;
         break;
       case 'network-mapper':
-        const { data: networkAnalyses, error: networkAnalysesError } = await supabaseAPI.supabase
+        const { data: networkAnalyses, error: networkAnalysesError } = await supabase
           .from('network_traffic_analysis')
           .select('analyzed_at')
           .eq('user_id', userId)
@@ -107,14 +106,14 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
         if (networkAnalyses && networkAnalyses.length > 0) {
           lastUsed = new Date(networkAnalyses[0].analyzed_at).toLocaleString();
         }
-        const { count: totalNetworkAnalyses, error: totalNetworkAnalysesError } = await supabaseAPI.supabase
+        const { count: totalNetworkAnalyses, error: totalNetworkAnalysesError } = await supabase
           .from('network_traffic_analysis')
           .select('id', { count: 'exact' })
           .eq('user_id', userId);
         if (!totalNetworkAnalysesError) usageCount = totalNetworkAnalyses || 0;
         break;
           case 'code-analyzer':
-        const { data: projectRequests, error: projectRequestsError } = await supabaseAPI.supabase
+        const { data: projectRequests, error: projectRequestsError } = await supabase
           .from('project_requests')
           .select('submitted_at')
           .eq('user_id', userId)
@@ -125,7 +124,7 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
         if (projectRequests && projectRequests.length > 0) {
           lastUsed = new Date(projectRequests[0].submitted_at).toLocaleString();
         }
-        const { count: totalCodeAnalyses, error: totalCodeAnalysesError } = await supabaseAPI.supabase
+        const { count: totalCodeAnalyses, error: totalCodeAnalysesError } = await supabase
           .from('project_requests')
           .select('id', { count: 'exact' })
           .eq('user_id', userId)
@@ -133,58 +132,16 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
         if (!totalCodeAnalysesError) usageCount = totalCodeAnalyses || 0;
         break;
           case 'data-forensics':
-        const { data: forensicsLogs, error: forensicsError } = await supabaseAPI.supabase
-          .from('forensics_logs')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (forensicsError) console.error('Error fetching forensics logs:', forensicsError);
-        if (forensicsLogs && forensicsLogs.length > 0) {
-          lastUsed = new Date(forensicsLogs[0].created_at).toLocaleString();
-        }
-        const { count: totalForensics, error: totalForensicsError } = await supabaseAPI.supabase
-          .from('forensics_logs')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalForensicsError) usageCount = totalForensics || 0;
+        // Forensics functionality - placeholder
         break;
           case 'exploit-framework':
-        const { data: exploitLogs, error: exploitLogsError } = await supabaseAPI.supabase
-          .from('exploit_logs')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (exploitLogsError) console.error('Error fetching exploit logs:', exploitLogsError);
-        if (exploitLogs && exploitLogs.length > 0) {
-          lastUsed = new Date(exploitLogs[0].created_at).toLocaleString();
-        }
-        const { count: totalExploits, error: totalExploitsError } = await supabaseAPI.supabase
-          .from('exploit_logs')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalExploitsError) usageCount = totalExploits || 0;
+        // Exploit framework functionality - placeholder
         break;
           case 'cloud-security':
-        const { data: cloudSecurityLogs, error: cloudSecurityError } = await supabaseAPI.supabase
-          .from('cloud_security_logs')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (cloudSecurityError) console.error('Error fetching cloud security logs:', cloudSecurityError);
-        if (cloudSecurityLogs && cloudSecurityLogs.length > 0) {
-          lastUsed = new Date(cloudSecurityLogs[0].created_at).toLocaleString();
-        }
-        const { count: totalCloudSecurity, error: totalCloudSecurityError } = await supabaseAPI.supabase
-          .from('cloud_security_logs')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalCloudSecurityError) usageCount = totalCloudSecurity || 0;
+        // Cloud security functionality - placeholder
         break;
       case 'threat-intelligence-feed':
-        const { data: threatIntel, error: threatIntelError } = await supabaseAPI.supabase
+        const { data: threatIntel, error: threatIntelError } = await supabase
           .from('threat_intelligence')
           .select('last_seen')
           .order('last_seen', { ascending: false })
@@ -193,112 +150,14 @@ export const fetchTools = async (userId: string): Promise<Tool[]> => {
         if (threatIntel && threatIntel.length > 0) {
           lastUsed = new Date(threatIntel[0].last_seen).toLocaleString();
         }
-        const { count: totalThreatIntel, error: totalThreatIntelError } = await supabaseAPI.supabase
+        const { count: totalThreatIntel, error: totalThreatIntelError } = await supabase
           .from('threat_intelligence')
           .select('id', { count: 'exact' });
         if (!totalThreatIntelError) usageCount = totalThreatIntel || 0;
         break;
-          case 'security-orchestrator':
-        const { data: orchestrationLogs, error: orchestrationError } = await supabaseAPI.supabase
-          .from('orchestration_logs')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (orchestrationError) console.error('Error fetching orchestration logs:', orchestrationError);
-        if (orchestrationLogs && orchestrationLogs.length > 0) {
-          lastUsed = new Date(orchestrationLogs[0].created_at).toLocaleString();
-        }
-        const { count: totalOrchestrations, error: totalOrchestrationsError } = await supabaseAPI.supabase
-          .from('orchestration_logs')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalOrchestrationsError) usageCount = totalOrchestrations || 0;
-        break;
-          case 'ai-code-auditor':
-        const { data: aiCodeAudits, error: aiCodeAuditsError } = await supabaseAPI.supabase
-          .from('ai_code_audits')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (aiCodeAuditsError) console.error('Error fetching AI code audits:', aiCodeAuditsError);
-        if (aiCodeAudits && aiCodeAudits.length > 0) {
-          lastUsed = new Date(aiCodeAudits[0].created_at).toLocaleString();
-        }
-        const { count: totalAiCodeAudits, error: totalAiCodeAuditsError } = await supabaseAPI.supabase
-          .from('ai_code_audits')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalAiCodeAuditsError) usageCount = totalAiCodeAudits || 0;
-        break;
-          case 'mobile-security-analyzer':
-        const { data: mobileScans, error: mobileScansError } = await supabaseAPI.supabase
-          .from('mobile_scans')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (mobileScansError) console.error('Error fetching mobile scans:', mobileScansError);
-        if (mobileScans && mobileScans.length > 0) {
-          lastUsed = new Date(mobileScans[0].created_at).toLocaleString();
-        }
-        const { count: totalMobileScans, error: totalMobileScansError } = await supabaseAPI.supabase
-          .from('mobile_scans')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalMobileScansError) usageCount = totalMobileScans || 0;
-        break;
-          case 'cryptocurrency-tracer':
-        const { data: cryptoTraces, error: cryptoTracesError } = await supabaseAPI.supabase
-          .from('crypto_traces')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (cryptoTracesError) console.error('Error fetching crypto traces:', cryptoTracesError);
-        if (cryptoTraces && cryptoTraces.length > 0) {
-          lastUsed = new Date(cryptoTraces[0].created_at).toLocaleString();
-        }
-        const { count: totalCryptoTraces, error: totalCryptoTracesError } = await supabaseAPI.supabase
-          .from('crypto_traces')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalCryptoTracesError) usageCount = totalCryptoTraces || 0;
-        break;
-          case 'dark-web-monitor':
-        const { data: darkWebLogs, error: darkWebLogsError } = await supabaseAPI.supabase
-          .from('dark_web_monitoring_logs')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (darkWebLogsError) console.error('Error fetching dark web monitoring logs:', darkWebLogsError);
-        if (darkWebLogs && darkWebLogs.length > 0) {
-          lastUsed = new Date(darkWebLogs[0].created_at).toLocaleString();
-        }
-        const { count: totalDarkWebMonitors, error: totalDarkWebMonitorsError } = await supabaseAPI.supabase
-          .from('dark_web_monitoring_logs')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalDarkWebMonitorsError) usageCount = totalDarkWebMonitors || 0;
-        break;
-          case 'custom-exploit-builder':
-        const { data: exploitBuilderLogs, error: exploitBuilderLogsError } = await supabaseAPI.supabase
-          .from('custom_exploit_builder_logs')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (exploitBuilderLogsError) console.error('Error fetching custom exploit builder logs:', exploitBuilderLogsError);
-        if (exploitBuilderLogs && exploitBuilderLogs.length > 0) {
-          lastUsed = new Date(exploitBuilderLogs[0].created_at).toLocaleString();
-        }
-        const { count: totalExploitBuilds, error: totalExploitBuildsError } = await supabaseAPI.supabase
-          .from('custom_exploit_builder_logs')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId);
-        if (!totalExploitBuildsError) usageCount = totalExploitBuilds || 0;
+      default:
+        // Default case for tools without database integration
+        break
         break;
     }
 
