@@ -172,10 +172,10 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   'vulnerability-scanner': async () => {
     console.log('Running Vulnerability Scan...');
     // Simulate API call to start a scan
-    const { data, error } = await supabaseAPI.supabase
+    const { data, error } = await supabase
       .from('vulnerability_scans')
       .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
         target_url: 'https://example.com', // Placeholder, ideally user input
         scan_type: 'full',
         status: 'in-progress',
@@ -186,10 +186,10 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   'ai-threat-analysis': async () => {
     console.log('Initiating AI Threat Analysis...');
     // Simulate API call for AI analysis
-    const { data, error } = await supabaseAPI.supabase
+    const { data, error } = await supabase
       .from('ai_security_analysis')
       .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
         analysis_type: 'threat_prediction',
         input_data: { system_logs: 'sample_log_data' }, // Placeholder
         results: { prediction: 'low_risk' }, // Placeholder
@@ -202,10 +202,10 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   'quantum-encryption': async () => {
     console.log('Generating Quantum Encryption Key...');
     // Simulate API call to generate key
-    const { data, error } = await supabaseAPI.supabase
+    const { data, error } = await supabase
       .from('encryption_keys')
       .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
         key_name: `Quantum Key ${new Date().toISOString()}`,
         algorithm: 'Quantum-Safe-AES256',
         key_size: 256,
@@ -217,10 +217,10 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   'network-mapper': async () => {
     console.log('Starting Network Mapping...');
     // Simulate API call for network mapping
-    const { data, error } = await supabaseAPI.supabase
+    const { data, error } = await supabase
       .from('network_traffic_analysis')
       .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
         analysis_name: `Network Map ${new Date().toISOString()}`,
         traffic_data: { network_segment: '192.168.1.0/24' }, // Placeholder
         anomalies_detected: 0,
@@ -231,10 +231,10 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   },
   'code-analyzer': async () => {
     console.log('Initiating Code Analysis...');
-    const { data, error } = await supabaseAPI.supabase
+    const { data, error } = await supabase
       .from('project_requests')
       .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
         project_type: 'code_analysis',
         title: `Code Analysis Request ${new Date().toISOString()}`,
         description: 'Automated code analysis request.',
@@ -246,47 +246,20 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   },
   'data-forensics': async () => {
     console.log('Starting Data Forensics...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('forensics_logs')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        log_type: 'data_recovery',
-        description: 'Initiated data recovery process.',
-        status: 'in-progress',
-      });
-    if (error) throw error;
-    return { message: 'Data forensics initiated!', data };
+    return { message: 'Data forensics feature coming soon!' };
   },
   'exploit-framework': async () => {
     console.log('Launching Exploit Framework...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('exploit_logs')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        exploit_type: 'zero_day_simulation',
-        target_system: 'simulated_network_segment',
-        status: 'initiated',
-      });
-    if (error) throw error;
-    return { message: 'Exploit framework initiated!', data };
+    return { message: 'Exploit framework feature coming soon!' };
   },
   'cloud-security': async () => {
     console.log('Activating Cloud Security Suite...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('cloud_security_logs')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        action_type: 'suite_activation',
-        description: 'Cloud Security Suite activated.',
-        status: 'completed',
-      });
-    if (error) throw error;
-    return { message: 'Cloud Security Suite activated!', data };
+    return { message: 'Cloud Security Suite feature coming soon!' };
   },
   'threat-intelligence-feed': async () => {
     console.log('Refreshing Threat Intelligence Feed...');
     // Simulate fetching latest threat intel
-    const { data, error } = await supabaseAPI.supabase
+    const { data, error } = await supabase
       .from('threat_intelligence')
       .select('*')
       .order('first_seen', { ascending: false })
@@ -296,82 +269,27 @@ export const toolActions: { [key: string]: () => Promise<any> } = {
   },
   'security-orchestrator': async () => {
     console.log('Running Security Orchestration...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('orchestration_logs')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        orchestration_type: 'automated_response',
-        description: 'Initiated automated security response.',
-        status: 'completed',
-      });
-    if (error) throw error;
-    return { message: 'Security orchestration initiated!', data };
+    return { message: 'Security orchestrator feature coming soon!' };
   },
   'ai-code-auditor': async () => {
     console.log('Initiating AI Code Audit...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('ai_code_audits')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        target_repo: 'user_repo_url', // Placeholder, ideally user input
-        scan_type: 'full_audit',
-        status: 'in-progress',
-      });
-    if (error) throw error;
-    return { message: 'AI Code Audit initiated!', data };
+    return { message: 'AI Code Auditor feature coming soon!' };
   },
   'mobile-security-analyzer': async () => {
     console.log('Starting Mobile Security Analysis...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('mobile_scans')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        target_app: 'user_app_id', // Placeholder, ideally user input
-        scan_type: 'full_scan',
-        status: 'in-progress',
-      });
-    if (error) throw error;
-    return { message: 'Mobile Security Analysis initiated!', data };
+    return { message: 'Mobile Security Analyzer feature coming soon!' };
   },
   'cryptocurrency-tracer': async () => {
     console.log('Tracing Cryptocurrency Transactions...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('crypto_traces')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        transaction_id: 'sample_transaction_id', // Placeholder, ideally user input
-        currency: 'BTC',
-        status: 'tracing_initiated',
-      });
-    if (error) throw error;
-    return { message: 'Cryptocurrency tracing initiated!', data };
+    return { message: 'Cryptocurrency Tracer feature coming soon!' };
   },
   'dark-web-monitor': async () => {
     console.log('Activating Dark Web Monitor...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('dark_web_monitoring_logs')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        search_query: 'eternyx mentions', // Placeholder, ideally user input
-        mentions_found: 0,
-        report_url: 'N/A',
-      });
-    if (error) throw error;
-    return { message: 'Dark Web Monitor activated!', data };
+    return { message: 'Dark Web Monitor feature coming soon!' };
   },
   'custom-exploit-builder': async () => {
     console.log('Launching Custom Exploit Builder...');
-    const { data, error } = await supabaseAPI.supabase
-      .from('custom_exploit_builder_logs')
-      .insert({
-        user_id: (await supabaseAPI.supabase.auth.getUser()).data.user?.id,
-        exploit_name: `Custom Exploit ${new Date().toISOString()}`,
-        target_platform: 'generic',
-        vulnerability_type: 'unknown',
-        status: 'building',
-      });
-    if (error) throw error;
-    return { message: 'Custom Exploit Builder initiated!', data };
+    return { message: 'Custom Exploit Builder feature coming soon!' };
   },
 };
 
