@@ -14,8 +14,12 @@ import {
   ChevronDown,
   Wrench,
   Zap,
-  Star
+  Star,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
+import { AuthModal } from '@/components/AuthModal';
 
 interface NavigationProps {
   className?: string;
@@ -42,6 +46,10 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  
+  const { user, isAuthenticated, signOut } = useAuthStore();
 
   // Detect mobile screen size
   useEffect(() => {
@@ -138,6 +146,26 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
            (path !== '/' && location.pathname.startsWith(path));
   };
 
+  const handleSignIn = () => {
+    setAuthMode('signin');
+    setShowAuthModal(true);
+  };
+
+  const handleSignUp = () => {
+    setAuthMode('signup');
+    setShowAuthModal(true);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
+  const handleProfileClick = () => {
+    navigate('/profile');
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-b border-cyan-500/20 ${className}`}>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -155,6 +183,46 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
           {/* Desktop Navigation - Hidden on mobile */}
           <div className="hidden md:flex items-center space-x-1">
+            {/* Auth Buttons or User Menu */}
+            {!isAuthenticated ? (
+              <div className="flex items-center gap-2 mr-2">
+                <Button
+                  onClick={handleSignIn}
+                  variant="ghost"
+                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 border border-cyan-500/30 rounded-lg hover:scale-105 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-500/25"
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Sign In
+                </Button>
+                <Button
+                  onClick={handleSignUp}
+                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg hover:scale-105 hover:from-cyan-400 hover:to-blue-500 shadow-lg shadow-cyan-500/25"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Sign Up
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mr-2">
+                <Button
+                  onClick={handleProfileClick}
+                  variant="ghost"
+                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 border border-purple-500/30 rounded-lg hover:scale-105 text-purple-400 hover:bg-purple-500/10 hover:border-purple-400"
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Profile
+                </Button>
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 border border-red-500/30 rounded-lg hover:scale-105 text-red-400 hover:bg-red-500/10 hover:border-red-400"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+            )}
+            
             {categories.map((category) => (
               <div key={category.id} className="relative group">
                 <Button
@@ -244,6 +312,46 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-md border-b border-cyan-500/20 shadow-xl animate-in slide-in-from-top-2 duration-300 max-h-[calc(100vh-4rem)] overflow-y-auto">
             <div className="px-4 py-6 space-y-3">
+              {/* Mobile Auth Buttons */}
+              {!isAuthenticated ? (
+                <div className="space-y-2 pb-3 border-b border-cyan-500/20">
+                  <Button
+                    onClick={handleSignIn}
+                    variant="ghost"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400 min-h-[56px]"
+                  >
+                    <LogIn className="w-5 h-5" />
+                    <span className="font-medium text-base">Sign In</span>
+                  </Button>
+                  <Button
+                    onClick={handleSignUp}
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg min-h-[56px]"
+                  >
+                    <UserPlus className="w-5 h-5" />
+                    <span className="font-medium text-base">Sign Up</span>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2 pb-3 border-b border-cyan-500/20">
+                  <Button
+                    onClick={handleProfileClick}
+                    variant="ghost"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-400 min-h-[56px]"
+                  >
+                    <User className="w-5 h-5" />
+                    <span className="font-medium text-base">Profile</span>
+                  </Button>
+                  <Button
+                    onClick={handleSignOut}
+                    variant="ghost"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-400 min-h-[56px]"
+                  >
+                    <X className="w-5 h-5" />
+                    <span className="font-medium text-base">Sign Out</span>
+                  </Button>
+                </div>
+              )}
+              
               {categories.map((category) => (
                 <div key={category.id} className="space-y-2">
                   <button
@@ -307,6 +415,13 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
           </div>
         )}
       </div>
+      
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+        mode={authMode}
+      />
     </nav>
   );
 };
