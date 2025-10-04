@@ -12,7 +12,7 @@ import HolographicCard from '@/components/HolographicCard';
 import InteractiveButton from '@/components/InteractiveButton';
 import { useAuthStore } from '@/store/authStore';
 import { useAppStore } from '@/store/useAppStore';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../lib/supabaseClient';
 import { fetchTools, toolActions, Tool } from '@/lib/tools.tsx';
 import {
   Activity,

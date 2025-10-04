@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { AuthModal } from '@/components/AuthModal';
+import { signInWithGoogle } from "../services/authService";
 import { useAuthStore } from '@/store/authStore';
 import { 
   Zap, 
@@ -77,18 +78,30 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
     });
   };
 
-  const handleInitializeConnection = () => {
+  const handleInitializeConnection = async () => {
     if (isAuthenticated) {
-      navigate('/cyber-arena');
+      navigate("/cyber-arena");
     } else {
-      setAuthMode('signin');
-      setAuthModalOpen(true);
+      // Attempt Google Sign-in
+      const { error } = await signInWithGoogle();
+      if (error) {
+        console.error("Google Sign-in failed:", error);
+        // Fallback to AuthModal if Google Sign-in fails or user cancels
+        setAuthMode("signin");
+        setAuthModalOpen(true);
+      }
     }
   };
 
-  const handleJoinNetwork = () => {
-    setAuthMode('signup');
-    setAuthModalOpen(true);
+  const handleJoinNetwork = async () => {
+    // Attempt Google Sign-in for signup
+    const { error } = await signInWithGoogle();
+    if (error) {
+      console.error("Google Sign-in failed:", error);
+      // Fallback to AuthModal if Google Sign-in fails or user cancels
+      setAuthMode("signup");
+      setAuthModalOpen(true);
+    }
   };
 
   const handleAccessDashboard = () => {

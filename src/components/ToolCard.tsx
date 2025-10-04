@@ -4,37 +4,22 @@ import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { cn } from '@/lib/utils';
 
+import { Tool } from "@/lib/tools";
+
 interface ToolCardProps {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  xp?: number;
-  maxXp?: number;
-  level?: number;
-  lastUsed?: string;
-  usageCount?: number;
-  onClick?: () => void;
+  tool: Tool;
+  runningScans: { [key: string]: number };
+  onExecuteTool: (toolId: string) => void;
   className?: string;
-  glowColor?: 'cyan' | 'green' | 'pink' | 'purple' | 'orange';
-  isLocked?: boolean;
-  requiredLevel?: number;
 }
 
 const ToolCard: React.FC<ToolCardProps> = ({
-  title,
-  description,
-  icon,
-  xp = 0,
-  maxXp = 1000,
-  level = 1,
-  lastUsed,
-  usageCount = 0,
-  onClick,
+  tool,
+  runningScans,
+  onExecuteTool,
   className,
-  glowColor = 'cyan',
-  isLocked = false,
-  requiredLevel,
 }) => {
+  const { id, title, description, icon, xp = 0, maxXp = 1000, level = 1, lastUsed, usageCount = 0, glowColor = 'cyan', isLocked = false, requiredLevel } = tool;
   const [isHovered, setIsHovered] = useState(false);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
@@ -51,7 +36,7 @@ const ToolCard: React.FC<ToolCardProps> = ({
     setParticles(newParticles);
     setTimeout(() => setParticles([]), 1000);
 
-    onClick?.();
+    onExecuteTool(id);
   };
 
   const getGlowColor = () => {
@@ -167,6 +152,24 @@ const ToolCard: React.FC<ToolCardProps> = ({
               <div className="text-xs text-muted-foreground font-mono">
                 Last used: {lastUsed}
               </div>
+            )}
+
+            {runningScans[id] !== undefined ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-primary">Running...</span>
+                  <span className="text-primary font-mono">{Math.round(runningScans[id])}%</span>
+                </div>
+                <Progress value={runningScans[id]} className="w-full animate-pulse-glow" />
+              </div>
+            ) : (
+              <Button 
+                onClick={handleClick}
+                className="w-full hover-glow gradient-border group-hover:scale-105 transition-all"
+              >
+                <PlayCircle className="w-4 h-4 mr-2" />
+                Execute Tool
+              </Button>
             )}
           </>
         )}

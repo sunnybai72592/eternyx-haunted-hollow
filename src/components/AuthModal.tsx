@@ -3,6 +3,7 @@ import { X, Eye, EyeOff, User, Mail, Lock, Zap, Shield, Crown, Loader2 } from 'l
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
+import { signInWithGoogle } from "../services/authService";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -284,6 +285,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
+
+          {/* Google Sign-in Button */}
+          <Button
+            type="button"
+            onClick={signInWithGoogle}
+            disabled={loading}
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 rounded-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+          >
+            <img src="/google-icon.svg" alt="Google" className="w-5 h-5" />
+            Sign {mode === 'signup' ? 'up' : 'in'} with Google
+          </Button>
+
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-black/95 px-2 text-gray-500">Or</span>
+          </div>
 
           {/* Submit Button */}
           <Button
