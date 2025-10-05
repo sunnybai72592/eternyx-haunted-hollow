@@ -308,18 +308,9 @@ const CyberDashboard: React.FC = () => {
           {filteredTools.map((tool) => (
             <ToolCard
               key={tool.id}
-              title={tool.title}
-              description={tool.description}
-              icon={tool.icon}
-              xp={tool.xp}
-              maxXp={tool.maxXp}
-              level={tool.level}
-              lastUsed={tool.lastUsed}
-              usageCount={tool.usageCount}
-              onClick={() => handleToolClick(tool.id)}
-              glowColor={tool.glowColor}
-              isLocked={tool.isLocked}
-              requiredLevel={tool.requiredLevel}
+              tool={tool}
+              runningScans={{}}
+              onExecuteTool={() => handleToolClick(tool.id)}
             />
           ))}
         </div>

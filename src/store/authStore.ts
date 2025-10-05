@@ -57,6 +57,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, username?: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>;
   initialize: () => void;
@@ -220,6 +221,26 @@ export const useAuthStore = create<AuthState>()(
         } catch (err: any) {
           set({ isLoading: false });
           return { success: false, error: err?.message || 'Registration failed' };
+        }
+      },
+
+      signInWithGoogle: async () => {
+        set({ isLoading: true });
+        try {
+          const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/dashboard`,
+            },
+          });
+
+          if (error) throw error;
+          
+          // OAuth flow will redirect, so we'll handle success in initialize()
+          return { success: true };
+        } catch (err: any) {
+          set({ isLoading: false });
+          return { success: false, error: err?.message || 'Google sign-in failed' };
         }
       },
 

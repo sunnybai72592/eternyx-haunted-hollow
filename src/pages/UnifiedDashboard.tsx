@@ -375,17 +375,17 @@ const UnifiedDashboard: React.FC = () => {
 
     if (tool.action) {
       try {
-        const result = await tool.action();
+        await tool.action();
         addNotification({
           type: 'success',
-          message: `${tool.title} executed successfully: ${result.message}`,
+          message: `${tool.title || tool.name || 'Tool'} executed successfully`,
         });
         // Optionally, re-fetch dashboard data to update metrics after tool use
         // loadDashboardData(); 
       } catch (error: any) {
         addNotification({
           type: 'error',
-          message: `Failed to execute ${tool.title}: ${error.message || 'Unknown error'}`,
+          message: `Failed to execute ${tool.title || tool.name || 'tool'}: ${error.message || 'Unknown error'}`,
         });
       }
     } else {
@@ -661,18 +661,9 @@ const UnifiedDashboard: React.FC = () => {
                 {filteredTools.map((tool) => (
                   <ToolCard
                     key={tool.id}
-                    title={tool.title}
-                    description={tool.description}
-                    icon={tool.icon}
-                    xp={tool.xp}
-                    maxXp={tool.maxXp}
-                    level={tool.level}
-                    lastUsed={tool.lastUsed}
-                    usageCount={tool.usageCount}
-                    onClick={() => handleToolClick(tool.id)}
-                    glowColor={tool.glowColor}
-                    isLocked={tool.isLocked}
-                    requiredLevel={tool.requiredLevel}
+                    tool={tool}
+                    runningScans={{}}
+                    onExecuteTool={(id) => handleToolClick(id)}
                   />
                 ))}
               </Suspense>

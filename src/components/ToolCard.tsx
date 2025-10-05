@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
+import { Button } from './ui/button';
+import { PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { Tool } from "@/lib/tools";
@@ -19,7 +21,8 @@ const ToolCard: React.FC<ToolCardProps> = ({
   onExecuteTool,
   className,
 }) => {
-  const { id, title, description, icon, xp = 0, maxXp = 1000, level = 1, lastUsed, usageCount = 0, glowColor = 'cyan', isLocked = false, requiredLevel } = tool;
+  const { id, title, name, description, icon, xp = 0, maxXp = 1000, level = 1, lastUsed, usageCount = 0, glowColor = 'cyan', isLocked = false, requiredLevel } = tool;
+  const displayTitle = title || name || 'Unnamed Tool';
   const [isHovered, setIsHovered] = useState(false);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
@@ -124,7 +127,7 @@ const ToolCard: React.FC<ToolCardProps> = ({
         </div>
 
         <CardTitle className="text-xl font-bold text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-cyan group-hover:to-neon-green transition-all duration-300">
-          {title}
+          {displayTitle}
         </CardTitle>
         
         <CardDescription className="text-gray-300 text-sm">

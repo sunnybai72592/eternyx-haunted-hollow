@@ -150,10 +150,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Port scanner error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
-        details: error.message 
+        details: errorMessage 
       }),
       { 
         status: 500, 

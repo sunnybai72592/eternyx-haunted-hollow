@@ -4,18 +4,26 @@ import React from 'react';
 
 export interface Tool {
   id: string;
-  title: string;
+  title?: string;  // For ToolCard compatibility
+  name?: string;   // For allTools compatibility
   description: string;
   icon: React.ReactNode;
-  xp: number;
-  maxXp: number;
-  level: number;
-  lastUsed: string;
-  usageCount: number;
-  glowColor: 'cyan' | 'green' | 'purple' | 'orange' | 'pink';
+  xp?: number;
+  maxXp?: number;
+  level?: number;
+  lastUsed?: string;
+  usageCount?: number;
+  glowColor?: 'cyan' | 'green' | 'purple' | 'orange' | 'pink';
   category: string;
   isLocked?: boolean;
   requiredLevel?: number;
+  // Additional properties from allTools
+  features?: string[];
+  tier?: 'free' | 'premium' | 'elite';
+  difficulty?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  executionTime?: string;
+  tags?: string[];
+  action?: () => void | Promise<void>;
 }
 
 export const baseTools: Tool[] = [

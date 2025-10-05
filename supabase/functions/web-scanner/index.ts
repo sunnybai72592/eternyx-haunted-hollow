@@ -193,10 +193,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Web scanner error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
-        details: error.message 
+        details: errorMessage 
       }),
       { 
         status: 500, 
@@ -217,7 +218,10 @@ async function analyzeHTTPResponse(url: string): Promise<{ vulnerabilities: WebV
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WebSecurityScanner/1.0)' }
     })
 
-    headersChecked = response.headers.size || 0
+    // Count headers manually since size property doesn't exist on Headers
+    let headerCount = 0;
+    response.headers.forEach(() => headerCount++);
+    headersChecked = headerCount;
 
     // Check for information disclosure in headers
     const serverHeader = response.headers.get('server')

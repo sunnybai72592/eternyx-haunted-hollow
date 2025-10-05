@@ -8,6 +8,7 @@ import {
 import { LoginForm } from './LoginForm';
 import { SignupForm } from './SignupForm';
 import { X } from 'lucide-react';
+import { GoogleAuthButton } from './GoogleAuthButton';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -59,15 +60,45 @@ export const AuthModal = ({ isOpen, onClose, mode: propMode, onModeChange, defau
             </DialogHeader>
 
             {mode === 'login' ? (
-              <LoginForm
-                onSuccess={handleSuccess}
-                onSwitchToSignup={handleSwitchMode}
-              />
+              <>
+                <LoginForm
+                  onSuccess={handleSuccess}
+                  onSwitchToSignup={handleSwitchMode}
+                />
+                <div className="mt-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-muted" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or</span>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <GoogleAuthButton />
+                  </div>
+                </div>
+              </>
             ) : (
-              <SignupForm
-                onSuccess={handleSuccess}
-                onSwitchToLogin={handleSwitchMode}
-              />
+              <>
+                <SignupForm
+                  onSuccess={handleSuccess}
+                  onSwitchToLogin={handleSwitchMode}
+                />
+                <div className="mt-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-muted" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or</span>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <GoogleAuthButton />
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>

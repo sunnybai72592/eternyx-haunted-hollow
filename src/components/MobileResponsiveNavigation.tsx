@@ -47,7 +47,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   
   const { user, isAuthenticated, signOut } = useAuthStore();
 
@@ -147,7 +147,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   };
 
   const handleSignIn = () => {
-    setAuthMode('signin');
+    setAuthMode('login');
     setShowAuthModal(true);
   };
 
@@ -419,8 +419,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       {/* Auth Modal */}
       <AuthModal 
         isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
-        mode={authMode}
+        onClose={() => setShowAuthModal(false)}
       />
     </nav>
   );
