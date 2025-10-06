@@ -325,8 +325,28 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
               </Button>
             </div>
 
+            {/* Stats Section */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-12 sm:mb-16 w-full max-w-4xl">
+              <div className="bg-gradient-to-br from-cyan-500/10 to-transparent border border-cyan-500/30 rounded-xl p-4 backdrop-blur-sm">
+                <div className="text-3xl font-bold text-cyan-400 mb-1">500+</div>
+                <div className="text-xs text-gray-400">Tools Available</div>
+              </div>
+              <div className="bg-gradient-to-br from-green-500/10 to-transparent border border-green-500/30 rounded-xl p-4 backdrop-blur-sm">
+                <div className="text-3xl font-bold text-green-400 mb-1">24/7</div>
+                <div className="text-xs text-gray-400">Security Watch</div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/30 rounded-xl p-4 backdrop-blur-sm">
+                <div className="text-3xl font-bold text-purple-400 mb-1">10K+</div>
+                <div className="text-xs text-gray-400">Users Protected</div>
+              </div>
+              <div className="bg-gradient-to-br from-orange-500/10 to-transparent border border-orange-500/30 rounded-xl p-4 backdrop-blur-sm">
+                <div className="text-3xl font-bold text-orange-400 mb-1">99.9%</div>
+                <div className="text-xs text-gray-400">Uptime SLA</div>
+              </div>
+            </div>
+
             {/* Cosmic Galaxy Cards - Each Page is a Galaxy */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mt-12 sm:mt-16 w-full max-w-4xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 w-full max-w-4xl">
               {/* Cybersecurity Galaxy */}
               <div 
                 onClick={(e) => handleNavigateWithAnimation('/services', e)}
