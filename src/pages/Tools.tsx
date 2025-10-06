@@ -17,41 +17,48 @@ import {
 import { supabase } from '@/lib/supabaseClient';
 
 const Tools = () => {
-  const [activeCategory, setActiveCategory] = useState('cybersecurity');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [runningScans, setRunningScans] = useState<{ [key: string]: number }>({});
   const [viewMode, setViewMode] = useState<'grid' | 'tabs'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTier, setSelectedTier] = useState<string>('all');
   const { toast } = useToast();
 
-  const categories = Array.from(new Set(baseTools.map(tool => tool.category))).map(category => {
-    let icon;
-    let name;
-    switch (category) {
-      case 'cybersecurity':
-        icon = <Shield className="w-4 h-4" />;
-        name = 'Cybersecurity Arsenal';
-        break;
-      case 'penetration':
-        icon = <Target className="w-4 h-4" />;
-        name = 'Penetration Testing';
-        break;
-      case 'development':
-        icon = <Code className="w-4 h-4" />;
-        name = 'Full Stack Development';
-        break;
-      case 'infrastructure':
-        icon = <Server className="w-4 h-4" />;
-        name = 'Infrastructure & DevOps';
-        break;
-      case 'innovation':
-        icon = <Lightbulb className="w-4 h-4" />;
-        name = 'Digital Innovation';
-        break;
-      default:
-        icon = <Wrench className="w-4 h-4" />;
-        name = category;
-    }
-    return { id: category, name, icon };
-  });
+  const categories = [
+    { id: 'all', name: 'All Tools', icon: <Grid className="w-4 h-4" /> },
+    ...Array.from(new Set(baseTools.map(tool => tool.category))).map(category => {
+      let icon;
+      let name;
+      switch (category) {
+        case 'cybersecurity':
+          icon = <Shield className="w-4 h-4" />;
+          name = 'Cybersecurity Arsenal';
+          break;
+        case 'penetration':
+          icon = <Target className="w-4 h-4" />;
+          name = 'Penetration Testing';
+          break;
+        case 'development':
+          icon = <Code className="w-4 h-4" />;
+          name = 'Full Stack Development';
+          break;
+        case 'infrastructure':
+          icon = <Server className="w-4 h-4" />;
+          name = 'Infrastructure & DevOps';
+          break;
+        case 'innovation':
+          icon = <Lightbulb className="w-4 h-4" />;
+          name = 'Digital Innovation';
+          break;
+        default:
+          icon = <Wrench className="w-4 h-4" />;
+          name = category;
+      }
+      return { id: category, name, icon };
+    })
+  ];
+
+  const tiers = ['all', 'free', 'basic', 'premium', 'elite'];
 
   const navigateToTool = (toolId: string) => {
     if (toolId === 'vuln-scanner') {
@@ -111,10 +118,16 @@ const Tools = () => {
     }
   };
 
-  // Use combined tools
-
-
-    const filteredTools = baseTools.filter(tool => tool.category === activeCategory);
+  const filteredTools = baseTools.filter(tool => {
+    const matchesCategory = activeCategory === 'all' || tool.category === activeCategory;
+    const matchesTier = selectedTier === 'all' || tool.tier === selectedTier;
+    const matchesSearch = !searchQuery || 
+      tool.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tool.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tool.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    return matchesCategory && matchesTier && matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,10 +140,86 @@ const Tools = () => {
           <p className="text-xl text-muted-foreground">
             Professional-grade cybersecurity and development tools
           </p>
-          <div className="mt-4 text-sm text-muted-foreground">
-            <span className="text-primary font-mono">{baseTools.length}</span> Advanced Tools Available
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+            <Badge variant="outline" className="border-primary/30">
+              <span className="text-primary font-mono">{baseTools.length}</span>
+              <span className="ml-1">Total Tools</span>
+            </Badge>
+            <Badge variant="outline" className="border-cyan-500/30">
+              <span className="text-cyan-400 font-mono">{filteredTools.length}</span>
+              <span className="ml-1">Filtered</span>
+            </Badge>
+            <Badge variant="outline" className="border-green-500/30">
+              <span className="text-green-400 font-mono">{categories.length - 1}</span>
+              <span className="ml-1">Categories</span>
+            </Badge>
           </div>
         </div>
+
+        {/* Search and Filters */}
+        <Card className="mb-8 bg-card/50 border-primary/20 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Search */}
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Search tools by name, description, or tags..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-primary/20 rounded-lg focus:outline-none focus:border-primary/50 transition-colors"
+                />
+              </div>
+              
+              {/* Tier Filter */}
+              <select
+                value={selectedTier}
+                onChange={(e) => setSelectedTier(e.target.value)}
+                className="px-4 py-2 bg-background border border-primary/20 rounded-lg focus:outline-none focus:border-primary/50 transition-colors capitalize"
+              >
+                {tiers.map(tier => (
+                  <option key={tier} value={tier}>{tier === 'all' ? 'All Tiers' : tier}</option>
+                ))}
+              </select>
+            </div>
+            
+            {(searchQuery || selectedTier !== 'all' || activeCategory !== 'all') && (
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Active filters:</span>
+                {searchQuery && (
+                  <Badge variant="secondary" className="gap-1">
+                    Search: {searchQuery}
+                    <button onClick={() => setSearchQuery('')} className="ml-1 hover:text-destructive">×</button>
+                  </Badge>
+                )}
+                {selectedTier !== 'all' && (
+                  <Badge variant="secondary" className="gap-1">
+                    Tier: {selectedTier}
+                    <button onClick={() => setSelectedTier('all')} className="ml-1 hover:text-destructive">×</button>
+                  </Badge>
+                )}
+                {activeCategory !== 'all' && (
+                  <Badge variant="secondary" className="gap-1">
+                    Category: {categories.find(c => c.id === activeCategory)?.name}
+                    <button onClick={() => setActiveCategory('all')} className="ml-1 hover:text-destructive">×</button>
+                  </Badge>
+                )}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedTier('all');
+                    setActiveCategory('all');
+                  }}
+                  className="ml-auto text-xs"
+                >
+                  Clear All
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* View Mode Toggle */}
         <div className="flex justify-center mb-8">

@@ -367,19 +367,19 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
                 </div>
                 <Shield className="relative w-8 h-8 sm:w-12 sm:h-12 text-cyan-400 mb-4 group-hover:scale-125 group-hover:rotate-12 transition-all duration-500 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
                 <h3 className="relative text-lg sm:text-xl font-bold text-white mb-3 group-hover:text-cyan-300 transition-colors font-mono">
-                  🛡️ Cybersecurity Galaxy
+                  🛡️ Cybersecurity Services
                 </h3>
                 <p className="relative text-sm text-gray-300 group-hover:text-gray-100 transition-colors leading-relaxed">
-                  Navigate through advanced security solutions, penetration testing, and threat intelligence
+                  Enterprise-grade security solutions, penetration testing, and 24/7 threat monitoring
                 </p>
                 <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                   <ArrowRight className="w-5 h-5 text-cyan-400 animate-pulse" />
                 </div>
               </div>
 
-              {/* Web Development Galaxy */}
+              {/* Tools Arsenal Galaxy */}
               <div 
-                onClick={(e) => handleNavigateWithAnimation('/development', e)}
+                onClick={(e) => handleNavigateWithAnimation('/tools', e)}
                 className="
                   group relative p-6 sm:p-8 bg-gradient-to-br from-orange-950/40 via-red-950/30 to-black/40
                   border-2 border-orange-500/30 backdrop-blur-md
@@ -397,19 +397,19 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
                 </div>
                 <Code className="relative w-8 h-8 sm:w-12 sm:h-12 text-orange-400 mb-4 group-hover:scale-125 group-hover:-rotate-12 transition-all duration-500 drop-shadow-[0_0_10px_rgba(251,146,60,0.7)]" />
                 <h3 className="relative text-lg sm:text-xl font-bold text-white mb-3 group-hover:text-orange-300 transition-colors font-mono">
-                  💻 Development Galaxy
+                  🔧 Tools Arsenal
                 </h3>
                 <p className="relative text-sm text-gray-300 group-hover:text-gray-100 transition-colors leading-relaxed">
-                  Explore full-stack development, modern frameworks, and innovative web solutions
+                  500+ professional tools for cybersecurity, development, and innovation
                 </p>
                 <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                   <ArrowRight className="w-5 h-5 text-orange-400 animate-pulse" />
                 </div>
               </div>
 
-              {/* Digital Innovation Galaxy */}
+              {/* Profile & Dashboard Galaxy */}
               <div 
-                onClick={(e) => handleNavigateWithAnimation('/innovation', e)}
+                onClick={(e) => handleNavigateWithAnimation(isAuthenticated ? '/profile' : '/innovation', e)}
                 className="
                   group relative p-6 sm:p-8 bg-gradient-to-br from-purple-950/40 via-pink-950/30 to-black/40
                   border-2 border-purple-500/30 backdrop-blur-md
@@ -427,10 +427,10 @@ export const ResponsiveMainContent = ({ className = '' }: ResponsiveMainContentP
                 </div>
                 <Lightbulb className="relative w-8 h-8 sm:w-12 sm:h-12 text-purple-400 mb-4 group-hover:scale-125 group-hover:rotate-180 transition-all duration-500 drop-shadow-[0_0_10px_rgba(192,132,252,0.7)]" />
                 <h3 className="relative text-lg sm:text-xl font-bold text-white mb-3 group-hover:text-purple-300 transition-colors font-mono">
-                  💡 Innovation Constellation
+                  {isAuthenticated ? '👤 Your Profile' : '💡 Innovation Constellation'}
                 </h3>
                 <p className="relative text-sm text-gray-300 group-hover:text-gray-100 transition-colors leading-relaxed">
-                  Journey through AI integration, blockchain technology, and next-gen digital solutions
+                  {isAuthenticated ? 'Manage your profile, tools progress, and account settings' : 'Journey through AI integration, blockchain technology, and next-gen digital solutions'}
                 </p>
                 <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                   <ArrowRight className="w-5 h-5 text-purple-400 animate-pulse" />
