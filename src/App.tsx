@@ -11,6 +11,7 @@ import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ResponsiveUnifiedNavigation from "@/components/ResponsiveUnifiedNavigation";
 import { MobileResponsiveNavigation } from "@/components/MobileResponsiveNavigation";
+import { PageTransitionWrapper } from "@/components/PageTransitionWrapper";
 import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
 import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
@@ -124,7 +125,8 @@ const AppContent = () => {
                       <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
                     </div>
                   }>
-                      <Routes>
+                      <PageTransitionWrapper>
+<Routes>
                         <Route path="/" element={<Index />} />
                         <Route path="/dashboard" element={<UnifiedDashboard />} />
                         <Route path="/arsenal" element={<CyberArsenal />} />
@@ -164,6 +166,7 @@ const AppContent = () => {
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />
                       </Routes>
+</PageTransitionWrapper>
                     </Suspense>
                   </main>
                 <Footer />
