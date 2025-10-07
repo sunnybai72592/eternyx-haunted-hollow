@@ -29,6 +29,7 @@ const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
 const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
 const ServicesHub = lazy(() => import("./pages/ServicesHub"));
 const ServicesPage = lazy(() => import("./pages/ServicesPage"));
+const ServiceDetailPage = lazy(() => import("./pages/ServiceDetailPage")); // <-- NEW IMPORT
 const Development = lazy(() => import("./pages/Development"));
 const Innovation = lazy(() => import("./pages/Innovation"));
 const KillerEdge = lazy(() => import("./pages/KillerEdge"));
@@ -149,6 +150,7 @@ const AppContent = () => {
                         <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
                         <Route path="/services-hub" element={<ServicesHub />} />
                         <Route path="/services" element={<ServicesPage />} />
+                        <Route path="/services/:serviceId" element={<ServiceDetailPage />} />
                         <Route path="/development" element={<Development />} />
                         <Route path="/innovation" element={<Innovation />} />
 
