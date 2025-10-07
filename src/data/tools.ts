@@ -1,4 +1,4 @@
-import { Shield, Code, Brain, Zap, Search, Bug, Network, FileText } from 'lucide-react';
+import { Shield, Code, Brain, Zap, Search, Bug, Network, FileText, Server } from 'lucide-react';
 
 export interface Tool {
   id: string;
