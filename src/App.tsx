@@ -26,7 +26,7 @@ const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
 const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
 const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
 const ServicesHub = lazy(() => import("./pages/ServicesHub"));
-const Services = lazy(() => import("./pages/Services"));
+const ServicesPage = lazy(() => import("./pages/ServicesPage"));
 const Development = lazy(() => import("./pages/Development"));
 const Innovation = lazy(() => import("./pages/Innovation"));
 const KillerEdge = lazy(() => import("./pages/KillerEdge"));
@@ -39,6 +39,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 
 // Tools page - arsenal of cybersecurity and development tools
 const Tools = lazy(() => import("./pages/Tools"));
+const ToolCategoryPage = lazy(() => import("./pages/ToolCategoryPage")); // <-- NEW IMPORT
 
 const SecurityAuditing = lazy(() => import("./pages/SecurityAuditing"));
 const IncidentResponse = lazy(() => import("./pages/IncidentResponse"));
@@ -47,7 +48,7 @@ const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessme
 
 // Tool pages
 const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
-const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
+const CodeAnalyzer = lazy(() => import(() => import("./pages/tools/CodeAnalyzer"));
 const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
 // New specialized tool pages
@@ -131,12 +132,12 @@ const App = () => {
                           <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
                           <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
                           <Route path="/services-hub" element={<ServicesHub />} />
-                          <Route path="/services" element={<Services />} />
+                          <Route path="/services" element={<ServicesPage />} />
                           <Route path="/development" element={<Development />} />
                           <Route path="/innovation" element={<Innovation />} />
 
                           <Route path="/tools" element={<Tools />} />
-
+                          <Route path="/tools/category/:categoryId" element={<ToolCategoryPage />} /> {/* <-- NEW ROUTE */}
 
 
                           <Route path="/killer-edge" element={<KillerEdge />} />
@@ -168,5 +169,3 @@ const App = () => {
 };
 
 export default App;
-
-
