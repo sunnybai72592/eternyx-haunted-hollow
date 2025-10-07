@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"; // Added useLocation
 import { Suspense, lazy, useEffect } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { AccessibilityProvider } from "@/components/AccessibilityProvider";
@@ -13,6 +13,7 @@ import ResponsiveUnifiedNavigation from "@/components/ResponsiveUnifiedNavigatio
 import { MobileResponsiveNavigation } from "@/components/MobileResponsiveNavigation";
 import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
+import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -48,7 +49,7 @@ const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessme
 
 // Tool pages
 const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
-const CodeAnalyzer = lazy(() => import(() => import("./pages/tools/CodeAnalyzer"));
+const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
 const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
 // New specialized tool pages
@@ -71,13 +72,18 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => {
+// Component to handle routing and back button logic
+const AppContent = () => {
+  const location = useLocation();
   const { initialize } = useAuthStore();
 
   useEffect(() => {
     // Initialize auth store when app starts
     initialize();
   }, [initialize]);
+
+  // Determine if the back button should be shown
+  const showBackButton = location.pathname !== '/';
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
@@ -102,58 +108,65 @@ const App = () => {
                 />
                 <NotificationSystem />
                 <PWAInstallPrompt />
-                <BrowserRouter>
-                  <MobileResponsiveNavigation />
-                  <main className="flex-1 p-4 pt-32 transition-all duration-300">
-                    <Suspense fallback={
-                      <div className="min-h-screen bg-background flex items-center justify-center">
-                        <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
-                      </div>
-                    }>
-                        <Routes>
-                          <Route path="/" element={<Index />} />
-                          <Route path="/dashboard" element={<UnifiedDashboard />} />
-                          <Route path="/arsenal" element={<CyberArsenal />} />
-                          <Route path="/subscriptions" element={<SubscriptionHub />} />
-                          <Route path="/knowledge" element={<KnowledgeHub />} />
-                          <Route path="/profile" element={<Profile />} />
-                          <Route path="/settings" element={<Settings />} />
-                          <Route path="/help" element={<Help />} />
-                          <Route path="/hacked" element={<Hacked />} />
-                          <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
-                          <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
-                          <Route path="/security-auditing" element={<SecurityAuditing />} />
-                          <Route path="/incident-response" element={<IncidentResponse />} />
-                          <Route path="/penetration-testing" element={<PenetrationTesting />} />
-                          <Route path="/vulnerability-assessment" element={<VulnerabilityAssessment />} />
-                          <Route path="/vulnerability-scanner" element={<VulnerabilityScanner />} />
-                          <Route path="/quantum-encryption" element={<QuantumEncryption />} />
-                          <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
-                          <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
-                          <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
-                          <Route path="/services-hub" element={<ServicesHub />} />
-                          <Route path="/services" element={<ServicesPage />} />
-                          <Route path="/development" element={<Development />} />
-                          <Route path="/innovation" element={<Innovation />} />
+                
+                <MobileResponsiveNavigation />
+                
+                {/* Back Button Placement */}
+                {showBackButton && (
+                  <div className="fixed top-20 left-4 z-50">
+                    <BackButton />
+                  </div>
+                )}
 
-                          <Route path="/tools" element={<Tools />} />
-                          <Route path="/tools/category/:categoryId" element={<ToolCategoryPage />} /> {/* <-- NEW ROUTE */}
+                <main className="flex-1 p-4 pt-32 transition-all duration-300">
+                  <Suspense fallback={
+                    <div className="min-h-screen bg-background flex items-center justify-center">
+                      <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
+                    </div>
+                  }>
+                      <Routes>
+                        <Route path="/" element={<Index />} />
+                        <Route path="/dashboard" element={<UnifiedDashboard />} />
+                        <Route path="/arsenal" element={<CyberArsenal />} />
+                        <Route path="/subscriptions" element={<SubscriptionHub />} />
+                        <Route path="/knowledge" element={<KnowledgeHub />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/help" element={<Help />} />
+                        <Route path="/hacked" element={<Hacked />} />
+                        <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
+                        <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
+                        <Route path="/security-auditing" element={<SecurityAuditing />} />
+                        <Route path="/incident-response" element={<IncidentResponse />} />
+                        <Route path="/penetration-testing" element={<PenetrationTesting />} />
+                        <Route path="/vulnerability-assessment" element={<VulnerabilityAssessment />} />
+                        <Route path="/vulnerability-scanner" element={<VulnerabilityScanner />} />
+                        <Route path="/quantum-encryption" element={<QuantumEncryption />} />
+                        <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
+                        <Route path="/elite-development-team" element={<EliteDevelopmentTeam />} />
+                        <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
+                        <Route path="/services-hub" element={<ServicesHub />} />
+                        <Route path="/services" element={<ServicesPage />} />
+                        <Route path="/development" element={<Development />} />
+                        <Route path="/innovation" element={<Innovation />} />
+
+                        <Route path="/tools" element={<Tools />} />
+                        <Route path="/tools/category/:categoryId" element={<ToolCategoryPage />} />
 
 
-                          <Route path="/killer-edge" element={<KillerEdge />} />
-                          <Route path="/premium" element={<Premium />} />
-                          <Route path="/bug-report" element={<BugReport />} />
-                          <Route path="/contact" element={<Contact />} />
-                          <Route path="/tools/network-scanner" element={<NetworkScanner />} />
-                          <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
+                        <Route path="/killer-edge" element={<KillerEdge />} />
+                        <Route path="/premium" element={<Premium />} />
+                        <Route path="/bug-report" element={<BugReport />} />
+                        <Route path="/contact" element={<Contact />} />
+                        <Route path="/tools/network-scanner" element={<NetworkScanner />} />
+                        <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
 
-                          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                      </Suspense>
-                    </main>
-                  <Footer />
-                </BrowserRouter>
+                        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </Suspense>
+                  </main>
+                <Footer />
               </TooltipProvider>
             </AccessibilityProvider>
           </QueryClientProvider>
@@ -167,5 +180,11 @@ const App = () => {
     </div>
   );
 };
+
+const App = () => (
+  <BrowserRouter>
+    <AppContent />
+  </BrowserRouter>
+);
 
 export default App;
