@@ -62,6 +62,11 @@ const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
 const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 
+// CBT System pages
+const Education = lazy(() => import("./pages/Education"));
+const TestInterface = lazy(() => import("./pages/TestInterface"));
+const TestResults = lazy(() => import("./pages/TestResults"));
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -164,6 +169,11 @@ const AppContent = () => {
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/tools/network-scanner" element={<NetworkScanner />} />
                         <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
+
+                        {/* CBT System Routes */}
+                        <Route path="/education" element={<Education />} />
+                        <Route path="/test/:testId" element={<TestInterface />} />
+                        <Route path="/test-results/:attemptId" element={<TestResults />} />
 
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />
