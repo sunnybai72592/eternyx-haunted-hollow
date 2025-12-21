@@ -93,8 +93,8 @@ serve(async (req) => {
           }
         } else if (question.question_type === "short_answer") {
           // Short answers need manual grading, so we don't auto-grade
-          // Set is_correct to null to indicate pending manual review
-          isCorrect = null;
+          // Keep isCorrect as false to indicate pending manual review
+          isCorrect = false;
           pointsAwarded = 0;
         }
 

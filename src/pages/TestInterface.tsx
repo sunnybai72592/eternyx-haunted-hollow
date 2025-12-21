@@ -10,10 +10,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { Clock, AlertTriangle, CheckCircle2, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import { App as CapacitorApp } from '@capacitor/app';
 
 interface Question {
   id: string;
@@ -177,52 +176,7 @@ const TestInterface: React.FC = () => {
     };
   }, [testData]);
 
-  // Screen lock detection (Capacitor)
-  useEffect(() => {
-    const setupScreenLockDetection = async () => {
-      try {
-        // Listen for app pause (screen lock or background)
-        appStateRef.current = await CapacitorApp.addListener('pause', () => {
-          setIsAppInBackground(true);
-          setScreenLockViolation(true);
-          toast.error('Test paused: Screen lock or app backgrounded detected. Your test will be auto-submitted.');
-          setTimeout(() => {
-            handleAutoSubmit();
-          }, 2000);
-        });
-
-        // Listen for app resume
-        await CapacitorApp.addListener('resume', () => {
-          setIsAppInBackground(false);
-        });
-      } catch (error) {
-        // Capacitor not available (web environment)
-        console.log('Screen lock detection not available in web environment');
-      }
-    };
-
-    setupScreenLockDetection();
-
-    return () => {
-      appStateRef.current?.remove();
-    };
-  }, []);
-
-  // Save answer
-  const handleAnswerChange = (questionId: string, value: string | undefined) => {
-    const newAnswers = new Map(answers);
-    const currentQuestion = testData?.questions[currentQuestionIndex];
-
-    if (currentQuestion?.question_type === 'multiple_choice') {
-      newAnswers.set(questionId, { questionId, selectedOptionId: value });
-    } else if (currentQuestion?.question_type === 'short_answer') {
-      newAnswers.set(questionId, { questionId, shortAnswer: value });
-    }
-
-    setAnswers(newAnswers);
-  };
-
-  // Submit test mutation
+  // Submit test mutation - must come before screen lock detection
   const submitTestMutation = useMutation({
     mutationFn: async () => {
       if (!attemptId || !testData) throw new Error('Missing attempt or test data');
@@ -268,6 +222,43 @@ const TestInterface: React.FC = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     submitTestMutation.mutate();
   }, [submitTestMutation]);
+
+  // Screen lock detection (using Visibility API for web)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsAppInBackground(true);
+        setScreenLockViolation(true);
+        toast.error('Test paused: Tab hidden or screen lock detected. Your test will be auto-submitted.');
+        setTimeout(() => {
+          if (timerRef.current) clearInterval(timerRef.current);
+          submitTestMutation.mutate();
+        }, 2000);
+      } else {
+        setIsAppInBackground(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [submitTestMutation]);
+
+  // Save answer
+  const handleAnswerChange = (questionId: string, value: string | undefined) => {
+    const newAnswers = new Map(answers);
+    const currentQuestion = testData?.questions[currentQuestionIndex];
+
+    if (currentQuestion?.question_type === 'multiple_choice') {
+      newAnswers.set(questionId, { questionId, selectedOptionId: value });
+    } else if (currentQuestion?.question_type === 'short_answer') {
+      newAnswers.set(questionId, { questionId, shortAnswer: value });
+    }
+
+    setAnswers(newAnswers);
+  };
 
   const handleManualSubmit = () => {
     setShowExitDialog(false);

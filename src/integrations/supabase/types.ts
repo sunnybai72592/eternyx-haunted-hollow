@@ -102,7 +102,7 @@ export type Database = {
           created_at: string | null
           details: Json | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           resource_id: string | null
           resource_type: string | null
           user_agent: string | null
@@ -113,7 +113,7 @@ export type Database = {
           created_at?: string | null
           details?: Json | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           resource_id?: string | null
           resource_type?: string | null
           user_agent?: string | null
@@ -124,7 +124,7 @@ export type Database = {
           created_at?: string | null
           details?: Json | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           resource_id?: string | null
           resource_type?: string | null
           user_agent?: string | null
@@ -542,6 +542,38 @@ export type Database = {
         }
         Relationships: []
       }
+      options: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_correct: boolean | null
+          option_text: string
+          question_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_correct?: boolean | null
+          option_text: string
+          question_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_correct?: boolean | null
+          option_text?: string
+          question_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_plans: {
         Row: {
           created_at: string
@@ -769,6 +801,44 @@ export type Database = {
           },
         ]
       }
+      questions: {
+        Row: {
+          created_at: string | null
+          id: string
+          order_index: number
+          points: number | null
+          question_text: string
+          question_type: string
+          test_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          order_index: number
+          points?: number | null
+          question_text: string
+          question_type: string
+          test_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          order_index?: number
+          points?: number | null
+          question_text?: string
+          question_type?: string
+          test_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recent_activities: {
         Row: {
           description: string
@@ -815,7 +885,7 @@ export type Database = {
           resolution_notes: string | null
           resolved_at: string | null
           severity: string
-          source_ip: unknown | null
+          source_ip: unknown
           status: string | null
           target_system: string | null
         }
@@ -829,7 +899,7 @@ export type Database = {
           resolution_notes?: string | null
           resolved_at?: string | null
           severity: string
-          source_ip?: unknown | null
+          source_ip?: unknown
           status?: string | null
           target_system?: string | null
         }
@@ -843,7 +913,7 @@ export type Database = {
           resolution_notes?: string | null
           resolved_at?: string | null
           severity?: string
-          source_ip?: unknown | null
+          source_ip?: unknown
           status?: string | null
           target_system?: string | null
         }
@@ -1065,6 +1135,36 @@ export type Database = {
           },
         ]
       }
+      tests: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          duration_minutes: number
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          duration_minutes: number
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       thread_participants: {
         Row: {
           thread_id: string
@@ -1165,7 +1265,7 @@ export type Database = {
         Row: {
           analyst_notes: string | null
           created_at: string | null
-          destination_ip: unknown | null
+          destination_ip: unknown
           destination_port: number | null
           detected_at: string | null
           event_data: Json | null
@@ -1174,13 +1274,13 @@ export type Database = {
           is_false_positive: boolean | null
           protocol: string | null
           severity: string
-          source_ip: unknown | null
+          source_ip: unknown
           source_port: number | null
         }
         Insert: {
           analyst_notes?: string | null
           created_at?: string | null
-          destination_ip?: unknown | null
+          destination_ip?: unknown
           destination_port?: number | null
           detected_at?: string | null
           event_data?: Json | null
@@ -1189,13 +1289,13 @@ export type Database = {
           is_false_positive?: boolean | null
           protocol?: string | null
           severity: string
-          source_ip?: unknown | null
+          source_ip?: unknown
           source_port?: number | null
         }
         Update: {
           analyst_notes?: string | null
           created_at?: string | null
-          destination_ip?: unknown | null
+          destination_ip?: unknown
           destination_port?: number | null
           detected_at?: string | null
           event_data?: Json | null
@@ -1204,7 +1304,7 @@ export type Database = {
           is_false_positive?: boolean | null
           protocol?: string | null
           severity?: string
-          source_ip?: unknown | null
+          source_ip?: unknown
           source_port?: number | null
         }
         Relationships: []
@@ -1256,6 +1356,115 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      user_answers: {
+        Row: {
+          attempt_id: string | null
+          created_at: string | null
+          id: string
+          is_correct: boolean | null
+          points_awarded: number | null
+          question_id: string | null
+          selected_option_id: string | null
+          short_answer_text: string | null
+        }
+        Insert: {
+          attempt_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_correct?: boolean | null
+          points_awarded?: number | null
+          question_id?: string | null
+          selected_option_id?: string | null
+          short_answer_text?: string | null
+        }
+        Update: {
+          attempt_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_correct?: boolean | null
+          points_awarded?: number | null
+          question_id?: string | null
+          selected_option_id?: string | null
+          short_answer_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_answers_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "user_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_answers_selected_option_id_fkey"
+            columns: ["selected_option_id"]
+            isOneToOne: false
+            referencedRelation: "options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_attempts: {
+        Row: {
+          created_at: string | null
+          end_time: string | null
+          id: string
+          is_mobile_locked: boolean | null
+          max_score: number | null
+          score: number | null
+          start_time: string | null
+          status: string | null
+          test_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_time?: string | null
+          id?: string
+          is_mobile_locked?: boolean | null
+          max_score?: number | null
+          score?: number | null
+          start_time?: string | null
+          status?: string | null
+          test_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          end_time?: string | null
+          id?: string
+          is_mobile_locked?: boolean | null
+          max_score?: number | null
+          score?: number | null
+          start_time?: string | null
+          status?: string | null
+          test_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_attempts_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "tests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_attempts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_profiles: {
         Row: {
@@ -1431,14 +1640,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      calculate_risk_score: {
-        Args: { scan_id: string }
-        Returns: number
+      calculate_risk_score: { Args: { scan_id: string }; Returns: number }
+      check_and_auto_submit_test: {
+        Args: { p_attempt_id: string }
+        Returns: undefined
       }
-      get_current_user_role: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_current_user_role: { Args: never; Returns: string }
       get_threat_statistics: {
         Args: { days?: number }
         Returns: {
@@ -1449,10 +1656,7 @@ export type Database = {
           total_threats: number
         }[]
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       access_level: "basic" | "premium" | "elite"

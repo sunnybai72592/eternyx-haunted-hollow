@@ -24,43 +24,50 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch all in-progress attempts
+    // Fetch all in-progress attempts with test duration using separate queries
     const { data: attempts, error: fetchError } = await supabase
       .from("user_attempts")
-      .select("ua.id, ua.start_time, ua.test_id, t.duration_minutes")
-      .eq("status", "in_progress")
-      .join("tests as t", "ua.test_id", "t.id")
-      .alias("ua");
+      .select("id, start_time, test_id")
+      .eq("status", "in_progress");
 
     if (fetchError) {
-      throw new Error("Failed to fetch in-progress attempts");
+      throw new Error("Failed to fetch in-progress attempts: " + fetchError.message);
     }
 
     if (!attempts || attempts.length === 0) {
       return new Response(
         JSON.stringify({ message: "No in-progress attempts to process" }),
-        { status: 200, headers: corsHeaders }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const now = new Date().getTime();
-    const expiredAttempts = [];
+    const expiredAttempts: string[] = [];
 
     // Check which attempts have exceeded their time limit
     for (const attempt of attempts) {
-      const startTime = new Date(attempt.start_time).getTime();
-      const durationMs = (attempt.duration_minutes || 0) * 60 * 1000;
-      const endTime = startTime + durationMs;
+      // Fetch the test duration for each attempt
+      const { data: test } = await supabase
+        .from("tests")
+        .select("duration_minutes")
+        .eq("id", attempt.test_id)
+        .single();
 
-      if (now > endTime) {
-        expiredAttempts.push(attempt.id);
+      if (test) {
+        const startTime = new Date(attempt.start_time).getTime();
+        const durationMs = (test.duration_minutes || 0) * 60 * 1000;
+        const endTime = startTime + durationMs;
+
+        if (now > endTime) {
+          expiredAttempts.push(attempt.id);
+        }
       }
     }
 
     if (expiredAttempts.length === 0) {
       return new Response(
         JSON.stringify({ message: "No expired attempts" }),
-        { status: 200, headers: corsHeaders }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -74,7 +81,7 @@ serve(async (req) => {
       .in("id", expiredAttempts);
 
     if (updateError) {
-      throw new Error("Failed to auto-submit expired attempts");
+      throw new Error("Failed to auto-submit expired attempts: " + updateError.message);
     }
 
     // Grade each auto-submitted test
@@ -103,12 +110,12 @@ serve(async (req) => {
         autoSubmittedCount: expiredAttempts.length,
         attemptIds: expiredAttempts,
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     return new Response(
       JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
