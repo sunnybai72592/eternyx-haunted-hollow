@@ -23,7 +23,7 @@ const itemVariants = {
     y: 0,
     scale: 1,
     transition: {
-      type: 'spring',
+      type: "spring" as const,
       stiffness: 100,
       damping: 15,
     },
@@ -62,7 +62,7 @@ const ServiceCard: React.FC<{ service: Service }> = ({ service }) => {
   );
 };
 
-export const ServicesPage: React.FC = () => {
+const ServicesPage: React.FC = () => {
   return (
     <motion.div
       initial={{ opacity: 0, x: 100 }}
@@ -102,3 +102,5 @@ export const ServicesPage: React.FC = () => {
     </motion.div>
   );
 };
+
+export default ServicesPage;

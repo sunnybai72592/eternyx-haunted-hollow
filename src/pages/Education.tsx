@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { AlertCircle, Clock, BookOpen, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 

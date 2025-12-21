@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { AlertCircle, CheckCircle2, XCircle, ArrowRight, Download } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 

@@ -173,7 +173,6 @@ const Profile = () => {
   };
 
   const renderToolCard = (tool: Tool) => {
-    const Icon = tool.icon;
     const xpPercentage = (tool.xp / tool.maxXp) * 100;
     const glowColor = tool.glowColor || 'cyan';
 
@@ -187,7 +186,7 @@ const Profile = () => {
       >
         <div className="flex items-start justify-between mb-3">
           <div className={`p-2 rounded-lg bg-${glowColor}-500/10`}>
-            <Icon className={`h-6 w-6 text-${glowColor}-400`} />
+            {tool.icon || <Wrench className={`h-6 w-6 text-${glowColor}-400`} />}
           </div>
           {tool.isLocked && (
             <div className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded font-mono">
@@ -352,8 +351,8 @@ const Profile = () => {
                   </Label>
                   <Switch
                     id="public-profile"
-                    checked={local?.is_public || false}
-                    onCheckedChange={(checked) => handlePrivacyUpdate('is_public', checked)}
+                    checked={local?.is_profile_public || false}
+                    onCheckedChange={(checked) => handlePrivacyUpdate('is_profile_public', checked)}
                   />
                 </div>
                 {/* Add more privacy settings here based on your schema */}
