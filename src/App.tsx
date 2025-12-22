@@ -67,6 +67,9 @@ const Education = lazy(() => import("./pages/Education"));
 const TestInterface = lazy(() => import("./pages/TestInterface"));
 const TestResults = lazy(() => import("./pages/TestResults"));
 
+// Eternyx AI pages
+const EternixAI = lazy(() => import("./pages/Eternyx AI"));
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -174,6 +177,9 @@ const AppContent = () => {
                         <Route path="/education" element={<Education />} />
                         <Route path="/test/:testId" element={<TestInterface />} />
                         <Route path="/test-results/:attemptId" element={<TestResults />} />
+
+                        {/* Eternyx AI Routes */}
+                        <Route path="/eternyx-ai" element={<EternixAI />} />
 
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />
