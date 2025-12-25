@@ -16,7 +16,9 @@ import {
   Zap,
   Star,
   LogIn,
-  UserPlus
+  UserPlus,
+  Bot,
+  GraduationCap
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { AuthModal } from '@/components/AuthModal';
@@ -91,7 +93,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       level: 10,
       xp: 6000
     },
-
     {
       id: 'tools-hub',
       name: 'Tools Hub',
@@ -100,7 +101,24 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       color: 'from-cyan-400 to-teal-600',
       level: 18,
       xp: 14200,
-
+    },
+    {
+      id: 'eternyx-ai',
+      name: 'Eternyx AI',
+      path: '/eternyx-ai',
+      icon: Bot,
+      color: 'from-pink-400 to-rose-600',
+      level: 25,
+      xp: 25000
+    },
+    {
+      id: 'education',
+      name: 'Education',
+      path: '/education',
+      icon: GraduationCap,
+      color: 'from-amber-400 to-orange-600',
+      level: 15,
+      xp: 12000
     },
     {
       id: 'dashboard',
