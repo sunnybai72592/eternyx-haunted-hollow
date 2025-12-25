@@ -100,42 +100,41 @@ const AppContent = () => {
       {/* Main Application */}
       <div className={`relative z-10 transition-all duration-1000 opacity-100 translate-y-0`}>
         <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
-            <AccessibilityProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner 
-                  toastOptions={{
-                    style: {
-                      background: "rgba(0, 0, 0, 0.9)",
-                      border: "1px solid hsl(var(--cyber-cyan))",
-                      color: "hsl(var(--cyber-cyan))",
-                      fontFamily: "Fira Code, monospace",
-                      boxShadow: "0 0 20px hsl(var(--cyber-cyan) / 0.3)",
-                      backdropFilter: "blur(10px)"
-                    }
-                  }}
-                />
-                <NotificationSystem />
-                <PWAInstallPrompt />
-                
-                <MobileResponsiveNavigation />
-                
-                {/* Back Button Placement */}
-                {showBackButton && (
-                  <div className="fixed top-20 left-4 z-50">
-                    <BackButton />
-                  </div>
-                )}
+          <AccessibilityProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner 
+                toastOptions={{
+                  style: {
+                    background: "rgba(0, 0, 0, 0.9)",
+                    border: "1px solid hsl(var(--cyber-cyan))",
+                    color: "hsl(var(--cyber-cyan))",
+                    fontFamily: "Fira Code, monospace",
+                    boxShadow: "0 0 20px hsl(var(--cyber-cyan) / 0.3)",
+                    backdropFilter: "blur(10px)"
+                  }
+                }}
+              />
+              <NotificationSystem />
+              <PWAInstallPrompt />
+              
+              <MobileResponsiveNavigation />
+              
+              {/* Back Button Placement */}
+              {showBackButton && (
+                <div className="fixed top-20 left-4 z-50">
+                  <BackButton />
+                </div>
+              )}
 
-                <main className="flex-1 p-4 pt-32 transition-all duration-300">
-                  <Suspense fallback={
-                    <div className="min-h-screen bg-background flex items-center justify-center">
-                      <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
-                    </div>
-                  }>
-                      <PageTransitionWrapper>
-<Routes>
+              <main className="flex-1 p-4 pt-32 transition-all duration-300">
+                <Suspense fallback={
+                  <div className="min-h-screen bg-background flex items-center justify-center">
+                    <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
+                  </div>
+                }>
+                    <PageTransitionWrapper>
+                      <Routes>
                         <Route path="/" element={<Index />} />
                         <Route path="/dashboard" element={<UnifiedDashboard />} />
                         <Route path="/arsenal" element={<CyberArsenal />} />
@@ -165,7 +164,6 @@ const AppContent = () => {
                         <Route path="/tools" element={<Tools />} />
                         <Route path="/tools/category/:categoryId" element={<ToolCategoryPage />} />
 
-
                         <Route path="/killer-edge" element={<KillerEdge />} />
                         <Route path="/premium" element={<Premium />} />
                         <Route path="/bug-report" element={<BugReport />} />
@@ -184,13 +182,12 @@ const AppContent = () => {
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />
                       </Routes>
-</PageTransitionWrapper>
-                    </Suspense>
-                  </main>
-                <Footer />
-              </TooltipProvider>
-            </AccessibilityProvider>
-          </QueryClientProvider>
+                    </PageTransitionWrapper>
+                  </Suspense>
+                </main>
+              <Footer />
+            </TooltipProvider>
+          </AccessibilityProvider>
         </ErrorBoundary>
       </div>
 
@@ -203,9 +200,11 @@ const AppContent = () => {
 };
 
 const App = () => (
-  <BrowserRouter>
-    <AppContent />
-  </BrowserRouter>
+  <QueryClientProvider client={queryClient}>
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  </QueryClientProvider>
 );
 
 export default App;
