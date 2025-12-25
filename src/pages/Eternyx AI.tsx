@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { AlertCircle, Send, Upload, Trash2, FileText, Plus, MessageCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
@@ -177,7 +177,7 @@ const EternixAI: React.FC = () => {
 
       // Trigger processing
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/process-document`,
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://wcncuarekaofmfurbtbh.supabase.co'}/functions/v1/process-document`,
         {
           method: 'POST',
           headers: {
@@ -223,7 +223,7 @@ const EternixAI: React.FC = () => {
 
       // Call the Eternyx AI chat function
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/eternyx-ai-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://wcncuarekaofmfurbtbh.supabase.co'}/functions/v1/eternyx-ai-chat`,
         {
           method: 'POST',
           headers: {
