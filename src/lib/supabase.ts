@@ -168,22 +168,20 @@ export class SupabaseAPI {
     timeline?: string;
   }) {
     try {
-      const submission: Partial<ContactSubmission> = {
-        ...formData,
-        status: 'new',
-        // Remove user_agent as it's not in the table schema
-        // user_agent: navigator.userAgent,
-        // ip_address: await this.getClientIP(),
-        // metadata: {
-        //   timestamp: Date.now(),
-        //   page_url: window.location.href,
-        //   referrer: document.referrer
-        // }
-      };
-
       const { data, error } = await supabase
         .from('contact_submissions')
-        .insert([submission])
+        .insert([{
+          name: formData.name,
+          email: formData.email,
+          message: formData.message,
+          subject: formData.subject || 'General Inquiry',
+          company: formData.company,
+          phone: formData.phone,
+          service_interested: formData.service_interested,
+          budget_range: formData.budget_range,
+          timeline: formData.timeline,
+          status: 'new',
+        }])
         .select()
         .single();
 
@@ -198,51 +196,47 @@ export class SupabaseAPI {
 
   // Security logging
   async logSecurityEvent(
-    eventType: SecurityLog['event_type'],
+    eventType: string,
     userId?: string,
     details: Record<string, any> = {},
-    severity: SecurityLog['severity'] = 'low'
+    severity: 'low' | 'medium' | 'high' | 'critical' = 'low'
   ) {
     try {
-      const logEntry: Partial<SecurityLog> = {
-        event_type: eventType,
-        user_id: userId,
-        ip_address: await this.getClientIP(),
-        user_agent: navigator.userAgent,
-        details,
-        severity
+      const severityMap: Record<string, 'info' | 'warning' | 'critical'> = {
+        'low': 'info',
+        'medium': 'warning',
+        'high': 'critical',
+        'critical': 'critical'
       };
 
       await supabase
         .from('security_logs')
-        .insert([logEntry]);
+        .insert([{
+          event_type: eventType,
+          user_id: userId || '',
+          message: JSON.stringify(details),
+          severity: severityMap[severity] || 'info',
+          source_ip: await this.getClientIP()
+        }]);
 
       // Alert on high severity events
       if (severity === 'high' || severity === 'critical') {
-        await this.sendSecurityAlert(logEntry);
+        await this.sendSecurityAlert({ eventType, userId, details, severity });
       }
     } catch (error) {
       console.error('Security logging error:', error);
     }
   }
 
-  // Performance metrics
+  // Performance metrics (logged to console as no table exists)
   async recordPerformanceMetric(
-    metricType: PerformanceMetric['metric_type'],
+    metricType: string,
     value: number,
     metadata: Record<string, any> = {}
   ) {
     try {
-      const metric: Partial<PerformanceMetric> = {
-        metric_type: metricType,
-        value,
-        metadata,
-        session_id: this.getSessionId()
-      };
-
-      await supabase
-        .from('performance_metrics')
-        .insert([metric]);
+      // Log to console as there's no performance_metrics table
+      console.log('Performance metric:', { metricType, value, metadata, sessionId: this.getSessionId() });
     } catch (error) {
       console.error('Performance metric recording error:', error);
     }
@@ -273,23 +267,24 @@ export class SupabaseAPI {
       .subscribe();
   }
 
-  // Analytics and insights
+  // Analytics and insights (simplified - no RPC function)
   async getUserAnalytics(userId: string, timeRange: string = '7d') {
     const cacheKey = `analytics-${userId}-${timeRange}`;
     const cached = this.getCached(cacheKey);
     if (cached) return cached;
 
     try {
-      const { data, error } = await supabase
-        .rpc('get_user_analytics', {
-          user_id: userId,
-          time_range: timeRange
-        });
+      // Return simulated analytics as there's no get_user_analytics RPC
+      const analytics = {
+        userId,
+        timeRange,
+        loginCount: 0,
+        projectsCreated: 0,
+        lastActivity: new Date().toISOString()
+      };
 
-      if (error) throw error;
-
-      this.setCache(cacheKey, data, 10 * 60 * 1000); // Cache for 10 minutes
-      return data;
+      this.setCache(cacheKey, analytics, 10 * 60 * 1000);
+      return analytics;
     } catch (error) {
       console.error('Analytics error:', error);
       return null;
@@ -327,7 +322,7 @@ export class SupabaseAPI {
     }, 5000);
   }
 
-  private async sendSecurityAlert(logEntry: Partial<SecurityLog>) {
+  private async sendSecurityAlert(logEntry: Record<string, any>) {
     // This would integrate with alerting systems
     console.warn('Security Alert:', logEntry);
     

@@ -1,0 +1,395 @@
+/* ============================================
+   SECTION-SPECIFIC THEME SYSTEM
+   Each section has its own visual identity
+   ============================================ */
+
+/* ============================================
+   🔐 CYBER SECURITY THEME
+   Dark cyber-punk with neon accents
+   ============================================ */
+[data-theme="cybersecurity"] {
+  --section-primary: 0 100% 50%;
+  --section-secondary: 330 80% 60%;
+  --section-accent: 180 80% 50%;
+  --section-bg: 0 0% 5%;
+  --section-bg-secondary: 0 0% 8%;
+  --section-glow: 0 100% 50%;
+  --section-text: 0 0% 95%;
+  --section-muted: 0 0% 60%;
+  
+  /* Custom gradients */
+  --section-gradient: linear-gradient(135deg, hsl(0 100% 20%) 0%, hsl(330 60% 15%) 50%, hsl(0 0% 5%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(0 0% 10%) 0%, hsl(0 0% 5%) 100%);
+  --section-glow-color: hsla(0, 100%, 50%, 0.5);
+  --section-scanline-opacity: 0.05;
+}
+
+[data-theme="cybersecurity"] .section-bg {
+  background: var(--section-gradient);
+}
+
+[data-theme="cybersecurity"] .glitch-effect::before,
+[data-theme="cybersecurity"] .glitch-effect::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+[data-theme="cybersecurity"] .glitch-effect::before {
+  animation: glitch-1 2s infinite;
+  color: hsl(0 100% 50%);
+  z-index: -1;
+}
+
+[data-theme="cybersecurity"] .glitch-effect::after {
+  animation: glitch-2 2s infinite;
+  color: hsl(180 80% 50%);
+  z-index: -2;
+}
+
+/* ============================================
+   🌐 WEB DEVELOPMENT THEME
+   Clean, modern, grid-based
+   ============================================ */
+[data-theme="web-development"] {
+  --section-primary: 210 100% 55%;
+  --section-secondary: 190 80% 50%;
+  --section-accent: 45 100% 60%;
+  --section-bg: 210 20% 98%;
+  --section-bg-secondary: 210 15% 95%;
+  --section-glow: 210 100% 55%;
+  --section-text: 210 30% 15%;
+  --section-muted: 210 15% 50%;
+  
+  --section-gradient: linear-gradient(180deg, hsl(210 20% 98%) 0%, hsl(210 15% 92%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
+  --section-glow-color: hsla(210, 100%, 55%, 0.3);
+  --section-grid-color: hsla(210, 30%, 80%, 0.5);
+}
+
+/* Dark mode override for web dev */
+.dark [data-theme="web-development"] {
+  --section-bg: 210 30% 10%;
+  --section-bg-secondary: 210 25% 15%;
+  --section-text: 210 20% 95%;
+  --section-muted: 210 15% 60%;
+  --section-gradient: linear-gradient(180deg, hsl(210 30% 10%) 0%, hsl(210 25% 8%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(210 25% 15%) 0%, hsl(210 30% 10%) 100%);
+  --section-grid-color: hsla(210, 50%, 30%, 0.3);
+}
+
+[data-theme="web-development"] .section-bg {
+  background: var(--section-gradient);
+  background-size: 50px 50px;
+  background-image: 
+    linear-gradient(var(--section-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--section-grid-color) 1px, transparent 1px);
+}
+
+/* ============================================
+   🤖 AI AUTOMATION THEME
+   Futuristic gradients, neural flow
+   ============================================ */
+[data-theme="ai-automation"] {
+  --section-primary: 270 80% 60%;
+  --section-secondary: 200 90% 50%;
+  --section-accent: 320 80% 65%;
+  --section-bg: 260 40% 8%;
+  --section-bg-secondary: 260 35% 12%;
+  --section-glow: 270 80% 60%;
+  --section-text: 0 0% 95%;
+  --section-muted: 260 20% 60%;
+  
+  --section-gradient: linear-gradient(135deg, hsl(260 40% 8%) 0%, hsl(280 50% 15%) 50%, hsl(200 40% 10%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsla(270, 50%, 20%, 0.6) 0%, hsla(260, 40%, 8%, 0.8) 100%);
+  --section-glow-color: hsla(270, 80%, 60%, 0.4);
+  --section-particle-color: hsla(270, 80%, 70%, 0.6);
+}
+
+[data-theme="ai-automation"] .section-bg {
+  background: var(--section-gradient);
+  position: relative;
+}
+
+[data-theme="ai-automation"] .neural-flow {
+  background: 
+    radial-gradient(circle at 20% 30%, hsla(270, 80%, 60%, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, hsla(200, 90%, 50%, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, hsla(320, 80%, 65%, 0.1) 0%, transparent 50%);
+}
+
+/* ============================================
+   🎓 EDUCATION THEME
+   Warm, readable, academic
+   ============================================ */
+[data-theme="education"] {
+  --section-primary: 35 80% 55%;
+  --section-secondary: 25 70% 50%;
+  --section-accent: 200 70% 50%;
+  --section-bg: 40 30% 97%;
+  --section-bg-secondary: 40 25% 93%;
+  --section-glow: 35 80% 55%;
+  --section-text: 30 40% 15%;
+  --section-muted: 30 20% 45%;
+  
+  --section-gradient: linear-gradient(180deg, hsl(40 30% 97%) 0%, hsl(35 25% 92%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(40 30% 97%) 100%);
+  --section-glow-color: hsla(35, 80%, 55%, 0.3);
+}
+
+.dark [data-theme="education"] {
+  --section-bg: 30 20% 10%;
+  --section-bg-secondary: 30 18% 15%;
+  --section-text: 35 15% 90%;
+  --section-muted: 30 15% 55%;
+  --section-gradient: linear-gradient(180deg, hsl(30 20% 10%) 0%, hsl(30 18% 8%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(30 18% 15%) 0%, hsl(30 20% 10%) 100%);
+}
+
+[data-theme="education"] .section-bg {
+  background: var(--section-gradient);
+}
+
+/* ============================================
+   🧬 ETERNYX AI (FLAGSHIP) THEME
+   Dark, cinematic, premium
+   ============================================ */
+[data-theme="eternyx-ai"] {
+  --section-primary: 180 80% 50%;
+  --section-secondary: 280 70% 55%;
+  --section-accent: 320 80% 60%;
+  --section-bg: 220 40% 5%;
+  --section-bg-secondary: 220 35% 8%;
+  --section-glow: 180 80% 50%;
+  --section-text: 0 0% 98%;
+  --section-muted: 220 15% 55%;
+  
+  --section-gradient: radial-gradient(ellipse at center, hsl(220 50% 12%) 0%, hsl(220 40% 5%) 70%);
+  --section-card-gradient: linear-gradient(180deg, hsla(180, 50%, 15%, 0.4) 0%, hsla(220, 40%, 5%, 0.8) 100%);
+  --section-glow-color: hsla(180, 80%, 50%, 0.5);
+  --section-aurora-1: hsla(180, 80%, 50%, 0.15);
+  --section-aurora-2: hsla(280, 70%, 55%, 0.1);
+  --section-aurora-3: hsla(320, 80%, 60%, 0.08);
+}
+
+[data-theme="eternyx-ai"] .section-bg {
+  background: var(--section-gradient);
+}
+
+[data-theme="eternyx-ai"] .aurora-bg {
+  background: 
+    radial-gradient(ellipse 80% 50% at 20% 20%, var(--section-aurora-1), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 80%, var(--section-aurora-2), transparent),
+    radial-gradient(ellipse 50% 30% at 50% 50%, var(--section-aurora-3), transparent);
+  animation: aurora-shift 20s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-shift {
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    background-position: 100% 50%;
+    opacity: 0.8;
+  }
+}
+
+/* ============================================
+   💼 PLANS/PRICING THEME
+   Conversion-focused, clear hierarchy
+   ============================================ */
+[data-theme="plans"] {
+  --section-primary: 145 80% 45%;
+  --section-secondary: 160 70% 50%;
+  --section-accent: 45 90% 55%;
+  --section-bg: 150 10% 98%;
+  --section-bg-secondary: 150 8% 95%;
+  --section-glow: 145 80% 45%;
+  --section-text: 150 30% 15%;
+  --section-muted: 150 15% 50%;
+  
+  --section-gradient: linear-gradient(180deg, hsl(150 10% 98%) 0%, hsl(145 8% 94%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(150 10% 98%) 100%);
+  --section-glow-color: hsla(145, 80%, 45%, 0.3);
+}
+
+.dark [data-theme="plans"] {
+  --section-bg: 150 20% 8%;
+  --section-bg-secondary: 150 18% 12%;
+  --section-text: 145 15% 92%;
+  --section-muted: 150 12% 55%;
+  --section-gradient: linear-gradient(180deg, hsl(150 20% 8%) 0%, hsl(150 18% 6%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(150 18% 12%) 0%, hsl(150 20% 8%) 100%);
+}
+
+/* ============================================
+   📞 CONTACT THEME
+   Minimal, elegant, human
+   ============================================ */
+[data-theme="contact"] {
+  --section-primary: 210 70% 50%;
+  --section-secondary: 190 60% 45%;
+  --section-accent: 30 80% 55%;
+  --section-bg: 0 0% 99%;
+  --section-bg-secondary: 0 0% 96%;
+  --section-glow: 210 70% 50%;
+  --section-text: 0 0% 15%;
+  --section-muted: 0 0% 45%;
+  
+  --section-gradient: linear-gradient(180deg, hsl(0 0% 99%) 0%, hsl(210 10% 96%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(0 0% 99%) 100%);
+  --section-glow-color: hsla(210, 70%, 50%, 0.25);
+}
+
+.dark [data-theme="contact"] {
+  --section-bg: 0 0% 8%;
+  --section-bg-secondary: 0 0% 12%;
+  --section-text: 0 0% 92%;
+  --section-muted: 0 0% 55%;
+  --section-gradient: linear-gradient(180deg, hsl(0 0% 8%) 0%, hsl(0 0% 5%) 100%);
+  --section-card-gradient: linear-gradient(180deg, hsl(0 0% 12%) 0%, hsl(0 0% 8%) 100%);
+}
+
+/* ============================================
+   SHARED SECTION UTILITIES
+   ============================================ */
+.section-wrapper {
+  min-height: 100vh;
+  background: var(--section-gradient);
+  color: hsl(var(--section-text));
+  transition: background 0.5s ease, color 0.3s ease;
+}
+
+.section-card {
+  background: var(--section-card-gradient);
+  border: 1px solid hsla(var(--section-primary), 0.2);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px hsla(var(--section-glow), 0.1);
+  transition: all 0.3s ease;
+}
+
+.section-card:hover {
+  border-color: hsla(var(--section-primary), 0.4);
+  box-shadow: 0 8px 40px var(--section-glow-color);
+  transform: translateY(-4px);
+}
+
+.section-glow {
+  box-shadow: 0 0 20px var(--section-glow-color), 0 0 40px var(--section-glow-color);
+}
+
+.section-text-primary {
+  color: hsl(var(--section-primary));
+}
+
+.section-text-secondary {
+  color: hsl(var(--section-secondary));
+}
+
+.section-text-accent {
+  color: hsl(var(--section-accent));
+}
+
+.section-bg-primary {
+  background-color: hsl(var(--section-primary));
+}
+
+.section-border-primary {
+  border-color: hsl(var(--section-primary));
+}
+
+/* ============================================
+   SECTION TRANSITION ANIMATIONS
+   ============================================ */
+.section-enter {
+  animation: sectionEnter 0.6s ease-out forwards;
+}
+
+@keyframes sectionEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.section-exit {
+  animation: sectionExit 0.4s ease-in forwards;
+}
+
+@keyframes sectionExit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+/* ============================================
+   SCANLINE EFFECT (for cybersecurity)
+   ============================================ */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    hsla(0, 0%, 0%, var(--section-scanline-opacity, 0)) 2px,
+    hsla(0, 0%, 0%, var(--section-scanline-opacity, 0)) 4px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ============================================
+   PARTICLE FIELD (for AI automation)
+   ============================================ */
+.particle-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--section-particle-color, hsla(270, 80%, 70%, 0.6));
+  border-radius: 50%;
+  animation: particle-float 8s ease-in-out infinite;
+}
+
+@keyframes particle-float {
+  0%, 100% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0.6;
+  }
+  25% {
+    transform: translateY(-30px) translateX(10px) scale(1.2);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-50px) translateX(-5px) scale(0.8);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translateY(-20px) translateX(15px) scale(1.1);
+    opacity: 0.8;
+  }
+}
