@@ -14,7 +14,6 @@ import {
   ChevronDown,
   Wrench,
   Zap,
-  Star,
   LogIn,
   UserPlus,
   Bot,
@@ -33,8 +32,6 @@ interface NavCategory {
   path: string;
   icon: React.ComponentType<any>;
   color: string;
-  level?: number;
-  xp?: number;
   children?: {
     name: string;
     path: string;
@@ -53,7 +50,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   
   const { user, isAuthenticated, signOut } = useAuthStore();
 
-  // Detect mobile screen size
   useEffect(() => {
     const checkScreenSize = () => {
       const mobile = window.innerWidth < 768;
@@ -68,7 +64,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  // Close mobile menu when route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
     setActiveDropdown(null);
@@ -81,8 +76,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/',
       icon: Home,
       color: 'from-green-400 to-emerald-600',
-      level: 1,
-      xp: 100
     },
     {
       id: 'services-hub',
@@ -90,8 +83,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/services-hub',
       icon: Zap,
       color: 'from-purple-400 to-indigo-600',
-      level: 10,
-      xp: 6000
     },
     {
       id: 'tools-hub',
@@ -99,8 +90,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/tools',
       icon: Wrench,
       color: 'from-cyan-400 to-teal-600',
-      level: 18,
-      xp: 14200,
     },
     {
       id: 'eternyx-ai',
@@ -108,8 +97,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/eternyx-ai',
       icon: Bot,
       color: 'from-pink-400 to-rose-600',
-      level: 25,
-      xp: 25000
     },
     {
       id: 'education',
@@ -117,8 +104,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/education',
       icon: GraduationCap,
       color: 'from-amber-400 to-orange-600',
-      level: 15,
-      xp: 12000
     },
     {
       id: 'dashboard',
@@ -126,8 +111,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/dashboard',
       icon: LayoutDashboard,
       color: 'from-indigo-400 to-purple-600',
-      level: 5,
-      xp: 2500
     },
     {
       id: 'contact',
@@ -135,13 +118,10 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/contact',
       icon: User,
       color: 'from-gray-400 to-slate-600',
-      level: 1,
-      xp: 50
     }
   ];
 
   const handleNavigation = (path: string, categoryName?: string) => {
-    console.log(`Navigating to: ${path} (${categoryName || 'Direct'})`);
     navigate(path);
     setActiveDropdown(null);
     setIsMobileMenuOpen(false);
@@ -185,47 +165,46 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-b border-cyan-500/20 ${className}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-b border-white/10 ${className}`}>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <button
               onClick={() => handleNavigation('/', 'Logo')}
-              className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent hover:from-cyan-300 hover:to-blue-400 transition-all duration-300 flex items-center gap-2 hover:scale-105"
+              className="text-xl sm:text-2xl font-bold text-white hover:text-white/80 transition-all duration-300 flex items-center gap-2"
             >
-              <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 animate-pulse" />
+              <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
               ETERNYX
             </button>
           </div>
 
-          {/* Desktop Navigation - Hidden on mobile */}
+          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">
-            {/* Auth Buttons or User Menu */}
             {!isAuthenticated ? (
-              <div className="flex items-center gap-2 mr-2">
+              <div className="flex items-center gap-2 mr-4">
                 <Button
                   onClick={handleSignIn}
                   variant="ghost"
-                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 border border-cyan-500/30 rounded-lg hover:scale-105 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-500/25"
+                  className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                 >
                   <LogIn className="w-4 h-4 mr-2" />
                   Sign In
                 </Button>
                 <Button
                   onClick={handleSignUp}
-                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg hover:scale-105 hover:from-cyan-400 hover:to-blue-500 shadow-lg shadow-cyan-500/25"
+                  className="px-4 py-2 text-sm font-medium bg-white text-black hover:bg-white/90 rounded-lg transition-all"
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
                   Sign Up
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 mr-2">
+              <div className="flex items-center gap-2 mr-4">
                 <Button
                   onClick={handleProfileClick}
                   variant="ghost"
-                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 border border-purple-500/30 rounded-lg hover:scale-105 text-purple-400 hover:bg-purple-500/10 hover:border-purple-400"
+                  className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                 >
                   <User className="w-4 h-4 mr-2" />
                   Profile
@@ -233,9 +212,8 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                 <Button
                   onClick={handleSignOut}
                   variant="ghost"
-                  className="relative px-4 py-2 text-sm font-medium transition-all duration-300 border border-red-500/30 rounded-lg hover:scale-105 text-red-400 hover:bg-red-500/10 hover:border-red-400"
+                  className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                 >
-                  <X className="w-4 h-4 mr-2" />
                   Sign Out
                 </Button>
               </div>
@@ -247,11 +225,10 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                   variant="ghost"
                   onClick={() => category.children ? toggleDropdown(category.id) : handleNavigation(category.path, category.name)}
                   className={`
-                    relative px-3 py-2 text-sm font-medium transition-all duration-300 
-                    border border-transparent rounded-lg hover:scale-105
+                    px-3 py-2 text-sm font-medium transition-all duration-300 rounded-lg
                     ${isActivePath(category.path) 
-                      ? 'bg-gradient-to-r ' + category.color + ' text-white shadow-lg shadow-cyan-500/25 scale-105' 
-                      : 'text-gray-300 hover:text-white hover:bg-gray-800/50 hover:border-cyan-500/30'
+                      ? 'bg-white/10 text-white' 
+                      : 'text-white/60 hover:text-white hover:bg-white/5'
                     }
                     ${category.children ? 'pr-8' : ''}
                   `}
@@ -260,15 +237,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                 >
                   <category.icon className="w-4 h-4 mr-2" />
                   <span className="hidden lg:inline">{category.name}</span>
-                  
-                  {/* Level and XP Display */}
-                  {category.level && (
-                    <div className="ml-2 flex items-center gap-1">
-                      <Star className="w-3 h-3 text-yellow-400" />
-                      <span className="text-xs text-yellow-400">{category.level}</span>
-                      <span className="text-xs text-cyan-400">{category.xp}</span>
-                    </div>
-                  )}
                   
                   {category.children && (
                     <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-200 ${
@@ -280,13 +248,13 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                 {/* Desktop Dropdown */}
                 {category.children && activeDropdown === category.id && (
                   <div 
-                    className="absolute top-full left-0 mt-2 w-80 bg-black/95 backdrop-blur-md border border-cyan-500/20 rounded-lg shadow-xl shadow-cyan-500/10 z-50 animate-in slide-in-from-top-2 duration-200"
+                    className="absolute top-full left-0 mt-2 w-80 bg-black/95 backdrop-blur-md border border-white/10 rounded-lg shadow-xl z-50"
                     onMouseEnter={() => setActiveDropdown(category.id)}
                     onMouseLeave={() => setTimeout(() => setActiveDropdown(null), 300)}
                   >
                     <div className="p-4">
                       <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                        <category.icon className="w-5 h-5 text-cyan-400" />
+                        <category.icon className="w-5 h-5 text-white/60" />
                         {category.name}
                       </h3>
                       <div className="grid gap-2">
@@ -294,12 +262,12 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                           <button
                             key={child.path}
                             onClick={() => handleNavigation(child.path, child.name)}
-                            className="text-left p-3 rounded-lg hover:bg-gray-800/50 transition-all duration-200 group hover:scale-105"
+                            className="text-left p-3 rounded-lg hover:bg-white/5 transition-all duration-200"
                           >
-                            <div className="text-white font-medium group-hover:text-cyan-400 transition-colors">
+                            <div className="text-white font-medium">
                               {child.name}
                             </div>
-                            <div className="text-gray-400 text-sm mt-1">
+                            <div className="text-white/40 text-sm mt-1">
                               {child.description}
                             </div>
                           </button>
@@ -315,7 +283,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
           {/* Mobile Menu Button */}
           <button
             onClick={toggleMobileMenu}
-            className="md:hidden p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all duration-200 hover:scale-110 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="md:hidden p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Toggle mobile menu"
           >
             {isMobileMenuOpen ? (
@@ -328,33 +296,32 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-md border-b border-cyan-500/20 shadow-xl animate-in slide-in-from-top-2 duration-300 max-h-[calc(100vh-4rem)] overflow-y-auto">
+          <div className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-md border-b border-white/10 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
             <div className="px-4 py-6 space-y-3">
-              {/* Mobile Auth Buttons */}
               {!isAuthenticated ? (
-                <div className="space-y-2 pb-3 border-b border-cyan-500/20">
+                <div className="space-y-2 pb-3 border-b border-white/10">
                   <Button
                     onClick={handleSignIn}
                     variant="ghost"
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400 min-h-[56px]"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]"
                   >
                     <LogIn className="w-5 h-5" />
                     <span className="font-medium text-base">Sign In</span>
                   </Button>
                   <Button
                     onClick={handleSignUp}
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg min-h-[56px]"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg bg-white text-black hover:bg-white/90 min-h-[56px]"
                   >
                     <UserPlus className="w-5 h-5" />
                     <span className="font-medium text-base">Sign Up</span>
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-2 pb-3 border-b border-cyan-500/20">
+                <div className="space-y-2 pb-3 border-b border-white/10">
                   <Button
                     onClick={handleProfileClick}
                     variant="ghost"
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-400 min-h-[56px]"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]"
                   >
                     <User className="w-5 h-5" />
                     <span className="font-medium text-base">Profile</span>
@@ -362,7 +329,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                   <Button
                     onClick={handleSignOut}
                     variant="ghost"
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-300 border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-400 min-h-[56px]"
+                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]"
                   >
                     <X className="w-5 h-5" />
                     <span className="font-medium text-base">Sign Out</span>
@@ -380,25 +347,14 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                     className={`
                       w-full flex items-center justify-between p-4 rounded-lg transition-all duration-300 min-h-[56px]
                       ${isActivePath(category.path)
-                        ? 'bg-gradient-to-r ' + category.color + ' text-white shadow-lg'
-                        : 'text-gray-300 hover:text-white hover:bg-gray-800/50 border border-gray-700 hover:border-cyan-500/30'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/60 hover:text-white hover:bg-white/5 border border-white/5'
                       }
                     `}
                   >
                     <div className="flex items-center gap-3">
                       <category.icon className="w-5 h-5 flex-shrink-0" />
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium text-base">{category.name}</span>
-                        {category.level && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex items-center gap-1">
-                              <Star className="w-3 h-3 text-yellow-400" />
-                              <span className="text-xs text-yellow-400">Level {category.level}</span>
-                            </div>
-                            <span className="text-xs text-cyan-400">{category.xp} XP</span>
-                          </div>
-                        )}
-                      </div>
+                      <span className="font-medium text-base">{category.name}</span>
                     </div>
                     
                     {category.children && (
@@ -410,17 +366,17 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
                   {/* Mobile Dropdown */}
                   {category.children && activeDropdown === category.id && (
-                    <div className="ml-4 space-y-2 animate-in slide-in-from-top-1 duration-200">
+                    <div className="ml-4 space-y-2">
                       {category.children.map((child) => (
                         <button
                           key={child.path}
                           onClick={() => handleNavigation(child.path, child.name)}
-                          className="w-full text-left p-3 rounded-lg hover:bg-gray-800/50 transition-all duration-200 border border-gray-700/50 hover:border-cyan-500/30 min-h-[48px]"
+                          className="w-full text-left p-3 rounded-lg hover:bg-white/5 transition-all duration-200 border border-white/5 min-h-[48px]"
                         >
                           <div className="text-white font-medium text-sm">
                             {child.name}
                           </div>
-                          <div className="text-gray-400 text-xs mt-1">
+                          <div className="text-white/40 text-xs mt-1">
                             {child.description}
                           </div>
                         </button>
@@ -434,7 +390,6 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
         )}
       </div>
       
-      {/* Auth Modal */}
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)}
@@ -444,4 +399,3 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 };
 
 export default MobileResponsiveNavigation;
-

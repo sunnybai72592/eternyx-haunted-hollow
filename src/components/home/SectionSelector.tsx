@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -24,23 +24,23 @@ const sections: SectionCardData[] = [
     id: 'cybersecurity',
     title: 'Cyber Security',
     subtitle: 'Advanced Threat Defense',
-    description: 'Dark cyber-punk arsenal for threat detection, penetration testing, and vulnerability assessment.',
+    description: 'Elite penetration testing, threat intelligence, and vulnerability assessment with military-grade precision.',
     icon: Shield,
     route: '/tools/category/cybersecurity',
     theme: 'cybersecurity',
-    gradient: 'linear-gradient(135deg, hsl(350 80% 15%) 0%, hsl(0 70% 10%) 50%, hsl(330 60% 8%) 100%)',
-    accentColor: '#ff3355',
+    gradient: 'linear-gradient(145deg, #0a0a0a 0%, #1a0505 40%, #2d0a0a 70%, #0f0505 100%)',
+    accentColor: '#dc2626',
     bgPattern: 'circuit',
   },
   {
     id: 'web-development',
     title: 'Web Development',
     subtitle: 'Modern Code Factory',
-    description: 'Clean, efficient tools for frontend, backend, and full-stack development with best practices.',
+    description: 'Cutting-edge frontend, backend, and full-stack solutions built with precision engineering.',
     icon: Code,
     route: '/tools/category/web-development',
     theme: 'web-development',
-    gradient: 'linear-gradient(135deg, hsl(210 40% 15%) 0%, hsl(200 50% 12%) 50%, hsl(220 45% 8%) 100%)',
+    gradient: 'linear-gradient(145deg, #0a0f1a 0%, #0c1829 40%, #0f2140 70%, #081020 100%)',
     accentColor: '#3b82f6',
     bgPattern: 'grid',
   },
@@ -48,35 +48,35 @@ const sections: SectionCardData[] = [
     id: 'ai-automation',
     title: 'AI & Automation',
     subtitle: 'Intelligent Systems',
-    description: 'Futuristic AI integration, machine learning tools, and intelligent automation solutions.',
+    description: 'Next-generation machine learning, neural networks, and intelligent automation pipelines.',
     icon: Brain,
     route: '/tools/category/digital-innovation',
     theme: 'ai-automation',
-    gradient: 'linear-gradient(135deg, hsl(280 50% 12%) 0%, hsl(260 40% 10%) 50%, hsl(300 45% 8%) 100%)',
+    gradient: 'linear-gradient(145deg, #0f0a1a 0%, #1a0f2e 40%, #2a1545 70%, #120a20 100%)',
     accentColor: '#a855f7',
     bgPattern: 'neural',
   },
   {
     id: 'education',
-    title: 'Education',
+    title: 'Education Hub',
     subtitle: 'Knowledge Academy',
-    description: 'Comprehensive learning resources, tutorials, and certification programs for tech professionals.',
+    description: 'Comprehensive certification programs, tutorials, and professional development pathways.',
     icon: GraduationCap,
     route: '/education',
     theme: 'education',
-    gradient: 'linear-gradient(135deg, hsl(35 40% 15%) 0%, hsl(30 35% 12%) 50%, hsl(25 30% 8%) 100%)',
-    accentColor: '#f59e0b',
+    gradient: 'linear-gradient(145deg, #0f0f05 0%, #1a1808 40%, #252010 70%, #100f05 100%)',
+    accentColor: '#eab308',
     bgPattern: 'dots',
   },
   {
     id: 'eternyx-ai',
     title: 'Eternyx AI',
     subtitle: 'Flagship Intelligence',
-    description: 'Our premium AI assistant with advanced document analysis, conversation memory, and deep insights.',
+    description: 'Premium AI assistant with advanced document analysis, deep reasoning, and enterprise capabilities.',
     icon: Sparkles,
     route: '/eternyx-ai',
     theme: 'eternyx-ai',
-    gradient: 'linear-gradient(135deg, hsl(185 60% 12%) 0%, hsl(220 50% 8%) 50%, hsl(280 40% 10%) 100%)',
+    gradient: 'linear-gradient(145deg, #030a10 0%, #051520 40%, #082030 70%, #020810 100%)',
     accentColor: '#06b6d4',
     bgPattern: 'neural',
   },
@@ -84,11 +84,11 @@ const sections: SectionCardData[] = [
     id: 'plans',
     title: 'Plans & Pricing',
     subtitle: 'Choose Your Tier',
-    description: 'Flexible subscription options from free tier to enterprise, with transparent pricing.',
+    description: 'Flexible enterprise solutions from starter to unlimited, with transparent value-based pricing.',
     icon: CreditCard,
     route: '/premium',
     theme: 'plans',
-    gradient: 'linear-gradient(135deg, hsl(145 40% 12%) 0%, hsl(160 35% 10%) 50%, hsl(140 30% 8%) 100%)',
+    gradient: 'linear-gradient(145deg, #050f0a 0%, #0a1a10 40%, #0f2518 70%, #05100a 100%)',
     accentColor: '#22c55e',
     bgPattern: 'none',
   },
@@ -96,12 +96,12 @@ const sections: SectionCardData[] = [
     id: 'contact',
     title: 'Contact Us',
     subtitle: 'Get In Touch',
-    description: 'Reach out for custom solutions, enterprise partnerships, or technical support.',
+    description: 'Enterprise partnerships, custom solutions, and dedicated technical support channels.',
     icon: Mail,
     route: '/contact',
     theme: 'contact',
-    gradient: 'linear-gradient(135deg, hsl(210 30% 12%) 0%, hsl(200 25% 10%) 50%, hsl(220 20% 8%) 100%)',
-    accentColor: '#64748b',
+    gradient: 'linear-gradient(145deg, #0a0a0f 0%, #12121a 40%, #1a1a25 70%, #0a0a10 100%)',
+    accentColor: '#6366f1',
     bgPattern: 'none',
   },
 ];
@@ -117,41 +117,60 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
-  // Background gradient based on hovered section
-  const getBackgroundGradient = () => {
+  const getBackgroundStyle = () => {
     if (!hoveredSection) {
-      return 'radial-gradient(ellipse at center, hsl(220 50% 8%) 0%, hsl(220 60% 3%) 100%)';
+      return {
+        background: 'radial-gradient(ellipse at 50% 30%, rgba(6, 182, 212, 0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(168, 85, 247, 0.05) 0%, transparent 40%), #030303',
+      };
     }
     const section = sections.find(s => s.id === hoveredSection);
     if (section) {
-      return `radial-gradient(ellipse at center, ${section.accentColor}15 0%, hsl(220 60% 3%) 70%)`;
+      return {
+        background: `radial-gradient(ellipse at 50% 30%, ${section.accentColor}20 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, ${section.accentColor}10 0%, transparent 50%), #030303`,
+      };
     }
-    return 'radial-gradient(ellipse at center, hsl(220 50% 8%) 0%, hsl(220 60% 3%) 100%)';
+    return { background: '#030303' };
   };
 
   return (
     <div 
-      className={cn('min-h-screen relative overflow-hidden transition-all duration-700', className)}
-      style={{ background: getBackgroundGradient() }}
+      className={cn('min-h-screen relative overflow-hidden transition-all duration-1000', className)}
+      style={getBackgroundStyle()}
     >
-      {/* Animated background stars */}
+      {/* Subtle grid pattern */}
+      <div 
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
+          `,
+          backgroundSize: '60px 60px',
+        }}
+      />
+
+      {/* Floating particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {Array.from({ length: 80 }).map((_, i) => (
+        {Array.from({ length: 40 }).map((_, i) => (
           <motion.div
             key={i}
-            className="absolute rounded-full bg-white"
+            className="absolute rounded-full"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
-              width: `${Math.random() * 2 + 1}px`,
-              height: `${Math.random() * 2 + 1}px`,
+              width: `${Math.random() * 3 + 1}px`,
+              height: `${Math.random() * 3 + 1}px`,
+              background: hoveredSection 
+                ? sections.find(s => s.id === hoveredSection)?.accentColor || '#fff'
+                : '#fff',
+              opacity: 0.4,
             }}
             animate={{
-              opacity: [0.3, 1, 0.3],
-              scale: [1, 1.2, 1],
+              y: [0, -30, 0],
+              opacity: [0.2, 0.6, 0.2],
             }}
             transition={{
-              duration: Math.random() * 3 + 2,
+              duration: Math.random() * 4 + 3,
               repeat: Infinity,
               delay: Math.random() * 2,
             }}
@@ -159,7 +178,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
         ))}
       </div>
 
-      {/* Gradient overlay based on hovered section */}
+      {/* Gradient orbs */}
       <AnimatePresence>
         {hoveredSection && (
           <motion.div
@@ -167,85 +186,101 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            style={{
-              background: `radial-gradient(circle at 50% 30%, ${sections.find(s => s.id === hoveredSection)?.accentColor}20 0%, transparent 50%)`,
-            }}
-          />
+            transition={{ duration: 0.8 }}
+          >
+            <div 
+              className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[120px]"
+              style={{ background: `${sections.find(s => s.id === hoveredSection)?.accentColor}15` }}
+            />
+            <div 
+              className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full blur-[100px]"
+              style={{ background: `${sections.find(s => s.id === hoveredSection)?.accentColor}10` }}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 
       {/* Content Container */}
-      <div className="relative z-10 container mx-auto px-4 py-8 md:py-16">
+      <div className="relative z-10 container mx-auto px-4 py-12 md:py-20">
         
         {/* Hero Header */}
         <motion.header 
-          className="text-center mb-12 md:mb-20"
-          initial={{ opacity: 0, y: -30 }}
+          className="text-center mb-16 md:mb-24"
+          initial={{ opacity: 0, y: -40 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
+          transition={{ duration: 1, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
           {/* Status indicator */}
           <motion.div 
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 mb-6"
+            className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-sm mb-8"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.4, duration: 0.6 }}
           >
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span className="text-sm text-cyan-400 font-mono tracking-wider">
-              {isAuthenticated ? `AGENT ${profile?.username || 'ACTIVE'}` : 'SYSTEM READY'}
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-sm text-white/60 font-light tracking-[0.2em] uppercase">
+              {isAuthenticated ? `Welcome, ${profile?.username || 'Agent'}` : 'System Online'}
             </span>
           </motion.div>
 
           {/* Main title */}
-          <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black mb-4 md:mb-6">
-            <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent">
+          <motion.h1 
+            className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-black mb-6 tracking-tighter"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.8 }}
+          >
+            <span className="bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
               ETERNYX
             </span>
-          </h1>
+          </motion.h1>
 
-          <p className="text-lg md:text-xl lg:text-2xl text-white/60 max-w-3xl mx-auto mb-8 font-light">
-            Your digital command center for{' '}
-            <span className="text-cyan-400">cybersecurity</span>,{' '}
-            <span className="text-blue-400">development</span>, and{' '}
-            <span className="text-purple-400">innovation</span>
-          </p>
+          <motion.p 
+            className="text-lg md:text-xl lg:text-2xl text-white/40 max-w-2xl mx-auto mb-10 font-light leading-relaxed"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.8 }}
+          >
+            The future of digital excellence. Enterprise-grade solutions for{' '}
+            <span className="text-white/70">security</span>,{' '}
+            <span className="text-white/70">development</span>, and{' '}
+            <span className="text-white/70">intelligence</span>.
+          </motion.p>
 
           {/* Auth buttons */}
           <motion.div 
             className="flex flex-col sm:flex-row justify-center gap-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            transition={{ delay: 0.7, duration: 0.6 }}
           >
             {isAuthenticated ? (
               <Button
                 size="lg"
                 onClick={() => navigate('/dashboard')}
-                className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold px-8 py-6 text-lg shadow-lg shadow-cyan-500/25"
+                className="bg-white text-black hover:bg-white/90 font-semibold px-10 py-6 text-base rounded-full transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
               >
                 <Terminal className="w-5 h-5 mr-2" />
-                ACCESS DASHBOARD
+                Open Dashboard
               </Button>
             ) : (
               <>
                 <Button
                   size="lg"
                   onClick={() => { setAuthMode('signin'); setAuthModalOpen(true); }}
-                  className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold px-8 py-6 text-lg shadow-lg shadow-cyan-500/25"
+                  className="bg-white text-black hover:bg-white/90 font-semibold px-10 py-6 text-base rounded-full transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
                 >
                   <Zap className="w-5 h-5 mr-2" />
-                  SIGN IN
+                  Sign In
                 </Button>
                 <Button
                   size="lg"
                   variant="outline"
                   onClick={() => { setAuthMode('signup'); setAuthModalOpen(true); }}
-                  className="border-purple-500/50 text-purple-300 hover:bg-purple-500/20 hover:border-purple-400 px-8 py-6 text-lg"
+                  className="border-white/20 text-white/80 hover:bg-white/10 hover:border-white/40 px-10 py-6 text-base rounded-full transition-all duration-300"
                 >
                   <Users className="w-5 h-5 mr-2" />
-                  CREATE ACCOUNT
+                  Create Account
                 </Button>
               </>
             )}
@@ -256,13 +291,18 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
         <motion.section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.8 }}
+          transition={{ delay: 0.9, duration: 1 }}
         >
-          <h2 className="text-center text-sm uppercase tracking-[0.3em] text-white/40 mb-8 font-mono">
+          <motion.h2 
+            className="text-center text-xs uppercase tracking-[0.4em] text-white/30 mb-12 font-light"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+          >
             Select Your Destination
-          </h2>
+          </motion.h2>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 md:gap-6">
             {sections.map((section, index) => (
               <SectionCard
                 key={section.id}
@@ -276,27 +316,24 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
           </div>
         </motion.section>
 
-        {/* Stats Footer */}
+        {/* Minimal footer stats */}
         <motion.footer
-          className="mt-16 md:mt-24 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1, duration: 0.6 }}
+          className="mt-20 md:mt-32 flex flex-wrap justify-center gap-8 md:gap-16"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2, duration: 0.8 }}
         >
           {[
-            { value: '500+', label: 'Tools', color: 'text-cyan-400' },
-            { value: '24/7', label: 'Monitoring', color: 'text-green-400' },
-            { value: '10K+', label: 'Users', color: 'text-purple-400' },
-            { value: '99.9%', label: 'Uptime', color: 'text-orange-400' },
+            { value: '500+', label: 'Tools' },
+            { value: '24/7', label: 'Monitoring' },
+            { value: '10K+', label: 'Users' },
+            { value: '99.9%', label: 'Uptime' },
           ].map((stat, i) => (
-            <div 
-              key={i}
-              className="text-center p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm"
-            >
-              <div className={cn('text-2xl md:text-3xl font-bold font-mono', stat.color)}>
+            <div key={i} className="text-center">
+              <div className="text-2xl md:text-3xl font-light text-white/80 mb-1">
                 {stat.value}
               </div>
-              <div className="text-xs md:text-sm text-white/50 uppercase tracking-wider mt-1">
+              <div className="text-xs text-white/30 uppercase tracking-[0.2em]">
                 {stat.label}
               </div>
             </div>
