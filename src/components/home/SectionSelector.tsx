@@ -106,7 +106,11 @@ const sections: SectionCardData[] = [
   },
 ];
 
-export const SectionSelector: React.FC = () => {
+interface SectionSelectorProps {
+  className?: string;
+}
+
+export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const { isAuthenticated, profile } = useAuthStore();
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
@@ -127,7 +131,7 @@ export const SectionSelector: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen relative overflow-hidden transition-all duration-700"
+      className={cn('min-h-screen relative overflow-hidden transition-all duration-700', className)}
       style={{ background: getBackgroundGradient() }}
     >
       {/* Animated background stars */}
