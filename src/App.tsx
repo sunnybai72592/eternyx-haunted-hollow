@@ -68,7 +68,7 @@ const TestInterface = lazy(() => import("./pages/TestInterface"));
 const TestResults = lazy(() => import("./pages/TestResults"));
 
 // Eternyx AI pages
-const EternixAI = lazy(() => import("./pages/Eternyx AI"));
+const EternixAI = lazy(() => import("./pages/EternyxAI"));
 
 
 const queryClient = new QueryClient({

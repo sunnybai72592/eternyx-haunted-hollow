@@ -1246,6 +1246,50 @@ export type Database = {
         }
         Relationships: []
       }
+      students: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean | null
+          results_password_hash: string | null
+          student_id_code: string
+          teacher_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          results_password_hash?: string | null
+          student_id_code: string
+          teacher_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          results_password_hash?: string | null
+          student_id_code?: string
+          teacher_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "students_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscribers: {
         Row: {
           created_at: string
@@ -1320,35 +1364,82 @@ export type Database = {
           },
         ]
       }
+      teachers: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          institution: string | null
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          institution?: string | null
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          institution?: string | null
+          name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       tests: {
         Row: {
+          access_password_hash: string | null
           created_at: string | null
           description: string | null
           duration_minutes: number
           id: string
           is_active: boolean | null
+          is_published: boolean | null
+          teacher_id: string | null
           title: string
           updated_at: string | null
         }
         Insert: {
+          access_password_hash?: string | null
           created_at?: string | null
           description?: string | null
           duration_minutes: number
           id?: string
           is_active?: boolean | null
+          is_published?: boolean | null
+          teacher_id?: string | null
           title: string
           updated_at?: string | null
         }
         Update: {
+          access_password_hash?: string | null
           created_at?: string | null
           description?: string | null
           duration_minutes?: number
           id?: string
           is_active?: boolean | null
+          is_published?: boolean | null
+          teacher_id?: string | null
           title?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tests_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       thread_participants: {
         Row: {
@@ -1607,6 +1698,7 @@ export type Database = {
           score: number | null
           start_time: string | null
           status: string | null
+          student_id: string | null
           test_id: string | null
           user_id: string | null
         }
@@ -1619,6 +1711,7 @@ export type Database = {
           score?: number | null
           start_time?: string | null
           status?: string | null
+          student_id?: string | null
           test_id?: string | null
           user_id?: string | null
         }
@@ -1631,10 +1724,18 @@ export type Database = {
           score?: number | null
           start_time?: string | null
           status?: string | null
+          student_id?: string | null
           test_id?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "user_attempts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_attempts_test_id_fkey"
             columns: ["test_id"]
@@ -1684,6 +1785,24 @@ export type Database = {
           preferences?: Json | null
           stats?: Json | null
           username?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          role?: string
+          user_id?: string
         }
         Relationships: []
       }
