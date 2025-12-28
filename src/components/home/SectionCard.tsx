@@ -53,19 +53,19 @@ export const SectionCard: React.FC<SectionCardProps> = ({
       transition: { 
         duration: 0.5, 
         delay: index * 0.1,
-        ease: 'easeOut' as const
+        ease: [0.25, 0.46, 0.45, 0.94] as const
       } 
     },
     hover: {
       scale: 1.05,
       zIndex: 50,
-      transition: { duration: 0.3, ease: 'easeOut' }
+      transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const }
     },
     notHovered: {
       scale: 0.95,
       opacity: 0.5,
       filter: 'blur(2px)',
-      transition: { duration: 0.3 }
+      transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const }
     }
   };
 
