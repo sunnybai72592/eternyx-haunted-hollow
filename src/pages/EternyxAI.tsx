@@ -175,25 +175,17 @@ const EternixAI: React.FC = () => {
 
       if (docError) throw docError;
 
-      // Trigger processing
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL || 'https://wcncuarekaofmfurbtbh.supabase.co'}/functions/v1/process-document`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            documentId: docData.id,
-            storagePath: uploadData.path,
-            fileType: fileType,
-            mimeType: file.type,
-          }),
-        }
-      );
+      // Trigger processing (Edge Function)
+      const { error: processError } = await supabase.functions.invoke('process-document', {
+        body: {
+          documentId: docData.id,
+          storagePath: uploadData.path,
+          fileType,
+          mimeType: file.type,
+        },
+      });
 
-      if (!response.ok) throw new Error('Failed to process document');
+      if (processError) throw new Error(processError.message);
 
       toast.success(`${fileType === 'pdf' ? 'PDF' : 'Image'} uploaded and processing started!`);
       loadDocuments(userId);
@@ -222,26 +214,17 @@ const EternixAI: React.FC = () => {
       setMessages((prev) => [...prev, userMsg]);
 
       // Call the Eternyx AI chat function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL || 'https://wcncuarekaofmfurbtbh.supabase.co'}/functions/v1/eternyx-ai-chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message: userMessage,
-            sessionId: currentSessionId,
-            documentId: selectedDocument,
-            userId,
-          }),
-        }
-      );
+      const { data, error: chatError } = await supabase.functions.invoke('eternyx-ai-chat', {
+        body: {
+          message: userMessage,
+          sessionId: currentSessionId,
+          documentId: selectedDocument,
+          userId,
+        },
+      });
 
-      if (!response.ok) throw new Error('Failed to get response');
-
-      const data = await response.json();
+      if (chatError) throw new Error(chatError.message);
+      if (!data) throw new Error('No response from Eternyx AI');
 
       // Update session ID if new
       if (!currentSessionId) {
