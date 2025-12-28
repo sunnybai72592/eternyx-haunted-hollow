@@ -23,7 +23,7 @@ interface Message {
 interface Document {
   id: string;
   file_name: string;
-  status: 'uploaded' | 'processing' | 'ready' | 'failed';
+  status: string;
   created_at: string;
 }
 
@@ -91,12 +91,12 @@ const EternixAI: React.FC = () => {
   const loadDocuments = async (uid: string) => {
     const { data, error } = await supabase
       .from('ai_documents')
-      .select('*')
+      .select('id, file_name, status, created_at')
       .eq('user_id', uid)
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setDocuments(data);
+      setDocuments(data as Document[]);
     }
   };
 

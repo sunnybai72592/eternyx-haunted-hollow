@@ -139,7 +139,12 @@ export class AuthService {
 
     const { error } = await supabase
       .from('user_profiles')
-      .insert([profile]);
+      .insert([{
+        id: user.id,
+        email: user.email!,
+        username,
+        access_level: 'basic' as const,
+      }]);
 
     if (error) {
       console.error('Error creating user profile:', error);
@@ -157,7 +162,29 @@ export class AuthService {
         .single();
 
       if (error) throw error;
-      this.userProfile = data;
+      // Map database response to our UserProfile interface
+      if (data) {
+        this.userProfile = {
+          id: data.id,
+          email: data.email,
+          username: data.username,
+          avatar_url: data.avatar_url ?? undefined,
+          access_level: data.access_level ?? 'basic',
+          created_at: data.created_at ?? new Date().toISOString(),
+          last_login: data.last_login ?? new Date().toISOString(),
+          preferences: (data.preferences as UserProfile['preferences']) ?? {
+            theme: 'cyberpunk',
+            notifications: true,
+            analytics: true,
+            sound_effects: true,
+          },
+          stats: (data.stats as UserProfile['stats']) ?? {
+            login_count: 0,
+            projects_created: 0,
+            last_activity: new Date().toISOString(),
+          },
+        };
+      }
     } catch (error) {
       console.error('Error loading user profile:', error);
     }

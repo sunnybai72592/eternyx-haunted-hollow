@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 interface Question {
   id?: string;
   question_text: string;
-  question_type: 'multiple_choice';
+  question_type: string;
   points: number;
   options: Option[];
 }
