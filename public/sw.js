@@ -1,169 +1,76 @@
-const CACHE_NAME = 'eternyx-v1.0.0';
-const urlsToCache = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
-];
+const CACHE_NAME = "eternyx-shell-v2";
 
-// Install event - cache resources
-self.addEventListener('install', (event) => {
+// Keep the app shell minimal; Vite assets are hashed and fetched on-demand.
+const APP_SHELL = ["/", "/manifest.json", "/robots.txt", "/google-icon.svg"];
+
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
-      .catch((error) => {
-        console.error('Failed to cache resources:', error);
-      })
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(APP_SHELL))
+      .catch(() => undefined)
   );
 });
 
-// Fetch event - serve from cache when offline
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        if (response) {
-          return response;
-        }
-        
-        return fetch(event.request).then((response) => {
-          // Check if we received a valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-
-          // Clone the response
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-
-          return response;
-        });
-      })
-      .catch(() => {
-        // Return offline page for navigation requests
-        if (event.request.destination === 'document') {
-          return caches.match('/offline.html');
-        }
-      })
-  );
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => (k === CACHE_NAME ? Promise.resolve() : caches.delete(k))));
+      await self.clients.claim();
+    })()
   );
 });
 
-// Background sync for form submissions
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'contact-form') {
-    event.waitUntil(
-      // Handle offline form submissions
-      handleOfflineFormSubmission()
+// Network-first for navigation to avoid stale index.html causing chunk 404s
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+
+  // SPA navigations
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(req);
+          const cache = await caches.open(CACHE_NAME);
+          cache.put("/", fresh.clone());
+          return fresh;
+        } catch {
+          const cached = await caches.match("/");
+          return (
+            cached ||
+            new Response("Offline", {
+              status: 503,
+              headers: { "Content-Type": "text/plain" },
+            })
+          );
+        }
+      })()
+    );
+    return;
+  }
+
+  // Don't cache Supabase calls
+  if (url.hostname.endsWith("supabase.co") || url.pathname.includes("/functions/v1/")) {
+    return;
+  }
+
+  // Cache Vite hashed assets (safe because filenames are content-hashed)
+  if (url.origin === self.location.origin && url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      (async () => {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+
+        const fresh = await fetch(req);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(req, fresh.clone());
+        return fresh;
+      })()
     );
   }
 });
-
-async function handleOfflineFormSubmission() {
-  try {
-    // Get stored form data from IndexedDB
-    const formData = await getStoredFormData();
-    
-    if (formData) {
-      // Try to submit the form
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      if (response.ok) {
-        // Clear stored data on successful submission
-        await clearStoredFormData();
-        
-        // Show notification
-        self.registration.showNotification('Form Submitted', {
-          body: 'Your contact form was submitted successfully!',
-          icon: '/icon-192x192.png',
-          badge: '/icon-192x192.png'
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Failed to submit offline form:', error);
-  }
-}
-
-// Push notifications
-self.addEventListener('push', (event) => {
-  const options = {
-    body: event.data ? event.data.text() : 'New notification from ETERNYX',
-    icon: '/icon-192x192.png',
-    badge: '/icon-192x192.png',
-    vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'Explore',
-        icon: '/icon-192x192.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/icon-192x192.png'
-      }
-    ]
-  };
-
-  event.waitUntil(
-    self.registration.showNotification('ETERNYX', options)
-  );
-});
-
-// Notification click handling
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  if (event.action === 'explore') {
-    event.waitUntil(
-      clients.openWindow('/')
-    );
-  }
-});
-
-// Helper functions for IndexedDB operations
-async function getStoredFormData() {
-  // Implementation would depend on your IndexedDB setup
-  return null;
-}
-
-async function clearStoredFormData() {
-  // Implementation would depend on your IndexedDB setup
-}
-

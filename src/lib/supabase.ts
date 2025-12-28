@@ -1,35 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase as supabaseClient } from "@/integrations/supabase/client";
 
-// Environment variables for Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-// Ensure environment variables are loaded
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase environment variables are not loaded. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set.');
-  // Fallback to hardcoded values for local development if needed, or throw an error
-  // For production, this check should ideally prevent the app from starting without proper config
-}
-
-// Create Supabase client with enhanced configuration
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'eternyx-app'
-    }
-  }
-});
+/**
+ * Single shared Supabase client.
+ * Avoids multiple GoTrueClient instances and auth/session inconsistencies.
+ */
+export const supabase = supabaseClient;
 
 // Enhanced database types
 export interface User {
