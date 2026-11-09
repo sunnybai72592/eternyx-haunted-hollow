@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CyberTool } from '@/data/cybersecurityTools';
 import { ToolModal } from './ToolModal';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Play, 
@@ -26,6 +27,32 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, className = "" }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { user, profile } = useAuthStore();
   const { toast } = useToast();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const verifyAdmin = async () => {
+      if (!user) {
+        if (active) setIsAdmin(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.rpc('is_admin');
+        if (error) throw error;
+        if (active) setIsAdmin(data === true);
+      } catch (error) {
+        console.error('Unable to verify administrator access for tool permissions:', error);
+        if (active) setIsAdmin(false);
+      }
+    };
+
+    void verifyAdmin();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   const getTierIcon = (tier: string) => {
     switch (tier) {
@@ -56,8 +83,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, className = "" }) => {
   };
 
   const canUseTool = () => {
-    // Admins bypass all checks
-    if (profile?.role === 'admin' || (user?.email && ['naimatullahullahofficial01@gmail.com','naimatullahofficial01@gmail.com'].includes(user.email))) return true;
+    // Administrator access is verified by the trusted database assignment.
+    if (isAdmin) return true;
     if (!user) return false;
 
     const userAccessLevel = profile?.access_level || 'basic';
