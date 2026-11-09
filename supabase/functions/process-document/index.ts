@@ -21,75 +21,33 @@ function chunkText(text: string, chunkSize: number = 500, overlap: number = 100)
   return chunks;
 }
 
-// Helper function to generate embeddings using OpenAI API
-async function generateEmbedding(text: string): Promise<number[]> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set");
-  }
-
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: text,
-      model: "text-embedding-3-small",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.data[0].embedding;
+// Embeddings are optional (retrieval uses document_id); skip external calls
+async function generateEmbedding(_text: string): Promise<number[] | null> {
+  return null;
 }
 
 // Helper function to extract text from image using OpenAI Vision API
 async function extractTextFromImage(imageBase64: string, mimeType: string): Promise<string> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set");
-  }
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) throw new Error("AI is not configured");
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-4-vision",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Please extract all text from this image. Return only the extracted text without any additional commentary.",
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mimeType};base64,${imageBase64}`,
-              },
-            },
-          ],
-        },
-      ],
-      max_tokens: 4096,
+      model: "openai/gpt-6-astra",
+      reasoning: { effort: "low" },
+      input: [{
+        role: "user",
+        content: [
+          { type: "input_text", text: "Extract all text from this image. Return only the extracted text." },
+          { type: "input_image", image_url: `data:${mimeType};base64,${imageBase64}` },
+        ],
+      }],
     }),
   });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI Vision API error: ${response.statusText}`);
-  }
-
   const data = await response.json();
-  return data.choices[0].message.content;
+  if (!response.ok) throw new Error(`AI error (${response.status})`);
+  return data.output_text ?? (data.output || []).flatMap((o: any) => o.content || []).filter((c: any) => c.type === "output_text").map((c: any) => c.text).join("");
 }
 
 // Helper function to extract text from PDF

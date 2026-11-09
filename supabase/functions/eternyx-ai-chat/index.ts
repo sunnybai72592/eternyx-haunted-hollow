@@ -14,44 +14,17 @@ interface ChatRequest {
   userId: string;
 }
 
-// Helper function to generate embeddings using OpenAI API
-async function generateEmbedding(text: string): Promise<number[]> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set");
-  }
-
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: text,
-      model: "text-embedding-3-small",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.data[0].embedding;
-}
-
 // Helper function to retrieve relevant chunks using vector similarity search
 async function retrieveRelevantChunks(
   supabase: any,
-  queryEmbedding: number[],
+  _q: unknown,
   documentId?: string,
   limit: number = 5
 ): Promise<string[]> {
   let query = supabase
     .from("document_chunks")
     .select("content")
-    .order("embedding", { ascending: false })
+    .order("chunk_index", { ascending: true })
     .limit(limit);
 
   if (documentId) {
@@ -70,47 +43,36 @@ async function retrieveRelevantChunks(
   return data?.map((chunk: any) => chunk.content) || [];
 }
 
-// Helper function to call OpenAI Chat API
 async function generateResponse(
   systemPrompt: string,
   userMessage: string,
   chatHistory: Array<{ role: string; content: string }>
 ): Promise<string> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set");
-  }
-
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...chatHistory.map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    })),
-    { role: "user" as const, content: userMessage },
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) throw new Error("AI is not configured");
+  const input = [
+    ...chatHistory.filter((m) => m.role === "user" || m.role === "assistant").map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage },
   ];
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 2048,
+      model: "openai/gpt-6-astra",
+      reasoning: { effort: "low" },
+      instructions: systemPrompt,
+      input,
+      max_output_tokens: 2048,
     }),
   });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`OpenAI API error: ${errorData.error.message}`);
-  }
-
   const data = await response.json();
-  return data.choices[0].message.content;
+  if (!response.ok) {
+    console.error("AI gateway error", response.status, JSON.stringify(data).slice(0, 300));
+    if (response.status === 402) throw new Error("AI credits are used up. Please top up Lovable credits.");
+    if (response.status === 429) throw new Error("Too many requests, please wait a moment.");
+    throw new Error("AI request failed");
+  }
+  return data.output_text ?? (data.output || []).flatMap((o: any) => o.content || []).filter((c: any) => c.type === "output_text").map((c: any) => c.text).join("");
 }
 
 serve(async (req) => {
@@ -141,7 +103,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Generate embedding for the user's message
-    const messageEmbedding = await generateEmbedding(message);
+    const messageEmbedding = null;
 
     // Retrieve relevant chunks if documentId is provided
     let contextChunks: string[] = [];
