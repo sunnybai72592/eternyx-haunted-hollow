@@ -122,7 +122,7 @@ const AppContent = () => {
               
               {/* Back Button Placement */}
               {showBackButton && (
-                <div className="fixed top-20 left-4 z-50">
+                <div className="fixed top-[4.75rem] left-3 sm:left-4 z-40">
                   <BackButton />
                 </div>
               )}
