@@ -17,28 +17,29 @@ Deno.serve(async (req) => {
       .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string")
       .map((m: any) => ({ role: m.role, content: m.content.slice(0, 4000) }));
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured" }, 500);
 
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are Eternyx, an expert cybersecurity assistant. Give clear, accurate, practical answers about security threats, defenses and best practices. Be concise. Refuse to help with clearly malicious attacks on systems the user doesn't own." },
-          ...clean,
-        ],
+        model: "openai/gpt-6-astra",
+        reasoning: { effort: "low" },
+        instructions: "You are Eternyx, an expert cybersecurity assistant. Give clear, accurate, practical answers about security threats, defenses and best practices. Be concise. Refuse to help with clearly malicious attacks on systems the user doesn't own.",
+        input: clean,
       }),
     });
     const data = await r.json();
     if (!r.ok) {
-      console.error("OpenAI error", r.status, data?.error?.message);
-      return json({ error: data?.error?.message || "AI request failed" }, r.status === 429 ? 429 : 502);
+      console.error("AI gateway error", r.status, JSON.stringify(data).slice(0, 500));
+      const msg = r.status === 402 ? "AI credits are used up. Please top up Lovable credits." : r.status === 429 ? "Too many requests, please wait a moment." : "AI request failed";
+      return json({ error: msg }, 200);
     }
-    return json({ reply: data.choices?.[0]?.message?.content ?? "" });
+    const reply = data.output_text ?? (data.output || []).flatMap((o: any) => o.content || []).filter((c: any) => c.type === "output_text").map((c: any) => c.text).join("");
+    return json({ reply });
   } catch (e) {
     console.error(e);
-    return json({ error: "Unexpected error" }, 500);
+    return json({ error: "Unexpected error" }, 200);
   }
 });
