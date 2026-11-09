@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -372,6 +373,29 @@ const AIPoweredSecurity = () => {
   const [anomalyResult, setAnomalyResult] = useState<any>(null);
   const [threatPrediction, setThreatPrediction] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chat, setChat] = useState<{ role: "user" | "assistant"; content: string }[]>([
+    { role: "assistant", content: "Hello, how can I assist you with your cybersecurity needs today?" },
+  ]);
+
+  const askAssistant = async () => {
+    const q = chatInput.trim();
+    if (!q || chatLoading) return;
+    const next = [...chat, { role: "user" as const, content: q }];
+    setChat(next);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("security-assistant", { body: { messages: next.slice(-20) } });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      setChat([...next, { role: "assistant", content: data.reply }]);
+    } catch (e: any) {
+      setChat([...next, { role: "assistant", content: `Error: ${e?.message || "Could not reach the assistant."}` }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const aiEngine = new AISecurityEngine();
 
@@ -745,9 +769,12 @@ const AIPoweredSecurity = () => {
                   <Textarea
                     placeholder="Ask your security question here..."
                     className="bg-background border-blue-500/20 min-h-24"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askAssistant(); } }}
                   />
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                    Ask AI Assistant
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={askAssistant} disabled={chatLoading || !chatInput.trim()}>
+                    {chatLoading ? "Thinking..." : "Ask AI Assistant"}
                   </Button>
                 </CardContent>
               </Card>
@@ -761,10 +788,13 @@ const AIPoweredSecurity = () => {
                 </CardHeader>
                 <CardContent>
                   <TerminalWindow title="ai-assistant-response.log">
-                    <div className="space-y-1 text-sm">
-                      <div className="text-green-400">[AI] Hello, how can I assist you with your cybersecurity needs today?</div>
-                      <div className="text-muted-foreground">[USER] What is a zero-day exploit?</div>
-                      <div className="text-green-400">[AI] A zero-day exploit is a cyberattack that takes advantage of a software vulnerability that is unknown to the vendor or the public. This means there is no patch available, making it a highly dangerous threat.</div>
+                    <div className="space-y-2 text-sm max-h-96 overflow-y-auto whitespace-pre-wrap">
+                      {chat.map((m, i) => (
+                        <div key={i} className={m.role === "assistant" ? "text-green-400" : "text-muted-foreground"}>
+                          [{m.role === "assistant" ? "AI" : "USER"}] {m.content}
+                        </div>
+                      ))}
+                      {chatLoading && <div className="text-green-400 animate-pulse">[AI] ...</div>}
                     </div>
                   </TerminalWindow>
                 </CardContent>
