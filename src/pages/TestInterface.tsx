@@ -52,7 +52,7 @@ const TestInterface: React.FC = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [screenLockViolation, setScreenLockViolation] = useState(false);
   const [isAppInBackground, setIsAppInBackground] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef<any>(null);
 
   // Fetch test data

@@ -40,7 +40,7 @@ export class CacheService {
     sets: 0,
     deletes: 0
   };
-  private cleanupTimer: NodeJS.Timeout | null = null;
+  private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config: Partial<CacheConfig> = {}) {
     this.config = {
