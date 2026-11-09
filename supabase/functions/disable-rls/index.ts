@@ -1,41 +1,25 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
+};
 
+// This endpoint previously invoked a privileged SECURITY DEFINER RPC that
+// disabled row-level security. It is intentionally retired. Do not restore
+// privileged database administration through a public Edge Function.
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Use service role key for elevated privileges
-      { auth: { persistSession: false } }
-    )
-
-    const { data, error } = await supabaseClient.rpc('disable_rls_vulnerability_scans')
-
-    if (error) {
-      throw error
-    }
-
-    return new Response(
-      JSON.stringify({ success: true, message: 'RLS disabled for vulnerability_scans table.' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  } catch (error) {
-    console.error('Error disabling RLS:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: 'Failed to disable RLS', details: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-})
-
-
+  return new Response(
+    JSON.stringify({
+      error: "This administrative endpoint has been permanently disabled.",
+      code: "ENDPOINT_RETIRED",
+    }),
+    { status: 410, headers: corsHeaders },
+  );
+});
