@@ -52,7 +52,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
   useEffect(() => {
     const checkScreenSize = () => {
-      const mobile = window.innerWidth < 768;
+      const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
       if (!mobile) {
         setIsMobileMenuOpen(false);
@@ -79,14 +79,14 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
     },
     {
       id: 'services-hub',
-      name: 'Services Hub',
+      name: 'Services',
       path: '/services-hub',
       icon: Zap,
       color: 'from-purple-400 to-indigo-600',
     },
     {
       id: 'tools-hub',
-      name: 'Tools Hub',
+      name: 'Tools',
       path: '/tools',
       icon: Wrench,
       color: 'from-cyan-400 to-teal-600',
@@ -107,7 +107,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
     },
     {
       id: 'dashboard',
-      name: 'Unified Dashboard',
+      name: 'Dashboard',
       path: '/dashboard',
       icon: LayoutDashboard,
       color: 'from-indigo-400 to-purple-600',
@@ -167,7 +167,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-b border-white/10 ${className}`}>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between gap-2 h-16">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <button
@@ -180,52 +180,16 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
-            {!isAuthenticated ? (
-              <div className="flex items-center gap-2 mr-4">
-                <Button
-                  onClick={handleSignIn}
-                  variant="ghost"
-                  className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                >
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Sign In
-                </Button>
-                <Button
-                  onClick={handleSignUp}
-                  className="px-4 py-2 text-sm font-medium bg-white text-black hover:bg-white/90 rounded-lg transition-all"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Sign Up
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 mr-4">
-                <Button
-                  onClick={handleProfileClick}
-                  variant="ghost"
-                  className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  Profile
-                </Button>
-                <Button
-                  onClick={handleSignOut}
-                  variant="ghost"
-                  className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                >
-                  Sign Out
-                </Button>
-              </div>
-            )}
-            
+          <div className="hidden lg:flex flex-1 min-w-0 items-center justify-center gap-0.5 px-4">
             {categories.map((category) => (
               <div key={category.id} className="relative group">
                 <Button
                   variant="ghost"
+                  title={category.name}
+                  aria-label={category.name}
                   onClick={() => category.children ? toggleDropdown(category.id) : handleNavigation(category.path, category.name)}
                   className={`
-                    px-3 py-2 text-sm font-medium transition-all duration-300 rounded-lg
+                    px-2.5 xl:px-3 py-2 text-sm font-medium whitespace-nowrap transition-all duration-300 rounded-lg
                     ${isActivePath(category.path) 
                       ? 'bg-white/10 text-white' 
                       : 'text-white/60 hover:text-white hover:bg-white/5'
@@ -235,8 +199,8 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                   onMouseEnter={() => category.children && setActiveDropdown(category.id)}
                   onMouseLeave={() => setTimeout(() => setActiveDropdown(null), 300)}
                 >
-                  <category.icon className="w-4 h-4 mr-2" />
-                  <span className="hidden lg:inline">{category.name}</span>
+                  <category.icon className="w-4 h-4 xl:mr-2" />
+                  <span className="hidden xl:inline">{category.name}</span>
                   
                   {category.children && (
                     <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-200 ${
@@ -280,10 +244,51 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
             ))}
           </div>
 
+          <div className="hidden lg:flex items-center">
+            {!isAuthenticated ? (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  onClick={handleSignIn}
+                  variant="ghost"
+                  className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Sign In
+                </Button>
+                <Button
+                  onClick={handleSignUp}
+                  className="px-3 py-2 text-sm font-medium bg-white text-black hover:bg-white/90 rounded-lg transition-all"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Sign Up
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  onClick={handleProfileClick}
+                  variant="ghost"
+                  className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Profile
+                </Button>
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            )}
+            
+          </div>
+
           {/* Mobile Menu Button */}
           <button
             onClick={toggleMobileMenu}
-            className="md:hidden p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="lg:hidden p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Toggle mobile menu"
           >
             {isMobileMenuOpen ? (
@@ -296,7 +301,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-md border-b border-white/10 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
+          <div className="lg:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-md border-b border-white/10 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
             <div className="px-4 py-6 space-y-3">
               {!isAuthenticated ? (
                 <div className="space-y-2 pb-3 border-b border-white/10">
