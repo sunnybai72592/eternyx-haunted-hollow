@@ -45,7 +45,10 @@ AS $function$
     WHEN public.is_admin() THEN 'admin'
     ELSE COALESCE(
       (
-        SELECT p.role
+        SELECT CASE
+          WHEN p.role IN ('teacher', 'student') THEN p.role
+          ELSE 'user'
+        END
         FROM public.profiles AS p
         WHERE p.user_id = (SELECT auth.uid())
         LIMIT 1
