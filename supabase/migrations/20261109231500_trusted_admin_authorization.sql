@@ -32,8 +32,8 @@ AS $function$
   );
 $function$;
 
--- Preserve the legacy role API used by existing RLS policies, but source admin
--- status from admin_users. Teacher/student roles remain in public.user_roles.
+-- Preserve the legacy role API used by existing RLS policies.
+-- Admin status comes from admin_users; teacher/student status comes from user_roles.
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS text
 LANGUAGE sql
@@ -45,12 +45,9 @@ AS $function$
     WHEN public.is_admin() THEN 'admin'
     ELSE COALESCE(
       (
-        SELECT CASE
-          WHEN p.role IN ('teacher', 'student') THEN p.role
-          ELSE 'user'
-        END
-        FROM public.profiles AS p
-        WHERE p.user_id = (SELECT auth.uid())
+        SELECT ur.role::text
+        FROM public.user_roles AS ur
+        WHERE ur.user_id = (SELECT auth.uid())
         LIMIT 1
       ),
       'user'
@@ -68,7 +65,7 @@ GRANT EXECUTE ON FUNCTION public.get_current_user_role() TO anon, authenticated,
 
 -- profiles.role is a legacy display field, not an authorization source.
 -- Force new profiles to the ordinary role and prevent client updates from
--- changing an existing role. Trusted administrator status lives in admin_users.
+-- changing an existing role. Trusted role assignments live in admin_users/user_roles.
 CREATE OR REPLACE FUNCTION public.prevent_profile_role_escalation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -96,4 +93,4 @@ EXECUTE FUNCTION public.prevent_profile_role_escalation();
 COMMENT ON TABLE public.admin_users IS
   'Trusted administrator assignments. Direct client access is revoked; manage through reviewed migrations.';
 COMMENT ON COLUMN public.profiles.role IS
-  'Legacy profile role only. Administrator authorization is determined by public.admin_users.';
+  'Legacy profile role only. Authorization is determined by public.admin_users and public.user_roles.';
