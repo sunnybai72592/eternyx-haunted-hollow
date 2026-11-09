@@ -37,7 +37,7 @@ class StripeService {
   private stripe: any = null;
 
   constructor() {
-    this.publishableKey = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || '';
+    this.publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
   }
 
   // Initialize Stripe

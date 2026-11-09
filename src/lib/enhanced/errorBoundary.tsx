@@ -34,7 +34,7 @@ export class EnhancedErrorBoundary extends Component<Props, State> {
     console.error('ETERNYX Error Boundary caught an error:', error, errorInfo);
     
     // In production, send to error tracking service
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       // Send to Sentry, LogRocket, etc.
     }
   }

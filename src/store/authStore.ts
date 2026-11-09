@@ -261,7 +261,7 @@ export const useAuthStore = create<AuthState>()(
 
           const { data, error } = await supabase
             .from("profiles")
-            .update(updates)
+            .update(updates as any)
             .eq("user_id", currentUser.id)
             .select()
             .maybeSingle();
