@@ -6,8 +6,10 @@ dist/
 dist-ssr/
 coverage/
 
-# Local environment and secrets
+# Lovable requires the root .env file to be committed for VITE_* build-time values.
+# Only put public VITE_* values in .env; never put private credentials here.
 .env
+!.env
 .env.*
 !.env.example
 *.local
