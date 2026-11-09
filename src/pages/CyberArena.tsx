@@ -54,8 +54,35 @@ const CyberArena = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [toolInputs, setToolInputs] = useState<{[key: string]: string}>({});
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const username = profile?.username || profile?.full_name || 'Agent';
+
+  // Verify administrator access through the trusted database assignment.
+  useEffect(() => {
+    let active = true;
+
+    const verifyAdmin = async () => {
+      if (!user) {
+        if (active) setIsAdmin(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.rpc('is_admin');
+        if (error) throw error;
+        if (active) setIsAdmin(data === true);
+      } catch (error) {
+        console.error('Cyber Arena admin verification failed:', error);
+        if (active) setIsAdmin(false);
+      }
+    };
+
+    void verifyAdmin();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -417,7 +444,7 @@ const CyberArena = () => {
     if (!isAuthenticated) return false;
     
     // Admin can access everything
-    if (profile?.role === 'admin') return true;
+    if (isAdmin) return true;
     
     // Check premium/elite access
     if (tool.isPremium && profile?.access_level !== 'premium' && profile?.access_level !== 'elite') return false;
@@ -471,12 +498,12 @@ const CyberArena = () => {
           {/* Access Level Badge */}
           <div className="flex justify-center mt-4">
             <Badge className={`px-4 py-2 ${
-              profile?.role === 'admin' ? 'bg-red-500/20 text-red-400 border-red-500/40' :
+              isAdmin ? 'bg-red-500/20 text-red-400 border-red-500/40' :
               profile?.access_level === 'elite' ? 'bg-pink-500/20 text-pink-400 border-pink-500/40' :
               profile?.access_level === 'premium' ? 'bg-purple-500/20 text-purple-400 border-purple-500/40' :
               'bg-green-500/20 text-green-400 border-green-500/40'
             }`}>
-              {profile?.role === 'admin' ? (
+              {isAdmin ? (
                 <><Crown className="w-4 h-4 mr-2" />ADMIN ACCESS</>
               ) : profile?.access_level === 'elite' ? (
                 <><Star className="w-4 h-4 mr-2" />ELITE ACCESS</>
