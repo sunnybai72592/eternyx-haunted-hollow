@@ -29,7 +29,7 @@ import { TerminalWindow } from '@/components/TerminalWindow';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, user, profile, updateProfile, signOut } = useAuthStore();
+  const { isAuthenticated, isLoading: authLoading, user, profile, updateProfile, signOut } = useAuthStore();
   const [local, setLocal] = useState<Partial<UserProfile>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -41,8 +41,10 @@ const Profile = () => {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) navigate('/login'); // Assuming a login route exists
-  }, [isAuthenticated, navigate]);
+    // Wait for Supabase to restore the session before deciding the visitor is signed out.
+    // ETERNYX uses an auth modal on the home page; there is no standalone /login route.
+    if (!authLoading && !isAuthenticated) navigate('/', { replace: true });
+  }, [authLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
     if (profile) {
