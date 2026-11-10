@@ -20,7 +20,7 @@ export default function IncidentResponsePlaybookWorkbench() {
   const [entry, setEntry] = useState({ action: "", owner: "", timestamp: new Date().toISOString().slice(0, 16) });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const playbook = INCIDENT_PLAYBOOKS[incident.type];
+  const playbook = INCIDENT_PLAYBOOKS[incident.type as keyof typeof INCIDENT_PLAYBOOKS];
   const summary = useMemo(() => summarizeIncident({ incident, timeline, completedActions: completed }), [incident, timeline, completed]);
   const report = useMemo(() => buildIncidentReport({ incident, timeline, completedActions: completed }), [incident, timeline, completed]);
   const addTimelineEntry = () => {
