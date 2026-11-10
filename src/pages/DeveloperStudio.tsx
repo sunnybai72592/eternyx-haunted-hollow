@@ -198,6 +198,13 @@ export default function DeveloperStudio() {
           <CardContent><Link to="/developer-studio/artifact-provenance" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open release trust workbench ↗</Link></CardContent>
         </Card>
 
+        <Card className="border-emerald-500/20 bg-slate-900/60 text-white">
+          <CardHeader><CardTitle className="flex items-center gap-2"><FileCode2 className="h-5 w-5 text-emerald-300" /> Database & SQL Intelligence</CardTitle>
+            <CardDescription className="text-slate-400">Review SQL scripts and PostgreSQL migrations for destructive operations, unsafe updates, privilege risks, and query-quality issues.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/database-sql" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">Open database workbench ↗</Link></CardContent>
+        </Card>
+
         <Tabs defaultValue="json" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
             <TabsTrigger value="json" className="gap-2 py-2"><Braces className="h-4 w-4" /><span>JSON</span></TabsTrigger>
