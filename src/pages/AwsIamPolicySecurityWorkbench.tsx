@@ -12,7 +12,7 @@ const samplePolicy = JSON.stringify({
   Version: "2012-10-17",
   Statement: [
     { Sid: "BroadStorageAccess", Effect: "Allow", Action: ["s3:*"], Resource: "*" },
-    { Sid: "RoleTrustExample", Effect: "Allow", Principal: "*", Action: "sts:AssumeRole", Resource: "*" }
+    { Sid: "RoleTrustExample", Effect: "Allow", Principal: "*", Action: "sts:AssumeRole" }
   ]
 }, null, 2);
 const styles = {
