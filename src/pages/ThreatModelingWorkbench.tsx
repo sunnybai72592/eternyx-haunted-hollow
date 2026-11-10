@@ -32,7 +32,7 @@ const ThreatModelingWorkbench = () => {
     anchor.href = url; anchor.download = "eternyx-threat-model.md"; anchor.click();
     URL.revokeObjectURL(url);
   };
-  const fields = [
+  const fields: Array<[keyof typeof initial, string, string, string]> = [
     ["assets", "Assets and components", "One per line. Example: customer database, authentication service, payment records.", "Customer database\nAuthentication service\nPayment records"],
     ["entryPoints", "Entry points", "One per line. Example: public login page, partner API, admin console.", "Public login page\nPartner API\nAdmin console"],
     ["dataFlows", "Important data flows", "Describe how data moves between components and users.", "Browser → API over HTTPS\nAPI → database using service identity"],
