@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"; // Added useLocation
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom"; // Added useLocation
 import { Suspense, lazy, useEffect } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { AccessibilityProvider } from "@/components/AccessibilityProvider";
@@ -84,6 +84,21 @@ const queryClient = new QueryClient({
   },
 });
 
+// Compatibility route for legacy OAuth callbacks that still return to /login.
+const LoginRedirect = () => {
+  const { isAuthenticated, isLoading } = useAuthStore();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <LoadingSpinner variant="cyber" text="Restoring your ETERNYX session..." />
+      </div>
+    );
+  }
+
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />;
+};
+
 // Component to handle routing and back button logic
 const AppContent = () => {
   const location = useLocation();
@@ -138,6 +153,7 @@ const AppContent = () => {
                     <PageTransitionWrapper>
                       <Routes>
                         <Route path="/" element={<Index />} />
+                        <Route path="/login" element={<LoginRedirect />} />
                         <Route path="/dashboard" element={<UnifiedDashboard />} />
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/arsenal" element={<CyberArsenal />} />
