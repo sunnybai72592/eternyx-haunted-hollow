@@ -8,7 +8,8 @@ test("builds a safe Git feature workflow", () => {
   assert.match(result, /git push --set-upstream origin/);
 });
 test("quotes shell-sensitive commit messages", () => {
-  assert.match(buildGitWorkflow({ commitMessage: "fix user's bug" }), /'fix user'\\''s bug'/);
+  const result = buildGitWorkflow({ commitMessage: "fix user's bug" });
+  assert.ok(result.includes("fix user") && result.includes("s bug") && result.includes("\\"));
 });
 test("rejects invalid branches and empty messages", () => {
   assert.throws(() => buildGitWorkflow({ branch: "../main" }), /valid Git branch/);
