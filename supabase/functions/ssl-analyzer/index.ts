@@ -222,8 +222,8 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
       attempts++
     }
 
-    if (analysisData.status !== 'READY') {
-      throw new Error('SSL Labs assessment is not ready yet; retry the request later.')
+    if (analysisData.status !== 'READY' || !analysisData.endpoints?.length) {
+      throw new Error('SSL Labs assessment is not ready or returned no endpoint; retry later.')
     }
 
     // Process SSL Labs results
@@ -302,27 +302,7 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
 
   } catch (error) {
     console.error('SSL Labs API error:', error)
-    
-    // Return basic analysis if SSL Labs fails
-    return {
-      grade: 'T',
-      hasWarnings: true,
-      isExceptional: false,
-      progress: 100,
-      endpoints: [],
-      certificates: [],
-      protocols: [],
-      suites: [],
-      serverSignature: 'Analysis failed',
-      prefixDelegation: false,
-      nonPrefixDelegation: false,
-      vulnerabilities: [{
-        id: 'ANALYSIS_FAILED',
-        name: 'Analysis Failed',
-        severity: 'high',
-        description: 'SSL Labs analysis could not be completed'
-      }]
-    }
+    throw new Error('SSL Labs assessment failed; no result was generated.')
   }
 }
 
