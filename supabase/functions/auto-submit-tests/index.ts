@@ -1,121 +1,66 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
+import { isTrustedServiceRequest } from "../_shared/service-auth.ts";
 
-const corsHeaders = {
+const headers = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
 };
+const reply = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers });
 
 serve(async (req) => {
-  // Handle CORS
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers });
+  if (req.method !== "POST") return reply({ error: "Method not allowed" }, 405);
+  if (!isTrustedServiceRequest(req)) return reply({ error: "Forbidden" }, 403);
 
   try {
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return reply({ error: "Auto-submission is not configured" }, 500);
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Supabase environment variables");
+    const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: attempts, error } = await db.from("user_attempts")
+      .select("id, start_time, test_id").eq("status", "in_progress")
+      .order("start_time", { ascending: true }).limit(200);
+    if (error) throw new Error("Unable to load in-progress attempts");
+
+    const now = Date.now();
+    const expired: string[] = [];
+    for (const attempt of attempts ?? []) {
+      if (!attempt.start_time || !attempt.test_id) continue;
+      const { data: test, error: testError } = await db.from("tests")
+        .select("duration_minutes").eq("id", attempt.test_id).maybeSingle();
+      if (testError) throw new Error("Unable to load test duration");
+      const duration = Number(test?.duration_minutes);
+      if (!test || !Number.isFinite(duration) || duration <= 0) continue;
+      const deadline = new Date(attempt.start_time).getTime() + duration * 60_000;
+      if (!Number.isFinite(deadline) || now <= deadline) continue;
+
+      // Compare-and-set avoids overwriting a concurrent user submission.
+      const { data: updated, error: updateError } = await db.from("user_attempts")
+        .update({ status: "auto_submitted", end_time: new Date(now).toISOString() })
+        .eq("id", attempt.id).eq("status", "in_progress").select("id").maybeSingle();
+      if (updateError) throw new Error("Unable to auto-submit expired attempt");
+      if (updated) expired.push(updated.id);
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Fetch all in-progress attempts with test duration using separate queries
-    const { data: attempts, error: fetchError } = await supabase
-      .from("user_attempts")
-      .select("id, start_time, test_id")
-      .eq("status", "in_progress");
-
-    if (fetchError) {
-      throw new Error("Failed to fetch in-progress attempts: " + fetchError.message);
+    let graded = 0;
+    for (const attemptId of expired) {
+      const response = await fetch(`${url}/functions/v1/grade-test`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, apikey: key, "Content-Type": "application/json" },
+        body: JSON.stringify({ attemptId }),
+      });
+      if (response.ok) graded++;
+      else console.error("Grading request failed for an auto-submitted attempt");
     }
 
-    if (!attempts || attempts.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No in-progress attempts to process" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const now = new Date().getTime();
-    const expiredAttempts: string[] = [];
-
-    // Check which attempts have exceeded their time limit
-    for (const attempt of attempts) {
-      // Fetch the test duration for each attempt
-      const { data: test } = await supabase
-        .from("tests")
-        .select("duration_minutes")
-        .eq("id", attempt.test_id)
-        .single();
-
-      if (test) {
-        const startTime = new Date(attempt.start_time).getTime();
-        const durationMs = (test.duration_minutes || 0) * 60 * 1000;
-        const endTime = startTime + durationMs;
-
-        if (now > endTime) {
-          expiredAttempts.push(attempt.id);
-        }
-      }
-    }
-
-    if (expiredAttempts.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No expired attempts" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Auto-submit expired attempts
-    const { error: updateError } = await supabase
-      .from("user_attempts")
-      .update({
-        status: "auto_submitted",
-        end_time: new Date().toISOString(),
-      })
-      .in("id", expiredAttempts);
-
-    if (updateError) {
-      throw new Error("Failed to auto-submit expired attempts: " + updateError.message);
-    }
-
-    // Grade each auto-submitted test
-    for (const attemptId of expiredAttempts) {
-      // Call the grade-test function
-      const gradeResponse = await fetch(
-        `${supabaseUrl}/functions/v1/grade-test`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ attemptId }),
-        }
-      );
-
-      if (!gradeResponse.ok) {
-        console.error(`Failed to grade attempt ${attemptId}`);
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        autoSubmittedCount: expiredAttempts.length,
-        attemptIds: expiredAttempts,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return reply({ success: true, checkedCount: attempts?.length ?? 0, autoSubmittedCount: expired.length, gradedCount: graded });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("Exam auto-submission failed:", error);
+    return reply({ error: "Exam auto-submission failed" }, 500);
   }
 });
