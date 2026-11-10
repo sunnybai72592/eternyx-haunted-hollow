@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { decodeBase64Utf8, decodeJwt, decodeUriComponent, encodeBase64Utf8, encodeUriComponent, formatJson as formatJsonInput, generateUuids } from "@/lib/developerStudioUtils.mjs";
+import { decodeBase64Utf8, decodeJwt as decodeJwtToken, decodeUriComponent, encodeBase64Utf8, encodeUriComponent, formatJson as formatJsonInput, generateUuids } from "@/lib/developerStudioUtils.mjs";
 
 type Feedback = { kind: "success" | "error" | "info"; message: string } | null;
 
@@ -102,7 +102,7 @@ export default function DeveloperStudio() {
 
   const decodeJwt = () => {
     try {
-      const { header, payload } = decodeJwt(jwtInput);
+      const { header, payload } = decodeJwtToken(jwtInput);
       setJwtOutput(JSON.stringify({ header, payload }, null, 2));
       setJwtFeedback({ kind: "info", message: "Decoded locally. This does NOT verify the signature, issuer, audience, or token validity." });
     } catch (error) {
@@ -261,6 +261,13 @@ export default function DeveloperStudio() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Level up your workflow</p><h2 className="mt-1 text-xl font-semibold text-white">Explore Advanced Developer Tools</h2><p className="mt-1 text-sm text-slate-400">Markdown preview, JSON-to-CSV, HTML entities, timestamps, and line-by-line diff.</p></div>
             <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/advanced">Open advanced workbench <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">API engineering</p><h2 className="mt-1 text-xl font-semibold text-white">API Engineering Workbench</h2><p className="mt-1 text-sm text-slate-400">Compose HTTP requests, inspect responses, measure latency, and export cURL commands.</p></div>
+            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/api-workbench">Open API workbench <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
           </div>
         </section>
 
