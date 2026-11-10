@@ -28,7 +28,7 @@ export function analyzeThreatModel(input = {}) {
   const trustBoundaries = lines(boundariesText);
   if (!assets.length) throw new Error("Add at least one asset or important component (one per line).");
   if (!entryPoints.length) throw new Error("Add at least one entry point (one per line).");
-  const context = [systemName, scope, ...assets, ...entryPoints, ...dataFlows, ...trustBoundaries].join(" ");
+  const context = [systemName, scope, ...assets, ...entryPoints, ...dataFlows, ...trustBoundaries, controlsText].join(" ");
   const has = (pattern) => pattern.test(context);
   const hasControls = controlsText.length > 0;
   const threats = STRIDE.map((item) => {
