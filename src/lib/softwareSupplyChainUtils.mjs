@@ -152,6 +152,6 @@ export function buildSupplyChainReport(result) {
   ];
   if (!result.findings.length) lines.push("No heuristic findings were detected. This is not proof that dependencies are vulnerability-free.");
   for (const finding of result.findings) lines.push(`### [${finding.severity.toUpperCase()}] ${finding.title}`, "", finding.detail, `Recommendation: ${finding.recommendation}`, finding.evidence ? `Evidence: \`${finding.evidence.replace(/\`/g, "'")}\`` : "", "");
-  lines.push("## Scope", "", "Static analysis of the supplied package.json and optional package-lock.json only. No package installation, network requests, vulnerability database lookups, malware analysis, or provenance verification was performed.", "");
+  lines.push("## Scope", "", "Static analysis of the supplied package.json and optional package-lock.json only. No package installation, network requests, vulnerability database lookups, malware analysis, or provenance verification was performed. A clean report does not mean the dependency set is vulnerability-free.", "");
   return lines.filter(Boolean).join("\n");
 }
