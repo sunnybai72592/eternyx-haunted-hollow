@@ -26,7 +26,7 @@ export function analyzeWorkflowSecurity(input){
  if(trigger&&checkout)add("PULL_REQUEST_TARGET_CHECKOUT",checkout.index,checkout[0]);
  const lines=source.split("\n");let offset=0;let inRun=false;let runIndent=0;
  for(const line of lines){const indent=(line.match(/^\s*/)||[""])[0].length;if(/^\s*run\s*:\s*[|>][-+]?\s*$/.test(line)){inRun=true;runIndent=indent;}else if(inRun&&line.trim()&&indent<=runIndent&&!/^\s*#/.test(line)){inRun=false;}
- const isRun=/^\s*run\s*:/.test(line)||inRun;
+ const isRun=/^\s*(?:-\s*)?run\s*:/.test(line)||inRun;
  if(isRun&&/\$\{\{\s*github\.event\.(?:pull_request\.(?:title|body|head\.ref)|issue\.(?:title|body)|comment\.body|discussion\.title|review\.body)\s*\}\}/i.test(line))add("EXPRESSION_INJECTION",offset,line);
  if(isRun&&/\b(?:echo|printf|print)\b/i.test(line)&&/\$\{\{\s*secrets\.[^}]+\}\}/i.test(line))add("SECRET_LOGGING",offset,line);
  offset+=line.length+1;}
