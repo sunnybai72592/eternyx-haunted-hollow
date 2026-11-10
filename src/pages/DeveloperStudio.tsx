@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound,
+  ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound, Gauge,
   Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -166,6 +166,13 @@ export default function DeveloperStudio() {
             <CardDescription className="text-slate-400">Review Prometheus scrape jobs, alert rules, and Grafana dashboard exports for reliability gaps.</CardDescription>
           </CardHeader>
           <CardContent><Link to="/developer-studio/observability" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open observability workbench ↗</Link></CardContent>
+        </Card>
+        <Card className="border-emerald-500/20 bg-slate-900/60 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Gauge className="h-5 w-5 text-emerald-300" /> SRE Reliability Workbench</CardTitle>
+            <CardDescription className="text-slate-400">Calculate SLOs and error budgets, and generate incident postmortems and operational runbooks.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/sre-reliability" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">Open SRE workbench ↗</Link></CardContent>
         </Card>
 
         <Tabs defaultValue="json" className="w-full">
