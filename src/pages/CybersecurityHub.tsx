@@ -81,6 +81,7 @@ const featuredTools = [
   { name: "Vulnerability Scanner", detail: "Assess authorized web targets for security issues.", href: "/vulnerability-scanner", icon: ShieldCheck, tag: "Web security" },
   { name: "Web Application Security Readiness", detail: "Review security headers, cookies, CSP, CSRF/session settings, and security.txt.", href: "/cybersecurity/web-security", icon: ShieldCheck, tag: "Application security" },
   { name: "STRIDE Threat Modeling", detail: "Map assets, entry points, trust boundaries, and prioritized security threats.", href: "/cybersecurity/threat-modeling", icon: ShieldAlert, tag: "Architecture security" },
+  { name: "Security Assessment & Remediation", detail: "Track evidence, owners, severity, remediation status, and validation notes.", href: "/cybersecurity/assessment-remediation", icon: FileSearch, tag: "Governance & remediation" },
   { name: "Threat Monitoring", detail: "Review platform threat-monitoring capabilities.", href: "/threat-monitoring", icon: Activity, tag: "Monitoring" },
   { name: "Security Auditing", detail: "Explore security review and assessment services.", href: "/security-auditing", icon: FileSearch, tag: "Assessment" },
   { name: "Incident Response", detail: "Explore incident handling and response workflows.", href: "/incident-response", icon: Siren, tag: "Response" },
