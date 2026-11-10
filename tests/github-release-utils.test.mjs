@@ -52,5 +52,5 @@ test("normalizes comparison stats and file inventory", () => {
   const result = normalizeGitHubComparison({ status: "ahead", ahead_by: 2, behind_by: 1, total_commits: 3, files: [{ filename: "src/a.ts", status: "modified", additions: 4, deletions: 2 }] });
   assert.equal(result.ahead_by, 2);
   assert.equal(result.files[0].changes, 0);
-  assert.equal(normalizeGitHubComparison(null).status, "unknown");
+  assert.throws(() => normalizeGitHubComparison(null), /invalid comparison response/i);
 });
