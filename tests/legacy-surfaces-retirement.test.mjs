@@ -37,9 +37,11 @@ test('legacy dashboard and catalogue URLs resolve to the real Explore surface', 
   assert.match(app, /<Route path="\/dashboard" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.match(app, /<Route path="\/tools" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.match(app, /<Route path="\/tools\/category\/:categoryId" element={<Navigate to="\/explore" replace \/>} \/>/);
-  assert.match(app, /<Route path="\\/tools\\/network-scanner" element={<Navigate to="\\/explore" replace \\/>} \\/>/);
-  assert.match(app, /<Route path="\\/tools\\/code-analyzer" element={<Navigate to="\\/explore" replace \\/>} \\/>/);
-  assert.doesNotMatch(app, /import\\(["']\\.\\/pages\\/(?:UnifiedDashboard|Tools|ToolCategoryPage|tools\\/NetworkScanner|tools\\/CodeAnalyzer)["']\\)/);
+  assert.ok(app.includes('<Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />'));
+  assert.ok(app.includes('<Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />'));
+  for (const retiredName of ['UnifiedDashboard', 'ToolCategoryPage', 'NetworkScanner', 'CodeAnalyzer']) {
+    assert.equal(app.includes(`import("./pages/${retiredName}")`), false);
+  }
 });
 
 test('the retained public exposure check does not invent scan progress or capabilities', async () => {
@@ -58,6 +60,6 @@ test('profile keeps real account management without fabricated arsenal progressi
   assert.match(profile, /\.from\('profiles'\)/);
   assert.match(profile, /handleSave/);
   assert.match(profile, /handlePrivacyUpdate/);
-  assert.match(profile, /onClick={signOut}/);
+  assert.ok(profile.includes('onClick={signOut}'));
   assert.doesNotMatch(profile, /fetchTools|userTools|loadingTools|ARSENAL|\bXP\b|\bLVL\b|handleDeleteAccount/);
 });
