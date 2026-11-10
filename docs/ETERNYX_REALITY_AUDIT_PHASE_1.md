@@ -261,6 +261,8 @@ Some cards use click handlers on non-interactive Card/motion containers rather t
 - The SSL analyzer verifies the caller JWT and validates public hostnames before analysis.
 - Subscription-check and customer-portal functions verify user identity; test-grading service functions use a dedicated service-auth helper.
 - Developer Studio's JSON, Base64, URL encoding, UUID, and JWT-decoding utilities are genuine browser-side utilities with explicit local-processing limitations.
+- The newer Developer Studio workbenches for API design/security, container and IaC review, CI/CD security, software supply chain, artifact provenance, database/SQL, RLS, STRIDE, AWS IAM, web security, observability, SRE, security assessment, and incident playbooks are deterministic input-driven analyzers; they do not claim to execute deployments or connect to cloud accounts. Preserve these as real local-analysis tools.
+- DevOps Launchpad and Deployment Intelligence clearly disclose that their generators/preflight checks run locally and do not execute Git, deploy to Vercel/Netlify, or access provider accounts. The GitHub integration/collaboration/change/Actions pages use real public GitHub API data and explicitly do not require a token; private repository access and write actions remain future work.
 - The profile visibility row policy was later tightened to respect `is_profile_public`; preserve that behavior while fixing column-level privacy.
 
 ## 8. Recommended remediation order
