@@ -31,6 +31,7 @@ const ContainerInfrastructureIntelligence = lazy(() => import("./pages/Container
 const InfrastructureAsCodeIntelligence = lazy(() => import("./pages/InfrastructureAsCodeIntelligence"));
 const ObservabilityIntelligence = lazy(() => import("./pages/ObservabilityIntelligence"));
 const SreReliabilityWorkbench = lazy(() => import("./pages/SreReliabilityWorkbench"));
+const CicdPipelineSecurityIntelligence = lazy(() => import("./pages/CicdPipelineSecurityIntelligence"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
 const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
@@ -184,6 +185,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/infrastructure-as-code" element={<InfrastructureAsCodeIntelligence />} />
                         <Route path="/developer-studio/observability" element={<ObservabilityIntelligence />} />
                         <Route path="/developer-studio/sre-reliability" element={<SreReliabilityWorkbench />} />
+                        <Route path="/developer-studio/cicd-security" element={<CicdPipelineSecurityIntelligence />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />
