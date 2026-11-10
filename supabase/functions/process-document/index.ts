@@ -1,35 +1,53 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
+import { authenticateUser } from "../_shared/user-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
 };
 
-// Helper function to chunk text into smaller pieces
-function chunkText(text: string, chunkSize: number = 500, overlap: number = 100): string[] {
-  const chunks: string[] = [];
-  let start = 0;
+const reply = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: corsHeaders });
 
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
-    chunks.push(text.substring(start, end));
-    start = end - overlap;
+const isUuid = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+export function chunkText(text: string, chunkSize = 500, overlap = 100): string[] {
+  if (!text) return [];
+  if (!Number.isInteger(chunkSize) || chunkSize < 1) {
+    throw new Error("chunkSize must be a positive integer");
+  }
+  if (!Number.isInteger(overlap) || overlap < 0 || overlap >= chunkSize) {
+    throw new Error("overlap must be a non-negative integer smaller than chunkSize");
   }
 
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    const end = Math.min(start + chunkSize, text.length);
+    chunks.push(text.slice(start, end));
+    if (end === text.length) break;
+    start = end - overlap;
+  }
   return chunks;
 }
 
-// Embeddings are optional (retrieval uses document_id); skip external calls
-async function generateEmbedding(_text: string): Promise<number[] | null> {
-  return null;
+function toBase64(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  const blockSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += blockSize) {
+    parts.push(String.fromCharCode(...bytes.subarray(offset, offset + blockSize)));
+  }
+  return btoa(parts.join(""));
 }
 
-// Helper function to extract text from image using OpenAI Vision API
 async function extractTextFromImage(imageBase64: string, mimeType: string): Promise<string> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) throw new Error("AI is not configured");
+
   const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -39,147 +57,144 @@ async function extractTextFromImage(imageBase64: string, mimeType: string): Prom
       input: [{
         role: "user",
         content: [
-          { type: "input_text", text: "Extract all text from this image. Return only the extracted text." },
+          { type: "input_text", text: "Extract all readable text from this image. Return only the extracted text." },
           { type: "input_image", image_url: `data:${mimeType};base64,${imageBase64}` },
         ],
       }],
+      max_output_tokens: 4096,
     }),
   });
+
   const data = await response.json();
-  if (!response.ok) throw new Error(`AI error (${response.status})`);
-  return data.output_text ?? (data.output || []).flatMap((o: any) => o.content || []).filter((c: any) => c.type === "output_text").map((c: any) => c.text).join("");
+  if (!response.ok) {
+    console.error("Document image extraction failed", response.status);
+    throw new Error("Unable to extract text from the image");
+  }
+
+  return data.output_text ?? (data.output || [])
+    .flatMap((item: any) => item.content || [])
+    .filter((item: any) => item.type === "output_text")
+    .map((item: any) => item.text)
+    .join("");
 }
 
-// Helper function to extract text from PDF
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  // For production, use a proper PDF parsing library
-  // This is a simplified approach that works with text-based PDFs
-  const text = new TextDecoder().decode(pdfBuffer);
-  return text;
+  // This remains a basic text-layer extraction, not a full PDF parser or OCR engine.
+  return new TextDecoder("utf-8", { fatal: false }).decode(pdfBuffer);
 }
 
 serve(async (req) => {
-  // Handle CORS
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return reply({ error: "Method not allowed" }, 405);
+
+  const { user, supabase } = await authenticateUser(req);
+  if (!user || !supabase) return reply({ error: "Authentication required" }, 401);
+
+  let body: { documentId?: unknown; storagePath?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return reply({ error: "Invalid JSON request" }, 400);
   }
 
+  if (!isUuid(body.documentId)) return reply({ error: "A valid documentId is required" }, 400);
+
   try {
-    const { documentId, storagePath, fileType, mimeType } = await req.json();
-
-    if (!documentId || !storagePath || !fileType) {
-      return new Response(
-        JSON.stringify({ error: "Missing documentId, storagePath, or fileType" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Supabase environment variables");
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Update document status to 'processing'
-    await supabase
+    // Derive storage path and file metadata from the owner's database record.
+    // Never let the caller choose an arbitrary Storage object to process.
+    const { data: document, error: documentError } = await supabase
       .from("ai_documents")
-      .update({ status: "processing" })
-      .eq("id", documentId);
+      .select("id, user_id, storage_path, file_type, mime_type, file_size")
+      .eq("id", body.documentId)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    // Download the file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase
-      .storage
+    if (documentError) throw new Error("Unable to verify document ownership");
+    if (!document) return reply({ error: "Document not found" }, 404);
+    if (body.storagePath !== undefined && body.storagePath !== document.storage_path) {
+      return reply({ error: "Document storage reference does not match" }, 403);
+    }
+
+    const fileType = document.file_type;
+    const mimeType = document.mime_type || "";
+    if (fileType !== "pdf" && fileType !== "image") {
+      return reply({ error: "Unsupported document type" }, 415);
+    }
+    if (fileType === "pdf" && mimeType !== "application/pdf") {
+      return reply({ error: "Invalid PDF content type" }, 415);
+    }
+    if (fileType === "image" && !["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+      return reply({ error: "Only JPEG, PNG, and WebP images are supported" }, 415);
+    }
+
+    const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
-      .download(storagePath);
+      .download(document.storage_path);
 
     if (downloadError || !fileData) {
-      throw new Error(`Failed to download file: ${downloadError?.message}`);
+      throw new Error("Unable to download the uploaded document");
     }
+    if (fileData.size > 20 * 1024 * 1024) {
+      return reply({ error: "Document exceeds the 20 MB processing limit" }, 413);
+    }
+
+    const { error: processingError } = await supabase
+      .from("ai_documents")
+      .update({ status: "processing", error_message: null })
+      .eq("id", document.id)
+      .eq("user_id", user.id);
+    if (processingError) throw new Error("Unable to update document processing status");
 
     let extractedText = "";
-
-    // Extract text based on file type
     if (fileType === "pdf") {
-      const pdfBuffer = await fileData.arrayBuffer();
-      extractedText = await extractTextFromPDF(pdfBuffer);
-    } else if (fileType === "image") {
-      // Convert image to base64
-      const arrayBuffer = await fileData.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const binaryString = String.fromCharCode(...uint8Array);
-      const imageBase64 = btoa(binaryString);
-
-      // Extract text from image using OpenAI Vision API
-      extractedText = await extractTextFromImage(imageBase64, mimeType || "image/jpeg");
+      extractedText = await extractTextFromPDF(await fileData.arrayBuffer());
     } else {
-      throw new Error(`Unsupported file type: ${fileType}`);
+      const bytes = new Uint8Array(await fileData.arrayBuffer());
+      extractedText = await extractTextFromImage(toBase64(bytes), mimeType);
     }
 
-    if (!extractedText || extractedText.trim().length === 0) {
-      throw new Error("No text could be extracted from the file");
+    if (!extractedText.trim()) throw new Error("No readable text could be extracted");
+    if (extractedText.length > 2_000_000) {
+      throw new Error("Extracted document text exceeds the processing limit");
     }
 
-    // Chunk the text
     const chunks = chunkText(extractedText, 500, 100);
+    const chunkRecords = chunks.map((content, index) => ({
+      document_id: document.id,
+      content,
+      embedding: null,
+      chunk_index: index,
+    }));
 
-    // Generate embeddings for each chunk and store them
-    const chunkRecords = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const embedding = await generateEmbedding(chunk);
-
-      chunkRecords.push({
-        document_id: documentId,
-        content: chunk,
-        embedding: embedding,
-        chunk_index: i,
-      });
-
-      // To avoid rate limiting, add a small delay between API calls
-      if (i < chunks.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    // Insert all chunks into the database
-    const { error: insertError } = await supabase
+    // Replace prior chunks so a retried processing request does not duplicate them.
+    const { error: deleteError } = await supabase
       .from("document_chunks")
-      .insert(chunkRecords);
+      .delete()
+      .eq("document_id", document.id);
+    if (deleteError) throw new Error("Unable to prepare document chunks");
 
-    if (insertError) {
-      throw new Error(`Failed to insert chunks: ${insertError.message}`);
-    }
+    const { error: insertError } = await supabase.from("document_chunks").insert(chunkRecords);
+    if (insertError) throw new Error("Unable to save extracted document text");
 
-    // Update document status to 'ready' and store extracted text
-    const { error: updateError } = await supabase
+    const { error: readyError } = await supabase
       .from("ai_documents")
       .update({
         status: "ready",
-        extracted_text: extractedText.substring(0, 1000), // Store first 1000 chars for preview
+        error_message: null,
+        extracted_text: extractedText.substring(0, 1000),
       })
-      .eq("id", documentId);
+      .eq("id", document.id)
+      .eq("user_id", user.id);
+    if (readyError) throw new Error("Unable to finalize document processing");
 
-    if (updateError) {
-      throw new Error(`Failed to update document status: ${updateError.message}`);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        documentId,
-        chunksCreated: chunkRecords.length,
-        extractedTextLength: extractedText.length,
-      }),
-      { status: 200, headers: corsHeaders }
-    );
+    return reply({
+      success: true,
+      documentId: document.id,
+      chunksCreated: chunkRecords.length,
+      extractedTextLength: extractedText.length,
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: corsHeaders }
-    );
+    console.error("Document processing failed:", error);
+    return reply({ error: (error as Error).message || "Document processing failed" }, 500);
   }
 });
