@@ -35,6 +35,7 @@ const CicdPipelineSecurityIntelligence = lazy(() => import("./pages/CicdPipeline
 const SoftwareSupplyChainIntelligence = lazy(() => import("./pages/SoftwareSupplyChainIntelligence"));
 const ArtifactProvenanceIntelligence = lazy(() => import("./pages/ArtifactProvenanceIntelligence"));
 const DatabaseSqlIntelligence = lazy(() => import("./pages/DatabaseSqlIntelligence"));
+const RlsSecurityIntelligence = lazy(() => import("./pages/RlsSecurityIntelligence"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
 const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
@@ -192,6 +193,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/supply-chain" element={<SoftwareSupplyChainIntelligence />} />
                         <Route path="/developer-studio/artifact-provenance" element={<ArtifactProvenanceIntelligence />} />
                         <Route path="/developer-studio/database-sql" element={<DatabaseSqlIntelligence />} />
+                        <Route path="/developer-studio/rls-security" element={<RlsSecurityIntelligence />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />
