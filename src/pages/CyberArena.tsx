@@ -102,7 +102,7 @@ const CyberArena = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       let functionName = '';
-      let payload: any = {};
+      let payload: any = { user_id: user?.id };
       
       switch (toolId) {
         case 'port-scanner':
@@ -121,6 +121,7 @@ const CyberArena = () => {
           break;
         case 'ssl-analyzer':
           functionName = 'ssl-analyzer';
+          delete payload.user_id; // The Edge Function derives ownership from the verified JWT.
           payload.hostname = input;
           break;
         case 'web-scanner':
