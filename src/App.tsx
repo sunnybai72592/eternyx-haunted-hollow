@@ -26,6 +26,7 @@ const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
 const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
 const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
+const DeploymentIntelligence = lazy(() => import("./pages/DeploymentIntelligence"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
 const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
@@ -174,6 +175,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/advanced" element={<AdvancedDeveloperTools />} />
                         <Route path="/developer-studio/api-workbench" element={<ApiEngineeringWorkbench />} />
                         <Route path="/developer-studio/devops" element={<DevOpsLaunchpad />} />
+                        <Route path="/developer-studio/deployment-intelligence" element={<DeploymentIntelligence />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />

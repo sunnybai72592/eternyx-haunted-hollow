@@ -37,6 +37,8 @@ jobs:
           node --check tests/api-workbench-utils.test.mjs
           node --check src/lib/devopsLaunchpadUtils.mjs
           node --check tests/devops-launchpad-utils.test.mjs
+          node --check src/lib/deploymentIntelligenceUtils.mjs
+          node --check tests/deployment-intelligence-utils.test.mjs
           node --check src/lib/githubHubUtils.mjs
           node --check tests/github-hub-utils.test.mjs
           node --check src/lib/githubCollaborationUtils.mjs
