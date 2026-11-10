@@ -80,7 +80,7 @@ const ToolCard: React.FC<ToolCardProps> = ({
   return (
     <Card
       className={cn(
-        'relative overflow-hidden cursor-pointer transition-all duration-300 group',
+        'relative overflow-hidden transition-all duration-300 group',
         'bg-black/70 backdrop-blur-sm border-2 border-gray-800',
         'hover:scale-105 hover:shadow-2xl',
         getBorderColor(),
@@ -88,7 +88,6 @@ const ToolCard: React.FC<ToolCardProps> = ({
         isLocked && 'opacity-60 cursor-not-allowed hover:scale-100',
         className
       )}
-      onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
