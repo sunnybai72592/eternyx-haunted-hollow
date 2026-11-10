@@ -445,4 +445,20 @@ The function validates message shape and limits a request to 30 messages with 4,
 **Required remediation:** verify the user in the handler, apply per-user and global quotas, bound total request size and response tokens, and return consistent non-200 error statuses for provider failures.
 
 
+
+### R-34 — Sales, support, and consultation surfaces contain false or dead interactions
+
+**Severity:** High user-trust / conversion issue  
+**Files:** `src/pages/EliteDevelopmentTeam.tsx`, `src/pages/Premium.tsx`, `src/pages/ServiceDetailPage.tsx`, `src/pages/Help.tsx`, `src/pages/ServicesHub.tsx`
+
+- Elite Development Team displays hard-coded sample team profiles, generic bios, stock avatar URLs, and unverified social destinations. Its contact form only logs the submitted values to the browser console, shows “Message sent”, and clears the form; it does not persist or deliver the inquiry.
+- Premium plan buttons have no click handlers. The displayed Basic/Pro/Elite prices ($29/$79/$199) do not match the two backend checkout plans ($29.99/$99.99), and no checkout action is connected from this page.
+- Service Detail's “Request a Consultation” button has no action.
+- Help promises a response within 24 hours but does not provide a verified support channel. Its “Send a message” link points to `#contact`, for which no target was found in the page; its FAQ still refers to a dashboard destination that now redirects to Explore.
+- Services Hub sends both internal paths and external URLs/mailto links through React Router's `navigate()`. External destinations therefore do not open as external links, and some service cards point to page paths that are not declared routes.
+- No dedicated suggestions/feature-request intake workflow was found in the current page/route inventory.
+
+**Required remediation:** remove fictional staff claims unless clearly labeled as sample content, connect inquiries to a real backend and delivery process, wire pricing to the canonical Stripe checkout flow and server-managed plans, validate every support promise, and use semantic internal/external links. Add a real suggestions intake only when ownership, moderation, privacy, and response expectations are defined.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
