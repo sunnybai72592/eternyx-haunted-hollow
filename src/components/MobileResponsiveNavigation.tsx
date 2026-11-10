@@ -152,13 +152,12 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   };
 
   const handleSignIn = () => {
-    setAuthMode('login');
-    setShowAuthModal(true);
+    setIsMenuOpen?.(false as any);
+    navigate('/auth');
   };
 
   const handleSignUp = () => {
-    setAuthMode('signup');
-    setShowAuthModal(true);
+    navigate('/auth?mode=signup');
   };
 
   const handleSignOut = async () => {
