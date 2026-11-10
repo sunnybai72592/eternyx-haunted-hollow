@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound, Gauge,
+  Activity, ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound, Gauge,
   Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -181,6 +181,14 @@ export default function DeveloperStudio() {
             <CardDescription className="text-slate-400">Review GitHub Actions workflows for risky permissions, unpinned actions, pull-request attack paths, and secret exposure.</CardDescription>
           </CardHeader>
           <CardContent><Link to="/developer-studio/cicd-security" className="text-sm font-medium text-rose-300 hover:text-rose-200">Open pipeline security workbench ↗</Link></CardContent>
+        </Card>
+
+        <Card className="border-fuchsia-500/20 bg-slate-900/60 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Boxes className="h-5 w-5 text-fuchsia-300" /> Software Supply Chain Intelligence</CardTitle>
+            <CardDescription className="text-slate-400">Inventory npm dependencies, generate CycloneDX SBOMs, and review lockfile drift, dependency sources, and install-time script risks.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/supply-chain" className="text-sm font-medium text-fuchsia-300 hover:text-fuchsia-200">Open supply chain workbench ↗</Link></CardContent>
         </Card>
 
         <Tabs defaultValue="json" className="w-full">
@@ -363,7 +371,7 @@ export default function DeveloperStudio() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
           <h2 className="font-semibold">Privacy & security</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            All five utilities process input in your browser. No tool in this workbench sends your text or tokens to an ETERNYX backend. JWT decoding only reads the token's first two segments and does not validate its signature or claims. Avoid pasting production secrets into shared or public devices.
+            Browser-based utilities process pasted input locally. No tool in this workbench sends your text, manifests, lockfiles, or tokens to an ETERNYX backend. JWT decoding only reads the token's first two segments and does not validate its signature or claims. Avoid pasting production secrets into shared or public devices.
           </p>
         </section>
       </div>
