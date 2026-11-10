@@ -8,13 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { buildIncidentReport, INCIDENT_PLAYBOOKS, summarizeIncident, validateIncident, validateTimelineEntry } from "@/lib/incidentResponseUtils.mjs";
 
+type TimelineEntry = ReturnType<typeof validateTimelineEntry>;
+
 const initialIncident = { title: "New incident (draft)", type: "service_disruption", severity: "medium", status: "declared", commander: "", affectedServices: "", summary: "" };
-const severityStyles = { critical: "border-rose-500/40 bg-rose-500/10 text-rose-200", high: "border-orange-500/40 bg-orange-500/10 text-orange-200", medium: "border-amber-500/40 bg-amber-500/10 text-amber-200", low: "border-slate-700 bg-slate-800 text-slate-300" };
+const severityStyles: Record<string, string> = { critical: "border-rose-500/40 bg-rose-500/10 text-rose-200", high: "border-orange-500/40 bg-orange-500/10 text-orange-200", medium: "border-amber-500/40 bg-amber-500/10 text-amber-200", low: "border-slate-700 bg-slate-800 text-slate-300" };
 
 export default function IncidentResponsePlaybookWorkbench() {
   const [incident, setIncident] = useState(initialIncident);
-  const [timeline, setTimeline] = useState([]);
-  const [completed, setCompleted] = useState([]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [completed, setCompleted] = useState<number[]>([]);
   const [entry, setEntry] = useState({ action: "", owner: "", timestamp: new Date().toISOString().slice(0, 16) });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -29,7 +31,7 @@ export default function IncidentResponsePlaybookWorkbench() {
       setEntry(v => ({ ...v, action: "", owner: "" })); setError(""); setNotice("Timeline entry recorded.");
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to add timeline entry."); }
   };
-  const toggleAction = (index) => setCompleted(current => current.includes(index) ? current.filter(value => value !== index) : [...current, index]);
+  const toggleAction = (index: number) => setCompleted(current => current.includes(index) ? current.filter(value => value !== index) : [...current, index]);
   const exportReport = () => {
     try {
       validateIncident(incident);
