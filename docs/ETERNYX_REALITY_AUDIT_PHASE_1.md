@@ -357,4 +357,47 @@ The current route map no longer directly mounts these older catalogue pages. The
 **Required remediation:** designate one current architecture source of truth, archive obsolete aspirational docs, correct the AI deployment guide before anyone follows it, reconcile route and capability statuses, and align documented release gates with CI.
 
 
+
+### R-27 — Active CBT flow exposes answer keys through the options policy
+
+**Severity:** High assessment-integrity issue  
+**Files:** `supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql`, `src/pages/TestInterface.tsx`
+
+The migration allows users to select option rows for any active test. The `options` table includes the `is_correct` column, and the Test Interface requests `select('*')`. Row-level security controls which rows can be read; it does not hide the `is_correct` column. A client can therefore retrieve correct answers for active tests if the migration and grants are deployed as written.
+
+**Required remediation:** expose student-safe options through a view or server endpoint that omits correctness fields. Keep correct-answer data available only to the trusted grading function. Add a regression test proving that a student cannot retrieve answer keys through REST or the app client.
+
+### R-28 — Manual CBT submission is inconsistent with the attempt RLS policy and grading flow
+
+**Severity:** High workflow issue  
+**Files:** `supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql`, `src/pages/TestInterface.tsx`, `supabase/functions/auto-submit-tests/index.ts`, `supabase/functions/grade-test/index.ts`
+
+The user-facing submit flow updates an attempt from `in_progress` to `submitted`. The RLS update policy's `USING` condition requires `status = 'in_progress'` and does not provide a separate `WITH CHECK`; PostgreSQL uses the policy expression to validate the new row as well, so the submitted status may fail the policy check. The UI also does not invoke `grade-test` after manual submission. The grading function is currently invoked by the trusted auto-submit function, not the manual-submit path.
+
+Additional limits:
+- The timer starts from the full configured duration on each page load rather than a server-owned attempt deadline, so refreshing can reset the timer.
+- The browser Visibility API detects a hidden tab, not a device screen lock or proof of cheating.
+- The grading function awards points only for multiple-choice/true-false selections; short answers receive no automated score.
+- No scheduled invocation for `auto-submit-tests` was found in the repository configuration. An external scheduler may exist, but it was not verified.
+
+**Required remediation:** make the server authoritative for attempt deadlines and status transitions; use a trusted submission/grading operation; add an explicit manual-grade path for short answers; and test manual, timed, refresh, and concurrent submission cases. Keep the shared service-auth protection on both Edge Functions.
+
+### R-29 — Standalone SQL schemas are required by later migrations but are outside migration automation
+
+**Severity:** High deployment/reproducibility and identity risk  
+**Files:** `cbt_schema.sql`, `tsms_schema.sql`, `supabase-schema.sql`, `eternyx_ai_schema.sql`, `supabase/config.toml`, migrations `20251221200912` and `20251225095322`
+
+The timestamped migration history alters/enables RLS on CBT and AI tables, but their `CREATE TABLE` statements are in standalone root-level SQL files rather than timestamped migrations. The Supabase config has `db.migrations.schema_paths = []`; those root files are not automatically applied by the migration runner. A clean database reset/push can therefore fail when the later migrations attempt to alter tables that have not been created, unless an operator manually applies the standalone files first.
+
+There is also an identity-model mismatch:
+- `supabase-schema.sql` creates a custom `public.users` table with a `password_hash` column and no visible RLS enablement or auth-user synchronization trigger.
+- `eternyx_ai_schema.sql` and `cbt_schema.sql` reference that custom `users` table.
+- The current frontend authenticates with Supabase Auth and passes `auth.users.id` as the `user_id` for AI documents and attempts.
+- `tsms_schema.sql` instead references `auth.users` directly for teacher/role records.
+
+If these standalone schemas are applied as written without an explicit mapping, foreign-key ownership and RLS comparisons may not align with the active Supabase Auth user IDs. The repository cannot confirm which files were manually applied to the live project.
+
+**Required remediation:** inventory the live schema and migration ledger in a non-production environment, choose `auth.users` as the canonical identity source, remove or isolate the legacy password table if unused, and move required table creation into ordered forward migrations. Do not replay or rewrite production migration history blindly.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
