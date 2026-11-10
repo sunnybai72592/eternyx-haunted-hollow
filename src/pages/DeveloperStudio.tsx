@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft, Braces, Check, Copy, FileCode2, Fingerprint, KeyRound,
+  ArrowLeft, Braces, Copy, FileCode2, Fingerprint, KeyRound,
   Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ const encodeBase64Utf8 = (value: string) => {
 };
 
 const decodeBase64Utf8 = (value: string) => {
-  const binary = atob(value.replace(/\\s/g, ""));
+  const binary = atob(value.replace(/\s/g, ""));
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 };
@@ -128,7 +128,7 @@ export default function DeveloperStudio() {
       setUuidOutput("");
       return;
     }
-    setUuidOutput(Array.from({ length: count }, makeUuid).join("\\n"));
+    setUuidOutput(Array.from({ length: count }, makeUuid).join("\n"));
   };
 
   const decodeJwt = () => {
