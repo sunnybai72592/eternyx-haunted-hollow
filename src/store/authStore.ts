@@ -3,7 +3,6 @@ import { persist } from 'zustand/middleware';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-// Auth profile shape based on public.profiles table
 export interface UserProfile {
   id: string;
   user_id: string;
@@ -26,7 +25,6 @@ export interface UserProfile {
   show_phone?: boolean;
   created_at?: string;
   updated_at?: string;
-  // Additional computed fields
   email?: string;
   access_level?: 'basic' | 'premium' | 'elite';
   last_login?: string | null;
@@ -44,91 +42,62 @@ export interface UserProfile {
 }
 
 interface AuthState {
-  // State
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-
-  // Actions
   setUser: (user: User | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setLoading: (loading: boolean) => void;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, username?: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, username?: string) => Promise<{ success: boolean; needsEmailConfirmation?: boolean; error?: string }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>;
   initialize: () => void;
 }
 
 async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase.from("profiles")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-
+  const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
   if (error) {
     console.error('fetchUserProfile error', error);
     return null;
   }
-  
-  if (data) {
-    // Add computed fields - cast to any first to allow adding computed properties
-    return {
-      ...(data as any),
-      email: (data as any).email || '',
-      access_level: (data as any).access_level || 'basic',
-      preferences: (data as any).preferences || {
-        theme: 'cyberpunk',
-        notifications: true,
-        sound_effects: true,
-        analytics: true
-      },
-      stats: (data as any).stats || {
-        login_count: 0,
-        projects_created: 0,
-        last_activity: null
-      }
-    } as UserProfile;
-  }
-  
-  return null;
+  if (!data) return null;
+  return {
+    ...(data as any),
+    email: (data as any).email || '',
+    access_level: (data as any).access_level || 'basic',
+    preferences: (data as any).preferences || {
+      theme: 'cyberpunk', notifications: true, sound_effects: true, analytics: true,
+    },
+    stats: (data as any).stats || { login_count: 0, projects_created: 0, last_activity: null },
+  } as UserProfile;
 }
 
 async function createDefaultProfile(user: User, username?: string): Promise<UserProfile | null> {
+  const name = username || user.user_metadata?.username || user.user_metadata?.full_name || user.email?.split('@')[0] || 'agent';
   const profile = {
     user_id: user.id,
-    full_name: username || user.user_metadata?.username || (user.email ? user.email.split('@')[0] : 'agent'),
-    username: username || user.user_metadata?.username || (user.email ? user.email.split('@')[0] : 'agent'),
+    full_name: name,
+    username: name,
     role: 'user',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   };
-
-  const { error } = await supabase.from("profiles").insert([profile]);
+  const { error } = await supabase.from('profiles').insert([profile]);
   if (error) {
-   console.error('createDefaultProfile error', error);
+    // Profile creation is secondary to authentication; never turn a valid login into a failed login.
+    console.error('createDefaultProfile error', error);
     return null;
   }
-  
   return {
-    id: user.id,
-    ...profile,
-    email: user.email || '',
-    access_level: 'basic',
-    preferences: {
-      theme: 'cyberpunk',
-      notifications: true,
-      analytics: true,
-      sound_effects: true,
-    },
-    stats: {
-      login_count: 1,
-      projects_created: 0,
-      last_activity: new Date().toISOString(),
-    },
+    id: user.id, ...profile, email: user.email || '', access_level: 'basic',
+    preferences: { theme: 'cyberpunk', notifications: true, analytics: true, sound_effects: true },
+    stats: { login_count: 1, projects_created: 0, last_activity: new Date().toISOString() },
     last_login: new Date().toISOString(),
   };
 }
@@ -142,94 +111,110 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       isAuthenticated: false,
 
-      setUser: (user) => {
-        set({ user, isAuthenticated: !!user });
-      },
-
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
       setProfile: (profile) => set({ profile }),
       setLoading: (isLoading) => set({ isLoading }),
 
       signIn: async (email, password) => {
         set({ isLoading: true });
         try {
-          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: email.trim().toLowerCase(), password,
+          });
           if (error) throw error;
-
-          const user = data.user!;
-          // Load or create profile
+          const user = data.user;
           let profile = await fetchUserProfile(user.id);
           if (!profile) profile = await createDefaultProfile(user);
-
-          set({
-            user,
-            session: data.session,
-            profile,
-            isAuthenticated: !!user,
-            isLoading: false,
-          });
+          set({ user, session: data.session, profile, isAuthenticated: true, isLoading: false });
           return { success: true };
         } catch (err: any) {
           set({ isLoading: false });
-          return { success: false, error: err?.message || 'Login failed' };
+          return { success: false, error: err?.message || 'Unable to sign in. Please try again.' };
         }
       },
 
       signUp: async (email, password, username) => {
         set({ isLoading: true });
         try {
-          const redirectUrl = `${window.location.origin}/`;
+          const cleanEmail = email.trim().toLowerCase();
+          const cleanUsername = username?.trim();
           const { data, error } = await supabase.auth.signUp({
-            email,
+            email: cleanEmail,
             password,
             options: {
-              emailRedirectTo: redirectUrl,
-              data: { username },
+              emailRedirectTo: window.location.origin,
+              data: { username: cleanUsername || cleanEmail.split('@')[0], full_name: cleanUsername || '' },
             },
           });
           if (error) throw error;
 
-          const user = data.user;
-          if (user) {
-            let profile = await fetchUserProfile(user.id);
-            if (!profile) profile = await createDefaultProfile(user, username);
-            set({ user, session: data.session, profile, isAuthenticated: true, isLoading: false });
-          } else {
-            // Email confirmation flow – no session yet
-            set({ isLoading: false });
+          // With email confirmation enabled, Supabase returns a user but no session.
+          // Wait for the confirmation/sign-in event before attempting an RLS-protected profile insert.
+          if (data.session && data.user) {
+            let profile = await fetchUserProfile(data.user.id);
+            if (!profile) profile = await createDefaultProfile(data.user, cleanUsername);
+            set({ user: data.user, session: data.session, profile, isAuthenticated: true, isLoading: false });
+            return { success: true, needsEmailConfirmation: false };
           }
-          return { success: true };
+          set({ user: null, session: null, profile: null, isAuthenticated: false, isLoading: false });
+          return { success: true, needsEmailConfirmation: true };
         } catch (err: any) {
           set({ isLoading: false });
-          return { success: false, error: err?.message || 'Registration failed' };
+          return { success: false, error: err?.message || 'Unable to create your account. Please try again.' };
         }
       },
 
       signInWithGoogle: async () => {
         set({ isLoading: true });
         try {
-          const { data, error } = await supabase.auth.signInWithOAuth({
+          const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
-            options: {
-              redirectTo: `${window.location.origin}/dashboard`,
-            },
+            options: { redirectTo: window.location.origin },
           });
-
           if (error) throw error;
-          
-          // OAuth flow will redirect, so we'll handle success in initialize()
+          // The browser is expected to leave for Google's consent screen.
           return { success: true };
         } catch (err: any) {
           set({ isLoading: false });
-          return { success: false, error: err?.message || 'Google sign-in failed' };
+          return { success: false, error: err?.message || 'Google sign-in could not be started.' };
+        }
+      },
+
+      resetPassword: async (email) => {
+        set({ isLoading: true });
+        try {
+          const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+            redirectTo: `${window.location.origin}/reset-password`,
+          });
+          if (error) throw error;
+          set({ isLoading: false });
+          return { success: true };
+        } catch (err: any) {
+          set({ isLoading: false });
+          return { success: false, error: err?.message || 'Unable to send the password reset email.' };
+        }
+      },
+
+      updatePassword: async (password) => {
+        set({ isLoading: true });
+        try {
+          const { error } = await supabase.auth.updateUser({ password });
+          if (error) throw error;
+          set({ isLoading: false });
+          return { success: true };
+        } catch (err: any) {
+          set({ isLoading: false });
+          return { success: false, error: err?.message || 'Unable to update your password.' };
         }
       },
 
       signOut: async () => {
         set({ isLoading: true });
         try {
-          await supabase.auth.signOut();
-        } catch (e) {
-          console.error('Logout error:', e);
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+        } catch (error) {
+          console.error('Logout error:', error);
         }
         set({ user: null, session: null, profile: null, isAuthenticated: false, isLoading: false });
       },
@@ -238,32 +223,24 @@ export const useAuthStore = create<AuthState>()(
         try {
           const currentUser = get().user;
           if (!currentUser) return { success: false, error: 'Not authenticated' };
-
-          const { data, error } = await supabase
-            .from("profiles")
-            .update(updates as any)
-            .eq("user_id", currentUser.id)
-            .select()
-            .maybeSingle();
-
+          const { data, error } = await supabase.from('profiles').update(updates as any)
+            .eq('user_id', currentUser.id).select().maybeSingle();
           if (error) throw error;
           set({ profile: (data as UserProfile) || get().profile });
           return { success: true };
         } catch (err: any) {
-          return { success: false, error: err?.message || 'Update failed' };
+          return { success: false, error: err?.message || 'Profile update failed.' };
         }
       },
 
       initialize: () => {
-        // Set up listener FIRST
-        const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-          // Only synchronous updates in callback
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
           set({ session, user: session?.user ?? null, isAuthenticated: !!session?.user });
-
-          // Defer profile fetching to avoid deadlocks
           if (session?.user) {
+            const currentUser = session.user;
             setTimeout(async () => {
-              const profile = await fetchUserProfile(session.user!.id);
+              let profile = await fetchUserProfile(currentUser.id);
+              if (!profile) profile = await createDefaultProfile(currentUser);
               set({ profile, isLoading: false });
             }, 0);
           } else {
@@ -271,24 +248,27 @@ export const useAuthStore = create<AuthState>()(
           }
         });
 
-        // THEN get existing session
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
+        supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+          if (error) console.error('Unable to restore Supabase session:', error);
           const user = session?.user ?? null;
           let profile: UserProfile | null = null;
-          if (user) profile = await fetchUserProfile(user.id);
+          if (user) {
+            profile = await fetchUserProfile(user.id);
+            if (!profile) profile = await createDefaultProfile(user);
+          }
           set({ session: session ?? null, user, profile, isAuthenticated: !!user, isLoading: false });
+        }).catch((error) => {
+          console.error('Unable to initialize authentication:', error);
+          set({ session: null, user: null, profile: null, isAuthenticated: false, isLoading: false });
         });
 
-        // Optional: return unsubscribe when used inside components
-        // but here we don't expose it from the store
+        // Supabase owns the auth subscription for the lifetime of the application.
+        void listener;
       },
     }),
     {
       name: 'eternyx-auth',
-      partialize: (state) => ({
-        // Only persist non-sensitive flag
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
+      partialize: (state) => ({ isAuthenticated: state.isAuthenticated }),
+    },
+  ),
 );

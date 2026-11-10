@@ -70,6 +70,7 @@ const TestResults = lazy(() => import("./pages/TestResults"));
 
 // Eternyx AI pages
 const EternixAI = lazy(() => import("./pages/EternyxAI"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 
 const queryClient = new QueryClient({
@@ -180,6 +181,7 @@ const AppContent = () => {
 
                         {/* Eternyx AI Routes */}
                         <Route path="/eternyx-ai" element={<EternixAI />} />
+                        <Route path="/reset-password" element={<ResetPassword />} />
 
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />
