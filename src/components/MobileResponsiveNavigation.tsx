@@ -78,6 +78,13 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       color: 'from-green-400 to-emerald-600',
     },
     {
+      id: 'cybersecurity',
+      name: 'Cybersecurity',
+      path: '/cybersecurity',
+      icon: Shield,
+      color: 'from-cyan-400 to-blue-600',
+    },
+    {
       id: 'services-hub',
       name: 'Services',
       path: '/services-hub',
