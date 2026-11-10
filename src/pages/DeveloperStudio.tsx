@@ -306,6 +306,14 @@ export default function DeveloperStudio() {
           </div>
         </section>
 
+
+        <section className="rounded-2xl border border-violet-400/20 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">Release engineering</p><h2 className="mt-1 text-xl font-semibold text-white">GitHub Release Intelligence</h2><p className="mt-1 text-sm text-slate-400">Explore releases, inspect notes and downloadable assets, track tags, and compare versions across public repositories.</p></div>
+            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-releases">Open Release Intelligence <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
           <h2 className="font-semibold">Privacy & security</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
