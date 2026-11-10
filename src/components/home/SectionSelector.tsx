@@ -106,7 +106,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {ecosystemPillars.map((pillar, index) => {
+            {ecosystemPillars.map((pillar) => {
               const Icon = pillar.icon;
               const isActive = pillar.status === "Existing foundation";
               const accentClasses: Record<string, string> = {
