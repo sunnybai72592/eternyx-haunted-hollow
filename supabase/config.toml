@@ -339,3 +339,11 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# These scheduled service-to-service functions authenticate the default secret
+# API key in their handler via the apikey header, not a user JWT.
+[functions.auto-submit-tests]
+verify_jwt = false
+
+[functions.grade-test]
+verify_jwt = false

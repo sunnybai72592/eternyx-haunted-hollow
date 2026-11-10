@@ -1,20 +1,22 @@
 /**
- * Restrict privileged exam-processing Edge Functions to the configured
- * server-side service-role JWT. Never expose this key to browser clients.
+ * Restrict privileged exam-processing Edge Functions to the project's
+ * server-side default secret API key. The key must be sent in the apikey
+ * header, never as a Bearer token.
  */
 export function isTrustedServiceRequest(req: Request): boolean {
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const authorization = req.headers.get("authorization") ?? "";
-  const matches = Boolean(serviceRoleKey) &&
-    authorization === `Bearer ${serviceRoleKey}`;
+  const rawKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (!rawKeys) return false;
 
-  // TEMPORARY SAFE DIAGNOSTIC: log booleans only, never credential values.
-  console.warn("[service-auth diagnostic]", {
-    runtimeSecretConfigured: Boolean(serviceRoleKey),
-    authorizationHeaderPresent: authorization.length > 0,
-    authorizationMatchesRuntimeSecret: matches,
-    runtimeSecretLooksLikeJwt: serviceRoleKey?.startsWith("eyJ") ?? false,
-  });
+  try {
+    const keys = JSON.parse(rawKeys) as Record<string, unknown>;
+    const secretKey = keys.default;
+    const suppliedKey = req.headers.get("apikey") ?? "";
 
-  return matches;
+    return typeof secretKey === "string" &&
+      secretKey.length > 0 &&
+      suppliedKey.length > 0 &&
+      suppliedKey === secretKey;
+  } catch {
+    return false;
+  }
 }
