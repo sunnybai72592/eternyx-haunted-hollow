@@ -283,4 +283,78 @@ Some cards use click handlers on non-interactive Card/motion containers rather t
 - Review every design token, shared shell, mobile viewport, reduced-motion behavior, and navigation pattern.
 - Add reproducible tests for route integrity, authorization contracts, tool execution contracts, and real submission workflows.
 
+
+## 10. Additional findings from the dormant-page and documentation pass
+
+### R-22 — AI document ingestion and retrieval do not match the documented RAG pipeline
+
+**Severity:** High functionality issue  
+**Files:** `supabase/functions/process-document/index.ts`, `supabase/functions/eternyx-ai-chat/index.ts`, `eternyx_ai_architecture.md`, `ETERNYX_AI_INTEGRATION_GUIDE.md`
+
+The implementation does not currently deliver the vector RAG behavior described in the guides:
+
+- `chunkText()` advances with `start = end - overlap` but does not stop when `end` reaches the end of the text. With a positive overlap, the final chunk repeats indefinitely instead of terminating.
+- `extractTextFromPDF()` decodes raw PDF bytes with `TextDecoder`; it does not use a PDF parser to extract page text.
+- `generateEmbedding()` currently returns `null` for every chunk.
+- `retrieveRelevantChunks()` ignores the query argument and returns the first chunks ordered by `chunk_index`, rather than performing vector similarity search.
+
+As a result, PDF ingestion can fail to terminate, PDF content is not reliably extracted, embeddings are not generated, and retrieval is not query-relevant.
+
+**Required remediation:** fix and unit-test chunk termination, use a maintained PDF parser with size/page limits, generate real embeddings, implement and test vector similarity retrieval, and clearly expose processing failure states. Complete this only alongside R-01's authentication and ownership protections.
+
+### R-23 — Dormant dashboard and service pages still contain fabricated operational data
+
+**Severity:** Medium / high if reintroduced  
+**Files:** `src/pages/Dashboard.tsx`, `src/pages/DashboardGodMode.tsx`, `src/pages/enhanced/EnhancedDashboard.tsx`, `src/pages/BackendDevelopment.tsx`, `src/pages/CloudSolutions.tsx`, `src/pages/MobileDevelopment.tsx`, `src/pages/PerformanceOptimization.tsx`, `src/pages/CustomSolutions.tsx`
+
+These modules are not directly imported by the current App router and should not be treated as current working product surfaces. They nevertheless contain behaviors that must not be reactivated unchanged:
+
+- Dashboard pages show fixed security/performance scores, threat counts, uptime, network usage, recent activity, and simulated loading.
+- The legacy Dashboard includes a commented-out authentication guard.
+- Backend Development labels code execution as simulated and returns canned “executed successfully” output.
+- Cloud Solutions returns a fabricated successful deployment endpoint and static simulated IAM/RBAC policy templates.
+- Mobile Development reports that push notifications were sent without invoking a push service.
+- Performance Optimization fabricates SEO, keyword, backlinks, domain-authority, and Core Web Vitals values.
+- Custom Solutions selects a random canned idea; it is a simple idea picker, not AI analysis.
+
+**Required remediation:** keep these modules out of active navigation until each capability has a real implementation or a clear demo/preview label. Map references before deleting files.
+
+### R-24 — Dormant education flows contain credential and workflow defects
+
+**Severity:** High if reactivated  
+**Files:** `src/pages/AddStudents.tsx`, `src/pages/CreateTest.tsx`, `src/pages/RoleSelection.tsx`, `src/pages/TeacherDashboard.tsx`
+
+These education pages are not directly imported by the current App router, but they contain important issues:
+
+- `AddStudents` writes the submitted results password directly into a column named `results_password_hash`; its own comment says hashing is deferred. Student IDs and passwords are generated with `Math.random()`, which is not appropriate for security credentials.
+- `RoleSelection` attaches the same role-selection action to both a clickable Card and its nested button, which can trigger duplicate submissions through event bubbling.
+- `TeacherDashboard` calls `loadTests()` and `loadStats()` back-to-back; `loadStats()` reads the previous `tests` state when building the attempt query, so the initial attempt count can be incorrect.
+- Teacher/student tables, password verification, ownership policies, and role assignment need a separate schema/RLS review before these flows are exposed.
+
+**Required remediation:** do not reactivate until credentials are generated/hashed server-side, role assignment is protected, all table ownership policies are verified, and education workflows have end-to-end tests.
+
+### R-25 — Legacy tool directories and backup pages duplicate catalogue concepts
+
+**Severity:** Medium cleanup/architecture issue  
+**Files:** `src/pages/CybersecurityTools.tsx`, `src/pages/DigitalInnovationTools.tsx`, `src/pages/UniversalWebAppUtilities.tsx`, `src/pages/WebDevelopmentTools.tsx`, their `.backup.tsx` counterparts, `src/data/cybersecurityTools.ts`, `src/data/webDevelopmentTools.ts`, `src/data/innovationTools.ts`, `src/data/allTools.ts`
+
+The current route map no longer directly mounts these older catalogue pages. The repository still contains several overlapping lists of external products/libraries, embedded local utilities, and tool definitions, including three explicit backup page copies. Some pages are directories of third-party products rather than tools executed by ETERNYX itself.
+
+**Required remediation:** distinguish external resource directories from first-party executable tools, select one canonical registry for real ETERNYX tools, and remove backup/duplicate catalogues only after all imports and links have been checked.
+
+### R-26 — Product documentation contains outdated architecture and capability claims
+
+**Severity:** Medium / high trust issue  
+**Files:** `ETERNYX_PLATFORM_DOCUMENTATION.md`, `ETERNYX_AI_INTEGRATION_GUIDE.md`, `eternyx_ai_architecture.md`, `docs/ECOSYSTEM_ARCHITECTURE.md`, `docs/ETERNYX_COMPLETE_ARCHITECTURE_EXPERIENCE_INVENTORY.md`, `docs/ETERNYX_UNIVERSAL_TRANSFORMATION_AUDIT.md`, `README.md`, `.gitignore`
+
+- The 2025 Platform 3.0 document describes Kubernetes, multi-cloud microservices, Redis, Elasticsearch, WAF, blockchain identity, and enterprise SOC capabilities without evidence that these are deployed. It should be marked historical/aspirational or archived, not treated as the current architecture.
+- The AI integration guide instructs disabling JWT verification and describes vector RAG/PDF parsing that the current functions do not implement.
+- The ecosystem architecture document still marks Developer Studio as planned and describes the old tools directory/category routes that PR #60 retired or redirected.
+- The architecture inventory and transformation audit contain historical file counts and baseline commits; they must be labeled historical or refreshed after the audit.
+- README says never to commit `.env`, while `.gitignore` explicitly tracks the root `.env` for public `VITE_` build-time values. The policy must be made consistent: no private secrets may be committed, and every `VITE_` value is public.
+- README recommends `npm run lint` before release, but the current CI workflow runs tests, selected Node syntax checks, and the Vite build; it does not run ESLint or a dedicated TypeScript typecheck.
+
+**Required remediation:** designate one current architecture source of truth, archive obsolete aspirational docs, correct the AI deployment guide before anyone follows it, reconcile route and capability statuses, and align documented release gates with CI.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
