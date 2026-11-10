@@ -100,7 +100,6 @@ export default function AuthPage() {
       <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-4 py-10 lg:grid-cols-2 lg:px-8">
         {/* Story side */}
         <aside className="hidden flex-col gap-8 lg:flex animate-fade-in">
-          <Link to="/" className="inline-flex w-fit items-center gap-2 text-sm text-muted-foreground transition hover:text-primary"><ArrowLeft className="h-4 w-4" />Back to ETERNYX</Link>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">ETERNYX Account</p>
             <h1 className="mt-4 text-5xl font-bold leading-tight tracking-tight">One account.<br /><span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Your whole digital kingdom.</span></h1>
