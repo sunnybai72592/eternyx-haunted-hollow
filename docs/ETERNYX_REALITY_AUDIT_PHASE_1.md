@@ -537,4 +537,15 @@ The homepage “Access Dashboard” CTA navigates to `/dashboard`, but PR #60 in
 **Required remediation:** rename the CTA to match its actual Explore destination or build a real authenticated dashboard later. Remove the audio toggle until a real, accessible audio experience exists.
 
 
+
+### R-41 — Cybersecurity Hub advertises retired routes and overstates available domains
+
+**Severity:** Medium/high product-integrity issue  
+**File:** `src/pages/CybersecurityHub.tsx`
+
+The hub's featured Network Scanner links to `/tools/network-scanner`, which is now a retired compatibility destination that redirects to Explore. The hub also marks Threat Monitoring as Available while the linked page is a simulated dashboard; Security Auditing and Incident Response link to other simulated pages. The page reports “7 Core domains” but its section heading says “Six security domains”.
+
+**Required remediation:** remove or replace the retired Network Scanner entry, align availability badges with verified tools, keep the genuine limited CVE/HTTP exposure review and static-analysis workbenches, and correct the domain count. Do not mark a domain Available solely because a route exists.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
