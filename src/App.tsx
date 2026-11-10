@@ -18,6 +18,7 @@ import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
+const CybersecurityHub = lazy(() => import("./pages/CybersecurityHub"));
 const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -137,6 +138,7 @@ const AppContent = () => {
                       <Routes>
                         <Route path="/" element={<Index />} />
                         <Route path="/dashboard" element={<UnifiedDashboard />} />
+                        <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/arsenal" element={<CyberArsenal />} />
                         <Route path="/subscriptions" element={<SubscriptionHub />} />
                         <Route path="/knowledge" element={<KnowledgeHub />} />
