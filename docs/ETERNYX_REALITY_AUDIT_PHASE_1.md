@@ -526,4 +526,15 @@ The DevSecOps Hub waits two seconds, then loads hard-coded pipeline runs, securi
 **Required remediation:** decide whether the near-term product is a responsive web app, installable PWA, or native Capacitor app. For PWA, register and test the service worker and supply valid icons/screenshots. For native, remove the remote development URL for release builds, create and validate Android/iOS projects, disable cleartext traffic, and test real device navigation, OAuth callbacks, storage, push permissions, offline behavior, and safe-area layouts. Do not claim native/offline capability until verified.
 
 
+
+### R-40 — Homepage retains a dashboard CTA that redirects to Explore and an inert audio toggle
+
+**Severity:** Medium UX issue  
+**Files:** `src/components/home/SectionSelector.tsx`, `src/components/HeroSection.tsx`, `src/App.tsx`
+
+The homepage “Access Dashboard” CTA navigates to `/dashboard`, but PR #60 intentionally made that compatibility route redirect to `/explore`. The button therefore does not open a dashboard. The Hero Section's “Enable/Disable Audio” control only toggles local React state and changes its label/icon; no audio playback or sound service is connected.
+
+**Required remediation:** rename the CTA to match its actual Explore destination or build a real authenticated dashboard later. Remove the audio toggle until a real, accessible audio experience exists.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
