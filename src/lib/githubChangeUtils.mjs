@@ -6,7 +6,7 @@ export function normalizeGitHubRef(value, label = "Git ref") {
   if (!ref || ref.length > 200 || !REF_PART.test(ref) ||
       ref.startsWith("/") || ref.endsWith("/") || ref.includes("//") ||
       ref.split("/").some((part) => !part || part === "." || part === ".." || part.startsWith(".") || part.endsWith(".") || part.endsWith(".lock")) ||
-      /[~^:?*\[\\\\\s]/.test(ref) || ref.endsWith(".") || ref.includes("@{")) {
+      /[~^:?*\[\]\\]/.test(ref) || /\s/.test(ref) || ref.endsWith(".") || ref.includes("@{")) {
     throw new Error("Enter a valid branch, tag, or commit reference for " + label.toLowerCase() + ".");
   }
   return ref;
