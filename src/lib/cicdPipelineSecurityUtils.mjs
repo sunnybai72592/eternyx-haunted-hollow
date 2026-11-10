@@ -18,7 +18,7 @@ export function analyzeWorkflowSecurity(input){
  const add=(id,index,evidence)=>{const rule=RULES.find(item=>item.id===id);if(rule)findings.push({...rule,line:lineNumberAt(source,index),evidence:String(evidence).trim().slice(0,240)});};
  if(!/^permissions\s*:/m.test(source)) add("PERMISSIONS_MISSING",0,"No top-level permissions block detected.");
  let match=/^permissions\s*:\s*write-all\b/m.exec(source);if(match)add("PERMISSIONS_WRITE_ALL",match.index,match[0]);
- const actionPattern=/^\s*uses:\s*([^\s#]+)\s*$/gm;
+ const actionPattern=/^\\s*(?:-\\s*)?uses:\\s*([^\\s#]+)\\s*$/gm;
  while((match=actionPattern.exec(source))){const target=match[1].replace(/^['"]|['"]$/g,"");if(target.startsWith("./"))continue;const at=target.lastIndexOf("@");const revision=at>=0?target.slice(at+1):"";if(!/^[a-f0-9]{40}$/i.test(revision))add("UNPINNED_ACTION",match.index,match[0]);}
  const persistPattern=/^\s*persist-credentials:\s*true\s*$/gm;while((match=persistPattern.exec(source)))add("CHECKOUT_PERSIST_CREDENTIALS",match.index,match[0]);
  const trigger=/^\s*pull_request_target\s*:/m.exec(source);
