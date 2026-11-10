@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
-  Home, 
+  Home,
+  Compass,
   Shield, 
   Code, 
   Lightbulb, 
@@ -76,6 +77,13 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/',
       icon: Home,
       color: 'from-green-400 to-emerald-600',
+    },
+    {
+      id: 'explore',
+      name: 'Explore',
+      path: '/explore',
+      icon: Compass,
+      color: 'from-cyan-400 to-violet-600',
     },
     {
       id: 'cybersecurity',

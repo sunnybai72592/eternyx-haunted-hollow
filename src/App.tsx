@@ -20,6 +20,8 @@ import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
 const CybersecurityHub = lazy(() => import("./pages/CybersecurityHub"));
+const Explore = lazy(() => import("./pages/Explore"));
+const EcosystemPillarPage = lazy(() => import("./pages/EcosystemPillarPage"));
 const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -158,6 +160,12 @@ const AppContent = () => {
                         <Route path="/auth" element={<AuthPage />} />
                         <Route path="/dashboard" element={<UnifiedDashboard />} />
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
+                        <Route path="/explore" element={<Explore />} />
+                        <Route path="/developer-studio" element={<EcosystemPillarPage pillarId="developer-studio" />} />
+                        <Route path="/ai-arsenal" element={<EcosystemPillarPage pillarId="ai-arsenal" />} />
+                        <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
+                        <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
+                        <Route path="/automation" element={<EcosystemPillarPage pillarId="automation" />} />
                         <Route path="/arsenal" element={<CyberArsenal />} />
                         <Route path="/subscriptions" element={<SubscriptionHub />} />
                         <Route path="/knowledge" element={<KnowledgeHub />} />
