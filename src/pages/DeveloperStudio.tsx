@@ -190,6 +190,13 @@ export default function DeveloperStudio() {
           </CardHeader>
           <CardContent><Link to="/developer-studio/supply-chain" className="text-sm font-medium text-fuchsia-300 hover:text-fuchsia-200">Open supply chain workbench ↗</Link></CardContent>
         </Card>
+        <Card className="border-cyan-500/20 bg-slate-900/60 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Fingerprint className="h-5 w-5 text-cyan-300" /> Artifact Provenance & Release Trust</CardTitle>
+            <CardDescription className="text-slate-400">Review release assets, SHA-256 digests, in-toto/SLSA-style provenance statements, and CycloneDX or SPDX SBOM structure.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/artifact-provenance" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open release trust workbench ↗</Link></CardContent>
+        </Card>
 
         <Tabs defaultValue="json" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
