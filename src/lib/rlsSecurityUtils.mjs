@@ -22,11 +22,11 @@ function maskSql(source) {
       while (i < input.length) {
         if (input[i] === "'" && input[i + 1] === "'") { blank(i++); blank(i++); continue; }
         if (input[i] === "'") { blank(i++); break; }
-        if (input[i] === "\\\\" && i + 1 < input.length) { blank(i++); blank(i++); continue; }
+        if (input[i] === "\\" && i + 1 < input.length) { blank(i++); blank(i++); continue; }
         blank(i++);
       }
     } else if (input[i] === "$") {
-      const match = /^\\$[a-zA-Z_][\\w]*\\$|^\\$\\$/.exec(input.slice(i));
+      const match = /^\$[a-zA-Z_][\w]*\$|^\$\$/.exec(input.slice(i));
       if (match) {
         const delimiter = match[0];
         for (let j = 0; j < delimiter.length; j++) blank(i++);
@@ -75,32 +75,32 @@ export function analyzeRlsPolicies({ sql = "" } = {}) {
   const findings = [];
 
   for (const statement of statements) {
-    const text = statement.masked.replace(/\\s+/g, " ").trim();
-    const evidence = "Line " + statement.line + ": " + statement.original.replace(/\\s+/g, " ").slice(0, 180);
-    const createTable = text.match(/^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?((?:"?[\\w$]+"?\\.)?"?[\\w$]+"?)/i);
+    const text = statement.masked.replace(/\s+/g, " ").trim();
+    const evidence = "Line " + statement.line + ": " + statement.original.replace(/\s+/g, " ").slice(0, 180);
+    const createTable = text.match(/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?((?:"?[\w$]+"?\.)?"?[\w$]+"?)/i);
     if (createTable) {
       const name = cleanIdentifier(createTable[1]);
       if (name) tables.set(name, { name, createdAt: statement.line, enabled: false, disabled: false, policies: [] });
     }
 
-    const alterTable = text.match(/^ALTER\\s+TABLE\\s+(?:ONLY\\s+)?((?:"?[\\w$]+"?\\.)?"?[\\w$]+"?)\\s+([\\s\\S]+)$/i);
+    const alterTable = text.match(/^ALTER\s+TABLE\s+(?:ONLY\s+)?((?:"?[\w$]+"?\.)?"?[\w$]+"?)\s+([\s\S]+)$/i);
     if (alterTable) {
       const name = cleanIdentifier(alterTable[1]);
       const action = alterTable[2];
       if (!tables.has(name)) tables.set(name, { name, createdAt: null, enabled: false, disabled: false, policies: [] });
-      if (/\\bENABLE\\s+ROW\\s+LEVEL\\s+SECURITY\\b/i.test(action)) tables.get(name).enabled = true;
-      if (/\\bDISABLE\\s+ROW\\s+LEVEL\\s+SECURITY\\b/i.test(action)) tables.get(name).disabled = true;
+      if (/\bENABLE\s+ROW\s+LEVEL\s+SECURITY\b/i.test(action)) tables.get(name).enabled = true;
+      if (/\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i.test(action)) tables.get(name).disabled = true;
     }
 
-    const policyMatch = text.match(/^CREATE\\s+POLICY\\s+(?:"[^"]+"|[\\w$]+)\\s+ON\\s+((?:"?[\\w$]+"?\\.)?"?[\\w$]+"?)([\\s\\S]*)$/i);
+    const policyMatch = text.match(/^CREATE\s+POLICY\s+(?:"[^"]+"|[\w$]+)\s+ON\s+((?:"?[\w$]+"?\.)?"?[\w$]+"?)([\s\S]*)$/i);
     if (policyMatch) {
       const table = cleanIdentifier(policyMatch[1]);
       const rest = policyMatch[2] || "";
-      const roleMatch = rest.match(/\\bTO\\s+([\\s\\S]*?)(?=\\bUSING\\s*\\(|\\bWITH\\s+CHECK\\s*\\(|$)/i);
+      const roleMatch = rest.match(/\bTO\s+([\s\S]*?)(?=\bUSING\s*\(|\bWITH\s+CHECK\s*\(|$)/i);
       const roles = roleMatch ? roleMatch[1].trim() : "PUBLIC";
-      const command = (rest.match(/\\bFOR\\s+(SELECT|INSERT|UPDATE|DELETE|ALL)\\b/i) || [,"ALL"])[1].toUpperCase();
-      const usingMatch = rest.match(/\\bUSING\\s*\\(([\\s\\S]*?)\\)(?=\\s+WITH\\s+CHECK\\b|$)/i);
-      const checkMatch = rest.match(/\\bWITH\\s+CHECK\\s*\\(([\\s\\S]*?)\\)\\s*$/i);
+      const command = (rest.match(/\bFOR\s+(SELECT|INSERT|UPDATE|DELETE|ALL)\b/i) || [,"ALL"])[1].toUpperCase();
+      const usingMatch = rest.match(/\bUSING\s*\(([\s\S]*?)\)(?=\s+WITH\s+CHECK\b|$)/i);
+      const checkMatch = rest.match(/\bWITH\s+CHECK\s*\(([\s\S]*?)\)\s*$/i);
       const policy = {
         table, line: statement.line, roles: roles || "PUBLIC", command,
         using: usingMatch ? usingMatch[1].trim() : null,
@@ -112,7 +112,7 @@ export function analyzeRlsPolicies({ sql = "" } = {}) {
       tables.get(table).policies.push(policy);
     }
 
-    const grantMatch = text.match(/^GRANT\\s+([\\s\\S]+?)\\s+ON\\s+([\\s\\S]+?)\\s+TO\\s+([\\s\\S]+?)(?:\\s+WITH\\s+GRANT\\s+OPTION)?$/i);
+    const grantMatch = text.match(/^GRANT\s+([\s\S]+?)\s+ON\s+([\s\S]+?)\s+TO\s+([\s\S]+?)(?:\s+WITH\s+GRANT\s+OPTION)?$/i);
     if (grantMatch) grants.push({ privileges: grantMatch[1].trim().toUpperCase(), target: grantMatch[2].trim(), roles: grantMatch[3].trim(), line: statement.line, evidence });
   }
 
@@ -129,8 +129,8 @@ export function analyzeRlsPolicies({ sql = "" } = {}) {
 
   for (const policy of policies) {
     const roleText = policy.roles.toLowerCase();
-    const publicRole = /(^|[,\\s])public($|[,\\s])/.test(roleText) || !roleText || roleText === "public";
-    const anonRole = /(^|[,\\s])anon($|[,\\s])/.test(roleText);
+    const publicRole = /(^|[,\s])public($|[,\s])/.test(roleText) || !roleText || roleText === "public";
+    const anonRole = /(^|[,\s])anon($|[,\s])/.test(roleText);
     const broadUsing = policy.using !== null && /^true$/i.test(policy.using);
     const broadCheck = policy.check !== null && /^true$/i.test(policy.check);
     if (publicRole || anonRole)
@@ -145,14 +145,14 @@ export function analyzeRlsPolicies({ sql = "" } = {}) {
 
   for (const grant of grants) {
     const roles = grant.roles.toLowerCase();
-    const publicRole = /(^|[,\\s])public($|[,\\s])/.test(roles);
-    const anonRole = /(^|[,\\s])anon($|[,\\s])/.test(roles);
-    const writes = /\\b(INSERT|UPDATE|DELETE|TRUNCATE|ALL)\\b/.test(grant.privileges);
+    const publicRole = /(^|[,\s])public($|[,\s])/.test(roles);
+    const anonRole = /(^|[,\s])anon($|[,\s])/.test(roles);
+    const writes = /\b(INSERT|UPDATE|DELETE|TRUNCATE|ALL)\b/.test(grant.privileges);
     if ((publicRole || anonRole) && writes)
       add(findings, "BROAD_ANONYMOUS_GRANT", "critical", "Write privileges granted to PUBLIC or anon", "The supplied script grants " + grant.privileges + " on " + grant.target + " to " + grant.roles + ".", "Revoke unnecessary anonymous write privileges, grant only required operations to intended roles, and test with an unauthenticated session.", grant.evidence);
     else if (publicRole || anonRole)
       add(findings, "BROAD_ANONYMOUS_READ_GRANT", "high", "Privileges granted to PUBLIC or anon", "The supplied script grants " + grant.privileges + " on " + grant.target + " to " + grant.roles + ". Even read access may expose sensitive data.", "Confirm the data classification and remove public or anonymous access unless it is an intentional, reviewed requirement.", grant.evidence);
-    else if (/\\bauthenticated\\b/.test(roles) && writes && /\\bALL\\b/.test(grant.privileges))
+    else if (/\bauthenticated\b/.test(roles) && writes && /\bALL\b/.test(grant.privileges))
       add(findings, "AUTHENTICATED_GRANT_ALL", "medium", "ALL privileges granted to authenticated", "The authenticated role receives broad privileges on " + grant.target + ".", "Prefer explicit table and operation grants; use RLS for row-level boundaries and test each operation.", grant.evidence);
   }
 
