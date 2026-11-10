@@ -81,7 +81,7 @@ function validateNetlifyToml(source) {
     if (!line || line.startsWith("#")) return;
     const sectionMatch = line.match(/^\[([A-Za-z0-9_.-]+)\]$/);
     if (sectionMatch) { section = sectionMatch[1]; return; }
-    if (/^\[\[([A-Za-z0-9_.-]+)\]\]$/.test(line)) { section = line.slice(2, -2); continue; }
+    if (/^\[\[([A-Za-z0-9_.-]+)\]\]$/.test(line)) { section = line.slice(2, -2); return; }
     const assignment = line.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*(.+)$/);
     if (!assignment) { errors.push("Line " + (index + 1) + ": expected a TOML key/value assignment or section header."); return; }
     const key = section + "." + assignment[1];
