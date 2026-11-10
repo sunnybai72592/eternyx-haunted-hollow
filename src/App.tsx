@@ -23,6 +23,7 @@ const CybersecurityHub = lazy(() => import("./pages/CybersecurityHub"));
 const Explore = lazy(() => import("./pages/Explore"));
 const EcosystemPillarPage = lazy(() => import("./pages/EcosystemPillarPage"));
 const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
+const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -163,6 +164,7 @@ const AppContent = () => {
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/explore" element={<Explore />} />
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
+                        <Route path="/developer-studio/advanced" element={<AdvancedDeveloperTools />} />
                         <Route path="/ai-arsenal" element={<EcosystemPillarPage pillarId="ai-arsenal" />} />
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
