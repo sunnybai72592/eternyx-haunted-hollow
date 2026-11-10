@@ -40,8 +40,14 @@ test('legacy dashboard and catalogue URLs resolve to the real Explore surface', 
   assert.match(app, /<Route path="\/tools\/category\/:categoryId" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.ok(app.includes('<Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />'));
   assert.ok(app.includes('<Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />'));
-  for (const retiredName of ['UnifiedDashboard', 'ToolCategoryPage', 'NetworkScanner', 'CodeAnalyzer']) {
-    assert.equal(app.includes(`import("./pages/${retiredName}")`), false);
+  for (const retiredImport of [
+    'import("./pages/UnifiedDashboard")',
+    'import("./pages/Tools")',
+    'import("./pages/ToolCategoryPage")',
+    'import("./pages/tools/NetworkScanner")',
+    'import("./pages/tools/CodeAnalyzer")',
+  ]) {
+    assert.equal(app.includes(retiredImport), false, `${retiredImport} should not be imported`);
   }
 });
 
