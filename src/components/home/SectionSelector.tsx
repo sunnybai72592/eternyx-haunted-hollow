@@ -267,7 +267,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
               <>
                 <Button
                   size="lg"
-                  onClick={() => { setAuthMode('signin'); setAuthModalOpen(true); }}
+                  onClick={() => navigate('/auth')}
                   className="bg-white text-black hover:bg-white/90 font-semibold px-10 py-6 text-base rounded-full transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
                 >
                   <Zap className="w-5 h-5 mr-2" />
@@ -276,7 +276,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ''
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => { setAuthMode('signup'); setAuthModalOpen(true); }}
+                  onClick={() => navigate('/auth?mode=signup')}
                   className="border-white/20 text-white/80 hover:bg-white/10 hover:border-white/40 px-10 py-6 text-base rounded-full transition-all duration-300"
                 >
                   <Users className="w-5 h-5 mr-2" />

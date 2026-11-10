@@ -152,13 +152,12 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   };
 
   const handleSignIn = () => {
-    setAuthMode('login');
-    setShowAuthModal(true);
+    setIsMobileMenuOpen(false);
+    navigate('/auth');
   };
 
   const handleSignUp = () => {
-    setAuthMode('signup');
-    setShowAuthModal(true);
+    navigate('/auth?mode=signup');
   };
 
   const handleSignOut = async () => {
@@ -206,8 +205,8 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                   onMouseEnter={() => category.children && setActiveDropdown(category.id)}
                   onMouseLeave={() => setTimeout(() => setActiveDropdown(null), 300)}
                 >
-                  <category.icon className="w-4 h-4 xl:mr-2" />
-                  <span className="hidden xl:inline">{category.name}</span>
+                  <category.icon className="w-4 h-4 2xl:mr-2" />
+                  <span className="hidden 2xl:inline">{category.name}</span>
                   
                   {category.children && (
                     <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-200 ${
