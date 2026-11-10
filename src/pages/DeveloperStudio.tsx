@@ -10,49 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { decodeBase64Utf8, decodeJwt, decodeUriComponent, encodeBase64Utf8, encodeUriComponent, formatJson as formatJsonInput, generateUuids } from "@/lib/developerStudioUtils.mjs";
 
 type Feedback = { kind: "success" | "error" | "info"; message: string } | null;
-
-const encodeBase64Utf8 = (value: string) => {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
-  return btoa(binary);
-};
-
-const decodeBase64Utf8 = (value: string) => {
-  const binary = atob(value.replace(/\s/g, ""));
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-};
-
-const decodeBase64UrlJson = (value: string) => {
-  if (!value || !/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
-    throw new Error("JWT header and payload must use unpadded Base64URL encoding.");
-  }
-
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  const json = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-
-  if (!json || typeof json !== "object" || Array.isArray(json)) {
-    throw new Error("JWT header and payload must each contain a JSON object.");
-  }
-
-  return json;
-};
-
-const makeUuid = () => {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
-  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
-};
 
 const Output = ({ value, label, onCopy }: { value: string; label: string; onCopy: () => void }) => (
   <div className="space-y-2">
@@ -103,8 +63,7 @@ export default function DeveloperStudio() {
 
   const formatJson = () => {
     try {
-      const parsed: unknown = JSON.parse(jsonInput);
-      setJsonOutput(JSON.stringify(parsed, null, 2));
+      setJsonOutput(formatJsonInput(jsonInput));
       setJsonFeedback({ kind: "success", message: "Valid JSON. Output formatted successfully." });
     } catch (error) {
       setJsonOutput("");
@@ -124,7 +83,7 @@ export default function DeveloperStudio() {
 
   const runUrl = () => {
     try {
-      setUrlOutput(urlMode === "encode" ? encodeURIComponent(urlInput) : decodeURIComponent(urlInput));
+      setUrlOutput(urlMode === "encode" ? encodeUriComponent(urlInput) : decodeUriComponent(urlInput));
       setUrlFeedback({ kind: "success", message: urlMode === "encode" ? "Value URL-encoded successfully." : "Value URL-decoded successfully." });
     } catch {
       setUrlOutput("");
@@ -138,18 +97,12 @@ export default function DeveloperStudio() {
       setUuidOutput("");
       return;
     }
-    setUuidOutput(Array.from({ length: count }, makeUuid).join("\n"));
+    setUuidOutput(generateUuids(count));
   };
 
   const decodeJwt = () => {
     try {
-      const parts = jwtInput.trim().split(".");
-      if (parts.length !== 3) throw new Error("A JWT must contain three dot-separated segments.");
-      if (!/^[A-Za-z0-9_-]*$/.test(parts[2]) || parts[2].length % 4 === 1) {
-        throw new Error("JWT signature segment must use valid Base64URL characters.");
-      }
-      const header = decodeBase64UrlJson(parts[0]);
-      const payload = decodeBase64UrlJson(parts[1]);
+      const { header, payload } = decodeJwt(jwtInput);
       setJwtOutput(JSON.stringify({ header, payload }, null, 2));
       setJwtFeedback({ kind: "info", message: "Decoded locally. This does NOT verify the signature, issuer, audience, or token validity." });
     } catch (error) {
