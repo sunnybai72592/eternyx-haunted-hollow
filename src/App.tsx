@@ -29,6 +29,7 @@ const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
 const DeploymentIntelligence = lazy(() => import("./pages/DeploymentIntelligence"));
 const ContainerInfrastructureIntelligence = lazy(() => import("./pages/ContainerInfrastructureIntelligence"));
 const InfrastructureAsCodeIntelligence = lazy(() => import("./pages/InfrastructureAsCodeIntelligence"));
+const ObservabilityIntelligence = lazy(() => import("./pages/ObservabilityIntelligence"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
 const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
@@ -180,6 +181,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/deployment-intelligence" element={<DeploymentIntelligence />} />
                         <Route path="/developer-studio/container-infrastructure" element={<ContainerInfrastructureIntelligence />} />
                         <Route path="/developer-studio/infrastructure-as-code" element={<InfrastructureAsCodeIntelligence />} />
+                        <Route path="/developer-studio/observability" element={<ObservabilityIntelligence />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />
