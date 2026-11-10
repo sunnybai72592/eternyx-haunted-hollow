@@ -347,3 +347,8 @@ verify_jwt = false
 
 [functions.grade-test]
 verify_jwt = false
+
+
+# User-facing SSL analysis requires a valid Supabase Auth JWT.
+[functions.ssl-analyzer]
+verify_jwt = true

@@ -121,6 +121,7 @@ const CyberArena = () => {
           break;
         case 'ssl-analyzer':
           functionName = 'ssl-analyzer';
+          delete payload.user_id; // The Edge Function derives ownership from the verified JWT.
           payload.hostname = input;
           break;
         case 'web-scanner':
