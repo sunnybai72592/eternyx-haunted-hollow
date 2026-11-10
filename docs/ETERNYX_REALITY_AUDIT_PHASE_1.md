@@ -425,4 +425,24 @@ The CI workflow runs Node tests, selected Edge Function syntax checks, and a Vit
 **Required remediation:** introduce a staged quality gate: lint, TypeScript check, unit tests, Edge Function tests, build, and eventually route/authorization integration tests. Tighten strictness incrementally rather than turning on strict mode across the entire legacy codebase in one disruptive change.
 
 
+
+### R-32 — Stripe return URLs trust the caller-supplied Origin and point to an undeclared route
+
+**Severity:** High payment-flow and phishing risk  
+**Files:** `supabase/functions/create-checkout/index.ts`, `supabase/functions/customer-portal/index.ts`, `src/App.tsx`
+
+Both payment functions use the request's `Origin` header directly to construct Stripe redirect URLs. The origin is caller-controlled and is not checked against an allowlist of ETERNYX production/preview domains. This can create Stripe sessions or customer-portal sessions that return users to an attacker-controlled site. Both functions also redirect to `/subscription`, while the application declares `/subscriptions` (plural); the configured return destination therefore falls through to the Not Found route.
+
+**Required remediation:** validate the request origin against a strict configured allowlist, construct return URLs from server-side configuration rather than an arbitrary header, use the canonical `/subscriptions` route, and add tests for hostile origins, preview domains, and successful/cancelled checkout returns.
+
+### R-33 — AI assistant usage has no application-level per-user quota
+
+**Severity:** Medium cost-abuse risk  
+**File:** `supabase/functions/security-assistant/index.ts`
+
+The function validates message shape and limits a request to 30 messages with 4,000 characters per message, which is a useful input boundary. However, the handler does not identify the user or enforce a per-user rate/cost quota before calling the paid AI gateway. The default gateway JWT behavior is not a substitute for usage limits or abuse monitoring.
+
+**Required remediation:** verify the user in the handler, apply per-user and global quotas, bound total request size and response tokens, and return consistent non-200 error statuses for provider failures.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
