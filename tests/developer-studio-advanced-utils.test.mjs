@@ -38,6 +38,9 @@ test("JSON to CSV handles nested values and empty arrays", () => {
   assert.equal(jsonArrayToCsv("[]"), "");
 });
 
+test("JSON to CSV neutralizes spreadsheet formula injection in string cells", () => {
+  assert.equal(jsonArrayToCsv('[{"value":"=SUM(1,2)"}]'), 'value\\r\\n"\'=SUM(1,2)"');
+});
 test("JSON to CSV rejects non-object rows", () => {
   assert.throws(() => jsonArrayToCsv('[1,2]'), /array of objects/);
   assert.throws(() => jsonArrayToCsv('{"a":1}'), /array of objects/);
