@@ -46,6 +46,11 @@ const EcosystemPillarPage = ({ pillarId }: EcosystemPillarPageProps) => {
                 <Link to="/cybersecurity">Open Cybersecurity Hub <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             )}
+            {pillar.id === "developer-studio" && (
+              <Button asChild className="mt-7 bg-cyan-500 text-slate-950 hover:bg-cyan-400">
+                <Link to="/developer-studio">Open Developer Studio <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            )}
           </div>
         </section>
 

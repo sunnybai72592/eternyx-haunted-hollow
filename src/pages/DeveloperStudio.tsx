@@ -1,0 +1,303 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ArrowLeft, Braces, Copy, FileCode2, Fingerprint, KeyRound,
+  Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+type Feedback = { kind: "success" | "error" | "info"; message: string } | null;
+
+const encodeBase64Utf8 = (value: string) => {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+};
+
+const decodeBase64Utf8 = (value: string) => {
+  const binary = atob(value.replace(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+};
+
+const decodeBase64UrlJson = (value: string) => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+};
+
+const makeUuid = () => {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+};
+
+const Output = ({ value, label, onCopy }: { value: string; label: string; onCopy: () => void }) => (
+  <div className="space-y-2">
+    <div className="flex items-center justify-between gap-3">
+      <Label>{label}</Label>
+      <Button type="button" variant="outline" size="sm" onClick={onCopy} disabled={!value}>
+        <Copy className="mr-2 h-4 w-4" /> Copy
+      </Button>
+    </div>
+    <Textarea value={value} readOnly spellCheck={false} className="min-h-48 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" />
+  </div>
+);
+
+const FeedbackLine = ({ feedback }: { feedback: Feedback }) => feedback ? (
+  <p role="status" aria-live="polite" className={`text-sm ${feedback.kind === "error" ? "text-rose-300" : feedback.kind === "success" ? "text-emerald-300" : "text-slate-400"}`}>
+    {feedback.message}
+  </p>
+) : null;
+
+export default function DeveloperStudio() {
+  const [jsonInput, setJsonInput] = useState('{"name":"ETERNYX","status":"building","tools":[]}');
+  const [jsonOutput, setJsonOutput] = useState("");
+  const [jsonFeedback, setJsonFeedback] = useState<Feedback>(null);
+  const [base64Input, setBase64Input] = useState("");
+  const [base64Output, setBase64Output] = useState("");
+  const [base64Mode, setBase64Mode] = useState<"encode" | "decode">("encode");
+  const [base64Feedback, setBase64Feedback] = useState<Feedback>(null);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlOutput, setUrlOutput] = useState("");
+  const [urlMode, setUrlMode] = useState<"encode" | "decode">("encode");
+  const [urlFeedback, setUrlFeedback] = useState<Feedback>(null);
+  const [uuidOutput, setUuidOutput] = useState("");
+  const [uuidCount, setUuidCount] = useState("5");
+  const [jwtInput, setJwtInput] = useState("");
+  const [jwtOutput, setJwtOutput] = useState("");
+  const [jwtFeedback, setJwtFeedback] = useState<Feedback>(null);
+  const [copyFeedback, setCopyFeedback] = useState("");
+
+  const copyValue = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyFeedback("Copied to clipboard.");
+      window.setTimeout(() => setCopyFeedback(""), 1800);
+    } catch {
+      setCopyFeedback("Clipboard access was blocked. Select the output and copy it manually.");
+    }
+  };
+
+  const formatJson = () => {
+    try {
+      const parsed: unknown = JSON.parse(jsonInput);
+      setJsonOutput(JSON.stringify(parsed, null, 2));
+      setJsonFeedback({ kind: "success", message: "Valid JSON. Output formatted successfully." });
+    } catch (error) {
+      setJsonOutput("");
+      setJsonFeedback({ kind: "error", message: error instanceof Error ? error.message : "Invalid JSON input." });
+    }
+  };
+
+  const runBase64 = () => {
+    try {
+      setBase64Output(base64Mode === "encode" ? encodeBase64Utf8(base64Input) : decodeBase64Utf8(base64Input));
+      setBase64Feedback({ kind: "success", message: base64Mode === "encode" ? "UTF-8 text encoded successfully." : "Base64 decoded successfully as UTF-8 text." });
+    } catch {
+      setBase64Output("");
+      setBase64Feedback({ kind: "error", message: "Unable to decode this value. Check that it is valid Base64 containing UTF-8 text." });
+    }
+  };
+
+  const runUrl = () => {
+    try {
+      setUrlOutput(urlMode === "encode" ? encodeURIComponent(urlInput) : decodeURIComponent(urlInput));
+      setUrlFeedback({ kind: "success", message: urlMode === "encode" ? "Value URL-encoded successfully." : "Value URL-decoded successfully." });
+    } catch {
+      setUrlOutput("");
+      setUrlFeedback({ kind: "error", message: "Invalid percent-encoded input. Check the escape sequences and try again." });
+    }
+  };
+
+  const generateUuids = () => {
+    const count = Number(uuidCount);
+    if (!Number.isInteger(count) || count < 1 || count > 100) {
+      setUuidOutput("");
+      return;
+    }
+    setUuidOutput(Array.from({ length: count }, makeUuid).join("\n"));
+  };
+
+  const decodeJwt = () => {
+    try {
+      const parts = jwtInput.trim().split(".");
+      if (parts.length !== 3) throw new Error("A JWT must contain three dot-separated segments.");
+      const header = decodeBase64UrlJson(parts[0]);
+      const payload = decodeBase64UrlJson(parts[1]);
+      setJwtOutput(JSON.stringify({ header, payload }, null, 2));
+      setJwtFeedback({ kind: "info", message: "Decoded locally. This does NOT verify the signature, issuer, audience, or token validity." });
+    } catch (error) {
+      setJwtOutput("");
+      setJwtFeedback({ kind: "error", message: error instanceof Error ? error.message : "Unable to decode this JWT." });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#070b14] text-white">
+      <div className="mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+        <Link to="/explore" className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-cyan-300">
+          <ArrowLeft className="h-4 w-4" /> All ecosystem pillars
+        </Link>
+
+        <section className="relative overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-950/70 via-slate-950 to-cyan-950/60 p-7 sm:p-10">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-violet-400/10 blur-3xl" />
+          <div className="relative max-w-3xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-violet-200">
+              <Sparkles className="h-3.5 w-3.5" /> Developer workspace · Browser-based
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Developer <span className="text-cyan-300">Studio</span></h1>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+              A practical workbench for everyday development tasks. These utilities run locally in your browser; your input is not sent to an ETERNYX server.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-400">
+              {["JSON", "Base64 · UTF-8", "URL encoding", "UUID v4", "JWT decoding"].map((item) => (
+                <span key={item} className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1.5">{item}</span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">Workbench</p>
+            <h2 className="mt-1 text-2xl font-bold">Choose a utility</h2>
+          </div>
+          <p className="text-xs text-slate-500">Client-side processing · No account required for these utilities</p>
+        </div>
+
+        <Tabs defaultValue="json" className="w-full">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
+            <TabsTrigger value="json" className="gap-2 py-2"><Braces className="h-4 w-4" /><span>JSON</span></TabsTrigger>
+            <TabsTrigger value="base64" className="gap-2 py-2"><FileCode2 className="h-4 w-4" /><span>Base64</span></TabsTrigger>
+            <TabsTrigger value="url" className="gap-2 py-2"><Link2 className="h-4 w-4" /><span>URL</span></TabsTrigger>
+            <TabsTrigger value="uuid" className="gap-2 py-2"><Fingerprint className="h-4 w-4" /><span>UUID</span></TabsTrigger>
+            <TabsTrigger value="jwt" className="gap-2 py-2"><KeyRound className="h-4 w-4" /><span>JWT</span></TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="json">
+            <Card className="border-slate-800 bg-slate-900/70 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Braces className="h-5 w-5 text-cyan-300" /> JSON Formatter & Validator</CardTitle>
+                <CardDescription className="text-slate-400">Parse JSON, report syntax errors, and produce readable two-space indentation.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <Label htmlFor="json-input">JSON input</Label>
+                  <Textarea id="json-input" value={jsonInput} onChange={(event) => setJsonInput(event.target.value)} spellCheck={false} className="min-h-64 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" placeholder='{"key":"value"}' />
+                  <Button onClick={formatJson} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"><WandSparkles className="mr-2 h-4 w-4" /> Validate & format</Button>
+                  <FeedbackLine feedback={jsonFeedback} />
+                </div>
+                <Output label="Formatted JSON" value={jsonOutput} onCopy={() => void copyValue(jsonOutput)} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="base64">
+            <Card className="border-slate-800 bg-slate-900/70 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><FileCode2 className="h-5 w-5 text-cyan-300" /> Base64 Encoder & Decoder</CardTitle>
+                <CardDescription className="text-slate-400">Encode and decode UTF-8 text, including non-English characters and emoji.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant={base64Mode === "encode" ? "default" : "outline"} onClick={() => { setBase64Mode("encode"); setBase64Feedback(null); }}>Encode</Button>
+                    <Button variant={base64Mode === "decode" ? "default" : "outline"} onClick={() => { setBase64Mode("decode"); setBase64Feedback(null); }}>Decode</Button>
+                  </div>
+                  <Label htmlFor="base64-input">{base64Mode === "encode" ? "Text to encode" : "Base64 to decode"}</Label>
+                  <Textarea id="base64-input" value={base64Input} onChange={(event) => setBase64Input(event.target.value)} spellCheck={false} className="min-h-64 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" />
+                  <Button onClick={runBase64} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"><WandSparkles className="mr-2 h-4 w-4" /> {base64Mode === "encode" ? "Encode text" : "Decode Base64"}</Button>
+                  <FeedbackLine feedback={base64Feedback} />
+                </div>
+                <Output label="Result" value={base64Output} onCopy={() => void copyValue(base64Output)} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="url">
+            <Card className="border-slate-800 bg-slate-900/70 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-cyan-300" /> URL Encoder & Decoder</CardTitle>
+                <CardDescription className="text-slate-400">Encode or decode a URI component using the browser's standard JavaScript functions.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant={urlMode === "encode" ? "default" : "outline"} onClick={() => { setUrlMode("encode"); setUrlFeedback(null); }}>Encode</Button>
+                    <Button variant={urlMode === "decode" ? "default" : "outline"} onClick={() => { setUrlMode("decode"); setUrlFeedback(null); }}>Decode</Button>
+                  </div>
+                  <Label htmlFor="url-input">{urlMode === "encode" ? "Text to encode" : "Encoded text to decode"}</Label>
+                  <Textarea id="url-input" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} spellCheck={false} className="min-h-64 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" />
+                  <Button onClick={runUrl} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"><WandSparkles className="mr-2 h-4 w-4" /> {urlMode === "encode" ? "Encode value" : "Decode value"}</Button>
+                  <FeedbackLine feedback={urlFeedback} />
+                </div>
+                <Output label="Result" value={urlOutput} onCopy={() => void copyValue(urlOutput)} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="uuid">
+            <Card className="border-slate-800 bg-slate-900/70 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Fingerprint className="h-5 w-5 text-cyan-300" /> UUID v4 Generator</CardTitle>
+                <CardDescription className="text-slate-400">Generate random version-4 UUIDs using the browser cryptographic random number generator.</CardDescription>
+              </CardHeader>
+              <CardContent className="max-w-2xl space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="uuid-count">Number of UUIDs (1–100)</Label>
+                  <Input id="uuid-count" type="number" min="1" max="100" step="1" value={uuidCount} onChange={(event) => setUuidCount(event.target.value)} className="border-slate-700 bg-slate-950 text-white" />
+                </div>
+                <Button onClick={generateUuids} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"><RefreshCw className="mr-2 h-4 w-4" /> Generate UUIDs</Button>
+                <Output label="Generated UUIDs" value={uuidOutput} onCopy={() => void copyValue(uuidOutput)} />
+                {(Number(uuidCount) < 1 || Number(uuidCount) > 100 || !Number.isInteger(Number(uuidCount))) && <p className="text-sm text-rose-300">Enter a whole number from 1 to 100.</p>}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="jwt">
+            <Card className="border-slate-800 bg-slate-900/70 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-cyan-300" /> JWT Decoder</CardTitle>
+                <CardDescription className="text-slate-400">Inspect the header and payload of a JSON Web Token locally.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <Label htmlFor="jwt-input">JWT token</Label>
+                  <Textarea id="jwt-input" value={jwtInput} onChange={(event) => setJwtInput(event.target.value)} spellCheck={false} className="min-h-64 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" placeholder="header.payload.signature" />
+                  <Button onClick={decodeJwt} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"><KeyRound className="mr-2 h-4 w-4" /> Decode token</Button>
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-5 text-amber-200">
+                    <ShieldAlert className="mr-1 inline h-4 w-4" /> Decoding is not verification. Never treat this output as proof that a token is authentic or safe.
+                  </div>
+                  <FeedbackLine feedback={jwtFeedback} />
+                </div>
+                <Output label="Decoded header & payload" value={jwtOutput} onCopy={() => void copyValue(jwtOutput)} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {copyFeedback && <p role="status" aria-live="polite" className="text-center text-sm text-emerald-300">{copyFeedback}</p>}
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
+          <h2 className="font-semibold">Privacy & security</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            All five utilities process input in your browser. No tool in this workbench sends your text or tokens to an ETERNYX backend. JWT decoding only reads the token's first two segments and does not validate its signature or claims. Avoid pasting production secrets into shared or public devices.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
