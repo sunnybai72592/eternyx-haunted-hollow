@@ -99,6 +99,7 @@ serve(async (req) => {
 
   if (!isUuid(body.documentId)) return reply({ error: "A valid documentId is required" }, 400);
 
+  let ownedDocumentId: string | null = null;
   try {
     // Derive storage path and file metadata from the owner's database record.
     // Never let the caller choose an arbitrary Storage object to process.
@@ -111,6 +112,7 @@ serve(async (req) => {
 
     if (documentError) throw new Error("Unable to verify document ownership");
     if (!document) return reply({ error: "Document not found" }, 404);
+    ownedDocumentId = document.id;
     if (body.storagePath !== undefined && body.storagePath !== document.storage_path) {
       return reply({ error: "Document storage reference does not match" }, 403);
     }
@@ -195,6 +197,12 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Document processing failed:", error);
+    if (ownedDocumentId) {
+      await supabase.from("ai_documents")
+        .update({ status: "failed", error_message: "Document processing failed" })
+        .eq("id", ownedDocumentId)
+        .eq("user_id", user.id);
+    }
     return reply({ error: (error as Error).message || "Document processing failed" }, 500);
   }
 });
