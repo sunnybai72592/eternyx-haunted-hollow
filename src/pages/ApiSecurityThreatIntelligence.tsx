@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { analyzeApiSecurity, buildApiSecurityReport } from "@/lib/apiSecurityIntelligenceUtils.mjs";
 
 const samples = {
-  openApi: JSON.stringify({ openapi: "3.0.3", info: { title: "Example API", version: "1.0.0" }, paths: { "/profile": { get: { responses: { "200": { description: "OK" } } }, "/admin": { post: { responses: { "200": { description: "OK" } } } } }, components: { securitySchemes: {} } }, null, 2),
+  openApi: JSON.stringify({ openapi: "3.0.3", info: { title: "Example API", version: "1.0.0" }, paths: { "/profile": { get: { responses: { "200": { description: "OK" } } } }, "/admin": { post: { responses: { "200": { description: "OK" } } } } }, components: { securitySchemes: {} } }, null, 2),
   jwt: JSON.stringify({ algorithm: "HS256", verifySignature: true, issuer: "https://issuer.example", audience: "api" }, null, 2),
   cors: "Access-Control-Allow-Origin: https://app.example.com\nAccess-Control-Allow-Credentials: true",
   headers: "Strict-Transport-Security: max-age=31536000; includeSubDomains\nContent-Security-Policy: default-src 'self'\nX-Content-Type-Options: nosniff\nReferrer-Policy: strict-origin-when-cross-origin",
