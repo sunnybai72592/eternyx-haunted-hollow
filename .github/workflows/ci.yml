@@ -33,5 +33,7 @@ jobs:
         run: |
           node --check src/lib/developerStudioUtils.mjs
           node --check tests/developer-studio-utils.test.mjs
+          node --check src/lib/apiWorkbenchUtils.mjs
+          node --check tests/api-workbench-utils.test.mjs
       - name: Build application
         run: npm run build
