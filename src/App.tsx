@@ -75,8 +75,6 @@ const PenetrationTesting = lazy(() => import("./pages/PenetrationTesting"));
 const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessment"));
 
 // Tool pages
-const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
-const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
 const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
 // New specialized tool pages
@@ -243,8 +241,8 @@ const AppContent = () => {
                         <Route path="/premium" element={<Premium />} />
                         <Route path="/bug-report" element={<BugReport />} />
                         <Route path="/contact" element={<Contact />} />
-                        <Route path="/tools/network-scanner" element={<NetworkScanner />} />
-                        <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
+                        <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
+                        <Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />
 
                         {/* CBT System Routes */}
                         <Route path="/education" element={<Education />} />
