@@ -221,7 +221,7 @@ export default function DeveloperStudio() {
           <CardContent><Link to="/developer-studio/api-security" className="text-sm font-medium text-rose-300 hover:text-rose-200">Open API security workbench ↗</Link></CardContent>
         </Card>
 
-        <Card className="border-violet-500/20 bg-slate-900/60 text-white"><CardHeader><CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-violet-300"/> Web Application Security & OWASP Readiness</CardTitle><CardDescription className="text-slate-400">Review response headers, CSP, cookie flags, CSRF/session settings, and security.txt with prioritized defensive guidance.</CardDescription></CardHeader><CardContent><Link to="/developer-studio/web-security" className="text-sm font-medium text-violet-300 hover:text-violet-200">Open web security workbench ↗</Link></CardContent></Card>
+        <Card className="border-violet-500/20 bg-slate-900/60 text-white"><CardHeader><CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-violet-300"/> Web Application Security Review</CardTitle><CardDescription className="text-slate-400">Review response headers, CSP, cookie flags, CSRF/session settings, and security.txt with prioritized defensive guidance.</CardDescription></CardHeader><CardContent><Link to="/cybersecurity/web-security" className="text-sm font-medium text-violet-300 hover:text-violet-200">Open Cybersecurity Hub security review ↗</Link></CardContent></Card>
         <Tabs defaultValue="json" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
             <TabsTrigger value="json" className="gap-2 py-2"><Braces className="h-4 w-4" /><span>JSON</span></TabsTrigger>

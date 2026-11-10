@@ -198,6 +198,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/rls-security" element={<RlsSecurityIntelligence />} />
                         <Route path="/developer-studio/api-security" element={<ApiSecurityThreatIntelligence />} />
                         <Route path="/developer-studio/web-security" element={<WebApplicationSecurityReadiness />} />
+                        <Route path="/cybersecurity/web-security" element={<WebApplicationSecurityReadiness />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />

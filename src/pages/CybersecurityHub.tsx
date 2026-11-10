@@ -43,7 +43,7 @@ const sections: HubSection[] = [
     title: "Web & Application Security",
     description: "Review TLS certificates, HTTP security headers, and common web application weaknesses.",
     icon: Globe2,
-    tools: ["Vulnerability scanner", "SSL/TLS review", "HTTP header analysis", "Web security checks"],
+    tools: ["Vulnerability scanner", "SSL/TLS review", "HTTP header analysis", "Web application security readiness", "Web security checks"],
     href: "/vulnerability-scanner",
     status: "Available",
   },
@@ -79,6 +79,7 @@ const sections: HubSection[] = [
 const featuredTools = [
   { name: "Network Scanner", detail: "Explore network discovery and diagnostics.", href: "/tools/network-scanner", icon: Network, tag: "Network" },
   { name: "Vulnerability Scanner", detail: "Assess authorized web targets for security issues.", href: "/vulnerability-scanner", icon: ShieldCheck, tag: "Web security" },
+  { name: "Web Application Security Readiness", detail: "Review security headers, cookies, CSP, CSRF/session settings, and security.txt.", href: "/cybersecurity/web-security", icon: ShieldCheck, tag: "Application security" },
   { name: "Threat Monitoring", detail: "Review platform threat-monitoring capabilities.", href: "/threat-monitoring", icon: Activity, tag: "Monitoring" },
   { name: "Security Auditing", detail: "Explore security review and assessment services.", href: "/security-auditing", icon: FileSearch, tag: "Assessment" },
   { name: "Incident Response", detail: "Explore incident handling and response workflows.", href: "/incident-response", icon: Siren, tag: "Response" },
