@@ -299,6 +299,13 @@ export default function DeveloperStudio() {
           </div>
         </section>
 
+        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">CI/CD intelligence</p><h2 className="mt-1 text-xl font-semibold text-white">GitHub Actions Intelligence</h2><p className="mt-1 text-sm text-slate-400">Monitor workflow runs, filter failures and branches, and inspect job and step outcomes with live GitHub data.</p></div>
+            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-actions">Open Actions Intelligence <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
           <h2 className="font-semibold">Privacy & security</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
