@@ -490,4 +490,15 @@ The privacy toggle updates the database and local component state but does not r
 **Required remediation:** define a database-safe profile update DTO, update the database once, check the returned result, then refresh/replace the shared profile state from the returned row. Expose only privacy controls that are actually enforced by the public profile query/view.
 
 
+
+### R-37 — Account Settings persists preferences that are not applied
+
+**Severity:** Medium account UX issue  
+**Files:** `src/pages/Settings.tsx`, `src/components/NotificationSystem.tsx`, `src/index.css`
+
+The Settings page stores theme, notification, analytics, and sound-effect preferences in the profile JSON, but the active application does not have a verified preference provider applying these values. The theme buttons update stored data but do not switch the actual theme. Notification/analytics/sound toggles are not consistently consumed by the corresponding application services. The Privacy tab contains only static text claiming changes are applied instantly and audit-logged; it has no controls or audit-log operation.
+
+**Required remediation:** define a single preferences contract and connect each setting to a real consumer, or remove/disable settings that do not work. Do not claim audit logging unless an actual protected audit record is written.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
