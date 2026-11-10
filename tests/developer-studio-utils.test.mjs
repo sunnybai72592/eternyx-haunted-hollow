@@ -35,7 +35,7 @@ test("Base64 round-trips UTF-8 text, emoji, and non-English characters", () => {
 });
 
 test("Base64 decoder tolerates whitespace", () => {
-  assert.equal(decodeBase64Utf8(" SGV sbG8=\\n"), "Hello");
+  assert.equal(decodeBase64Utf8(" SGV sbG8= "), "Hello");
 });
 
 test("Base64 decoder rejects invalid Base64", () => {
