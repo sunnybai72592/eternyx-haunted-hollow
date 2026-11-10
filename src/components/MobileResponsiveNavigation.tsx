@@ -152,7 +152,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
   };
 
   const handleSignIn = () => {
-    setIsMenuOpen?.(false as any);
+    setIsMobileMenuOpen(false);
     navigate('/auth');
   };
 
