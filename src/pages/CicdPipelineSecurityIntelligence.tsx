@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { analyzeWorkflowSecurity } from "@/lib/cicdPipelineSecurityUtils.mjs";
 
 const starterWorkflow = "name: CI\non: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          persist-credentials: true\n      - run: echo " + "${{ github.event.pull_request.title }}" + "\n";
-const severityStyle = {
+const severityStyle: Record<string, string> = {
  critical: "border-rose-500/40 bg-rose-950/30 text-rose-200",
  high: "border-orange-500/40 bg-orange-950/30 text-orange-200",
  medium: "border-amber-500/40 bg-amber-950/30 text-amber-200",
@@ -17,7 +17,7 @@ const severityStyle = {
 
 export default function CicdPipelineSecurityIntelligence() {
  const [workflow,setWorkflow]=useState(starterWorkflow);
- const [result,setResult]=useState(null);
+ const [result,setResult]=useState<ReturnType<typeof analyzeWorkflowSecurity> | null>(null);
  const [error,setError]=useState("");
  const [copyMessage,setCopyMessage]=useState("");
  const analyze=()=>{try{setResult(analyzeWorkflowSecurity(workflow));setError("");setCopyMessage("");}catch(e){setResult(null);setError(e instanceof Error?e.message:"Unable to analyze workflow.");}};
