@@ -501,4 +501,15 @@ The Settings page stores theme, notification, analytics, and sound-effect prefer
 **Required remediation:** define a single preferences contract and connect each setting to a real consumer, or remove/disable settings that do not work. Do not claim audit logging unless an actual protected audit record is written.
 
 
+
+### R-38 — The legacy DevSecOps Hub simulates live pipelines and deployment controls
+
+**Severity:** High product-integrity issue  
+**Files:** `src/components/DevSecOpsHub.tsx`, `src/pages/KillerEdge.tsx`
+
+The DevSecOps Hub waits two seconds, then loads hard-coded pipeline runs, security checks, deployment versions, timestamps, and health percentages. “Trigger Pipeline” and “Rollback Deployment” only display success toasts; they do not call GitHub Actions, Vercel, Netlify, or any deployment API. The component is embedded in the active Killer Edge page and is presented as a centralized operational dashboard.
+
+**Required remediation:** remove this simulated console from operational navigation or replace it with the existing real GitHub Actions/deployment intelligence surfaces. Preserve the DevOps Launchpad and Deployment Intelligence tools that accurately state they perform local generation/preflight only.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
