@@ -48,6 +48,15 @@ const sections: HubSection[] = [
     status: "Available",
   },
   {
+    id: "cloud-identity",
+    title: "Cloud Identity & Access",
+    description: "Review cloud permission policies, trust relationships, and least-privilege design before deployment.",
+    icon: LockKeyhole,
+    tools: ["AWS IAM policy review", "Wildcard permission checks", "Role trust analysis", "Privilege-sensitive actions"],
+    href: "/cybersecurity/aws-iam-policy",
+    status: "Available",
+  },
+  {
     id: "crypto",
     title: "Cryptography & Data Protection",
     description: "Work with hashes, encoding, password strength, and practical data-protection utilities.",
@@ -83,6 +92,7 @@ const featuredTools = [
   { name: "STRIDE Threat Modeling", detail: "Map assets, entry points, trust boundaries, and prioritized security threats.", href: "/cybersecurity/threat-modeling", icon: ShieldAlert, tag: "Architecture security" },
   { name: "Security Assessment & Remediation", detail: "Track evidence, owners, severity, remediation status, and validation notes.", href: "/cybersecurity/assessment-remediation", icon: FileSearch, tag: "Governance & remediation" },
   { name: "Incident Response Playbook Workbench", detail: "Coordinate response checklists, incident ownership, event timelines, and reports.", href: "/cybersecurity/incident-playbooks", icon: Siren, tag: "Incident response" },
+  { name: "AWS IAM Policy Security Review", detail: "Inspect wildcard permissions, broad resource access, privilege-sensitive actions, and role trust policies.", href: "/cybersecurity/aws-iam-policy", icon: LockKeyhole, tag: "Cloud identity security" },
   { name: "Threat Monitoring", detail: "Review platform threat-monitoring capabilities.", href: "/threat-monitoring", icon: Activity, tag: "Monitoring" },
   { name: "Security Auditing", detail: "Explore security review and assessment services.", href: "/security-auditing", icon: FileSearch, tag: "Assessment" },
   { name: "Incident Response", detail: "Explore incident handling and response workflows.", href: "/incident-response", icon: Siren, tag: "Response" },
@@ -143,7 +153,7 @@ const CybersecurityHub = () => {
             </div>
           </div>
           <div className="relative mt-9 grid grid-cols-2 gap-3 border-t border-white/10 pt-6 sm:mt-10 sm:grid-cols-3">
-            <div><p className="text-2xl font-bold text-white">6</p><p className="text-xs text-slate-400">Core domains</p></div>
+            <div><p className="text-2xl font-bold text-white">7</p><p className="text-xs text-slate-400">Core domains</p></div>
             <div><p className="text-2xl font-bold text-white">Authorized</p><p className="text-xs text-slate-400">Security-first approach</p></div>
             <div className="col-span-2 sm:col-span-1"><p className="text-2xl font-bold text-white">Growing</p><p className="text-xs text-slate-400">Tools and learning paths</p></div>
           </div>
