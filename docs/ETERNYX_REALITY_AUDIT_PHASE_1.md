@@ -477,4 +477,17 @@ The function validates message shape and limits a request to 30 messages with 4,
 **Required remediation:** remove operational wording and fake results from active security workflows. Retire these pages or convert them into explicitly labeled educational demos, separate from real assessment history. Keep any real incident-response playbooks as static guidance, not as a pretend SOC console.
 
 
+
+### R-36 — Profile save can report success while the shared profile state remains stale
+
+**Severity:** Medium account UX/data consistency issue  
+**Files:** `src/pages/Profile.tsx`, `src/store/authStore.ts`, `src/pages/Settings.tsx`, `src/components/ProfileSettings.tsx`
+
+The Profile page first updates a selected set of valid database columns directly, then calls `updateProfile(local)` with the entire local profile object. The store maps the auth email into `UserProfile`, but the `profiles` table does not have an `email` column. The second update can therefore return `success: false`; the page ignores that result and still displays “Profile Updated”. The first direct update may have persisted the fields, but the shared Zustand profile is not refreshed, so other parts of the app can show stale data until reload.
+
+The privacy toggle updates the database and local component state but does not refresh the shared store. Settings preference toggles also ignore the `updateProfile` result. The older `ProfileSettings` component contains email/phone visibility controls but is not mounted by the active Profile route.
+
+**Required remediation:** define a database-safe profile update DTO, update the database once, check the returned result, then refresh/replace the shared profile state from the returned row. Expose only privacy controls that are actually enforced by the public profile query/view.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
