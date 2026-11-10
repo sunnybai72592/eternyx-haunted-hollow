@@ -25,6 +25,7 @@ const EcosystemPillarPage = lazy(() => import("./pages/EcosystemPillarPage"));
 const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
 const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
+const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
 const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -167,6 +168,7 @@ const AppContent = () => {
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
                         <Route path="/developer-studio/advanced" element={<AdvancedDeveloperTools />} />
                         <Route path="/developer-studio/api-workbench" element={<ApiEngineeringWorkbench />} />
+                        <Route path="/developer-studio/devops" element={<DevOpsLaunchpad />} />
                         <Route path="/ai-arsenal" element={<EcosystemPillarPage pillarId="ai-arsenal" />} />
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
