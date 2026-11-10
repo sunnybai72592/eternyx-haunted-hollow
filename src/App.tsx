@@ -29,6 +29,7 @@ const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
 const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
+const GitHubActionsIntelligence = lazy(() => import("./pages/GitHubActionsIntelligence"));
 const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -175,6 +176,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />
+                        <Route path="/developer-studio/github-actions" element={<GitHubActionsIntelligence />} />
                         <Route path="/ai-arsenal" element={<EcosystemPillarPage pillarId="ai-arsenal" />} />
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
