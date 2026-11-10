@@ -24,6 +24,7 @@ test('retired legacy dashboard and fake tool engine are no longer shipped', asyn
     'src/pages/tools/CodeAnalyzer.tsx',
     'src/data/tools.ts',
     'src/lib/tools.tsx',
+    'tests/legacy-tool-card-interaction.test.mjs',
   ];
 
   for (const path of retiredPaths) {
