@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Activity, ArrowRight, BookOpen, FileSearch, Globe2, KeyRound,
+  Activity, ArrowRight, BookOpen, FileSearch, Globe2, KeyRound, ShieldAlert,
   Network, Search, Shield, ShieldCheck, Siren, Radar, LockKeyhole, GraduationCap
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +61,7 @@ const sections: HubSection[] = [
     title: "Threat Intelligence & Monitoring",
     description: "Review security events and investigate indicators of compromise with clear, traceable context.",
     icon: Siren,
-    tools: ["Threat monitoring", "IOC analysis", "Event review", "Incident insights"],
+    tools: ["STRIDE threat modeling", "Threat monitoring", "IOC analysis", "Event review", "Incident insights"],
     href: "/threat-monitoring",
     status: "Available",
   },
@@ -80,6 +80,7 @@ const featuredTools = [
   { name: "Network Scanner", detail: "Explore network discovery and diagnostics.", href: "/tools/network-scanner", icon: Network, tag: "Network" },
   { name: "Vulnerability Scanner", detail: "Assess authorized web targets for security issues.", href: "/vulnerability-scanner", icon: ShieldCheck, tag: "Web security" },
   { name: "Web Application Security Readiness", detail: "Review security headers, cookies, CSP, CSRF/session settings, and security.txt.", href: "/cybersecurity/web-security", icon: ShieldCheck, tag: "Application security" },
+  { name: "STRIDE Threat Modeling", detail: "Map assets, entry points, trust boundaries, and prioritized security threats.", href: "/cybersecurity/threat-modeling", icon: ShieldAlert, tag: "Architecture security" },
   { name: "Threat Monitoring", detail: "Review platform threat-monitoring capabilities.", href: "/threat-monitoring", icon: Activity, tag: "Monitoring" },
   { name: "Security Auditing", detail: "Explore security review and assessment services.", href: "/security-auditing", icon: FileSearch, tag: "Assessment" },
   { name: "Incident Response", detail: "Explore incident handling and response workflows.", href: "/incident-response", icon: Siren, tag: "Response" },
