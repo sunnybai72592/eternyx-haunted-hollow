@@ -24,7 +24,7 @@ test("ignores risky-looking text inside comments and quoted strings", () => {
 });
 
 test("detects security definer and dynamic SQL patterns", () => {
-  const result = analyzeSqlScript({ sql: "CREATE FUNCTION public.run_sql() RETURNS void SECURITY DEFINER LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT 1'; END; $$;" });
+  const result = analyzeSqlScript({ sql: "CREATE FUNCTION public.run_sql() RETURNS void SECURITY DEFINER LANGUAGE plpgsql AS $ BEGIN RETURN; END; $; EXECUTE IMMEDIATE 'SELECT * FROM users';" });
   assert.ok(result.findings.some(item => item.id === "SECURITY_DEFINER"));
   assert.ok(result.findings.some(item => item.id === "DYNAMIC_SQL"));
 });
