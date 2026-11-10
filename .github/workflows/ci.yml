@@ -27,5 +27,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Run utility tests
+        run: npm test
+      - name: Run lint
+        run: npm run lint
       - name: Build application
         run: npm run build
