@@ -12,7 +12,7 @@ const initial = { systemName: "", scope: "", assets: "", entryPoints: "", dataFl
 const fieldClass = "border-slate-700 bg-slate-950/80 text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-400";
 const ThreatModelingWorkbench = () => {
   const [form, setForm] = useState(initial);
-  const [model, setModel] = useState(null);
+  const [model, setModel] = useState<ReturnType<typeof analyzeThreatModel> | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const update = (key) => (event) => setForm(current => ({ ...current, [key]: event.target.value }));
