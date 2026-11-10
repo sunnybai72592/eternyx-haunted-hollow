@@ -40,5 +40,5 @@ export function buildAssessmentReport({ assessmentName = "Security assessment", 
     lines.push("## " + (index + 1) + ". [" + item.severity.toUpperCase() + "] " + item.title, "", "- Status: " + item.status, "- Owner: " + (item.owner || "Unassigned"), "- Due date: " + (item.dueDate || "Not set"), "", "**Evidence / observation**", item.evidence || "Not supplied", "", "**Recommended action**", item.recommendation || "Not supplied", "");
   }
   lines.push("## Validation note", "Mark a finding verified only after recording and reviewing evidence that the remediation is effective. Accepted risk should have documented approval from the responsible risk owner.");
-  return lines.join("\\n");
+  return lines.join("\n");
 }
