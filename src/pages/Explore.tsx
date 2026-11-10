@@ -36,7 +36,7 @@ const Explore = () => {
               One ecosystem. Endless possibilities.
             </div>
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-              Explore <span className="text-cyan-300">ETERN YX</span>
+              Explore <span className="text-cyan-300">ETERNYX</span>
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
               Discover a connected ecosystem for cybersecurity, development, AI, digital work, integrations, and automation.
