@@ -10,7 +10,7 @@ export function encodeBase64Utf8(value) {
 }
 
 export function decodeBase64Utf8(value) {
-  const binary = atob(value.replace(/\\s/g, ""));
+  const binary = atob(value.replace(/\s/g, ""));
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
