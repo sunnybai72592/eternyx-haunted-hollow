@@ -160,6 +160,14 @@ export default function DeveloperStudio() {
           <CardContent><Link to="/developer-studio/infrastructure-as-code" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open IaC workbench ↗</Link></CardContent>
         </Card>
 
+        <Card className="border-cyan-500/20 bg-slate-900/60 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-cyan-300" /> Observability Intelligence</CardTitle>
+            <CardDescription className="text-slate-400">Review Prometheus scrape jobs, alert rules, and Grafana dashboard exports for reliability gaps.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/observability" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open observability workbench ↗</Link></CardContent>
+        </Card>
+
         <Tabs defaultValue="json" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
             <TabsTrigger value="json" className="gap-2 py-2"><Braces className="h-4 w-4" /><span>JSON</span></TabsTrigger>
