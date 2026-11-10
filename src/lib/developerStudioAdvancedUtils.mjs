@@ -52,7 +52,8 @@ export function jsonArrayToCsv(input) {
   if (rows.length === 0) return "";
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const cell = (value) => {
-    const text = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+    let text = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+    if (typeof value === "string" && /^[\\s]*[=+@-]/.test(text)) text = "'" + text;
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   return [columns, ...rows.map((row) => columns.map((key) => row[key]))]
