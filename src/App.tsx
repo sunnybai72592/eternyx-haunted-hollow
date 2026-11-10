@@ -27,6 +27,7 @@ const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
 const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
+const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -171,6 +172,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/api-workbench" element={<ApiEngineeringWorkbench />} />
                         <Route path="/developer-studio/devops" element={<DevOpsLaunchpad />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
+                        <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/ai-arsenal" element={<EcosystemPillarPage pillarId="ai-arsenal" />} />
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
