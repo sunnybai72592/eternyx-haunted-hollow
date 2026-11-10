@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ElementType, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Braces, Clock3, Code2, FileCode2, FileDiff, FileSpreadsheet, Eye, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
 const sampleMarkdown = "# Welcome to ETERNYX\n\nWrite **Markdown** on the left and preview it safely on the right.\n\n- Fast local processing\n- No account required\n\n[Open ETERNYX](https://example.com)";
 const sampleJson = '[{"name":"ETERNYX","status":"active"},{"name":"Developer Studio","status":"building"}]';
 
-function ToolCard({ title, description, icon: Icon, children }: { title: string; description: string; icon: React.ElementType; children: React.ReactNode }) {
+function ToolCard({ title, description, icon: Icon, children }: { title: string; description: string; icon: ElementType; children: ReactNode }) {
   return <Card className="border-slate-800 bg-slate-900/70 text-white"><CardHeader><CardTitle className="flex items-center gap-2"><Icon className="h-5 w-5 text-cyan-300" />{title}</CardTitle><CardDescription className="text-slate-400">{description}</CardDescription></CardHeader><CardContent>{children}</CardContent></Card>;
 }
 
