@@ -114,7 +114,6 @@ export default function AuthPage() {
 
         {/* Form side */}
         <main className="mx-auto w-full max-w-md animate-scale-in">
-          <Link to="/" className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary lg:hidden"><ArrowLeft className="h-4 w-4" />Back</Link>
           <section className="rounded-3xl border border-border bg-card/80 p-7 shadow-2xl backdrop-blur-xl sm:p-8">
             <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary"><ShieldCheck className="h-6 w-6" /></div>
 
