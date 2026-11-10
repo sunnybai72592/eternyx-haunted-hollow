@@ -40,7 +40,7 @@ export default function AwsIamPolicySecurityWorkbench() {
     <div className="mx-auto max-w-6xl space-y-6">
       <Link to="/cybersecurity" className="inline-flex items-center gap-2 text-sm text-cyan-300 hover:text-cyan-200"><ArrowLeft className="h-4 w-4" />Cybersecurity Hub</Link>
       <header className="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-slate-900 via-[#0a1426] to-violet-950/40 p-6 sm:p-9">
-        <Badge className="mb-4 border border-cyan-300/30 bg-cyan-300/10 text-cyan-200">ETERN YX • CLOUD IDENTITY SECURITY</Badge>
+        <Badge className="mb-4 border border-cyan-300/30 bg-cyan-300/10 text-cyan-200">ETERNYX • CLOUD IDENTITY SECURITY</Badge>
         <div className="flex items-center gap-3 text-cyan-300"><Cloud className="h-7 w-7" /><span className="text-xs font-semibold uppercase tracking-[0.25em]">Cloud IAM Workbench</span></div>
         <h1 className="mt-3 text-3xl font-bold text-white sm:text-4xl">AWS IAM Policy Security Review</h1>
         <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Inspect policy JSON for excessive permissions, wildcard access, privilege-sensitive actions, and risky role trust relationships. Review locally before deployment.</p>
