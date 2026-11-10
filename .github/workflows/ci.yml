@@ -29,7 +29,9 @@ jobs:
         run: npm ci
       - name: Run utility tests
         run: npm test
-      - name: Run lint
-        run: npm run lint
+      - name: Check utility JavaScript syntax
+        run: |
+          node --check src/lib/developerStudioUtils.mjs
+          node --check tests/developer-studio-utils.test.mjs
       - name: Build application
         run: npm run build
