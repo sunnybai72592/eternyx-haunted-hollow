@@ -35,5 +35,7 @@ jobs:
           node --check tests/developer-studio-utils.test.mjs
           node --check src/lib/apiWorkbenchUtils.mjs
           node --check tests/api-workbench-utils.test.mjs
+          node --check src/lib/devopsLaunchpadUtils.mjs
+          node --check tests/devops-launchpad-utils.test.mjs
       - name: Build application
         run: npm run build
