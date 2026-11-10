@@ -402,9 +402,10 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
         )}
       </div>
       
-      <AuthModal 
-        isOpen={showAuthModal} 
+      <AuthModal
+        isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+        initialMode={authMode === 'signup' ? 'signup' : 'signin'}
       />
     </nav>
   );
