@@ -213,6 +213,14 @@ export default function DeveloperStudio() {
           <CardContent><Link to="/developer-studio/rls-security" className="text-sm font-medium text-sky-300 hover:text-sky-200">Open RLS security workbench ↗</Link></CardContent>
         </Card>
 
+        <Card className="border-rose-500/20 bg-slate-900/60 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-rose-300" /> API Security & Threat Intelligence</CardTitle>
+            <CardDescription className="text-slate-400">Review OpenAPI security requirements, JWT validation settings, CORS, HTTP security headers, rate limits, and authorization design with prioritized findings.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/api-security" className="text-sm font-medium text-rose-300 hover:text-rose-200">Open API security workbench ↗</Link></CardContent>
+        </Card>
+
         <Tabs defaultValue="json" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
             <TabsTrigger value="json" className="gap-2 py-2"><Braces className="h-4 w-4" /><span>JSON</span></TabsTrigger>
