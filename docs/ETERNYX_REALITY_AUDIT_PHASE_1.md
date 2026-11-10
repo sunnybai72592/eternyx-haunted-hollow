@@ -401,4 +401,28 @@ If these standalone schemas are applied as written without an explicit mapping, 
 **Required remediation:** inventory the live schema and migration ledger in a non-production environment, choose `auth.users` as the canonical identity source, remove or isolate the legacy password table if unused, and move required table creation into ordered forward migrations. Do not replay or rewrite production migration history blindly.
 
 
+
+### R-30 — Accessibility support is partly decorative or disconnected
+
+**Severity:** Medium accessibility issue  
+**Files:** `src/components/AccessibilityProvider.tsx`, `src/components/PageTransitionWrapper.tsx`, `src/index.css`, `src/styles/section-themes.css`, `src/App.tsx`
+
+- The accessibility provider treats the presence of `window.speechSynthesis` as evidence of a screen reader. That API is available in ordinary browsers and is not a reliable screen-reader detector.
+- The provider exposes settings and a live-region announcer, but repository search found no consumer of `useAccessibility` or caller of `announceToScreenReader`.
+- `PageTransitionWrapper` animates every route with Framer Motion and does not consult the reduced-motion setting. The global CSS reduced-motion rule does not reliably disable JavaScript-driven Framer Motion transitions.
+- `section-themes.css` is not imported by the active entry point, so its section theme tokens are not part of the active global design system.
+- `index.css` applies a monospace coding font to all body text and continuous animated background/scanline effects globally. This may be appropriate for limited accents, but it should not reduce long-form readability or create avoidable mobile rendering/battery cost.
+
+**Required remediation:** make accessibility controls real and testable, remove false screen-reader inference, connect announcements to meaningful state changes, honor reduced motion in Framer Motion, and define a readable shared typography hierarchy. Validate with keyboard-only, screen reader, contrast, reduced-motion, and mobile-device testing.
+
+### R-31 — Current CI and TypeScript settings do not enforce the documented quality bar
+
+**Severity:** Medium engineering quality risk  
+**Files:** `.github/workflows/ci.yml`, `eslint.config.js`, `tsconfig.app.json`, `tsconfig.json`
+
+The CI workflow runs Node tests, selected Edge Function syntax checks, and a Vite build, but does not run ESLint or a dedicated TypeScript typecheck. The app TypeScript configuration has `strict: false`, `noImplicitAny: false`, and `noUnusedLocals: false`; the root config also disables strict null checks. ESLint disables the unused-variable rule. Consequently, the current green build/test gate would not establish strict type safety or catch many stale imports and dead code paths.
+
+**Required remediation:** introduce a staged quality gate: lint, TypeScript check, unit tests, Edge Function tests, build, and eventually route/authorization integration tests. Tighten strictness incrementally rather than turning on strict mode across the entire legacy codebase in one disruptive change.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
