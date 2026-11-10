@@ -329,6 +329,7 @@ These education pages are not directly imported by the current App router, but t
 - `AddStudents` writes the submitted results password directly into a column named `results_password_hash`; its own comment says hashing is deferred. Student IDs and passwords are generated with `Math.random()`, which is not appropriate for security credentials.
 - `RoleSelection` attaches the same role-selection action to both a clickable Card and its nested button, which can trigger duplicate submissions through event bubbling.
 - `TeacherDashboard` calls `loadTests()` and `loadStats()` back-to-back; `loadStats()` reads the previous `tests` state when building the attempt query, so the initial attempt count can be incorrect.
+- The TSMS schema enables RLS on `user_roles` and `teachers` but defines no INSERT policy for either table; `RoleSelection` attempts to insert into both, so that onboarding flow is blocked by the inspected policies.
 - Teacher/student tables, password verification, ownership policies, and role assignment need a separate schema/RLS review before these flows are exposed.
 
 **Required remediation:** do not reactivate until credentials are generated/hashed server-side, role assignment is protected, all table ownership policies are verified, and education workflows have end-to-end tests.
