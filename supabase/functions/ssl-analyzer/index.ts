@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface SSLAnalysisRequest {
   hostname: string;
-  user_id: string;
 }
 
 interface SSLResult {
@@ -86,22 +85,30 @@ interface SSLVulnerability {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: corsHeaders })
 
   try {
-    // Initialize Supabase client
+    const authorization = req.headers.get('Authorization')
+    if (!authorization?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authorization } } },
     )
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
-    const { hostname, user_id }: SSLAnalysisRequest = await req.json()
+    const { hostname }: SSLAnalysisRequest = await req.json()
+    const normalizedHostname = validatePublicHostname(hostname)
+    const user_id = user.id
 
-    // Validate input
-    if (!hostname || !user_id) {
+    if (!normalizedHostname) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { 
@@ -113,11 +120,10 @@ serve(async (req) => {
 
     const startTime = Date.now()
 
-    // Use Qualys SSL Labs API for comprehensive SSL analysis
-    const sslResult = await performSSLAnalysis(hostname)
-    
-    // Perform additional SSL checks
-    const additionalChecks = await performAdditionalSSLChecks(hostname)
+    // SSL Labs performs the remote TLS assessment. Do not fetch user-supplied hosts
+    // from this function: that would create an SSRF path from the Edge Runtime.
+    const sslResult = await performSSLAnalysis(normalizedHostname)
+    const additionalChecks = performAdditionalSSLChecks(sslResult)
     
     const analysisTime = Math.floor((Date.now() - startTime) / 1000)
 
@@ -131,7 +137,7 @@ serve(async (req) => {
         user_id,
         analysis_type: 'ssl_analysis',
         input_data: {
-          hostname,
+          hostname: normalizedHostname,
           timestamp: new Date().toISOString()
         },
         results: {
@@ -162,7 +168,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         analysis_id: analysisData.id,
-        hostname,
+        hostname: normalizedHostname,
         overall_grade: sslResult.grade,
         security_score: securityScore,
         analysis_time: analysisTime,
@@ -177,11 +183,10 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('SSL analyzer error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
-        details: errorMessage 
+        details: 'The SSL/TLS assessment could not be completed.' 
       }),
       { 
         status: 500, 
@@ -204,10 +209,10 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
 
     // Poll for results (SSL Labs analysis can take time)
     let attempts = 0
-    const maxAttempts = 30 // Maximum 5 minutes (30 * 10 seconds)
+    const maxAttempts = 12 // Bound request duration to approximately one minute
 
     while (analysisData.status !== 'READY' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
+      await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
       
       const pollResponse = await fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(hostname)}&all=done`)
       if (pollResponse.ok) {
@@ -215,6 +220,10 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
       }
       
       attempts++
+    }
+
+    if (analysisData.status !== 'READY') {
+      throw new Error('SSL Labs assessment is not ready yet; retry the request later.')
     }
 
     // Process SSL Labs results
@@ -317,41 +326,48 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
   }
 }
 
-async function performAdditionalSSLChecks(hostname: string): Promise<any> {
-  const checks = {
-    certificate_valid: false,
-    supports_tls13: false,
-    hsts_enabled: false,
-    certificate_transparency: false,
-    ocsp_stapling: false,
-    perfect_forward_secrecy: false,
-    certificate_chain_valid: false
+function performAdditionalSSLChecks(sslResult: SSLResult): Record<string, boolean | null> {
+  const certificate = sslResult.certificates?.[0] as any
+  const now = Date.now()
+  const certificateValid = certificate?.notBefore && certificate?.notAfter
+    ? now >= certificate.notBefore * 1000 && now <= certificate.notAfter * 1000
+    : null
+  const supportsTls13 = sslResult.protocols.length > 0
+    ? sslResult.protocols.some((protocol) => protocol.name === 'TLS' && protocol.version === '1.3')
+    : null
+  const perfectForwardSecrecy = sslResult.suites.length > 0
+    ? sslResult.suites.every((suite) => suite.dhStrength > 0 || suite.ecdhBits > 0)
+    : null
+
+  return {
+    certificate_valid: certificateValid,
+    supports_tls13: supportsTls13,
+    // These require an HTTP response or a dedicated certificate-status check.
+    // SSL Labs' TLS protocol response alone does not establish them.
+    hsts_enabled: null,
+    certificate_transparency: null,
+    ocsp_stapling: null,
+    perfect_forward_secrecy: perfectForwardSecrecy,
+    certificate_chain_valid: null,
   }
+}
 
-  try {
-    // Check HTTPS availability and headers
-    const response = await fetch(`https://${hostname}`, {
-      method: 'HEAD',
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SSLAnalyzer/1.0)' }
-    })
-
-    if (response.ok) {
-      checks.certificate_valid = true
-      
-      // Check for HSTS header
-      const hstsHeader = response.headers.get('strict-transport-security')
-      checks.hsts_enabled = !!hstsHeader
-      
-      // Check for other security headers that indicate good SSL practices
-      const expectCTHeader = response.headers.get('expect-ct')
-      checks.certificate_transparency = !!expectCTHeader
-    }
-
-  } catch (error) {
-    console.error('Additional SSL checks error:', error)
-  }
-
-  return checks
+function validatePublicHostname(input: string): string | null {
+  if (typeof input !== 'string') return null
+  const hostname = input.trim().toLowerCase().replace(/\\.$/, '')
+  if (!hostname || hostname.length > 253 || hostname.includes('://') || /[\\/@?#:\\s]/.test(hostname)) return null
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') || hostname.endsWith('.internal') ||
+      hostname.endsWith('.test') || hostname.endsWith('.example') ||
+      hostname.endsWith('.invalid')) return null
+  // Accept DNS names only. IP literals (including IPv6) are deliberately rejected.
+  if (/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(hostname) || hostname.includes(':')) return null
+  const labels = hostname.split('.')
+  if (labels.length < 2 || labels.some((label) =>
+    label.length < 1 || label.length > 63 ||
+    !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+  )) return null
+  return hostname
 }
 
 function calculateSSLSecurityScore(sslResult: SSLResult, additionalChecks: any): number {
@@ -400,15 +416,15 @@ function generateSSLRecommendations(sslResult: SSLResult, additionalChecks: any)
     recommendations.push('Critical: SSL/TLS configuration has serious security issues that need immediate attention')
   }
 
-  if (!additionalChecks.supports_tls13) {
+  if (additionalChecks.supports_tls13 === false) {
     recommendations.push('Enable TLS 1.3 support for improved security and performance')
   }
 
-  if (!additionalChecks.hsts_enabled) {
+  if (additionalChecks.hsts_enabled === false) {
     recommendations.push('Implement HTTP Strict Transport Security (HSTS) headers')
   }
 
-  if (!additionalChecks.certificate_transparency) {
+  if (additionalChecks.certificate_transparency === false) {
     recommendations.push('Enable Certificate Transparency monitoring')
   }
 
