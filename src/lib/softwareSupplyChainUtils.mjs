@@ -105,7 +105,7 @@ export function analyzeNpmSupplyChain({ manifestText, lockfileText = "" } = {}) 
     const component = { type: "library", name: item.name, version: item.version, "bom-ref": item.ref, purl: item.ref };
     const hashes = normalizeIntegrity(item.item?.integrity);
     if (hashes.length) component.hashes = hashes;
-    if (item.item?.license) component.licenses = [{ license: { id: String(item.item.license) } }];
+    if (item.item?.license) component.licenses = [{ license: { name: String(item.item.license) } }];
     if (item.item?.dev) component.scope = "optional";
     return component;
   });
