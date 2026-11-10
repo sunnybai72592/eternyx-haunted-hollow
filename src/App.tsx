@@ -41,6 +41,7 @@ const WebApplicationSecurityReadiness = lazy(() => import("./pages/WebApplicatio
 const ThreatModelingWorkbench = lazy(() => import("./pages/ThreatModelingWorkbench"));
 const SecurityAssessmentWorkbench = lazy(() => import("./pages/SecurityAssessmentWorkbench"));
 const IncidentResponsePlaybookWorkbench = lazy(() => import("./pages/IncidentResponsePlaybookWorkbench"));
+const AwsIamPolicySecurityWorkbench = lazy(() => import("./pages/AwsIamPolicySecurityWorkbench"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
 const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaborationCenter"));
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
@@ -205,6 +206,7 @@ const AppContent = () => {
                         <Route path="/cybersecurity/threat-modeling" element={<ThreatModelingWorkbench />} />
                         <Route path="/cybersecurity/assessment-remediation" element={<SecurityAssessmentWorkbench />} />
                         <Route path="/cybersecurity/incident-playbooks" element={<IncidentResponsePlaybookWorkbench />} />
+                        <Route path="/cybersecurity/aws-iam-policy" element={<AwsIamPolicySecurityWorkbench />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />
                         <Route path="/developer-studio/github-collaboration" element={<GitHubCollaborationCenter />} />
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />
