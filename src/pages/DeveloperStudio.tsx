@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft, Braces, Copy, FileCode2, Fingerprint, KeyRound,
+  ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound,
   Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -143,6 +143,14 @@ export default function DeveloperStudio() {
           </div>
           <p className="text-xs text-slate-500">Client-side processing · No account required for these utilities</p>
         </div>
+
+        <Card className="border-cyan-500/20 bg-slate-900/60 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Boxes className="h-5 w-5 text-cyan-300" /> Container & Infrastructure Intelligence</CardTitle>
+            <CardDescription className="text-slate-400">Analyze Dockerfiles, Compose services, and Kubernetes manifests for common security and readiness issues.</CardDescription>
+          </CardHeader>
+          <CardContent><Link to="/developer-studio/container-infrastructure" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open infrastructure workbench ↗</Link></CardContent>
+        </Card>
 
         <Tabs defaultValue="json" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
