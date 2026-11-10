@@ -15,7 +15,7 @@ export function validateAssessmentFinding(input = {}) {
   if (!SEVERITIES.includes(severity)) throw new Error("Choose a valid severity.");
   if (evidence.length > 4000 || recommendation.length > 4000 || owner.length > 120) throw new Error("Evidence, recommendation, or owner exceeds its length limit.");
   if (!STATUSES.includes(status)) throw new Error("Choose a valid remediation status.");
-  if (dueDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(dueDate)) throw new Error("Due date must use YYYY-MM-DD.");
+  if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error("Due date must use YYYY-MM-DD.");
   return { title, severity, evidence, recommendation, owner, status, dueDate };
 }
 
