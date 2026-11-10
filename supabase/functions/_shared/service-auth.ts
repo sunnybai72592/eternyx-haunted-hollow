@@ -4,8 +4,17 @@
  */
 export function isTrustedServiceRequest(req: Request): boolean {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!serviceRoleKey) return false;
-
   const authorization = req.headers.get("authorization") ?? "";
-  return authorization === `Bearer ${serviceRoleKey}`;
+  const matches = Boolean(serviceRoleKey) &&
+    authorization === `Bearer ${serviceRoleKey}`;
+
+  // TEMPORARY SAFE DIAGNOSTIC: log booleans only, never credential values.
+  console.warn("[service-auth diagnostic]", {
+    runtimeSecretConfigured: Boolean(serviceRoleKey),
+    authorizationHeaderPresent: authorization.length > 0,
+    authorizationMatchesRuntimeSecret: matches,
+    runtimeSecretLooksLikeJwt: serviceRoleKey?.startsWith("eyJ") ?? false,
+  });
+
+  return matches;
 }
