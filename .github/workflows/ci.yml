@@ -39,5 +39,7 @@ jobs:
           node --check tests/devops-launchpad-utils.test.mjs
           node --check src/lib/githubHubUtils.mjs
           node --check tests/github-hub-utils.test.mjs
+          node --check src/lib/githubCollaborationUtils.mjs
+          node --check tests/github-collaboration-utils.test.mjs
       - name: Build application
         run: npm run build
