@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import type { ElementType, ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Braces, Clock3, Code2, FileCode2, FileDiff, FileSpreadsheet, Eye, WandSparkles } from "lucide-react";
+import { ArrowLeft, Clock3, Code2, FileCode2, FileDiff, FileSpreadsheet, Eye, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import {
   convertTimestamp, createLineDiff, decodeHtmlEntities, encodeHtmlEntities,
   jsonArrayToCsv, renderMarkdownSafe,
@@ -21,7 +22,7 @@ function ToolCard({ title, description, icon: Icon, children }: { title: string;
 }
 
 function Output({ value, label = "Output" }: { value: string; label?: string }) {
-  return <div className="space-y-2"><div className="flex items-center justify-between"><Label>{label}</Label><Button type="button" size="sm" variant="outline" disabled={!value} onClick={() => void navigator.clipboard.writeText(value)}>Copy</Button></div><Textarea readOnly value={value} spellCheck={false} className="min-h-48 border-slate-700 bg-slate-950 font-mono text-sm text-slate-100" /></div>;
+  return <div className="space-y-2"><div className="flex items-center justify-between"><Label>{label}</Label><Button type="button" size="sm" variant="outline" disabled={!value} onClick={async () => { try { await navigator.clipboard.writeText(value); toast.success("Copied to clipboard."); } catch { toast.error("Clipboard unavailable. Select the output and copy it manually."); } }}>Copy</Button></div><Textarea readOnly value={value} spellCheck={false} className="min-h-48 border-slate-700 bg-slate-950 font-mono text-sm text-slate-100" /></div>;
 }
 
 export default function AdvancedDeveloperTools() {
