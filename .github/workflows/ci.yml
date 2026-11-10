@@ -43,5 +43,7 @@ jobs:
           node --check tests/github-collaboration-utils.test.mjs
           node --check src/lib/githubChangeUtils.mjs
           node --check tests/github-change-utils.test.mjs
+          node --check src/lib/githubActionsUtils.mjs
+          node --check tests/github-actions-utils.test.mjs
       - name: Build application
         run: npm run build
