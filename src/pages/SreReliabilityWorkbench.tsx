@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Activity, BookOpenCheck, ClipboardList, Gauge, ShieldAlert, Copy, RotateCcw } from "lucide-react";
+import { ArrowLeft, Activity, BookOpenCheck, ClipboardList, Gauge, ShieldAlert, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
