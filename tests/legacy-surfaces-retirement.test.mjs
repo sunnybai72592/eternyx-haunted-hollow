@@ -20,6 +20,8 @@ test('retired legacy dashboard and fake tool engine are no longer shipped', asyn
     'src/components/SimpleToolCard.tsx',
     'src/components/ToolCard.tsx',
     'src/components/ToolsGrid.tsx',
+    'src/pages/tools/NetworkScanner.tsx',
+    'src/pages/tools/CodeAnalyzer.tsx',
     'src/data/tools.ts',
     'src/lib/tools.tsx',
   ];
@@ -35,7 +37,18 @@ test('legacy dashboard and catalogue URLs resolve to the real Explore surface', 
   assert.match(app, /<Route path="\/dashboard" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.match(app, /<Route path="\/tools" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.match(app, /<Route path="\/tools\/category\/:categoryId" element={<Navigate to="\/explore" replace \/>} \/>/);
-  assert.doesNotMatch(app, /import\(["']\.\/pages\/(?:UnifiedDashboard|Tools|ToolCategoryPage)["']\)/);
+  assert.match(app, /<Route path="\\/tools\\/network-scanner" element={<Navigate to="\\/explore" replace \\/>} \\/>/);
+  assert.match(app, /<Route path="\\/tools\\/code-analyzer" element={<Navigate to="\\/explore" replace \\/>} \\/>/);
+  assert.doesNotMatch(app, /import\\(["']\\.\\/pages\\/(?:UnifiedDashboard|Tools|ToolCategoryPage|tools\\/NetworkScanner|tools\\/CodeAnalyzer)["']\\)/);
+});
+
+test('the retained public exposure check does not invent scan progress or capabilities', async () => {
+  const scanner = await read('src/pages/VulnerabilityScanner.tsx');
+
+  assert.match(scanner, /toolExecutionService\.executeVulnerabilityScanner/);
+  assert.match(scanner, /Public CVE & HTTP Security Check/);
+  assert.match(scanner, /not a full vulnerability assessment/);
+  assert.doesNotMatch(scanner, /setInterval|setTimeout|Math\.random|Zero-Day Detection|Military-grade|AI-powered analysis/);
 });
 
 test('profile keeps real account management without fabricated arsenal progression', async () => {
