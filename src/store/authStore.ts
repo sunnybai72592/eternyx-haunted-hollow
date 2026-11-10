@@ -237,9 +237,10 @@ export const useAuthStore = create<AuthState>()(
         const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
           set({ session, user: session?.user ?? null, isAuthenticated: !!session?.user });
           if (session?.user) {
+            const currentUser = session.user;
             setTimeout(async () => {
-              let profile = await fetchUserProfile(session.user.id);
-              if (!profile) profile = await createDefaultProfile(session.user);
+              let profile = await fetchUserProfile(currentUser.id);
+              if (!profile) profile = await createDefaultProfile(currentUser);
               set({ profile, isLoading: false });
             }, 0);
           } else {
