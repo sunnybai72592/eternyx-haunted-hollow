@@ -102,7 +102,7 @@ const CyberArena = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       let functionName = '';
-      let payload: any = { user_id: user?.id };
+      let payload: any = {};
       
       switch (toolId) {
         case 'port-scanner':
