@@ -159,8 +159,8 @@ export default function AuthPage() {
     }
   };
 
-  const resend = async () => {
-    if (loading) return;
+  const resend = async (): Promise<boolean> => {
+    if (loading) return false;
     setBusy(true);
     setError(null);
     try {
@@ -171,11 +171,13 @@ export default function AuthPage() {
       });
       if (resendError) {
         setError(friendly(resendError.message));
-      } else {
-        setInfo(info === 'confirm' || info === 'confirm-resent' ? 'confirm-resent' : info);
+        return false;
       }
+      setInfo(info === 'confirm' || info === 'confirm-resent' ? 'confirm-resent' : info);
+      return true;
     } catch {
       setError('We could not resend the email. Please try again.');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -383,7 +385,7 @@ export default function AuthPage() {
                       </div>
                     )}
 
-                    {error && <div role="alert" aria-live="polite" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive">{error}</div>}
+                    {error && <div role="alert" aria-live="polite" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive">{error}{error.includes('confirm your email') && <button type="button" disabled={loading} onClick={async () => { const sent = await resend(); if (sent) { setInfo('confirm-resent'); setMode('sent'); } }} className="ml-1 font-semibold underline underline-offset-2 disabled:opacity-50">Resend confirmation link</button>}</div>}
 
                     <Button type="submit" disabled={loading} className="group mt-2 h-12 w-full rounded-xl bg-gradient-to-r from-primary to-accent text-sm font-bold text-primary-foreground shadow-lg shadow-primary/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-primary/20 disabled:translate-y-0 disabled:opacity-60">
                       {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mode === 'signup' ? <Sparkles className="mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4" />}
