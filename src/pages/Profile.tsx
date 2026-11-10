@@ -8,33 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { User as UserIcon, Save, Shield, Settings, Trash2, Wrench, Zap, Loader2, LogOut } from 'lucide-react';
-import { fetchTools, Tool } from '@/lib/tools';
+import { User as UserIcon, Save, Shield, Settings, Loader2, LogOut } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { motion } from 'framer-motion';
 import ProfileAvatarUploader from '@/components/ProfileAvatarUploader';
-import { TerminalWindow } from '@/components/TerminalWindow';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, user, profile, updateProfile, signOut } = useAuthStore();
   const [local, setLocal] = useState<Partial<UserProfile>>({});
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [userTools, setUserTools] = useState<Tool[]>([]);
-  const [loadingTools, setLoadingTools] = useState(true);
 
   useEffect(() => {
     document.title = 'Agent Profile | ETERNYX';
@@ -51,34 +35,6 @@ const Profile = () => {
       setLocal(profile);
     }
   }, [profile]);
-
-  useEffect(() => {
-    const getTools = async () => {
-      if (user?.id) {
-        setLoadingTools(true);
-        try {
-          // NOTE: Using a placeholder for fetchTools as the original implementation is complex.
-          // In a real scenario, this would be replaced with the actual implementation.
-          // For now, we'll use a mock or the existing one if it works.
-          // Since the original file used it, we'll keep the import and hope for the best.
-          // If fetchTools is not defined, this will break. Assuming it is defined in '@/lib/tools'.
-          const tools = await fetchTools(user.id); 
-          setUserTools(tools);
-        } catch (error) {
-          console.error("Failed to fetch user tools:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load your tools data.",
-            variant: "destructive",
-          });
-        } finally {
-          setLoadingTools(false);
-        }
-      }
-    };
-
-    getTools();
-  }, [user]);
 
   const handleSave = async () => {
     if (!local || !user) return;
@@ -144,81 +100,6 @@ const Profile = () => {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!user) return;
-    setDeleting(true);
-    try {
-      // Delete profile data (soft delete or flag is better, but following original code structure)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (profileError) throw profileError;
-
-      // Sign out and navigate
-      await signOut();
-      toast({
-        title: "Account Decommissioned",
-        description: "Your ETERNYX account has been permanently deleted.",
-      });
-      navigate('/');
-    } catch (error: any) {
-      toast({
-        title: "Decommission Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const renderToolCard = (tool: Tool) => {
-    const xpPercentage = (tool.xp / tool.maxXp) * 100;
-    const glowColor = tool.glowColor || 'cyan';
-
-    return (
-      <motion.div 
-        key={tool.id}
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className={`p-4 rounded-lg border transition-all duration-300 hover:scale-[1.02] cyber-card-sm`}
-      >
-        <div className="flex items-start justify-between mb-3">
-          <div className={`p-2 rounded-lg bg-${glowColor}-500/10`}>
-            {tool.icon || <Wrench className={`h-6 w-6 text-${glowColor}-400`} />}
-          </div>
-          {tool.isLocked && (
-            <div className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded font-mono">
-              [LOCKED]
-            </div>
-          )}
-        </div>
-        
-        <h4 className="font-semibold text-base mb-1 font-mono">{tool.title}</h4>
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{tool.description}</p>
-        
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
-            <span>LVL {tool.level}</span>
-            <span>{tool.xp}/{tool.maxXp} XP</span>
-          </div>
-          
-          <div className="w-full bg-gray-700 rounded-full h-2">
-            <motion.div 
-              className={`bg-gradient-to-r from-${glowColor}-400 to-${glowColor}-600 h-2 rounded-full`}
-              initial={{ width: 0 }}
-              animate={{ width: `${xpPercentage}%` }}
-              transition={{ duration: 1.5 }}
-            ></motion.div>
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
-
   return (
     <motion.main
       initial={{ opacity: 0, y: 20 }}
@@ -226,28 +107,24 @@ const Profile = () => {
       transition={{ duration: 0.5 }}
       className="min-h-screen bg-background"
     >
-      <TerminalWindow title="AGENT_PROFILE_V4.1.2" className="mb-8">
-        <div className="space-y-2 text-center">
-          <div className="text-cyber-green text-3xl font-extrabold flex items-center justify-center">
-            <UserIcon className="inline mr-3 h-8 w-8 animate-pulse" />
-            AGENT PROFILE MANAGEMENT
+      <header className="mx-auto mb-8 max-w-6xl px-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl border border-border bg-card p-3">
+            <UserIcon className="h-6 w-6 text-primary" />
           </div>
-          <p className="text-lg text-muted-foreground font-mono">
-            // Accessing and modifying ETERNYX operational identity.
-          </p>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Account profile</h1>
+            <p className="text-sm text-muted-foreground">Manage your personal details, privacy and account settings.</p>
+          </div>
         </div>
-      </TerminalWindow>
+      </header>
 
       <section className="container mx-auto px-4 py-8 max-w-6xl">
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8 bg-card/70 backdrop-blur-sm border border-border/50 shadow-lg">
+          <TabsList className="grid w-full grid-cols-3 mb-8 bg-card/70 backdrop-blur-sm border border-border/50 shadow-lg">
             <TabsTrigger value="profile" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-primary/30 data-[state=active]:shadow-md transition-all duration-300">
               <UserIcon className="h-4 w-4 mr-2" />
               IDENTITY
-            </TabsTrigger>
-            <TabsTrigger value="tools" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-primary/30 data-[state=active]:shadow-md transition-all duration-300">
-              <Wrench className="h-4 w-4 mr-2" />
-              ARSENAL
             </TabsTrigger>
             <TabsTrigger value="privacy" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-primary/30 data-[state=active]:shadow-md transition-all duration-300">
               <Shield className="h-4 w-4 mr-2" />
@@ -313,31 +190,6 @@ const Profile = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="tools" className="space-y-6">
-            <Card className="cyber-card p-8">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-primary">
-                <Wrench className="h-6 w-6 text-primary" />
-                OPERATIONAL ARSENAL & PROGRESS
-              </h3>
-              
-              {loadingTools ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-                  <p className="text-primary font-mono">LOADING ARSENAL DATA...</p>
-                </div>
-              ) : userTools.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Wrench className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-mono">NO TOOLS UNLOCKED. BEGIN YOUR OPERATIONAL DEPLOYMENT.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {userTools.map(renderToolCard)}
-                </div>
-              )}
-            </Card>
-          </TabsContent>
-
           <TabsContent value="privacy" className="space-y-6">
             <Card className="cyber-card p-8 space-y-6">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-primary">
@@ -378,41 +230,6 @@ const Profile = () => {
                   LOGOUT (END SESSION)
                 </Button>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full bg-destructive hover:bg-destructive/90 neon-border-sm transition-all duration-300"
-                    >
-                      <Trash2 className="h-5 w-5 mr-2" />
-                      DECOMMISSION ACCOUNT
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="cyber-card border-destructive shadow-destructive/50">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle className="text-destructive flex items-center gap-2">
-                        <Zap className="h-6 w-6 animate-pulse" />
-                        WARNING: CRITICAL DECOMMISSION PROTOCOL
-                      </AlertDialogTitle>
-                      <AlertDialogDescription className="text-muted-foreground font-mono">
-                        Initiating this protocol will permanently erase your operational identity and all associated data from the ETERNYX network. This action is irreversible.
-                        <br/><br/>
-                        <span className="text-red-400 font-bold">CONFIRM DECOMMISSION?</span>
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel className="neon-border-sm hover:bg-card/50">CANCEL PROTOCOL</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={handleDeleteAccount} 
-                        disabled={deleting}
-                        className="bg-destructive hover:bg-destructive/90 neon-border-sm"
-                      >
-                        {deleting ? <Loader2 className="h-5 w-5 mr-2 animate-spin"/> : <Trash2 className="h-5 w-5 mr-2"/>}
-                        {deleting ? 'ERASING DATA...' : 'CONFIRM DECOMMISSION'}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
               </div>
             </Card>
           </TabsContent>

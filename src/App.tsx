@@ -47,7 +47,6 @@ const GitHubCollaborationCenter = lazy(() => import("./pages/GitHubCollaboration
 const GitHubChangeIntelligence = lazy(() => import("./pages/GitHubChangeIntelligence"));
 const GitHubActionsIntelligence = lazy(() => import("./pages/GitHubActionsIntelligence"));
 const GitHubReleaseIntelligence = lazy(() => import("./pages/GitHubReleaseIntelligence"));
-const UnifiedDashboard = lazy(() => import("./pages/UnifiedDashboard"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const BlackHatPentesting = lazy(() => import("./pages/BlackHatPentesting"));
@@ -69,9 +68,6 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
 
-// Tools page - arsenal of cybersecurity and development tools
-const Tools = lazy(() => import("./pages/Tools"));
-const ToolCategoryPage = lazy(() => import("./pages/ToolCategoryPage")); // <-- NEW IMPORT
 
 const SecurityAuditing = lazy(() => import("./pages/SecurityAuditing"));
 const IncidentResponse = lazy(() => import("./pages/IncidentResponse"));
@@ -79,8 +75,6 @@ const PenetrationTesting = lazy(() => import("./pages/PenetrationTesting"));
 const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessment"));
 
 // Tool pages
-const NetworkScanner = lazy(() => import("./pages/tools/NetworkScanner"));
-const CodeAnalyzer = lazy(() => import("./pages/tools/CodeAnalyzer"));
 const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
 // New specialized tool pages
@@ -183,7 +177,7 @@ const AppContent = () => {
                         <Route path="/" element={<Index />} />
                         <Route path="/login" element={<AuthPage />} />
                         <Route path="/auth" element={<AuthPage />} />
-                        <Route path="/dashboard" element={<UnifiedDashboard />} />
+                        <Route path="/dashboard" element={<Navigate to="/explore" replace />} />
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/explore" element={<Explore />} />
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
@@ -240,15 +234,15 @@ const AppContent = () => {
                         <Route path="/development" element={<Development />} />
                         <Route path="/innovation" element={<Innovation />} />
 
-                        <Route path="/tools" element={<Tools />} />
-                        <Route path="/tools/category/:categoryId" element={<ToolCategoryPage />} />
+                        <Route path="/tools" element={<Navigate to="/explore" replace />} />
+                        <Route path="/tools/category/:categoryId" element={<Navigate to="/explore" replace />} />
 
                         <Route path="/killer-edge" element={<KillerEdge />} />
                         <Route path="/premium" element={<Premium />} />
                         <Route path="/bug-report" element={<BugReport />} />
                         <Route path="/contact" element={<Contact />} />
-                        <Route path="/tools/network-scanner" element={<NetworkScanner />} />
-                        <Route path="/tools/code-analyzer" element={<CodeAnalyzer />} />
+                        <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
+                        <Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />
 
                         {/* CBT System Routes */}
                         <Route path="/education" element={<Education />} />
