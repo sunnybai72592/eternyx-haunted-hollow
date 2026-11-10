@@ -75,7 +75,7 @@ export default function GitHubReleaseIntelligence() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 25000);
     try {
-      const resource = "compare/" + encodeURIComponent(baseTag) + "..." + encodeURIComponent(headTag);
+      const resource = "compare/" + baseTag + "..." + headTag;
       const result = await requestGitHub<unknown>(githubApiUrl(parsed.owner, parsed.repository, resource), controller.signal);
       setComparison(normalizeGitHubComparison(result.data));
       setRateRemaining(result.remaining);
