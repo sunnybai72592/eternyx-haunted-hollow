@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Activity, ArrowRight, BookOpen, Bug, Code2, Fingerprint, Globe2,
-  KeyRound, Network, Search, Shield, ShieldCheck, Siren, Terminal,
-  Radar, LockKeyhole, FileSearch, GraduationCap
+  Activity, ArrowRight, BookOpen, FileSearch, Globe2, KeyRound,
+  Network, Search, Shield, ShieldCheck, Siren, Radar, LockKeyhole, GraduationCap
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
