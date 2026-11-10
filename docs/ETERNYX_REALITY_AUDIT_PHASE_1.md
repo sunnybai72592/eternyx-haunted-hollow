@@ -461,4 +461,20 @@ The function validates message shape and limits a request to 30 messages with 4,
 **Required remediation:** remove fictional staff claims unless clearly labeled as sample content, connect inquiries to a real backend and delivery process, wire pricing to the canonical Stripe checkout flow and server-managed plans, validate every support promise, and use semantic internal/external links. Add a real suggestions intake only when ownership, moderation, privacy, and response expectations are defined.
 
 
+
+### R-35 — Additional active security pages simulate audits, scans, incidents, and feature launches
+
+**Severity:** High product-integrity issue  
+**Files:** `src/pages/SecurityAuditing.tsx`, `src/pages/IncidentResponse.tsx`, `src/pages/PenetrationTesting.tsx`, `src/pages/VulnerabilityAssessment.tsx`, `src/pages/KillerEdge.tsx`, `src/pages/Hacked.tsx`
+
+- Security Auditing displays fixed category totals and canned failed findings after a timed progress sequence; it does not inspect a supplied system or configuration.
+- Incident Response loads hard-coded incidents, timeline events, and fictional response-team members; its response controls are local UI state, not an incident-management integration.
+- Penetration Testing advances random progress and generates random finding counts/sample vulnerabilities; no actual target assessment is performed.
+- Vulnerability Assessment loads hard-coded assets and vulnerabilities, then animates random progress; it does not perform a scan.
+- Killer Edge shows fixed accuracy, threat, pipeline, deployment, uptime, and challenge statistics. “Launch Feature” changes a local tab and displays a toast rather than launching the advertised service.
+- Hacked runs a fictional terminal breach sequence ending in “ROOT ACCESS GRANTED”; it is a narrative effect, not a security event or real privilege escalation.
+
+**Required remediation:** remove operational wording and fake results from active security workflows. Retire these pages or convert them into explicitly labeled educational demos, separate from real assessment history. Keep any real incident-response playbooks as static guidance, not as a pretend SOC console.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
