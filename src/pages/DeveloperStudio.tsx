@@ -27,11 +27,21 @@ const decodeBase64Utf8 = (value: string) => {
 };
 
 const decodeBase64UrlJson = (value: string) => {
+  if (!value || !/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
+    throw new Error("JWT header and payload must use unpadded Base64URL encoding.");
+  }
+
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   const binary = atob(padded);
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return JSON.parse(new TextDecoder().decode(bytes));
+  const json = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+
+  if (!json || typeof json !== "object" || Array.isArray(json)) {
+    throw new Error("JWT header and payload must each contain a JSON object.");
+  }
+
+  return json;
 };
 
 const makeUuid = () => {
@@ -135,6 +145,9 @@ export default function DeveloperStudio() {
     try {
       const parts = jwtInput.trim().split(".");
       if (parts.length !== 3) throw new Error("A JWT must contain three dot-separated segments.");
+      if (!/^[A-Za-z0-9_-]*$/.test(parts[2]) || parts[2].length % 4 === 1) {
+        throw new Error("JWT signature segment must use valid Base64URL characters.");
+      }
       const header = decodeBase64UrlJson(parts[0]);
       const payload = decodeBase64UrlJson(parts[1]);
       setJwtOutput(JSON.stringify({ header, payload }, null, 2));
