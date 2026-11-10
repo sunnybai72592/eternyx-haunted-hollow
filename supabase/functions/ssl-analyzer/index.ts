@@ -270,7 +270,7 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
         if (details.cert) {
           const cert = details.cert
           const now = Date.now()
-          const notAfter = cert.notAfter * 1000
+          const notAfter = cert.notAfter > 1e12 ? cert.notAfter : cert.notAfter * 1000
           const daysUntilExpiry = Math.floor((notAfter - now) / (1000 * 60 * 60 * 24))
           
           if (daysUntilExpiry < 30) {
@@ -329,9 +329,9 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
 function performAdditionalSSLChecks(sslResult: SSLResult): Record<string, boolean | null> {
   const certificate = sslResult.certificates?.[0] as any
   const now = Date.now()
-  const certificateValid = certificate?.notBefore && certificate?.notAfter
-    ? now >= certificate.notBefore * 1000 && now <= certificate.notAfter * 1000
-    : null
+  const notBefore = certificate?.notBefore > 1e12 ? certificate.notBefore : (certificate?.notBefore ? certificate.notBefore * 1000 : null)
+  const notAfter = certificate?.notAfter > 1e12 ? certificate.notAfter : (certificate?.notAfter ? certificate.notAfter * 1000 : null)
+  const certificateValid = notBefore && notAfter ? now >= notBefore && now <= notAfter : null
   const supportsTls13 = sslResult.protocols.length > 0
     ? sslResult.protocols.some((protocol) => protocol.name === 'TLS' && protocol.version === '1.3')
     : null
@@ -354,14 +354,14 @@ function performAdditionalSSLChecks(sslResult: SSLResult): Record<string, boolea
 
 function validatePublicHostname(input: string): string | null {
   if (typeof input !== 'string') return null
-  const hostname = input.trim().toLowerCase().replace(/\\.$/, '')
-  if (!hostname || hostname.length > 253 || hostname.includes('://') || /[\\/@?#:\\s]/.test(hostname)) return null
+  const hostname = input.trim().toLowerCase().replace(/\.$/, '')
+  if (!hostname || hostname.length > 253 || hostname.includes('://') || /[\/@?#:\s\\]/.test(hostname)) return null
   if (hostname === 'localhost' || hostname.endsWith('.localhost') ||
       hostname.endsWith('.local') || hostname.endsWith('.internal') ||
       hostname.endsWith('.test') || hostname.endsWith('.example') ||
       hostname.endsWith('.invalid')) return null
   // Accept DNS names only. IP literals (including IPv6) are deliberately rejected.
-  if (/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(hostname) || hostname.includes(':')) return null
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':')) return null
   const labels = hostname.split('.')
   if (labels.length < 2 || labels.some((label) =>
     label.length < 1 || label.length > 63 ||
