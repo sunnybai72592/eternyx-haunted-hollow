@@ -61,7 +61,7 @@ test("HTML entity decoder leaves unknown entities untouched and replaces invalid
 test("timestamp converter accepts seconds and milliseconds", () => {
   assert.equal(convertTimestamp("0").iso, "1970-01-01T00:00:00.000Z");
   assert.equal(convertTimestamp("1000").unixMilliseconds, 1000000);
-  assert.equal(convertTimestamp("1000000").unixMilliseconds, 1000000);
+  assert.equal(convertTimestamp("1000000000000").unixMilliseconds, 1000000000000);
 });
 
 test("timestamp converter accepts date strings and rejects invalid input", () => {
