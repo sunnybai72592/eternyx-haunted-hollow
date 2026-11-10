@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
+import { getSupabaseSecretKey } from "../_shared/supabase.ts";
 import { isTrustedServiceRequest } from "../_shared/service-auth.ts";
 
 const headers = {
@@ -24,8 +25,8 @@ serve(async (req) => {
     }
 
     const url = Deno.env.get("SUPABASE_URL");
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !key) return reply({ error: "Exam grading is not configured" }, 500);
+    const key = getSupabaseSecretKey();
+    if (!url) return reply({ error: "Exam grading is not configured" }, 500);
 
     const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: attempt, error: attemptError } = await db
