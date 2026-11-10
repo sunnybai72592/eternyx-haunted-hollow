@@ -512,4 +512,18 @@ The DevSecOps Hub waits two seconds, then loads hard-coded pipeline runs, securi
 **Required remediation:** remove this simulated console from operational navigation or replace it with the existing real GitHub Actions/deployment intelligence surfaces. Preserve the DevOps Launchpad and Deployment Intelligence tools that accurately state they perform local generation/preflight only.
 
 
+
+### R-39 — PWA and native mobile packaging are not production-ready
+
+**Severity:** High launch-readiness issue  
+**Files:** `capacitor.config.ts`, `public/manifest.json`, `public/sw.js`, `src/components/PWAInstallPrompt.tsx`, `vite.config.ts`
+
+- Capacitor is configured with a remote Lovable `server.url`, so a native wrapper would load the hosted Lovable site rather than the bundled `dist` app. No `android/` or `ios/` platform projects are present in the repository.
+- `cleartext: true` is enabled in Capacitor configuration and should not be carried into a production native build without a documented requirement.
+- A service worker file exists, but no `navigator.serviceWorker.register` or equivalent registration was found. The PWA prompt advertises offline capabilities that are not currently established.
+- The manifest references `icon-192x192.png`, `icon-512x512.png`, `screenshot-wide.png`, and `screenshot-narrow.png`; those assets were not found in the repository tree.
+
+**Required remediation:** decide whether the near-term product is a responsive web app, installable PWA, or native Capacitor app. For PWA, register and test the service worker and supply valid icons/screenshots. For native, remove the remote development URL for release builds, create and validate Android/iOS projects, disable cleartext traffic, and test real device navigation, OAuth callbacks, storage, push permissions, offline behavior, and safe-area layouts. Do not claim native/offline capability until verified.
+
+
 **No application source, database migration, production data, secret, or deployment setting was changed by this audit document.**
