@@ -4,7 +4,7 @@
 
 **Tagline:** One ecosystem. Endless possibilities.
 
-ETERN YX is organized as one connected digital platform with focused pillars, a shared discovery experience, and a consistent account/workspace layer. The visual direction is deep navy, near-black, electric cyan, and violet, with responsive layouts and clear hierarchy.
+ETERNYX is organized as one connected digital platform with focused pillars, a shared discovery experience, and a consistent account/workspace layer. The visual direction is deep navy, near-black, electric cyan, and violet, with responsive layouts and clear hierarchy.
 
 ## Six ecosystem pillars
 
