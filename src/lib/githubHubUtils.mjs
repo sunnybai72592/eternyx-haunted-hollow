@@ -31,9 +31,10 @@ export function parseGitHubRepositoryInput(input) {
 export function githubApiUrl(owner, repository, resource = "") {
   const parsed = parseGitHubRepositoryInput(owner + "/" + repository);
   const suffix = String(resource).replace(/^\/+/, "");
-  if (suffix.split("/").some((part) => part === "." || part === "..")) {
+  const [resourcePath, query = ""] = suffix.split("?", 2);
+  if (resourcePath.split("/").some((part) => part === "." || part === "..")) {
     throw new Error("Invalid GitHub API resource path.");
   }
   return "https://api.github.com/repos/" + encodeURIComponent(parsed.owner) + "/" +
-    encodeURIComponent(parsed.repository) + (suffix ? "/" + suffix.split("/").map(encodeURIComponent).join("/") : "");
+    encodeURIComponent(parsed.repository) + (resourcePath ? "/" + resourcePath.split("/").map(encodeURIComponent).join("/") : "") + (query ? "?" + query : "");
 }
