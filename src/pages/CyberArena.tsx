@@ -109,7 +109,6 @@ const CyberArena = () => {
           functionName = 'port-scanner';
           delete payload.user_id; // Ownership is derived from the verified JWT.
           payload.target = input;
-          payload.scan_type = 'passive_shodan_lookup';
           break;
         case 'vuln-scanner':
           functionName = 'vulnerability-scanner';
