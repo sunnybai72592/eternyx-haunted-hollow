@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface DNSAnalysisRequest {
   domain: string;
-  user_id: string;
 }
 
 interface DNSRecord {
@@ -44,56 +43,61 @@ interface DNSAnalysisResult {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
+  }
 
   try {
-    // Initialize Supabase client
+    const authorization = req.headers.get('Authorization')
+    if (!authorization?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authorization } } },
     )
-
-    const { domain, user_id }: DNSAnalysisRequest = await req.json()
-
-    // Validate input
-    if (!domain || !user_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
 
-    // Validate domain format
-    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
-    if (!domainRegex.test(domain)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid domain format' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    const { domain }: DNSAnalysisRequest = await req.json()
+    const normalizedDomain = typeof domain === 'string'
+      ? domain.trim().toLowerCase().replace(/\.$/, '')
+      : ''
+    const domainRegex = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
+    if (!domainRegex.test(normalizedDomain)) {
+      return new Response(JSON.stringify({ error: 'Enter a valid public domain name' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
-
+    const domainName = normalizedDomain
+    const user_id = user.id
     const startTime = Date.now()
     const vulnerabilities: DNSVulnerability[] = []
     const dnsRecords: DNSRecord[] = []
     let nameservers: string[] = []
 
-    console.log(`Starting DNS security analysis for: ${domain}`)
+    console.log(`Starting DNS configuration review for: ${domainName}`)
 
     // 1. DNS Record Enumeration
     const recordTypes = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
     
     for (const recordType of recordTypes) {
       try {
-        const records = await queryDNSRecords(domain, recordType)
+        const records = await queryDNSRecords(domainName, recordType)
         dnsRecords.push(...records)
         
         if (recordType === 'NS') {
@@ -105,27 +109,26 @@ serve(async (req) => {
     }
 
     // 2. Security Features Analysis
-    const securityFeatures = await analyzeSecurityFeatures(domain, dnsRecords)
+    const securityFeatures = await analyzeSecurityFeatures(domainName, dnsRecords)
 
     // 3. DNSSEC Validation
-    const dnssecAnalysis = await analyzeDNSSEC(domain)
+    const dnssecAnalysis = await analyzeDNSSEC(domainName)
     vulnerabilities.push(...dnssecAnalysis.vulnerabilities)
 
     // 4. Email Security Analysis
-    const emailSecurityAnalysis = await analyzeEmailSecurity(domain, dnsRecords)
+    const emailSecurityAnalysis = await analyzeEmailSecurity(domainName, dnsRecords)
     vulnerabilities.push(...emailSecurityAnalysis.vulnerabilities)
 
     // 5. DNS Configuration Security
-    const configAnalysis = await analyzeDNSConfiguration(domain, dnsRecords, nameservers)
+    const configAnalysis = await analyzeDNSConfiguration(domainName, dnsRecords, nameservers)
     vulnerabilities.push(...configAnalysis.vulnerabilities)
 
-    // 6. Zone Transfer Testing
-    const zoneTransferAnalysis = await testZoneTransfer(domain, nameservers)
-    vulnerabilities.push(...zoneTransferAnalysis.vulnerabilities)
-
-    // 7. DNS Cache Poisoning Tests
-    const cachePoisoningAnalysis = await testCachePoisoning(domain)
-    vulnerabilities.push(...cachePoisoningAnalysis.vulnerabilities)
+    const coverageLimitations = [
+      'DNS zone transfers (AXFR) are not tested by this analyzer.',
+      'DNS cache-poisoning resistance is not tested by this analyzer.',
+      'DKIM lookup checks only the default._domainkey selector; other provider-specific selectors may exist.',
+      'DNSSEC status is inferred from the presence of a DS record; this is not a full DNSSEC validation.'
+    ]
 
     const analysisDuration = Math.floor((Date.now() - startTime) / 1000)
     const riskScore = calculateDNSRiskScore(vulnerabilities, securityFeatures)
@@ -135,6 +138,7 @@ serve(async (req) => {
       dns_records: dnsRecords,
       vulnerabilities,
       security_features: securityFeatures,
+      coverage_limitations: coverageLimitations,
       nameservers,
       analysis_duration: analysisDuration,
       risk_score: riskScore
@@ -151,7 +155,6 @@ serve(async (req) => {
           timestamp: new Date().toISOString()
         },
         results: analysisResult,
-        confidence_score: 0.95,
         processing_time: analysisDuration * 1000
       })
       .select()
@@ -179,7 +182,8 @@ serve(async (req) => {
           low: vulnerabilities.filter(v => v.severity === 'low').length
         },
         vulnerabilities: vulnerabilities.slice(0, 10), // Return first 10 for preview
-        recommendations: generateDNSRecommendations(vulnerabilities, securityFeatures)
+        recommendations: generateDNSRecommendations(vulnerabilities, securityFeatures),
+        coverage_limitations: coverageLimitations
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -412,63 +416,6 @@ async function analyzeDNSConfiguration(domain: string, dnsRecords: DNSRecord[], 
       location: 'NS Records',
       remediation: 'Configure at least 2 nameservers for redundancy',
     })
-  }
-
-  return { vulnerabilities }
-}
-
-async function testZoneTransfer(domain: string, nameservers: string[]): Promise<{ vulnerabilities: DNSVulnerability[] }> {
-  const vulnerabilities: DNSVulnerability[] = []
-
-  // Note: In a real implementation, you would attempt AXFR queries
-  // This is a simplified simulation since Edge Functions have limited DNS capabilities
-  
-  // Simulate zone transfer test results
-  const hasZoneTransferVuln = Math.random() < 0.1 // 10% chance for demonstration
-  
-  if (hasZoneTransferVuln) {
-    vulnerabilities.push({
-      type: 'Zone Transfer Allowed',
-      severity: 'high',
-      description: 'DNS zone transfer is allowed from unauthorized sources',
-      location: 'DNS Server Configuration',
-      remediation: 'Restrict zone transfers to authorized secondary nameservers only',
-    })
-  }
-
-  return { vulnerabilities }
-}
-
-async function testCachePoisoning(domain: string): Promise<{ vulnerabilities: DNSVulnerability[] }> {
-  const vulnerabilities: DNSVulnerability[] = []
-
-  // Note: This is a simplified simulation
-  // Real cache poisoning tests would require more sophisticated techniques
-  
-  try {
-    // Check for DNS response inconsistencies that might indicate vulnerabilities
-    const responses = []
-    
-    for (let i = 0; i < 3; i++) {
-      const records = await queryDNSRecords(domain, 'A')
-      responses.push(records)
-    }
-
-    // Check for response consistency
-    const firstResponse = JSON.stringify(responses[0])
-    const inconsistent = responses.some(r => JSON.stringify(r) !== firstResponse)
-    
-    if (inconsistent) {
-      vulnerabilities.push({
-        type: 'DNS Response Inconsistency',
-        severity: 'low',
-        description: 'DNS responses show inconsistencies that may indicate configuration issues',
-        location: 'DNS Resolution',
-        remediation: 'Review DNS configuration for consistency and proper load balancing',
-      })
-    }
-  } catch (error) {
-    console.error('Cache poisoning test error:', error)
   }
 
   return { vulnerabilities }
