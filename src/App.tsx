@@ -10,7 +10,6 @@ import { AccessibilityProvider } from "@/components/AccessibilityProvider";
 import NotificationSystem from "@/components/NotificationSystem";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import ResponsiveUnifiedNavigation from "@/components/ResponsiveUnifiedNavigation";
 import { MobileResponsiveNavigation } from "@/components/MobileResponsiveNavigation";
 import { PageTransitionWrapper } from "@/components/PageTransitionWrapper";
 import Footer from "@/components/Footer";
