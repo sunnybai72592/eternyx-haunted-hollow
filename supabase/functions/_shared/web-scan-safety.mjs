@@ -1,14 +1,14 @@
 const RESERVED_SUFFIXES = ['.localhost', '.local', '.internal', '.test', '.example', '.invalid']
 
 export function normalizeWebTarget(value) {
-  if (typeof value !== 'string' || !value.trim() || value.length > 2048) {
-    throw new Error('Enter a public HTTP or HTTPS URL (maximum 2,048 characters).')
+  if (typeof value !== 'string' || !value.trim() || value.length > 500) {
+    throw new Error('Enter a public HTTP or HTTPS URL (maximum 500 characters).')
   }
   let url
   try { url = new URL(value.trim()) } catch { throw new Error('Enter a valid absolute HTTP or HTTPS URL.') }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Only HTTP and HTTPS targets are supported.')
   if (url.username || url.password) throw new Error('URLs containing embedded credentials are not accepted.')
-  if (url.port && url.port !== '80' && url.port !== '443') throw new Error('Only standard HTTP (80) and HTTPS (443) ports are accepted.')
+  if (url.port && ((url.protocol === 'http:' && url.port !== '80') || (url.protocol === 'https:' && url.port !== '443'))) throw new Error('Only standard HTTP (80) and HTTPS (443) ports are accepted.')
   const hostname = url.hostname.toLowerCase().replace(/\.$/, '')
   if (!hostname || hostname.startsWith('[') || /^[0-9.]+$/.test(hostname)) {
     throw new Error('IP-literal targets are not accepted. Enter a public hostname instead.')
