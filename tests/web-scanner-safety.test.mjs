@@ -10,7 +10,9 @@ test('accepts absolute HTTP(S) public hostnames and rejects unsafe URL forms', (
   assert.throws(() => normalizeWebTarget('http://2130706433'), /IP-literal/);
   assert.throws(() => normalizeWebTarget('http://localhost'), /IP-literal|Local/);
   assert.throws(() => normalizeWebTarget('http://service.internal'), /Local/);
-  assert.throws(() => normalizeWebTarget('https://example.com:8443'), /standard HTTP/);\n  assert.throws(() => normalizeWebTarget('https://example.com:80'), /standard HTTP/);\n  assert.throws(() => normalizeWebTarget('http://example.com:443'), /standard HTTP/);
+  assert.throws(() => normalizeWebTarget('https://example.com:8443'), /standard HTTP/);
+  assert.throws(() => normalizeWebTarget('https://example.com:80'), /standard HTTP/);
+  assert.throws(() => normalizeWebTarget('http://example.com:443'), /standard HTTP/);
 });
 
 test('rejects non-public IPv4 ranges', () => {
