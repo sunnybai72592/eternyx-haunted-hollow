@@ -72,3 +72,13 @@ test('profile keeps real account management without fabricated arsenal progressi
   assert.match(profile, /updateProfile\(local\)/);
   assert.doesNotMatch(profile, /fetchTools|userTools|loadingTools|ARSENAL|\bXP\b|\bLVL\b|handleDeleteAccount/);
 });
+
+test('profile avatar upload and public URL use the provisioned storage bucket', async () => {
+  const uploader = await read('src/components/ProfileAvatarUploader.tsx');
+  const migration = await read('supabase/migrations/20251004122829_a8554bfe-efa3-4057-858d-edee58f73e61.sql');
+
+  assert.match(migration, /'avatars'/);
+  assert.match(uploader.replace(/\s+/g, ' '), /storage\s*\.from\('avatars'\)\s*\.upload/);
+  assert.match(uploader.replace(/\s+/g, ' '), /storage\s*\.from\('avatars'\)\s*\.getPublicUrl/);
+  assert.doesNotMatch(uploader, /user-avatars/);
+});
