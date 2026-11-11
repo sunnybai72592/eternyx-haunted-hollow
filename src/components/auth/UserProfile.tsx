@@ -35,6 +35,9 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
 
   if (!user || !profile) return null;
 
+  const displayName = profile.username || profile.full_name || user.email?.split('@')[0] || 'Member';
+  const accessLevel = profile.access_level || 'basic';
+
   const getAccessLevelIcon = (level: string) => {
     switch (level) {
       case 'elite':
@@ -72,21 +75,21 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
           >
             <div className="flex items-center space-x-3">
               <Avatar className="h-8 w-8 ring-2 ring-primary/50">
-                <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={profile?.username} />
+                <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={displayName} />
                 <AvatarFallback className="bg-primary/20 text-primary font-bold">
-                  {profile.username.slice(0, 2).toUpperCase()}
+                  {displayName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               
               <div className="hidden sm:flex flex-col items-start">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-semibold text-foreground">
-                    {profile.username}
+                    {displayName}
                   </span>
-                  {getAccessLevelIcon(profile.access_level)}
+                  {getAccessLevelIcon(accessLevel)}
                 </div>
-                <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
-                  {profile.access_level}
+                <span className={`text-xs ${getAccessLevelColor(accessLevel)} uppercase font-medium`}>
+                  {accessLevel}
                 </span>
               </div>
               
@@ -145,7 +148,7 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
             <ClipboardList className="mr-2 h-4 w-4" /><span>My Bug Reports</span>
           </DropdownMenuItem>
           
-          {profile.access_level === 'basic' && (
+          {accessLevel === 'basic' && (
             <>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem className="cursor-pointer hover:bg-blue-500/10 focus:bg-blue-500/10 text-blue-400">
