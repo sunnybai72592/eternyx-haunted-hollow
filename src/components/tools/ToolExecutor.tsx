@@ -298,6 +298,20 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             </div>
           )}
 
+          {Array.isArray(result.coverage_limitations) && result.coverage_limitations.length > 0 && (
+            <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-lg">
+              <h4 className="text-md font-semibold text-amber-300 mb-2">Coverage & Limitations</h4>
+              <ul className="space-y-2">
+                {result.coverage_limitations.map((item: string, index: number) => (
+                  <li key={index} className="text-sm text-gray-300 flex items-start">
+                    <span className="text-amber-300 mr-2">•</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {result.recommendations && result.recommendations.length > 0 && (
             <div className="bg-gray-800 p-4 rounded-lg">
               <h4 className="text-md font-semibold text-green-400 mb-2">Recommendations</h4>
