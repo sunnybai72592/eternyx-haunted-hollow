@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   User, 
   Settings, 
@@ -20,6 +21,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   Crown,
+  ShieldCheck,
   Zap,
   ChevronDown
 } from 'lucide-react';
@@ -30,6 +32,16 @@ interface UserProfileProps {
 
 export const UserProfile = ({ className = '' }: UserProfileProps) => {
   const { user, profile, signOut } = useAuthStore();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) { setIsAdmin(false); return; }
+    void supabase.rpc('is_admin').then(({ data, error }) => {
+      if (active) setIsAdmin(!error && data === true);
+    });
+    return () => { active = false; };
+  }, [user?.id]);
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -86,10 +98,10 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
                   <span className="text-sm font-semibold text-foreground">
                     {displayName}
                   </span>
-                  {getAccessLevelIcon(accessLevel)}
+                  {isAdmin ? <ShieldCheck className="h-4 w-4 text-amber-400" /> : getAccessLevelIcon(accessLevel)}
                 </div>
-                <span className={`text-xs ${getAccessLevelColor(accessLevel)} uppercase font-medium`}>
-                  {accessLevel}
+                <span className={`text-xs ${isAdmin ? 'text-amber-400' : getAccessLevelColor(accessLevel)} uppercase font-medium`}>
+                  {isAdmin ? 'Administrator' : `${accessLevel} member`}
                 </span>
               </div>
               
@@ -123,16 +135,24 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
               </div>
               
               <div className="flex items-center space-x-2">
-                {getAccessLevelIcon(profile.access_level)}
-                <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
-                  {profile.access_level} ACCESS
+                {isAdmin ? <ShieldCheck className="h-4 w-4 text-amber-400" /> : getAccessLevelIcon(accessLevel)}
+                <span className={`text-xs ${isAdmin ? 'text-amber-400' : getAccessLevelColor(accessLevel)} uppercase font-medium`}>
+                  {isAdmin ? 'TRUSTED ADMINISTRATOR' : `${accessLevel} ACCESS`}
                 </span>
               </div>
             </div>
           </DropdownMenuLabel>
           
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem onSelect={() => navigate('/admin/bug-reports')} className="cursor-pointer text-amber-400 hover:bg-amber-500/10 focus:bg-amber-500/10">
+                <ShieldCheck className="mr-2 h-4 w-4" /><span>Administrator Console</span>
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuSeparator className="bg-border" />
-          <DropdownMenuItem onSelect={() => navigate('/account')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+          <DropdownMenuItem onSelect={() => navigate('/account') className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
             <LayoutDashboard className="mr-2 h-4 w-4" /><span>Account Overview</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/profile')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
