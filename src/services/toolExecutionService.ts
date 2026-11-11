@@ -27,21 +27,34 @@ class ToolExecutionService {
         return { success: false, error: 'Your session has expired. Please sign in again.' };
       }
 
-      const response = await fetch(`${this.baseUrl}/vulnerability-scanner`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(params),
+      // Use the configured Supabase client so the project apikey and the
+      // current user's Authorization token are both attached consistently.
+      const { data, error } = await supabase.functions.invoke('vulnerability-scanner', {
+        body: params,
       });
 
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || 'CVE research failed' };
+      if (error) {
+        let message = error.message || 'CVE research failed';
+        if ('context' in error && error.context instanceof Response) {
+          try {
+            const payload = await error.context.clone().json();
+            if (typeof payload?.error === 'string') message = payload.error;
+            else if (typeof payload?.message === 'string') message = payload.message;
+          } catch {
+            // Keep the SDK error message when the response has no JSON body.
+          }
+        }
+        return { success: false, error: message };
       }
 
-      return { success: true, data: result, executionId: result.scan_id };
+      if (!data || data.success !== true) {
+        return {
+          success: false,
+          error: typeof data?.error === 'string' ? data.error : 'CVE research returned an unexpected response.',
+        };
+      }
+
+      return { success: true, data, executionId: data.scan_id };
     } catch (error) {
       return {
         success: false,
