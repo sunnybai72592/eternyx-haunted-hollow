@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { recordAuthorizationEvent } from "../_shared/security-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,6 +115,11 @@ serve(async (req) => {
     if (!document) return reply({ error: "Document not found" }, 404);
     ownedDocumentId = document.id;
     if (body.storagePath !== undefined && body.storagePath !== document.storage_path) {
+      await recordAuthorizationEvent({
+        functionName: "process-document",
+        reason: "document_storage_reference_mismatch",
+        actorUserId: user.id,
+      });
       return reply({ error: "Document storage reference does not match" }, 403);
     }
 

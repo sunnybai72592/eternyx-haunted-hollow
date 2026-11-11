@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { recordAuthorizationEvent } from "../_shared/security-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +138,12 @@ serve(async (req) => {
     return reply({ error: "Message must contain between 1 and 4000 characters" }, 400);
   }
   if (body.userId !== undefined && body.userId !== user.id) {
+    await recordAuthorizationEvent({
+      functionName: "eternyx-ai-chat",
+      reason: "request_user_id_mismatch",
+      actorUserId: user.id,
+      severity: "high",
+    });
     return reply({ error: "User identity does not match the authenticated account" }, 403);
   }
   if (body.sessionId !== undefined && body.sessionId !== null && !isUuid(body.sessionId)) {
@@ -171,6 +178,11 @@ serve(async (req) => {
       if (error) throw new Error("Unable to verify conversation access");
       if (!session) return reply({ error: "Conversation not found" }, 404);
       if (documentId && session.document_id && session.document_id !== documentId) {
+        await recordAuthorizationEvent({
+          functionName: "eternyx-ai-chat",
+          reason: "conversation_document_mismatch",
+          actorUserId: user.id,
+        });
         return reply({ error: "Conversation is linked to a different document" }, 403);
       }
     }
