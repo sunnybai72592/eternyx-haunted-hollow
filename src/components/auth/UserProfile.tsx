@@ -16,7 +16,6 @@ import {
   Settings, 
   LogOut, 
   Shield, 
-  Activity,
   Bell,
   LayoutDashboard,
   ClipboardList,
@@ -120,17 +119,11 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
                 </div>
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  {getAccessLevelIcon(profile.access_level)}
-                  <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
-                    {profile.access_level} ACCESS
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                  <Activity className="h-3 w-3" />
-                  <span>Online</span>
-                </div>
+              <div className="flex items-center space-x-2">
+                {getAccessLevelIcon(profile.access_level)}
+                <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
+                  {profile.access_level} ACCESS
+                </span>
               </div>
             </div>
           </DropdownMenuLabel>
