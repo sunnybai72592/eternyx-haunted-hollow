@@ -230,10 +230,10 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
       <Card className="p-6 mt-6">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-green-400">Execution Results</h3>
+            <h3 className="text-lg font-semibold text-green-400">{toolId === 'port-scanner' ? 'Lookup Results' : 'Execution Results'}</h3>
             <Badge variant="outline" className="text-green-400 border-green-400">
               <CheckCircle className="w-4 h-4 mr-1" />
-              Completed
+              {toolId === 'port-scanner' ? 'Lookup complete' : 'Completed'}
             </Badge>
           </div>
 
