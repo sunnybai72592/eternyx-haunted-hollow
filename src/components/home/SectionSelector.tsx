@@ -39,7 +39,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
   const { isAuthenticated, profile } = useAuthStore();
 
   return (
-    <main className={cn("relative isolate min-h-screen overflow-hidden bg-[#050914] text-white", className)}>
+    <main className={cn("relative isolate overflow-hidden bg-[#050914] text-white", className)}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-72 left-[45%] h-[46rem] w-[46rem] -translate-x-1/2 rounded-full bg-cyan-400/[0.13] blur-[130px]" />
         <div className="absolute right-[-18rem] top-[28rem] h-[38rem] w-[38rem] rounded-full bg-violet-600/[0.13] blur-[130px]" />
@@ -47,7 +47,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
         <div className="absolute inset-0 opacity-[0.13]" style={{ backgroundImage: "linear-gradient(rgba(148,163,184,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.12) 1px, transparent 1px)", backgroundSize: "72px 72px", maskImage: "linear-gradient(to bottom, black, transparent 88%)" }} />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-7 sm:px-6 sm:pt-10 lg:px-8">
+      <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-7 sm:px-6 sm:pt-10 lg:px-8">
         <section className="relative grid items-center gap-12 pb-16 pt-5 lg:min-h-[590px] lg:grid-cols-[1.08fr_.92fr] lg:gap-8 lg:pb-20">
           <div className="relative z-10 max-w-3xl">
             <div className="mb-7 inline-flex items-center gap-2.5 rounded-full border border-cyan-200/20 bg-cyan-200/[0.06] px-3.5 py-2 text-[10px] font-bold uppercase tracking-[.2em] text-cyan-100 sm:text-xs">
@@ -174,7 +174,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
           ))}
         </section>
 
-        <section className="mt-16 overflow-hidden rounded-2xl border border-cyan-200/15 bg-gradient-to-r from-cyan-200/[0.08] via-blue-300/[0.04] to-violet-300/[0.08] p-6 sm:p-9">
+        <section className="mt-12 overflow-hidden rounded-2xl border border-cyan-200/15 bg-gradient-to-r from-cyan-200/[0.08] via-blue-300/[0.04] to-violet-300/[0.08] p-6 sm:p-9">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-2xl">
               <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.22em] text-cyan-100 sm:text-xs"><Sparkles className="h-4 w-4" /> Built with intention</div>
