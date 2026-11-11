@@ -97,7 +97,7 @@ test('retired Black Hat Pentesting console is not shipped or advertised as an op
   const servicesHub = await read('src/pages/ServicesHub.tsx');
   const services = await read('src/pages/Services.tsx');
 
-  assert.ok(app.includes('<Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />'));
+  assert.ok(app.includes('<Route path="/black-hat-pentesting" element={<RequireAuth><BlackHatPentesting /></RequireAuth>} />'));
   assert.match(app, /BlackHatPentesting = lazy\(\(\) => import\("\.\/pages\/BlackHatPentesting"\)\)/);
   assert.match(app, /path="\/penetration-testing" element={<Navigate to="\/black-hat-pentesting" replace \/>}/);
   assert.match(app, /path="\/vulnerability-assessment" element={<Navigate to="\/cybersecurity\/assessment-remediation" replace \/>}/);
