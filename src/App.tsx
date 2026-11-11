@@ -50,7 +50,6 @@ const GitHubActionsIntelligence = lazy(() => import("./pages/GitHubActionsIntell
 const GitHubReleaseIntelligence = lazy(() => import("./pages/GitHubReleaseIntelligence"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const BlackHatPentesting = lazy(() => import("./pages/BlackHatPentesting"));
 const ZeroDayProtection = lazy(() => import("./pages/ZeroDayProtection"));
 const QuantumEncryption = lazy(() => import("./pages/QuantumEncryption"));
 const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
@@ -231,7 +230,7 @@ const AppContent = () => {
                         <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                         <Route path="/help" element={<Help />} />
                         <Route path="/hacked" element={<Hacked />} />
-                        <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
+                        <Route path="/black-hat-pentesting" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
                         <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
                         <Route path="/security-auditing" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
                         <Route path="/incident-response" element={<Navigate to="/cybersecurity/incident-playbooks" replace />} />
