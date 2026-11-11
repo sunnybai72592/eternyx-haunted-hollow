@@ -107,8 +107,9 @@ const CyberArena = () => {
       switch (toolId) {
         case 'port-scanner':
           functionName = 'port-scanner';
+          delete payload.user_id; // Ownership is derived from the verified JWT.
           payload.target = input;
-          payload.scan_type = 'tcp';
+          payload.scan_type = 'passive_shodan_lookup';
           break;
         case 'vuln-scanner':
           functionName = 'vulnerability-scanner';
@@ -154,15 +155,15 @@ const CyberArena = () => {
     // Scanning Tools
     {
       id: 'port-scanner',
-      name: 'Port Scanner',
-      description: 'Advanced TCP/UDP port scanning with service detection',
+      name: 'Shodan Host Exposure Lookup',
+      description: 'Passive lookup of publicly observed host ports from Shodan; not a live port scan.',
       icon: Network,
       category: 'scan',
       difficulty: 'basic',
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      inputPlaceholder: 'Enter target IP or hostname',
+      inputPlaceholder: 'Enter a public IPv4 address',
       inputLabel: 'Target'
     },
     {
