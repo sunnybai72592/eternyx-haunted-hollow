@@ -97,15 +97,11 @@ serve(async (req) => {
     const recordTypes = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
     
     for (const recordType of recordTypes) {
-      try {
-        const records = await queryDNSRecords(domainName, recordType)
-        dnsRecords.push(...records)
-        
-        if (recordType === 'NS') {
-          nameservers = records.map(r => r.value)
-        }
-      } catch (error) {
-        console.error(`Error querying ${recordType} records:`, error)
+      const records = await queryDNSRecords(domainName, recordType)
+      dnsRecords.push(...records)
+
+      if (recordType === 'NS') {
+        nameservers = records.map(r => r.value)
       }
     }
 
@@ -208,37 +204,28 @@ serve(async (req) => {
 })
 
 async function queryDNSRecords(domain: string, recordType: string): Promise<DNSRecord[]> {
-  const records: DNSRecord[] = []
-  
-  try {
-    // Use DNS over HTTPS (DoH) for DNS queries
-    const dohUrl = `https://cloudflare-dns.com/dns-query?name=${domain}&type=${recordType}`
-    
-    const response = await fetch(dohUrl, {
-      headers: {
-        'Accept': 'application/dns-json'
-      }
-    })
+  const dohUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(recordType)}`
+  const response = await fetch(dohUrl, {
+    headers: { 'Accept': 'application/dns-json' }
+  })
 
-    if (response.ok) {
-      const data = await response.json()
-      
-      if (data.Answer) {
-        data.Answer.forEach((answer: any) => {
-          records.push({
-            type: recordType,
-            name: answer.name,
-            value: answer.data,
-            ttl: answer.TTL
-          })
-        })
-      }
-    }
-  } catch (error) {
-    console.error(`DNS query error for ${recordType}:`, error)
+  if (!response.ok) {
+    throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
   }
 
-  return records
+  const data = await response.json()
+  if (data.Status !== undefined && data.Status !== 0 && data.Status !== 3) {
+    throw new Error(`DNS provider returned status ${data.Status} for ${recordType} query`)
+  }
+
+  return Array.isArray(data.Answer)
+    ? data.Answer.map((answer: any) => ({
+        type: recordType,
+        name: answer.name,
+        value: answer.data,
+        ttl: answer.TTL
+      }))
+    : []
 }
 
 async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]): Promise<any> {
@@ -250,58 +237,36 @@ async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]):
     caa_configured: false
   }
 
-  // Check for SPF records
   const txtRecords = dnsRecords.filter(r => r.type === 'TXT')
   features.spf_configured = txtRecords.some(r => r.value.includes('v=spf1'))
 
-  // Check for DMARC records
-  try {
-    const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
-    features.dmarc_configured = dmarcRecords.some(r => r.value.includes('v=DMARC1'))
-  } catch (error) {
-    console.error('DMARC check error:', error)
-  }
+  const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
+  features.dmarc_configured = dmarcRecords.some(r => r.value.includes('v=DMARC1'))
 
-  // Check for DKIM records (common selector)
-  try {
-    const dkimRecords = await queryDNSRecords(`default._domainkey.${domain}`, 'TXT')
-    features.default_dkim_selector_found = dkimRecords.length > 0
-  } catch (error) {
-    console.error('DKIM check error:', error)
-  }
+  const dkimRecords = await queryDNSRecords(`default._domainkey.${domain}`, 'TXT')
+  features.default_dkim_selector_found = dkimRecords.length > 0
 
-  // Check for CAA records
   const caaRecords = dnsRecords.filter(r => r.type === 'CAA')
   features.caa_configured = caaRecords.length > 0
 
-  // Check for DNSSEC (simplified check)
-  try {
-    const dsRecords = await queryDNSRecords(domain, 'DS')
-    features.ds_record_present = dsRecords.length > 0
-  } catch (error) {
-    console.error('DNSSEC check error:', error)
-  }
+  const dsRecords = await queryDNSRecords(domain, 'DS')
+  features.ds_record_present = dsRecords.length > 0
 
   return features
 }
 
 async function analyzeDNSSEC(domain: string): Promise<{ vulnerabilities: DNSVulnerability[] }> {
   const vulnerabilities: DNSVulnerability[] = []
+  const dsRecords = await queryDNSRecords(domain, 'DS')
 
-  try {
-    const dsRecords = await queryDNSRecords(domain, 'DS')
-    
-    if (dsRecords.length === 0) {
-      vulnerabilities.push({
-        type: 'No DS Record Observed',
-        severity: 'medium',
-        description: 'No DS record was returned for this domain. Confirm DNSSEC delegation with the registrar; this lookup is not a complete DNSSEC validation.',
-        location: 'DNS Configuration',
-        remediation: 'Verify DNSSEC signing and DS delegation with the DNS provider and domain registrar.',
-      })
-    }
-  } catch (error) {
-    console.error('DNSSEC analysis error:', error)
+  if (dsRecords.length === 0) {
+    vulnerabilities.push({
+      type: 'No DS Record Observed',
+      severity: 'medium',
+      description: 'No DS record was returned for this domain. Confirm DNSSEC delegation with the registrar; this lookup is not a complete DNSSEC validation.',
+      location: 'DNS Configuration',
+      remediation: 'Verify DNSSEC signing and DS delegation with the DNS provider and domain registrar.',
+    })
   }
 
   return { vulnerabilities }
@@ -309,11 +274,9 @@ async function analyzeDNSSEC(domain: string): Promise<{ vulnerabilities: DNSVuln
 
 async function analyzeEmailSecurity(domain: string, dnsRecords: DNSRecord[]): Promise<{ vulnerabilities: DNSVulnerability[] }> {
   const vulnerabilities: DNSVulnerability[] = []
-
-  // Check SPF configuration
   const txtRecords = dnsRecords.filter(r => r.type === 'TXT')
   const spfRecords = txtRecords.filter(r => r.value.includes('v=spf1'))
-  
+
   if (spfRecords.length === 0) {
     vulnerabilities.push({
       type: 'Missing SPF Record',
@@ -332,11 +295,8 @@ async function analyzeEmailSecurity(domain: string, dnsRecords: DNSRecord[]): Pr
       remediation: 'Consolidate into a single SPF record',
     })
   } else {
-    // Analyze SPF record quality
     const spfRecord = spfRecords[0].value
-    if (spfRecord.includes('~all') || spfRecord.includes('-all')) {
-      // Good SPF policy
-    } else if (spfRecord.includes('+all')) {
+    if (spfRecord.includes('+all')) {
       vulnerabilities.push({
         type: 'Weak SPF Policy',
         severity: 'high',
@@ -348,33 +308,27 @@ async function analyzeEmailSecurity(domain: string, dnsRecords: DNSRecord[]): Pr
     }
   }
 
-  // Check DMARC configuration
-  try {
-    const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
-    
-    if (dmarcRecords.length === 0) {
+  const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
+  if (dmarcRecords.length === 0) {
+    vulnerabilities.push({
+      type: 'Missing DMARC Record',
+      severity: 'medium',
+      description: 'Domain lacks DMARC record for email policy enforcement',
+      location: '_dmarc subdomain',
+      remediation: 'Configure DMARC record to enforce email authentication policies',
+    })
+  } else {
+    const dmarcRecord = dmarcRecords[0].value
+    if (dmarcRecord.includes('p=none')) {
       vulnerabilities.push({
-        type: 'Missing DMARC Record',
-        severity: 'medium',
-        description: 'Domain lacks DMARC record for email policy enforcement',
-        location: '_dmarc subdomain',
-        remediation: 'Configure DMARC record to enforce email authentication policies',
+        type: 'Weak DMARC Policy',
+        severity: 'low',
+        description: 'DMARC policy is set to none, providing no protection',
+        location: 'DMARC Record',
+        proof_of_concept: dmarcRecord,
+        remediation: 'Strengthen DMARC policy to quarantine or reject',
       })
-    } else {
-      const dmarcRecord = dmarcRecords[0].value
-      if (dmarcRecord.includes('p=none')) {
-        vulnerabilities.push({
-          type: 'Weak DMARC Policy',
-          severity: 'low',
-          description: 'DMARC policy is set to none, providing no protection',
-          location: 'DMARC Record',
-          proof_of_concept: dmarcRecord,
-          remediation: 'Strengthen DMARC policy to quarantine or reject',
-        })
-      }
     }
-  } catch (error) {
-    console.error('DMARC analysis error:', error)
   }
 
   return { vulnerabilities }
@@ -475,7 +429,7 @@ function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securit
   }
   
   if (recommendations.length === 0) {
-    recommendations.push('DNS configuration appears secure, continue monitoring for changes')
+    recommendations.push('No issues were detected by the checks completed. Review the coverage limitations before treating this as a full DNS security assessment.')
   }
   
   return recommendations
