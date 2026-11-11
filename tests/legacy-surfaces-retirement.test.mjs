@@ -97,11 +97,12 @@ test('retired Black Hat Pentesting console is not shipped or advertised as an op
   const servicesHub = await read('src/pages/ServicesHub.tsx');
   const services = await read('src/pages/Services.tsx');
 
-  assert.match(app, /<Route path="\\/black-hat-pentesting" element={<Navigate to="\\/cybersecurity\\/assessment-remediation" replace \/>} \/>/);
-  assert.doesNotMatch(app, /import\\("\\.\\/pages\\/BlackHatPentesting"\\)/);
-  assert.doesNotMatch(navigation, /Black Hat Pentesting|\\/black-hat-pentesting/);
+  assert.ok(app.includes('<Route path="/black-hat-pentesting" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />'));
+  assert.equal(app.includes('import("./pages/BlackHatPentesting")'), false);
+  assert.equal(app.includes('BlackHatPentesting ='), false);
+  assert.doesNotMatch(navigation, /Black Hat Pentesting/);
   assert.match(navigation, /Assessment & Remediation/);
-  assert.doesNotMatch(servicesHub, /Black Hat Pentesting|\\/black-hat-pentesting/);
+  assert.doesNotMatch(servicesHub, /Black Hat Pentesting|black-hat-pentesting/);
   assert.match(servicesHub, /Assessment & Remediation/);
-  assert.doesNotMatch(services, /Black Hat Pentesting|\\/black-hat-pentesting|Social Engineering Assessments/);
+  assert.doesNotMatch(services, /Black Hat Pentesting|black-hat-pentesting|Social Engineering Assessments/);
 });
