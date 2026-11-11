@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
-  ArrowRight, ArrowUpRight, BookOpen, ChevronDown, Compass, Menu,
+  ArrowUpRight, BookOpen, ChevronDown, Menu,
   PanelsTopLeft, ShieldCheck, Sparkles, X, Zap
 } from "lucide-react";
 import { ecosystemPillars } from "@/data/ecosystem";
@@ -13,7 +13,6 @@ interface NavigationProps {
 }
 
 export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) => {
-  const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -61,12 +60,9 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
           </Link>
 
           <div className="hidden items-center gap-1 lg:flex">
-            <Link to="/explore" aria-current={isActive("/explore") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/explore") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>
-              Explore
-            </Link>
             <div className="relative" onMouseEnter={() => setEcosystemOpen(true)} onMouseLeave={() => setEcosystemOpen(false)}>
               <button type="button" aria-haspopup="true" aria-expanded={ecosystemOpen} onClick={() => setEcosystemOpen((open) => !open)} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setEcosystemOpen(true); } }} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${ecosystemOpen || ecosystemPillars.some((pillar) => isActive(pillar.href)) ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>
-                Ecosystem <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${ecosystemOpen ? "rotate-180" : ""}`} />
+                Platform <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${ecosystemOpen ? "rotate-180" : ""}`} />
               </button>
               {ecosystemOpen && (
                 <div className="absolute left-1/2 top-full z-50 w-[min(780px,calc(100vw-2rem))] -translate-x-1/2 pt-4">
@@ -76,7 +72,6 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
                         <p className="text-[10px] font-bold uppercase tracking-[.24em] text-cyan-300">One ecosystem</p>
                         <h2 className="mt-1 text-lg font-semibold text-white">Explore the six pillars</h2>
                       </div>
-                      <Link to="/explore" onClick={closeMenus} className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-200 transition hover:text-white">Full directory <ArrowUpRight className="h-3.5 w-3.5" /></Link>
                     </div>
                     <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                       {ecosystemPillars.map((pillar, index) => {
@@ -126,8 +121,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
               <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-cyan-300">Navigate ETERNYX</p><p className="mt-1 text-sm text-slate-400">One ecosystem. Endless possibilities.</p></div>
               <span className="rounded-lg border border-cyan-200/15 bg-cyan-200/[0.06] p-2 text-cyan-200"><PanelsTopLeft className="h-5 w-5" /></span>
             </div>
-            <Link to="/explore" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-white transition hover:bg-white/[0.06]"><Compass className="h-4 w-4 text-cyan-200" /> Explore the platform <ArrowRight className="ml-auto h-4 w-4 text-slate-500" /></Link>
-            <button type="button" onClick={() => setEcosystemOpen((open) => !open)} aria-expanded={ecosystemOpen} className="mt-1 flex min-h-12 items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-white transition hover:bg-white/[0.06]"><Sparkles className="h-4 w-4 text-cyan-200" /> The six pillars <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 transition-transform ${ecosystemOpen ? "rotate-180" : ""}`} /></button>
+                        <button type="button" onClick={() => setEcosystemOpen((open) => !open)} aria-expanded={ecosystemOpen} className="mt-1 flex min-h-12 items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-white transition hover:bg-white/[0.06]"><Sparkles className="h-4 w-4 text-cyan-200" /> Platform <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 transition-transform ${ecosystemOpen ? "rotate-180" : ""}`} /></button>
             {ecosystemOpen && (
               <div className="mb-2 ml-3 grid gap-1 border-l border-cyan-200/20 pl-3">
                 {ecosystemPillars.map((pillar) => {

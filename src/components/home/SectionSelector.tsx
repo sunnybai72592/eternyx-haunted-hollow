@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  ArrowRight, ArrowUpRight, BookOpen, CheckCircle2, Compass,
+  ArrowRight, ArrowUpRight, CheckCircle2, Compass,
   LockKeyhole, Sparkles, Workflow, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,27 +12,6 @@ import { cn } from "@/lib/utils";
 interface SectionSelectorProps {
   className?: string;
 }
-
-const quickLinks = [
-  {
-    title: "Explore the ecosystem",
-    description: "Find the capabilities and workspaces taking shape across ETERNYX.",
-    href: "/explore",
-    icon: Compass,
-  },
-  {
-    title: "Cybersecurity Hub",
-    description: "Explore the security foundation and responsible security workflows.",
-    href: "/cybersecurity",
-    icon: LockKeyhole,
-  },
-  {
-    title: "Education",
-    description: "Build knowledge through the learning experiences available today.",
-    href: "/education",
-    icon: BookOpen,
-  },
-];
 
 export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = "" }) => {
   const navigate = useNavigate();
@@ -68,8 +47,8 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" onClick={() => navigate("/explore")} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_rgba(34,211,238,.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
-                Explore the ecosystem <ArrowRight className="ml-2 h-4 w-4" />
+              <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_rgba(34,211,238,.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
+                Explore the six pillars <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               {isAuthenticated ? (
                 <Button size="lg" variant="outline" onClick={() => navigate("/account")} className="h-12 rounded-xl border-white/15 bg-white/[0.04] px-6 text-white transition hover:border-white/25 hover:bg-white/[0.08]">
@@ -120,14 +99,13 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
           </div>
         </section>
 
-        <section className="border-t border-white/[0.08] pt-14 sm:pt-16" aria-labelledby="pillars-heading">
+        <section className="border-t border-white/[0.08] pt-14 sm:pt-16" id="pillars" aria-labelledby="pillars-heading">
           <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[.25em] text-cyan-300 sm:text-xs">The architecture of possibility</p>
               <h2 id="pillars-heading" className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Six pillars. One connected vision.</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Every part has a purpose. We're growing the ecosystem in stages and staying clear about what's available today.</p>
             </div>
-            <Link to="/explore" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-200 transition hover:text-white">Explore all capabilities <ArrowRight className="h-4 w-4" /></Link>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -164,16 +142,6 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
           </div>
         </section>
 
-        <section className="mt-16 grid gap-4 md:grid-cols-3" aria-label="Quick access">
-          {quickLinks.map(({ title, description, href, icon: Icon }) => (
-            <Link key={href} to={href} className="group flex items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 transition duration-200 hover:border-cyan-200/20 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-200/15 bg-cyan-200/[0.06] text-cyan-200"><Icon className="h-5 w-5" /></div>
-              <div className="min-w-0 flex-1"><h3 className="font-semibold text-white">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-400">{description}</p></div>
-              <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-500 transition group-hover:text-cyan-200" />
-            </Link>
-          ))}
-        </section>
-
         <section className="mt-12 overflow-hidden rounded-2xl border border-cyan-200/15 bg-gradient-to-r from-cyan-200/[0.08] via-blue-300/[0.04] to-violet-300/[0.08] p-6 sm:p-9">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-2xl">
@@ -181,7 +149,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
               <h2 className="text-xl font-bold text-white sm:text-2xl">A bigger vision. Real progress. No shortcuts.</h2>
               <p className="mt-2 text-sm leading-6 text-slate-300">We distinguish working foundations from planned experiences. Every capability should earn its place through usefulness, transparency, and trust.</p>
             </div>
-            <Button onClick={() => navigate("/explore")} className="shrink-0 rounded-xl bg-white px-6 font-semibold text-slate-950 hover:bg-cyan-50">Discover ETERNYX <ArrowRight className="ml-2 h-4 w-4" /></Button>
+            <Button onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="shrink-0 rounded-xl bg-white px-6 font-semibold text-slate-950 hover:bg-cyan-50">Explore the pillars <ArrowRight className="ml-2 h-4 w-4" /></Button>
           </div>
         </section>
       </div>
