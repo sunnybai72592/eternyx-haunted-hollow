@@ -56,13 +56,18 @@ export default function AdminBugReports() {
 
   const updateStatus = async (reportId: string, status: BugStatus) => {
     setUpdatingId(reportId);
-    const { error } = await supabase.from('bug_reports').update({ status }).eq('id', reportId);
+    const { data, error } = await supabase.rpc('admin_update_bug_report_status', {
+      p_report_id: reportId,
+      p_status: status,
+    });
     if (error) {
       toast.error('Status update failed. Please try again.');
       console.error('Bug report status update failed:', error);
-    } else {
+    } else if (data === true) {
       setReports((current) => current.map((report) => report.id === reportId ? { ...report, status } : report));
-      toast.success('Bug report status updated.');
+      toast.success('Status updated and reporter notified.');
+    } else {
+      toast.info('This report already has that status.');
     }
     setUpdatingId(null);
   };

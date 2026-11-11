@@ -1996,7 +1996,8 @@ export type Database = {
           total_threats: number
         }[]
       }
-      is_admin: { Args: never; Returns: boolean }
+      is_admin: { Args: never; Returns: boolean },
+      admin_update_bug_report_status: { Args: { p_report_id: string; p_status: string }; Returns: boolean }
     }
     Enums: {
       access_level: "basic" | "premium" | "elite"
