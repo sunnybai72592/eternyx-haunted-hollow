@@ -118,21 +118,21 @@ const Services = () => {
     },
     {
       id: "monitoring",
-      title: "24/7 Threat Monitoring",
-      description: "Round-the-clock security operations center monitoring your infrastructure with instant threat response.",
+      title: "Platform Security Monitoring",
+      description: "Review selected ETERNYX platform security events recorded at trusted backend authorization boundaries."
       icon: <Wifi className="h-8 w-8" />,
       color: "red",
       link: "/threat-monitoring",
       features: [
-        "Real-time SIEM Integration",
-        "Incident Response Team",
-        "Security Analytics Dashboard",
-        "Automated Alert Triage",
-        "Compliance Reporting",
-        "Threat Intelligence Feeds"
+        "Verified authorization event capture",
+        "Admin-only event review",
+        "Severity and event-type filtering",
+        "Best-effort backend event persistence",
+        "Restricted security telemetry access",
+        "Documented event-source coverage"
       ],
-      pricing: "Starting at $10,000/month",
-      duration: "Ongoing",
+      pricing: "Platform capability",
+      duration: "Current coverage is limited",
     },
   ];
 
