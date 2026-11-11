@@ -1,18 +1,19 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Upload, Save, X, Loader2, User as UserIcon } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ImagePlus, Loader2, Save, ShieldCheck, Upload, X } from 'lucide-react';
 
 interface ProfileAvatarUploaderProps {
   currentAvatarUrl: string | null | undefined;
   username: string | null | undefined;
 }
 
-const ProfileAvatarUploader: React.FC<ProfileAvatarUploaderProps> = ({ currentAvatarUrl, username }) => {
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const ProfileAvatarUploader = ({ currentAvatarUrl, username }: ProfileAvatarUploaderProps) => {
   const { user, updateProfile } = useAuthStore();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -20,69 +21,55 @@ const ProfileAvatarUploader: React.FC<ProfileAvatarUploaderProps> = ({ currentAv
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selectedFile) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    } else {
+    if (!selectedFile) {
       setPreviewUrl(null);
+      return;
     }
+    const url = URL.createObjectURL(selectedFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
   }, [selectedFile]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setSelectedFile(file);
-    } else {
-      setSelectedFile(null);
-      toast({
-        title: "Upload Error",
-        description: "Please select a valid image file.",
-        variant: "destructive",
-      });
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Choose an image', description: 'Please select a JPG, PNG, WebP or other supported image file.', variant: 'destructive' });
+      event.target.value = '';
+      return;
     }
+    if (file.size > MAX_FILE_SIZE) {
+      toast({ title: 'Image is too large', description: 'Choose an image smaller than 5 MB.', variant: 'destructive' });
+      event.target.value = '';
+      return;
+    }
+    setSelectedFile(file);
   };
 
   const handleUpload = async () => {
     if (!user || !selectedFile) return;
     setUploading(true);
-
     try {
-      const ext = selectedFile.name.split('.').pop();
-      const path = `${user.id}.${ext}`;
-      
-      // 1. Upload to Supabase Storage
+      const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'png';
+      const path = `${user.id}/${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(path, selectedFile, { upsert: true });
-
+        .from('user-avatars')
+        .upload(path, selectedFile, { upsert: true, contentType: selectedFile.type });
       if (uploadError) throw uploadError;
 
-      // 2. Get public URL
       const { data } = supabase.storage.from('avatars').getPublicUrl(path);
       const newAvatarUrl = data.publicUrl;
-      
-      // 3. Update profile table
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: newAvatarUrl })
-        .eq('user_id', user.id);
+      const result = await updateProfile({ avatar_url: newAvatarUrl });
+      if (!result.success) throw new Error(result.error || 'The image uploaded, but the profile could not be updated.');
 
-      if (updateError) throw updateError;
-
-      // 4. Update local state and store
-      await updateProfile({ avatar_url: newAvatarUrl });
       setSelectedFile(null);
-      
+      if (fileRef.current) fileRef.current.value = '';
+      toast({ title: 'Profile image updated', description: 'Your new image is now linked to your ETERNYX identity.' });
+    } catch (error) {
       toast({
-        title: "Avatar Uploaded",
-        description: "Agent profile image updated successfully.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Upload Failed",
-        description: error.message || "An unknown error occurred during upload.",
-        variant: "destructive",
+        title: 'Image upload failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setUploading(false);
@@ -91,79 +78,47 @@ const ProfileAvatarUploader: React.FC<ProfileAvatarUploaderProps> = ({ currentAv
 
   const handleCancel = () => {
     setSelectedFile(null);
-    if (fileRef.current) {
-      fileRef.current.value = ''; // Clear file input
-    }
+    if (fileRef.current) fileRef.current.value = '';
   };
 
-  const displayUrl = previewUrl || currentAvatarUrl;
+  const displayName = username || 'ETERNYX member';
+  const displayUrl = previewUrl || currentAvatarUrl || undefined;
+  const initials = displayName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'EX';
 
   return (
-    <div className="flex flex-col items-center gap-4 p-6 border border-border/50 rounded-lg bg-card/50 shadow-lg">
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 100 }}
-        className="relative group"
-      >
-        <Avatar className="h-32 w-32 border-4 border-primary/50 shadow-primary/50 shadow-xl transition-all duration-300 hover:border-primary">
-          <AvatarImage src={displayUrl || ''} alt={`${username || 'user'} avatar`} />
-          <AvatarFallback className="text-2xl bg-primary/20 text-primary">
-            {username ? username.slice(0, 2).toUpperCase() : <UserIcon className="h-8 w-8" />}
-          </AvatarFallback>
+    <div className="flex flex-col items-center text-center">
+      <div className="relative">
+        <div aria-hidden="true" className="absolute -inset-3 rounded-full bg-cyan-300/10 blur-xl" />
+        <Avatar className="relative h-36 w-36 border border-cyan-200/30 bg-[#0b1728] shadow-[0_0_0_7px_rgba(103,232,249,.045),0_18px_45px_rgba(0,0,0,.35)]">
+          <AvatarImage src={displayUrl} alt={`${displayName} profile image`} className="object-cover" />
+          <AvatarFallback className="bg-cyan-200/[0.08] text-3xl font-semibold text-cyan-100">{initials}</AvatarFallback>
         </Avatar>
-        {selectedFile && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-full"
-          >
-            <span className="text-xs text-cyber-green font-mono animate-pulse">PREVIEW</span>
-          </motion.div>
-        )}
-      </motion.div>
-
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-
-      <div className="flex gap-2">
-        {!selectedFile ? (
-          <Button 
-            size="sm" 
-            onClick={() => fileRef.current?.click()} 
-            disabled={uploading}
-            className="bg-primary/80 hover:bg-primary neon-border-sm"
-          >
-            <Upload className="h-4 w-4 mr-2"/>
-            Upload New
-          </Button>
-        ) : (
-          <>
-            <Button 
-              size="sm" 
-              onClick={handleUpload} 
-              disabled={uploading}
-              className="bg-green-600 hover:bg-green-700 neon-border-sm"
-            >
-              {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2"/>}
-              {uploading ? 'Transmitting...' : 'Save Avatar'}
-            </Button>
-            <Button 
-              size="sm" 
-              variant="outline" 
-              onClick={handleCancel}
-              disabled={uploading}
-              className="border-destructive text-destructive hover:bg-destructive/10"
-            >
-              <X className="h-4 w-4"/>
-            </Button>
-          </>
-        )}
+        <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border border-[#0a1322] bg-cyan-200 text-slate-950 shadow-lg"><ImagePlus className="h-4 w-4" /></span>
       </div>
-      {selectedFile && (
-        <p className="text-xs text-muted-foreground font-mono mt-1">
-          File selected: {selectedFile.name}
-        </p>
+
+      <p className="mt-5 max-w-full truncate text-sm font-semibold text-white">{displayName}</p>
+      <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">Personal profile image</p>
+
+      <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={handleFileChange} aria-label="Choose a profile image" />
+
+      {!selectedFile ? (
+        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="mt-5 h-10 w-full max-w-[190px] rounded-xl border-cyan-200/20 bg-cyan-200/[0.07] text-xs font-semibold text-cyan-100 hover:border-cyan-200/35 hover:bg-cyan-200/[0.12] hover:text-white">
+          <Upload className="mr-2 h-4 w-4" /> Choose image
+        </Button>
+      ) : (
+        <div className="mt-5 w-full space-y-2">
+          <p className="truncate text-[10px] text-slate-400" title={selectedFile.name}>{selectedFile.name}</p>
+          <Button type="button" onClick={handleUpload} disabled={uploading} className="h-10 w-full rounded-xl bg-cyan-200 text-xs font-semibold text-slate-950 hover:bg-cyan-100">
+            {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {uploading ? 'Updating image…' : 'Save profile image'}
+          </Button>
+          <Button type="button" variant="ghost" onClick={handleCancel} disabled={uploading} className="h-9 w-full rounded-xl text-xs text-slate-400 hover:bg-white/[0.05] hover:text-white">
+            <X className="mr-2 h-3.5 w-3.5" /> Cancel selection
+          </Button>
+        </div>
       )}
+
+      <div className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-200/70" /> JPG, PNG or WebP · up to 5 MB</div>
     </div>
   );
 };
