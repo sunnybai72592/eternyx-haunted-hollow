@@ -122,17 +122,32 @@ class ToolExecutionService {
     }
   }
 
-  async executeWebScanner(params: { target_url: string; scan_depth?: number; user_id: string }): Promise<ToolExecutionResult> {
+  async executeWebScanner(params: { target_url: string }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`${this.baseUrl}/web-scanner`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify(params),
+      if (!session?.access_token) {
+        return { success: false, error: 'Your session has expired. Please sign in again.' };
+      }
+
+      const { data, error } = await supabase.functions.invoke('web-scanner', {
+        body: { target_url: params.target_url },
       });
-      const result = await response.json();
-      if (!response.ok) return { success: false, error: result.error || 'Web application scan failed' };
-      return { success: true, data: result, executionId: result.scan_id };
+      if (error) {
+        let message = error.message || 'Web configuration inspection failed';
+        if ('context' in error && error.context instanceof Response) {
+          try {
+            const payload = await error.context.clone().json();
+            if (typeof payload?.error === 'string') message = payload.error;
+          } catch {
+            // Keep the SDK error message when the response has no JSON body.
+          }
+        }
+        return { success: false, error: message };
+      }
+      if (!data || data.success !== true) {
+        return { success: false, error: typeof data?.error === 'string' ? data.error : 'Web inspection returned an unexpected response.' };
+      }
+      return { success: true, data, executionId: data.scan_id };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
