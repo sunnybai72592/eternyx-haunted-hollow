@@ -37,6 +37,7 @@ interface ConversationSession {
 const EternixAI: React.FC = () => {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -48,36 +49,61 @@ const EternixAI: React.FC = () => {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Check authentication
+  // Restore the existing session before deciding whether to redirect.
+  // Redirecting while this async check is pending incorrectly sends signed-in users home.
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-        setIsAuthenticated(true);
-        loadDocuments(user.id);
-        loadSessions(user.id);
-      } else {
-        setIsAuthenticated(false);
-        navigate('/');
-      }
-    };
-
-    checkAuth();
+    let isMounted = true;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+
       if (session?.user) {
         setUserId(session.user.id);
         setIsAuthenticated(true);
+        setIsAuthLoading(false);
         loadDocuments(session.user.id);
         loadSessions(session.user.id);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
+        setUserId(null);
         setIsAuthenticated(false);
+        setIsAuthLoading(false);
+        navigate('/login?redirect=%2Feternyx-ai', { replace: true });
       }
     });
 
+    const restoreSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!isMounted) return;
+
+        if (session?.user) {
+          setUserId(session.user.id);
+          setIsAuthenticated(true);
+          loadDocuments(session.user.id);
+          loadSessions(session.user.id);
+        } else {
+          setUserId(null);
+          setIsAuthenticated(false);
+          navigate('/login?redirect=%2Feternyx-ai', { replace: true });
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('Unable to restore the Eternyx AI session:', error);
+        toast.error('We could not verify your session. Please sign in again.');
+        setUserId(null);
+        setIsAuthenticated(false);
+        navigate('/login?redirect=%2Feternyx-ai', { replace: true });
+      } finally {
+        if (isMounted) setIsAuthLoading(false);
+      }
+    };
+
+    void restoreSession();
+
     return () => {
-      subscription?.unsubscribe();
+      isMounted = false;
+      subscription.unsubscribe();
     };
   }, [navigate]);
 
@@ -265,13 +291,15 @@ const EternixAI: React.FC = () => {
     }
   };
 
-  if (!isAuthenticated) {
+  if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner variant="cyber" text="Loading Eternyx AI..." />
+        <LoadingSpinner variant="cyber" text="Restoring your ETERNYX session..." />
       </div>
     );
   }
+
+  if (!isAuthenticated) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 py-8 px-4">
