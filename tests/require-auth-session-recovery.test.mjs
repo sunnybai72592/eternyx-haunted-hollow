@@ -7,7 +7,7 @@ const guard = await readFile(new URL("../src/components/auth/RequireAuth.tsx", i
 test("private routes verify Supabase persisted session before redirecting", () => {
   assert.match(guard, /supabase\.auth\.getSession\(\)/);
   assert.match(guard, /data\.session\?\.user/);
-  assert.match(guard, /setUser\(data\.session\.user\)/);
+  assert.match(guard, /setSession\(data\.session\)/);
   assert.match(guard, /sessionCheckComplete/);
   assert.match(guard, /Restoring your ETERNYX session/);
 });
