@@ -64,6 +64,8 @@ const KillerEdge = lazy(() => import("./pages/KillerEdge"));
 const Premium = lazy(() => import("./pages/Premium"));
 const BugReport = lazy(() => import("./pages/BugReport"));
 const MyBugReports = lazy(() => import("./pages/MyBugReports"));
+const AccountCenter = lazy(() => import("./pages/AccountCenter"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 const AdminBugReports = lazy(() => import("./pages/AdminBugReports"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -120,7 +122,7 @@ const LoginRedirect = () => {
     );
   }
 
-  return <Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />;
+  return <Navigate to={isAuthenticated ? "/account" : "/"} replace />;
 };
 
 // Component to handle routing and back button logic
@@ -179,7 +181,9 @@ const AppContent = () => {
                         <Route path="/" element={<Index />} />
                         <Route path="/login" element={<AuthPage />} />
                         <Route path="/auth" element={<AuthPage />} />
-                        <Route path="/dashboard" element={<Navigate to="/explore" replace />} />
+                        <Route path="/dashboard" element={<Navigate to="/account" replace />} />
+                        <Route path="/account" element={<AccountCenter />} />
+                        <Route path="/notifications" element={<Notifications />} />
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/explore" element={<Explore />} />
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
