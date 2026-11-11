@@ -63,10 +63,12 @@ test('the retained public exposure check does not invent scan progress or capabi
 test('profile keeps real account management without fabricated arsenal progression', async () => {
   const profile = await read('src/pages/Profile.tsx');
 
+  assert.match(profile, /useAuthStore/);
   assert.match(profile, /updateProfile/);
-  assert.match(profile, /\.from\('profiles'\)/);
+  assert.match(profile, /ProfileAvatarUploader/);
+  assert.doesNotMatch(profile, /\.from\('profiles'\)/);
   assert.match(profile, /handleSave/);
   assert.match(profile, /handlePrivacyUpdate/);
-  assert.match(profile, /updateProfile\\(local\\)/);\n  assert.match(profile, /updateProfile\\(\\{ \\[field\\]: value \\}\\)/);\n  assert.match(profile, /handleSave/);
+  assert.match(profile, /updateProfile\(local\)/);
   assert.doesNotMatch(profile, /fetchTools|userTools|loadingTools|ARSENAL|\bXP\b|\bLVL\b|handleDeleteAccount/);
 });
