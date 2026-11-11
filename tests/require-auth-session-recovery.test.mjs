@@ -22,3 +22,13 @@ test("session recovery ignores results after the route guard unmounts", () => {
   assert.match(guard, /if \(!active\) return/);
   assert.match(guard, /active = false/);
 });
+
+
+test("auth store reconciles a valid Supabase session when a background tab becomes visible", async () => {
+  const store = await readFile(new URL("../src/store/authStore.ts", import.meta.url), "utf8");
+  assert.match(store, /document\.addEventListener\('visibilitychange', reconcileVisibleSession\)/);
+  assert.match(store, /document\.visibilityState !== 'visible'/);
+  assert.match(store, /supabase\.auth\.getSession\(\)/);
+  assert.match(store, /current\.session\?\.access_token !== data\.session\.access_token/);
+  assert.match(store, /setSession: \(session\) => set\(\{ session, user: session\?\.user \?\? null, isAuthenticated: !!session\?\.user \}\)/);
+});
