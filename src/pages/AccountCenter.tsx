@@ -40,7 +40,7 @@ export default function AccountCenter() {
     return <main className="mx-auto flex min-h-[50vh] max-w-5xl items-center justify-center px-4 text-muted-foreground">Loading your account…</main>;
   }
 
-  const name = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'ETERN YX member';
+  const name = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'ETERNYX member';
   const initials = name.slice(0, 2).toUpperCase();
   const tiles = [
     { title: 'My Profile', description: 'Personal details, avatar and public profile visibility.', href: '/profile', icon: UserRound },
