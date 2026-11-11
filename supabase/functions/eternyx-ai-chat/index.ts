@@ -43,42 +43,79 @@ async function generateResponse(
   userMessage: string,
   chatHistory: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<string> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) throw new Error("AI is not configured");
+  const apiKey = Deno.env.get("GROQ_API_KEY");
+  if (!apiKey) throw new Error("AI is not configured: GROQ_API_KEY is missing");
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "openai/gpt-6-astra",
-      reasoning: { effort: "low" },
-      instructions: systemPrompt,
-      input: [
-        ...chatHistory.map((message) => ({ role: message.role, content: message.content })),
-        { role: "user", content: userMessage },
-      ],
-      max_output_tokens: 2048,
-    }),
-  });
+  // Use a model available on Groq's free plan by default. This can be
+  // changed later through the GROQ_MODEL Edge Function secret.
+  const model = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-20b";
 
-  const data = await response.json();
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...chatHistory.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    { role: "user", content: userMessage },
+  ];
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_completion_tokens: 2048,
+      }),
+    });
+  } catch (error) {
+    console.error("Groq network request failed:", error);
+    throw new Error("The AI provider could not be reached. Please try again.");
+  }
+
+  // Read as text first so a non-JSON provider error cannot cause an
+  // unhandled JSON parsing exception that hides the real HTTP status.
+  const responseText = await response.text();
+  let data: any = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    data = null;
+  }
+
   if (!response.ok) {
-    console.error("AI gateway request failed", response.status);
-    if (response.status === 402) throw new Error("AI credits are unavailable. Please try again later.");
-    if (response.status === 429) throw new Error("Too many AI requests. Please wait and try again.");
-    throw new Error("AI request failed");
+    console.error("Groq API request failed", {
+      status: response.status,
+      requestId: response.headers.get("x-request-id"),
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("The AI provider rejected its API key. Check GROQ_API_KEY in Supabase secrets.");
+    }
+    if (response.status === 429) {
+      throw new Error("The AI provider rate limit has been reached. Please wait and try again.");
+    }
+    if (response.status >= 500) {
+      throw new Error("The AI provider is temporarily unavailable. Please try again shortly.");
+    }
+    throw new Error("The AI provider rejected the request. Check the configured model and request settings.");
   }
 
-  const output = data.output_text ?? (data.output || [])
-    .flatMap((item: any) => item.content || [])
-    .filter((item: any) => item.type === "output_text")
-    .map((item: any) => item.text)
-    .join("");
-
+  const output = data?.choices?.[0]?.message?.content;
   if (typeof output !== "string" || !output.trim()) {
-    throw new Error("AI returned an empty response");
+    console.error("Groq returned an empty or unexpected completion payload", {
+      model,
+      requestId: response.headers.get("x-request-id"),
+    });
+    throw new Error("The AI provider returned an empty response. Please try again.");
   }
-  return output;
+
+  return output.trim();
 }
 
 serve(async (req) => {
