@@ -68,9 +68,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
         case 'port-scanner':
           executionResult = await toolExecutionService.executePortScanner({
             target: parameters.target,
-            ports: parameters.ports ? parameters.ports.split(',').map((p: string) => parseInt(p.trim())) : undefined,
-            scan_type: parameters.scan_type || 'stealth',
-            user_id: user.id,
+            ports: parameters.ports?.trim() ? parameters.ports.split(',').map((p: string) => Number(p.trim())) : undefined,
           });
           break;
 
@@ -137,36 +135,24 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
         return (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="target">Target Host</Label>
+              <Label htmlFor="target">Public IPv4 address</Label>
               <Input
                 id="target"
-                placeholder="example.com or 192.168.1.1"
+                placeholder="203.0.113.10 (public IPv4 only)"
                 value={parameters.target || ''}
                 onChange={(e) => handleParameterChange('target', e.target.value)}
               />
             </div>
             <div>
-              <Label htmlFor="ports">Ports (optional)</Label>
+              <Label htmlFor="ports">Filter observed ports (optional)</Label>
               <Input
                 id="ports"
-                placeholder="80,443,22,21 (leave empty for common ports)"
+                placeholder="80,443,22,21 (leave empty for all Shodan observations)"
                 value={parameters.ports || ''}
                 onChange={(e) => handleParameterChange('ports', e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="scan_type">Scan Type</Label>
-              <Select onValueChange={(value) => handleParameterChange('scan_type', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select scan type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stealth">Stealth Scan</SelectItem>
-                  <SelectItem value="connect">Connect Scan</SelectItem>
-                  <SelectItem value="udp">UDP Scan</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-xs leading-5 text-amber-300/80">Passive Shodan lookup only. This does not send probes to the target and cannot confirm current port state. Hostnames, private IPs and reserved ranges are not accepted.</p>
           </div>
         );
 
@@ -244,37 +230,72 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
       <Card className="p-6 mt-6">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-green-400">Execution Results</h3>
+            <h3 className="text-lg font-semibold text-green-400">{toolId === 'port-scanner' ? 'Lookup Results' : 'Execution Results'}</h3>
             <Badge variant="outline" className="text-green-400 border-green-400">
               <CheckCircle className="w-4 h-4 mr-1" />
-              Completed
+              {toolId === 'port-scanner' ? 'Lookup complete' : 'Completed'}
             </Badge>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-800 p-4 rounded-lg">
-              <div className="text-sm text-gray-400">Execution Time</div>
-              <div className="text-lg font-semibold text-white">
-                {result.scan_duration || result.analysis_duration || 'N/A'}s
+          {toolId === 'port-scanner' ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-lg bg-gray-800 p-4">
+                <div className="text-sm text-gray-400">Lookup duration</div>
+                <div className="text-lg font-semibold text-white">{typeof result.scan_duration_ms === 'number' ? (result.scan_duration_ms / 1000).toFixed(2) + 's' : 'N/A'}</div>
+              </div>
+              <div className="rounded-lg bg-gray-800 p-4">
+                <div className="text-sm text-gray-400">Shodan-observed ports</div>
+                <div className="text-lg font-semibold text-white">{Array.isArray(result.observed_ports) ? result.observed_ports.length : 0}</div>
+              </div>
+              <div className="rounded-lg bg-gray-800 p-4">
+                <div className="text-sm text-gray-400">Risk assessment</div>
+                <div className="text-lg font-semibold text-white">Not scored</div>
               </div>
             </div>
-            
-            <div className="bg-gray-800 p-4 rounded-lg">
-              <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : 'Risk Score'}</div>
-              <div className="text-lg font-semibold text-white">
-                {toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="rounded-lg bg-gray-800 p-4">
+                <div className="text-sm text-gray-400">Execution Time</div>
+                <div className="text-lg font-semibold text-white">{result.scan_duration || result.analysis_duration || 'N/A'}s</div>
+              </div>
+              <div className="rounded-lg bg-gray-800 p-4">
+                <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : 'Risk Score'}</div>
+                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}</div>
+              </div>
+              <div className="rounded-lg bg-gray-800 p-4">
+                <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Total matches in NVD' : 'Issues Found'}</div>
+                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}</div>
               </div>
             </div>
-            
-            <div className="bg-gray-800 p-4 rounded-lg">
-              <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Total matches in NVD' : 'Issues Found'}</div>
-              <div className="text-lg font-semibold text-white">
-                {toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}
-              </div>
-            </div>
-          </div>
+          )}
 
-          {toolId !== 'vuln-scanner' && result.summary && (
+          {toolId === 'port-scanner' && (
+            <div className="space-y-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="font-semibold text-cyan-300">Passive host observations</h4>
+                <Badge variant="outline" className="border-cyan-400/40 text-cyan-200">Shodan Host API</Badge>
+              </div>
+              {result.message && <p className="text-sm text-gray-300">{result.message}</p>}
+              <div className="grid gap-2 text-sm text-gray-300 sm:grid-cols-2">
+                <p>Target: <span className="font-medium text-white">{result.target || '—'}</span></p>
+                <p>Organization: <span className="font-medium text-white">{result.organization || 'Not reported'}</span></p>
+                <p>Location: <span className="font-medium text-white">{[result.city, result.country].filter(Boolean).join(', ') || 'Not reported'}</span></p>
+                <p>Shodan last update: <span className="font-medium text-white">{result.shodan_last_update ? new Date(result.shodan_last_update).toLocaleString() : 'Not supplied'}</span></p>
+              </div>
+              {Array.isArray(result.observed_ports) && result.observed_ports.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs uppercase text-gray-400"><tr><th className="py-2 pr-3">Port</th><th className="py-2 pr-3">Transport</th><th className="py-2 pr-3">Service</th><th className="py-2">State evidence</th></tr></thead>
+                    <tbody>{result.observed_ports.map((item: any) => <tr key={`${item.port}-${item.transport}`} className="border-t border-gray-700"><td className="py-2 pr-3 font-mono text-white">{item.port}</td><td className="py-2 pr-3">{item.transport || 'Unknown'}</td><td className="py-2 pr-3">{item.service || 'Unknown'}</td><td className="py-2 text-amber-200">Observed by Shodan</td></tr>)}</tbody>
+                  </table>
+                </div>
+              ) : <p className="text-sm text-gray-400">No port observations were returned for this lookup/filter. This does not mean the target has no open ports.</p>}
+              {Array.isArray(result.vulnerabilities_reported_by_shodan) && result.vulnerabilities_reported_by_shodan.length > 0 && <p className="text-xs text-amber-200">Shodan vulnerability references: {result.vulnerabilities_reported_by_shodan.map((item: any) => typeof item === 'string' ? item : JSON.stringify(item)).join(', ')}</p>}
+              <p className="text-xs text-gray-400">Lookup completed: {result.lookup_completed_at ? new Date(result.lookup_completed_at).toLocaleString() : 'Not supplied'}</p>
+            </div>
+          )}
+
+          {toolId !== 'port-scanner' && toolId !== 'vuln-scanner' && result.summary && (
             <div className="bg-gray-800 p-4 rounded-lg">
               <h4 className="text-md font-semibold text-green-400 mb-2">Summary</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -288,7 +309,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             </div>
           )}
 
-          {Array.isArray(result.coverage_limitations) && result.coverage_limitations.length > 0 && (
+          {toolId !== 'port-scanner' && Array.isArray(result.coverage_limitations) && result.coverage_limitations.length > 0 && (
             <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-lg">
               <h4 className="text-md font-semibold text-amber-300 mb-2">Coverage & Limitations</h4>
               <ul className="space-y-2">
@@ -299,6 +320,13 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {toolId === 'port-scanner' && Array.isArray(result.limitations) && result.limitations.length > 0 && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+              <h4 className="mb-2 font-semibold text-amber-300">Interpretation limits</h4>
+              <ul className="space-y-2">{result.limitations.map((item: string, index: number) => <li key={index} className="flex items-start text-sm text-gray-300"><span className="mr-2 text-amber-300">•</span>{item}</li>)}</ul>
             </div>
           )}
 

@@ -10,7 +10,6 @@ const corsHeaders = {
 interface PortScanRequest {
   target: string;
   ports?: number[];
-  scan_type?: string;
 }
 
 interface ShodanHostResponse {
@@ -21,6 +20,7 @@ interface ShodanHostResponse {
   vulns?: string[] | Record<string, unknown>;
   country_name?: string;
   city?: string;
+  last_update?: string;
 }
 
 serve(async (req) => {
@@ -76,7 +76,7 @@ serve(async (req) => {
         target,
         source: 'Shodan Host API',
         observation_type: 'passive_internet_scan_observations',
-        observed_at: new Date().toISOString(),
+        lookup_completed_at: new Date().toISOString(),
         message: 'Shodan has no host record for this IP. This does not mean its ports are closed.',
         observed_ports: [],
         ports_requested_filter: portFilter,
@@ -113,8 +113,9 @@ serve(async (req) => {
       target,
       source: 'Shodan Host API',
       observation_type: 'passive_internet_scan_observations',
-      observed_at: new Date().toISOString(),
-      observation_age: 'Shodan observations may be stale; verify with an authorized live assessment.',
+      lookup_completed_at: new Date().toISOString(),
+      shodan_last_update: host.last_update || null,
+      observation_age: 'The lookup completion time is not the scan time. Use Shodan last-update metadata when available; observations may still be stale.',
       organization: host.org || null,
       country: host.country_name || null,
       city: host.city || null,
