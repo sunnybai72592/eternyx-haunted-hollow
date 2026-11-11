@@ -164,6 +164,8 @@ serve(async (req) => {
     } else {
       await response.body?.cancel()
     }
+    clearTimeout(requestTimeout)
+    requestTimeout = undefined
     const formsFound = isHtml ? (html.match(/<form\b/gi) || []).length : 0
     const duration = Math.floor((Date.now() - startedAt) / 1000)
     const coverageLimitations = [
