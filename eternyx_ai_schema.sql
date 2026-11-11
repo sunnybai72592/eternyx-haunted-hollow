@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- 1. AI Documents Table: Stores metadata about uploaded documents (PDFs, Images, etc.)
 CREATE TABLE IF NOT EXISTS ai_documents (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     file_name VARCHAR(255) NOT NULL,
     storage_path VARCHAR(255) NOT NULL,
     file_size INTEGER, -- Size in bytes
