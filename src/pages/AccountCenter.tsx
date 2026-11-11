@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Activity, ArrowRight, Bell, Bug, ClipboardList, LifeBuoy, Settings, ShieldCheck, UserRound, LayoutDashboard } from 'lucide-react';
+import { ArrowRight, Bell, Bug, ClipboardList, LifeBuoy, Settings, UserRound } from 'lucide-react';
 
 export default function AccountCenter() {
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ export default function AccountCenter() {
     return <main className="mx-auto flex min-h-[50vh] max-w-5xl items-center justify-center px-4 text-muted-foreground">Loading your account…</main>;
   }
 
-  const name = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'ETTERNYX member';
+  const name = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'ETERN YX member';
   const initials = name.slice(0, 2).toUpperCase();
   const tiles = [
     { title: 'My Profile', description: 'Personal details, avatar and public profile visibility.', href: '/profile', icon: UserRound },
@@ -98,10 +98,7 @@ export default function AccountCenter() {
           ))}
         </div>
       </section>
-      <section className="mt-8 rounded-xl border border-border p-5">
-        <div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-primary" /><div><h2 className="font-semibold">Account security</h2><p className="text-sm text-muted-foreground">Keep your sign-in details up to date.</p></div></div>
-        <div className="mt-4 flex flex-wrap gap-3"><Button asChild variant="outline"><Link to="/reset-password">Change password</Link></Button><Button asChild variant="ghost"><Link to="/settings">Privacy & preferences</Link></Button></div>
-      </section>
+
     </main>
   );
 }
