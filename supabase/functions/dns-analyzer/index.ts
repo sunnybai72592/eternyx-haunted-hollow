@@ -40,6 +40,7 @@ interface DNSAnalysisResult {
   nameservers: string[];
   analysis_duration: number;
   risk_score: number;
+  coverage_limitations: string[];
 }
 
 serve(async (req) => {
@@ -134,7 +135,7 @@ serve(async (req) => {
     const riskScore = calculateDNSRiskScore(vulnerabilities, securityFeatures)
 
     const analysisResult: DNSAnalysisResult = {
-      domain,
+      domain: domainName,
       dns_records: dnsRecords,
       vulnerabilities,
       security_features: securityFeatures,
@@ -151,7 +152,7 @@ serve(async (req) => {
         user_id,
         analysis_type: 'dns_security',
         input_data: {
-          domain,
+          domain: domainName,
           timestamp: new Date().toISOString()
         },
         results: analysisResult,
@@ -168,12 +169,13 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         analysis_id: analysisData.id,
-        domain,
+        domain: domainName,
         vulnerabilities_found: vulnerabilities.length,
         risk_score: riskScore,
         analysis_duration: analysisDuration,
         dns_records: dnsRecords.length,
         security_features: securityFeatures,
+        coverage_limitations: coverageLimitations,
         nameservers: nameservers.length,
         summary: {
           critical: vulnerabilities.filter(v => v.severity === 'critical').length,
