@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -102,9 +101,11 @@ async function createDefaultProfile(user: User, username?: string): Promise<User
   };
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+let authInitialized = false;
+let authEventVersion = 0;
+let profileLoadVersion = 0;
+
+export const useAuthStore = create<AuthState>()((set, get) => ({
       user: null,
       session: null,
       profile: null,
@@ -234,41 +235,65 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initialize: () => {
+        // React may invoke startup effects more than once in development.
+        // Keep one subscription for this shared Supabase browser client.
+        if (authInitialized) return;
+        authInitialized = true;
+        set({ isLoading: true });
+
         const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-          set({ session, user: session?.user ?? null, isAuthenticated: !!session?.user });
-          if (session?.user) {
-            const currentUser = session.user;
-            setTimeout(async () => {
-              let profile = await fetchUserProfile(currentUser.id);
-              if (!profile) profile = await createDefaultProfile(currentUser);
-              set({ profile, isLoading: false });
-            }, 0);
-          } else {
+          authEventVersion += 1;
+          const currentUser = session?.user ?? null;
+          const previousUserId = get().user?.id ?? null;
+          const loadVersion = ++profileLoadVersion;
+
+          set({
+            session: session ?? null,
+            user: currentUser,
+            isAuthenticated: !!currentUser,
+            profile: currentUser?.id === previousUserId ? get().profile : null,
+            isLoading: !!currentUser,
+          });
+
+          if (!currentUser) {
             set({ profile: null, isLoading: false });
+            return;
           }
+
+          // Defer database work until the auth callback has returned.
+          setTimeout(async () => {
+            let profile = await fetchUserProfile(currentUser.id);
+            if (!profile) profile = await createDefaultProfile(currentUser);
+            if (loadVersion !== profileLoadVersion || get().user?.id !== currentUser.id) return;
+            set({ profile, isLoading: false });
+          }, 0);
         });
 
+        void listener.subscription;
+
+        const versionAtRequest = authEventVersion;
         supabase.auth.getSession().then(async ({ data: { session }, error }) => {
           if (error) console.error('Unable to restore Supabase session:', error);
+          // Never let a slower initial read overwrite a newer auth event.
+          if (versionAtRequest !== authEventVersion) return;
+
           const user = session?.user ?? null;
-          let profile: UserProfile | null = null;
-          if (user) {
-            profile = await fetchUserProfile(user.id);
-            if (!profile) profile = await createDefaultProfile(user);
+          const loadVersion = ++profileLoadVersion;
+          set({ session: session ?? null, user, profile: null, isAuthenticated: !!user, isLoading: !!user });
+
+          if (!user) {
+            set({ isLoading: false });
+            return;
           }
-          set({ session: session ?? null, user, profile, isAuthenticated: !!user, isLoading: false });
+
+          let profile = await fetchUserProfile(user.id);
+          if (!profile) profile = await createDefaultProfile(user);
+          if (loadVersion !== profileLoadVersion || get().user?.id !== user.id) return;
+          set({ profile, isLoading: false });
         }).catch((error) => {
           console.error('Unable to initialize authentication:', error);
+          if (versionAtRequest !== authEventVersion) return;
           set({ session: null, user: null, profile: null, isAuthenticated: false, isLoading: false });
         });
-
-        // Supabase owns the auth subscription for the lifetime of the application.
-        void listener;
       },
-    }),
-    {
-      name: 'eternyx-auth',
-      partialize: (state) => ({ isAuthenticated: state.isAuthenticated }),
-    },
-  ),
-);
+}));
