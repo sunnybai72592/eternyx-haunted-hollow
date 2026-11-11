@@ -25,6 +25,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
+  let requestTimeout: ReturnType<typeof setTimeout> | undefined
   try {
     const authorization = req.headers.get('Authorization')
     if (!authorization?.startsWith('Bearer ')) return json({ error: 'Authentication required' }, 401)
@@ -60,23 +61,20 @@ serve(async (req) => {
 
     const startedAt = Date.now()
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    let response: Response
-    try {
-      response = await fetch(target.toString(), {
-        method: 'GET',
-        redirect: 'manual',
-        signal: controller.signal,
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
-          'User-Agent': 'ETERNYX-Web-Configuration-Inspector/1.0',
-        },
-      })
-    } finally {
-      clearTimeout(timeout)
-    }
+    requestTimeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    const response = await fetch(target.toString(), {
+      method: 'GET',
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
+        'User-Agent': 'ETERNYX-Web-Configuration-Inspector/1.0',
+      },
+    })
 
     if (response.status >= 300 && response.status < 400) {
+      clearTimeout(requestTimeout)
+      requestTimeout = undefined
       await response.body?.cancel()
       return json({ error: 'Redirects are not followed for safety. Submit the final public URL directly.', redirect_status: response.status }, 400)
     }
@@ -207,6 +205,7 @@ serve(async (req) => {
     }
     return json({ success: true, scan_id: scanData.id, ...result })
   } catch (error) {
+    if (requestTimeout) clearTimeout(requestTimeout)
     console.error('Web configuration inspection failed:', error)
     if (error instanceof Error && error.name === 'AbortError') return json({ error: 'The target did not respond within the 10-second request limit.' }, 504)
     return json({ error: 'Web configuration inspection failed. No vulnerability conclusion was produced.' }, 502)
