@@ -68,6 +68,7 @@ const MyBugReports = lazy(() => import("./pages/MyBugReports"));
 const AccountCenter = lazy(() => import("./pages/AccountCenter"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const AdminBugReports = lazy(() => import("./pages/AdminBugReports"));
+const AdminOverview = lazy(() => import("./pages/AdminOverview"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
@@ -253,6 +254,7 @@ const AppContent = () => {
                         <Route path="/premium" element={<Premium />} />
                         <Route path="/bug-report" element={<BugReport />} />
                          <Route path="/my-bug-reports" element={<RequireAuth><MyBugReports /></RequireAuth>} />
+                        <Route path="/admin" element={<AdminOverview />} />
                         <Route path="/admin/bug-reports" element={<AdminBugReports />} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
