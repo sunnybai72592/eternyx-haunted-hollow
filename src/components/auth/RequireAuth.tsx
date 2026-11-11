@@ -10,7 +10,7 @@ interface RequireAuthProps {
 /** Prevent signed-out visitors from rendering private account pages. */
 export default function RequireAuth({ children }: RequireAuthProps) {
   const location = useLocation();
-  const { user, isAuthenticated, isLoading, setUser } = useAuthStore();
+  const { user, isAuthenticated, isLoading, setSession } = useAuthStore();
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function RequireAuth({ children }: RequireAuthProps) {
       .then(({ data, error }) => {
         if (error) console.error('Unable to verify the current session:', error);
         if (!active) return;
-        if (data.session?.user) setUser(data.session.user);
+        if (data.session?.user) setSession(data.session);
       })
       .catch((error) => {
         console.error('Unable to restore the current session for this route:', error);
@@ -37,7 +37,7 @@ export default function RequireAuth({ children }: RequireAuthProps) {
     return () => {
       active = false;
     };
-  }, [isLoading, user, isAuthenticated, sessionCheckComplete, setUser]);
+  }, [isLoading, user, isAuthenticated, sessionCheckComplete, setSession]);
 
   if (isLoading || ((!user || !isAuthenticated) && !sessionCheckComplete)) {
     return (
