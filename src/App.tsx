@@ -16,6 +16,7 @@ import { PageTransitionWrapper } from "@/components/PageTransitionWrapper";
 import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
 import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
+import RequireAuth from "@/components/auth/RequireAuth";
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -182,8 +183,8 @@ const AppContent = () => {
                         <Route path="/login" element={<AuthPage />} />
                         <Route path="/auth" element={<AuthPage />} />
                         <Route path="/dashboard" element={<Navigate to="/account" replace />} />
-                        <Route path="/account" element={<AccountCenter />} />
-                        <Route path="/notifications" element={<Notifications />} />
+                        <Route path="/account" element={<RequireAuth><AccountCenter /></RequireAuth>} />
+                        <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/explore" element={<Explore />} />
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
@@ -219,8 +220,8 @@ const AppContent = () => {
                         <Route path="/arsenal" element={<CyberArsenal />} />
                         <Route path="/subscriptions" element={<SubscriptionHub />} />
                         <Route path="/knowledge" element={<KnowledgeHub />} />
-                        <Route path="/profile" element={<Profile />} />
-                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+                        <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                         <Route path="/help" element={<Help />} />
                         <Route path="/hacked" element={<Hacked />} />
                         <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
@@ -246,7 +247,7 @@ const AppContent = () => {
                         <Route path="/killer-edge" element={<KillerEdge />} />
                         <Route path="/premium" element={<Premium />} />
                         <Route path="/bug-report" element={<BugReport />} />
-                         <Route path="/my-bug-reports" element={<MyBugReports />} />
+                         <Route path="/my-bug-reports" element={<RequireAuth><MyBugReports /></RequireAuth>} />
                         <Route path="/admin/bug-reports" element={<AdminBugReports />} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
