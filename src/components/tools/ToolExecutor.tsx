@@ -267,9 +267,9 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             </div>
             
             <div className="bg-gray-800 p-4 rounded-lg">
-              <div className="text-sm text-gray-400">Issues Found</div>
+              <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'NVD total matches' : 'Issues Found'}</div>
               <div className="text-lg font-semibold text-white">
-                {toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}
+                {toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}
               </div>
             </div>
           </div>
@@ -327,6 +327,19 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {toolId === 'vuln-scanner' && Array.isArray(result.candidate_cves) && (
+            <div className="space-y-3">
+              <h4 className="font-semibold text-cyan-300">Candidate CVE references</h4>
+              {result.candidate_cves.map((cve: any) => (
+                <div key={cve.id} className="rounded-lg border border-gray-700 p-3">
+                  <a href={cve.nvd_url} target="_blank" rel="noreferrer" className="font-medium text-cyan-300 hover:underline">{cve.id}</a>
+                  <p className="mt-1 text-sm text-gray-300">{cve.description}</p>
+                  <p className="mt-2 text-xs text-gray-500">{cve.cvss_severity || 'Not scored'}{cve.cvss_score !== null ? ` · CVSS ${cve.cvss_score}` : ''}</p>
+                </div>
+              ))}
             </div>
           )}
 
