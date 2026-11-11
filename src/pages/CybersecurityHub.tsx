@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Activity, ArrowRight, BookOpen, Bug, ChevronRight, Cloud, FileCheck2,
+  Activity, ArrowRight, BookOpen, Bug, ChevronRight, Cloud, Crosshair, FileCheck2,
   Fingerprint, Globe2, KeyRound, LockKeyhole, Network, Radar, Search,
   Shield, ShieldAlert, ShieldCheck, Siren, Workflow, Zap,
 } from "lucide-react";
@@ -82,6 +82,14 @@ const destinations: Destination[] = [
     href: "/vulnerability-scanner",
     icon: Bug,
     category: "Security intelligence",
+    kind: "Workbench",
+  },
+  {
+    name: "Black Hat Pentesting",
+    description: "Plan authorized security engagements and launch the real assessment workbenches currently available in ETERNYX.",
+    href: "/black-hat-pentesting",
+    icon: Crosshair,
+    category: "Authorized offensive security",
     kind: "Workbench",
   },
   {
