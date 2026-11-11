@@ -59,9 +59,9 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
       switch (toolId) {
         case 'vuln-scanner':
           executionResult = await toolExecutionService.executeVulnerabilityScanner({
-            target_url: parameters.target_url,
-            scan_type: parameters.scan_type || 'comprehensive',
-            user_id: user.id,
+            vendor: parameters.vendor || '',
+            product: parameters.product || '',
+            version: parameters.version || '',
           });
           break;
 
@@ -119,26 +119,16 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
         return (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="target_url">Target URL</Label>
-              <Input
-                id="target_url"
-                placeholder="https://example.com"
-                value={parameters.target_url || ''}
-                onChange={(e) => handleParameterChange('target_url', e.target.value)}
-              />
+              <Label htmlFor="cve-vendor">Vendor (optional)</Label>
+              <Input id="cve-vendor" placeholder="e.g. Microsoft" value={parameters.vendor || ''} onChange={(e) => handleParameterChange('vendor', e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="scan_type">Scan Type</Label>
-              <Select onValueChange={(value) => handleParameterChange('scan_type', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select scan type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="comprehensive">Comprehensive</SelectItem>
-                  <SelectItem value="quick">Quick Scan</SelectItem>
-                  <SelectItem value="deep">Deep Analysis</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="cve-product">Product name</Label>
+              <Input id="cve-product" placeholder="e.g. Windows Server" value={parameters.product || ''} onChange={(e) => handleParameterChange('product', e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="cve-version">Version (optional)</Label>
+              <Input id="cve-version" placeholder="e.g. 2019" value={parameters.version || ''} onChange={(e) => handleParameterChange('version', e.target.value)} />
             </div>
           </div>
         );
@@ -270,21 +260,21 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             </div>
             
             <div className="bg-gray-800 p-4 rounded-lg">
-              <div className="text-sm text-gray-400">Risk Score</div>
+              <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : 'Risk Score'}</div>
               <div className="text-lg font-semibold text-white">
-                {result.risk_score || result.security_score || 'N/A'}/100
+                {toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}
               </div>
             </div>
             
             <div className="bg-gray-800 p-4 rounded-lg">
               <div className="text-sm text-gray-400">Issues Found</div>
               <div className="text-lg font-semibold text-white">
-                {result.vulnerabilities_found || result.vulnerabilities?.length || 0}
+                {toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}
               </div>
             </div>
           </div>
 
-          {result.summary && (
+          {toolId !== 'vuln-scanner' && result.summary && (
             <div className="bg-gray-800 p-4 rounded-lg">
               <h4 className="text-md font-semibold text-green-400 mb-2">Summary</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -326,7 +316,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             </div>
           )}
 
-          {result.recommendations && result.recommendations.length > 0 && (
+          {toolId !== 'vuln-scanner' && result.recommendations && result.recommendations.length > 0 && (
             <div className="bg-gray-800 p-4 rounded-lg">
               <h4 className="text-md font-semibold text-green-400 mb-2">Recommendations</h4>
               <ul className="space-y-2">
