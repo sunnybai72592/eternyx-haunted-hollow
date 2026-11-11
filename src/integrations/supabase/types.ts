@@ -92,6 +92,72 @@ export type Database = {
         }
         Relationships: []
       }
+      pentest_evidence: {
+        Row: {
+          created_at: string
+          description: string | null
+          engagement_id: string
+          file_name: string
+          file_size: number
+          id: string
+          mime_type: string
+          owner_id: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          engagement_id: string
+          file_name: string
+          file_size: number
+          id?: string
+          mime_type: string
+          owner_id: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          engagement_id?: string
+          file_name?: string
+          file_size?: number
+          id?: string
+          mime_type?: string
+          owner_id?: string
+          storage_path?: string
+        }
+        Relationships: []
+      }
+      pentest_audit_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          details: Json
+          engagement_id: string | null
+          event_type: "engagement_created" | "engagement_updated" | "engagement_deleted" | "evidence_uploaded"
+          id: string
+          owner_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          engagement_id?: string | null
+          event_type: "engagement_created" | "engagement_updated" | "engagement_deleted" | "evidence_uploaded"
+          id?: string
+          owner_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          engagement_id?: string | null
+          event_type?: "engagement_created" | "engagement_updated" | "engagement_deleted" | "evidence_uploaded"
+          id?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
       admin_users: {
         Row: {
           created_at: string
