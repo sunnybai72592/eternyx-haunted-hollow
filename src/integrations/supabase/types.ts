@@ -14,6 +14,25 @@ export type Database = {
   }
   public: {
     Tables: {
+      bug_reports: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          severity: string
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          description: string
+          severity?: string
+          title: string
+          user_id: string
+        }
+        Update: {}
+        Relationships: []
+      }
       admin_users: {
         Row: {
           created_at: string
