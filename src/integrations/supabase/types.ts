@@ -35,6 +35,63 @@ export type Database = {
         }
         Relationships: []
       }
+      pentest_engagements: {
+        Row: {
+          authorization_attested: boolean
+          authorization_attested_at: string | null
+          authorization_reference: string | null
+          client_name: string | null
+          created_at: string
+          emergency_contact: string | null
+          end_at: string | null
+          engagement_name: string
+          id: string
+          notes: string | null
+          owner_id: string
+          permitted_methods: string[]
+          scope_targets: string[]
+          excluded_targets: string[]
+          start_at: string | null
+          status: "draft" | "authorized" | "in_progress" | "on_hold" | "completed" | "cancelled"
+          updated_at: string
+        }
+        Insert: {
+          authorization_attested?: boolean
+          authorization_attested_at?: string | null
+          authorization_reference?: string | null
+          client_name?: string | null
+          created_at?: string
+          emergency_contact?: string | null
+          end_at?: string | null
+          engagement_name: string
+          id?: string
+          notes?: string | null
+          owner_id: string
+          permitted_methods?: string[]
+          scope_targets?: string[]
+          excluded_targets?: string[]
+          start_at?: string | null
+          status?: "draft" | "authorized" | "in_progress" | "on_hold" | "completed" | "cancelled"
+          updated_at?: string
+        }
+        Update: {
+          authorization_attested?: boolean
+          authorization_attested_at?: string | null
+          authorization_reference?: string | null
+          client_name?: string | null
+          emergency_contact?: string | null
+          end_at?: string | null
+          engagement_name?: string
+          notes?: string | null
+          permitted_methods?: string[]
+          scope_targets?: string[]
+          excluded_targets?: string[]
+          start_at?: string | null
+          status?: "draft" | "authorized" | "in_progress" | "on_hold" | "completed" | "cancelled"
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_users: {
         Row: {
           created_at: string
