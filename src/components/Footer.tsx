@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Github, Twitter, Linkedin, Bug } from 'lucide-react';
+import { Github, Twitter, Linkedin, Bug, ClipboardList } from 'lucide-react';
 
 const Footer: React.FC = () => (
   <footer className="w-full bg-black/70 backdrop-blur-md border-t border-cyber-cyan/30 shadow-lg mt-8 py-6 relative overflow-hidden">
@@ -19,6 +19,7 @@ const Footer: React.FC = () => (
       <div className="mb-4 md:mb-0"><p>&copy; {new Date().getFullYear()} EterNyx. All rights reserved.</p><p className="mt-1">"Unlocking the Digital Underworld."</p></div>
       <div className="mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 md:mb-0">
         <Link to="/bug-report" className="inline-flex items-center gap-2 hover:text-neon-green transition-colors duration-300"><Bug className="h-4 w-4" />Report a Bug</Link>
+        <Link to="/my-bug-reports" className="inline-flex items-center gap-2 hover:text-neon-green transition-colors duration-300"><ClipboardList className="h-4 w-4" />My Bug Reports</Link>
         <Link to="/contact" className="hover:text-neon-green transition-colors duration-300">Contact Us</Link>
         <a href="#" className="hover:text-neon-green transition-colors duration-300">Privacy Policy</a>
         <a href="#" className="hover:text-neon-green transition-colors duration-300">Terms of Service</a>
