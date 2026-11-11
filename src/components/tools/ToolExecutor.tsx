@@ -267,9 +267,9 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             </div>
             
             <div className="bg-gray-800 p-4 rounded-lg">
-              <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'NVD total matches' : 'Issues Found'}</div>
+              <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Total matches in NVD' : 'Issues Found'}</div>
               <div className="text-lg font-semibold text-white">
-                {toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}
+                {toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}
               </div>
             </div>
           </div>
