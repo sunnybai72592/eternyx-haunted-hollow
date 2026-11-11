@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ImagePlus, Loader2, RotateCcw, Save, ShieldCheck, Upload, X } from 'lucide-react';
+import { ImagePlus, Loader2, Save, ShieldCheck, Upload, X } from 'lucide-react';
 
 interface ProfileAvatarUploaderProps {
   currentAvatarUrl: string | null | undefined;
@@ -51,9 +51,9 @@ const ProfileAvatarUploader = ({ currentAvatarUrl, username }: ProfileAvatarUplo
     setUploading(true);
     try {
       const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'png';
-      const path = `${user.id}.${ext}`;
+      const path = `${user.id}/${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from('user-avatars')
         .upload(path, selectedFile, { upsert: true, contentType: selectedFile.type });
       if (uploadError) throw uploadError;
 
