@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Skull,
   AlertTriangle,
   Gem,
   Eye,
@@ -26,24 +25,6 @@ const Services = () => {
   const navigate = useNavigate();
 
   const services = [
-    {
-      id: "pentesting",
-      title: "Black Hat Pentesting",
-      description: "Advanced penetration testing using cutting-edge techniques to identify vulnerabilities before attackers do.",
-      icon: <Skull className="h-8 w-8" />,
-      color: "green",
-      link: "/black-hat-pentesting",
-      features: [
-        "Network & Infrastructure Testing",
-        "Web Application Security",
-        "Mobile App Penetration Testing",
-        "Social Engineering Assessments",
-        "Wireless Security Audits",
-        "Physical Security Testing"
-      ],
-      pricing: "Starting at $5,000",
-      duration: "1-4 weeks",
-    },
     {
       id: "zero-day",
       title: "Zero-Day Protection",
