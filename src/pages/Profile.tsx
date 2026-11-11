@@ -12,14 +12,14 @@ import ProfileAvatarUploader from '@/components/ProfileAvatarUploader';
 import { toast } from '@/hooks/use-toast';
 import {
   ArrowRight, AtSign, BadgeCheck, BriefcaseBusiness, Check, ChevronRight,
-  Globe2, KeyRound, Link2, Loader2, LockKeyhole, Mail, MapPin,
-  Save, ShieldCheck, Sparkles, UserRound, UserRoundCog, X
+  Globe2, KeyRound, Loader2, LockKeyhole, Mail, MapPin,
+  Save, ShieldCheck, Sparkles, UserRound, UserRoundCog
 } from 'lucide-react';
 
-type EditableProfile = Pick<UserProfile,
+type EditableProfile = Partial<Pick<UserProfile,
   'username' | 'full_name' | 'bio' | 'location' | 'job_title' |
   'company' | 'website' | 'github_url' | 'twitter_url' | 'linkedin_url'
->;
+>>;
 
 const fieldClass = 'h-11 rounded-xl border-white/[0.10] bg-[#070e19]/85 px-3.5 text-sm text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/20 transition focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10';
 const labelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400';
