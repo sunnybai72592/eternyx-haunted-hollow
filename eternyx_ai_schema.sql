@@ -36,7 +36,7 @@ WITH (lists = 100);
 -- 3. Chat History Table: Stores conversation history
 CREATE TABLE IF NOT EXISTS chat_history (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     document_id UUID REFERENCES ai_documents(id) ON DELETE SET NULL, -- Optional: for RAG-specific chats
     role VARCHAR(10) NOT NULL, -- 'user' or 'assistant'
     content TEXT NOT NULL, -- The message content
@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_history_user_created ON chat_history(user_id
 -- 4. Conversation Sessions Table: Groups related messages into conversations
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     document_id UUID REFERENCES ai_documents(id) ON DELETE SET NULL, -- Optional: for document-specific conversations
     title VARCHAR(255), -- User-friendly title for the conversation
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
