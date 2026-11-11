@@ -4,260 +4,185 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 interface PortScanRequest {
   target: string;
   ports?: number[];
-  scan_type: string;
-  user_id: string;
+  scan_type?: string;
 }
 
-interface PortResult {
-  port: number;
-  status: 'open' | 'closed' | 'filtered';
-  service?: string;
-  banner?: string;
+interface ShodanHostResponse {
+  ip_str?: string;
+  org?: string;
+  ports?: number[];
+  data?: Array<{ port: number; banner?: string; product?: string; version?: string; transport?: string }>;
+  vulns?: string[] | Record<string, unknown>;
+  country_name?: string;
+  city?: string;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   try {
-    // Initialize Supabase client
+    const authorization = req.headers.get('Authorization')
+    if (!authorization?.startsWith('Bearer ')) return json({ error: 'Authentication required' }, 401)
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authorization } } },
     )
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) return json({ error: 'Invalid or expired session' }, 401)
 
-    const { target, ports, scan_type, user_id }: PortScanRequest = await req.json()
-
-    // Validate input
-    if (!target || !scan_type || !user_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    const body = await req.json() as PortScanRequest
+    const target = typeof body.target === 'string' ? body.target.trim() : ''
+    if (!isPublicIPv4(target)) {
+      return json({ error: 'Enter a public IPv4 address. Hostnames, private addresses, and reserved ranges are not accepted.' }, 400)
     }
 
-    // Default common ports if none specified
-    const targetPorts = ports || [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 993, 995, 1723, 3306, 3389, 5900, 8080]
+    const requestedPorts = body.ports ?? []
+    if (!Array.isArray(requestedPorts) || requestedPorts.length > 100 ||
+        requestedPorts.some(port => !Number.isInteger(port) || port < 1 || port > 65535)) {
+      return json({ error: 'Ports must be an array of up to 100 valid port numbers (1–65535).' }, 400)
+    }
+    const portFilter = [...new Set(requestedPorts)]
 
-    const startTime = Date.now()
-    const scanResults: PortResult[] = []
-
-    // Use Shodan API for enhanced port scanning if API key is available
     const shodanApiKey = Deno.env.get('SHODAN_API_KEY')
-    
-    if (shodanApiKey) {
-      try {
-        // Query Shodan for the target
-        const shodanResponse = await fetch(`https://api.shodan.io/host/${target}?key=${shodanApiKey}`)
-        
-        if (shodanResponse.ok) {
-          const shodanData = await shodanResponse.json()
-          
-          // Process Shodan results
-          if (shodanData.ports && Array.isArray(shodanData.ports)) {
-            for (const port of shodanData.ports) {
-              if (targetPorts.includes(port)) {
-                const serviceData = shodanData.data?.find((d: any) => d.port === port)
-                scanResults.push({
-                  port,
-                  status: 'open',
-                  service: serviceData?.product || getServiceName(port),
-                  banner: serviceData?.banner?.substring(0, 200) || undefined
-                })
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Shodan API error:', error)
-      }
+    if (!shodanApiKey) {
+      return json({ error: 'Shodan integration is not configured. No port observations were performed.', code: 'SHODAN_NOT_CONFIGURED' }, 503)
     }
 
-    // Perform basic connectivity checks for remaining ports
-    for (const port of targetPorts) {
-      if (!scanResults.find(r => r.port === port)) {
-        const result = await checkPort(target, port)
-        scanResults.push(result)
-      }
+    const startedAt = Date.now()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 12000)
+    let providerResponse: Response
+    try {
+      providerResponse = await fetch(
+        `https://api.shodan.io/shodan/host/${encodeURIComponent(target)}?key=${encodeURIComponent(shodanApiKey)}`,
+        { headers: { 'Accept': 'application/json' }, signal: controller.signal }
+      )
+    } finally {
+      clearTimeout(timeout)
     }
 
-    // Sort results by port number
-    scanResults.sort((a, b) => a.port - b.port)
+    if (providerResponse.status === 404) {
+      return json({
+        success: true,
+        target,
+        source: 'Shodan Host API',
+        observation_type: 'passive_internet_scan_observations',
+        observed_at: new Date().toISOString(),
+        message: 'Shodan has no host record for this IP. This does not mean its ports are closed.',
+        observed_ports: [],
+        ports_requested_filter: portFilter,
+        scan_duration_ms: Date.now() - startedAt,
+        risk_level: 'unknown',
+        limitations: ['This is a passive lookup, not a live TCP or UDP scan.', 'Ports absent from Shodan data are unknown, not closed.']
+      })
+    }
 
-    const scanDuration = Math.floor((Date.now() - startTime) / 1000)
-    const openPorts = scanResults.filter(r => r.status === 'open')
+    if (!providerResponse.ok) {
+      return json({
+        error: providerResponse.status === 401 || providerResponse.status === 403
+          ? 'Shodan rejected the configured API credentials or access level.'
+          : `Shodan lookup failed with HTTP ${providerResponse.status}. No port states were inferred.`,
+        code: 'SHODAN_LOOKUP_FAILED'
+      }, 502)
+    }
 
-    // Store scan results in database
-    const { data: scanData, error: scanError } = await supabaseClient
+    const host = await providerResponse.json() as ShodanHostResponse
+    const observedPorts = Array.isArray(host.ports) ? host.ports : []
+    const filteredPorts = portFilter.length ? observedPorts.filter(port => portFilter.includes(port)) : observedPorts
+    const observations = filteredPorts.map(port => {
+      const service = host.data?.find(item => item.port === port)
+      return {
+        port,
+        state: 'observed_open' as const,
+        transport: service?.transport || 'unknown',
+        service: service?.product || service?.version || 'unknown',
+        banner: service?.banner?.slice(0, 200) || undefined
+      }
+    })
+
+    const result = {
+      target,
+      source: 'Shodan Host API',
+      observation_type: 'passive_internet_scan_observations',
+      observed_at: new Date().toISOString(),
+      observation_age: 'Shodan observations may be stale; verify with an authorized live assessment.',
+      organization: host.org || null,
+      country: host.country_name || null,
+      city: host.city || null,
+      observed_ports: observations,
+      ports_requested_filter: portFilter,
+      vulnerabilities_reported_by_shodan: host.vulns || [],
+      scan_duration_ms: Date.now() - startedAt,
+      risk_level: 'not_scored',
+      limitations: [
+        'This is a passive lookup of Shodan observations, not a live TCP or UDP port scan.',
+        'Ports absent from Shodan data are unknown, not closed.',
+        'Service banners and vulnerability associations may be outdated or inaccurate.',
+        'No OS fingerprinting, stealth scanning, firewall evasion, or UDP probing is performed.'
+      ]
+    }
+
+    const { data: stored, error: storeError } = await supabaseClient
       .from('network_traffic_analysis')
       .insert({
-        user_id,
-        analysis_name: `Port Scan - ${target}`,
-        traffic_data: {
-          target,
-          scan_type,
-          ports_scanned: targetPorts,
-          results: scanResults,
-          scan_duration: scanDuration,
-          timestamp: new Date().toISOString()
-        },
-        risk_level: calculateRiskLevel(openPorts),
+        user_id: user.id,
+        analysis_name: `Shodan Host Exposure Lookup - ${target}`,
+        traffic_data: result,
+        risk_level: 'unknown',
         analysis_results: {
-          total_ports_scanned: targetPorts.length,
-          open_ports: openPorts.length,
-          closed_ports: scanResults.filter(r => r.status === 'closed').length,
-          filtered_ports: scanResults.filter(r => r.status === 'filtered').length,
-          services_detected: openPorts.map(p => ({ port: p.port, service: p.service }))
+          observation_source: result.source,
+          observed_ports: observations.length,
+          ports: observations.map(item => item.port)
         }
       })
-      .select()
+      .select('id')
       .single()
+    if (storeError) throw storeError
 
-    if (scanError) {
-      throw scanError
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        scan_id: scanData.id,
-        target,
-        ports_scanned: targetPorts.length,
-        open_ports: openPorts.length,
-        scan_duration: scanDuration,
-        results: scanResults,
-        risk_level: calculateRiskLevel(openPorts),
-        summary: {
-          open: openPorts.length,
-          closed: scanResults.filter(r => r.status === 'closed').length,
-          filtered: scanResults.filter(r => r.status === 'filtered').length
-        }
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-
+    return json({ success: true, lookup_id: stored.id, ...result })
   } catch (error) {
-    console.error('Port scanner error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        details: errorMessage 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    console.error('Shodan host lookup failed:', error)
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'Shodan lookup timed out. No port states were inferred.'
+      : 'Host exposure lookup failed. No port states were inferred.'
+    return json({ error: message }, 502)
   }
 })
 
-async function checkPort(host: string, port: number): Promise<PortResult> {
-  try {
-    // Use a timeout-based approach to check port connectivity
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+function isPublicIPv4(value: string): boolean {
+  const parts = value.split('.')
+  if (parts.length !== 4 || parts.some(part => !/^(0|[1-9]\d{0,2})$/.test(part))) return false
+  const octets = parts.map(Number)
+  if (octets.some(part => part > 255)) return false
+  const [a, b, c] = octets
 
-    try {
-      // Attempt to establish a connection
-      const response = await fetch(`http://${host}:${port}`, {
-        method: 'HEAD',
-        signal: controller.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SecurityScanner/1.0)' }
-      })
-      
-      clearTimeout(timeoutId)
-      
-      return {
-        port,
-        status: 'open',
-        service: getServiceName(port)
-      }
-    } catch (fetchError) {
-      clearTimeout(timeoutId)
-      
-      // Try TCP connection simulation
-      try {
-        const tcpResult = await simulateTCPConnection(host, port)
-        return tcpResult
-      } catch {
-        return {
-          port,
-          status: 'closed',
-          service: getServiceName(port)
-        }
-      }
-    }
-  } catch (error) {
-    return {
-      port,
-      status: 'filtered',
-      service: getServiceName(port)
-    }
-  }
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return false
+  if (a === 100 && b >= 64 && b <= 127) return false
+  if (a === 169 && b === 254) return false
+  if (a === 172 && b >= 16 && b <= 31) return false
+  if (a === 192 && b === 0 && c === 0) return false
+  if (a === 192 && b === 0 && c === 2) return false
+  if (a === 192 && b === 88 && c === 99) return false
+  if (a === 192 && b === 168) return false
+  if (a === 198 && (b === 18 || b === 19)) return false
+  if (a === 198 && b === 51 && c === 100) return false
+  if (a === 203 && b === 0 && c === 113) return false
+  if (a === 255 && b === 255 && c === 255) return false
+  return true
 }
 
-async function simulateTCPConnection(host: string, port: number): Promise<PortResult> {
-  // This is a simplified simulation since Deno in Edge Functions has limited network access
-  // In a real implementation, you would use actual TCP socket connections
-  
-  const commonOpenPorts = [80, 443, 22, 21, 25, 53]
-  const isLikelyOpen = commonOpenPorts.includes(port)
-  
-  return {
-    port,
-    status: isLikelyOpen ? 'open' : 'closed',
-    service: getServiceName(port)
-  }
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
 }
-
-function getServiceName(port: number): string {
-  const services: { [key: number]: string } = {
-    21: 'FTP',
-    22: 'SSH',
-    23: 'Telnet',
-    25: 'SMTP',
-    53: 'DNS',
-    80: 'HTTP',
-    110: 'POP3',
-    111: 'RPC',
-    135: 'RPC',
-    139: 'NetBIOS',
-    143: 'IMAP',
-    443: 'HTTPS',
-    993: 'IMAPS',
-    995: 'POP3S',
-    1723: 'PPTP',
-    3306: 'MySQL',
-    3389: 'RDP',
-    5900: 'VNC',
-    8080: 'HTTP-Alt'
-  }
-  
-  return services[port] || 'Unknown'
-}
-
-function calculateRiskLevel(openPorts: PortResult[]): string {
-  const highRiskPorts = [21, 23, 135, 139, 445, 1433, 3306, 3389, 5900]
-  const mediumRiskPorts = [22, 25, 110, 143, 993, 995]
-  
-  const highRiskCount = openPorts.filter(p => highRiskPorts.includes(p.port)).length
-  const mediumRiskCount = openPorts.filter(p => mediumRiskPorts.includes(p.port)).length
-  
-  if (highRiskCount > 2) return 'high'
-  if (highRiskCount > 0 || mediumRiskCount > 3) return 'medium'
-  return 'low'
-}
-
