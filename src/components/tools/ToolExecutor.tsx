@@ -75,7 +75,6 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
         case 'ssl-analyzer':
           executionResult = await toolExecutionService.executeSSLAnalyzer({
             hostname: parameters.hostname,
-            user_id: user.id,
           });
           break;
 
@@ -167,6 +166,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
                 value={parameters.hostname || ''}
                 onChange={(e) => handleParameterChange('hostname', e.target.value)}
               />
+              <p className="mt-2 text-xs leading-5 text-amber-200/80">Only assess domains you own or are authorized to test. Qualys SSL Labs performs the assessment from its external infrastructure.</p>
             </div>
           </div>
         );
@@ -256,16 +256,66 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-lg bg-gray-800 p-4">
                 <div className="text-sm text-gray-400">Execution Time</div>
-                <div className="text-lg font-semibold text-white">{result.scan_duration || result.analysis_duration || 'N/A'}s</div>
+                <div className="text-lg font-semibold text-white">{result.analysis_time ?? result.scan_duration ?? result.analysis_duration ?? 'N/A'}s</div>
               </div>
               <div className="rounded-lg bg-gray-800 p-4">
-                <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : 'Risk Score'}</div>
-                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}</div>
+                <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : toolId === 'ssl-analyzer' ? 'SSL Labs grade' : 'Risk Score'}</div>
+                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : toolId === 'ssl-analyzer' ? (result.overall_grade ?? 'Not available') : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}</div>
               </div>
               <div className="rounded-lg bg-gray-800 p-4">
                 <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Total matches in NVD' : 'Issues Found'}</div>
-                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}</div>
+                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.total_matches_reported_by_nvd ?? 0) : toolId === 'ssl-analyzer' ? (result.ssl_result?.vulnerabilities?.length ?? 0) : (result.vulnerabilities_found || result.vulnerabilities?.length || 0)}</div>
               </div>
+            </div>
+          )}
+
+          {toolId === 'ssl-analyzer' && (
+            <div className="space-y-4 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="font-semibold text-cyan-300">Qualys SSL Labs assessment</h4>
+                <Badge variant="outline" className="border-cyan-400/40 text-cyan-200">{result.source || 'SSL Labs API'}</Badge>
+              </div>
+              <p className="text-sm text-gray-300">Grade is the SSL Labs endpoint grade. ETERNYX does not convert it into an invented 0–100 risk or confidence score.</p>
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <p className="text-gray-300">Protocols observed: <span className="font-medium text-white">{result.ssl_result?.protocols?.length ?? 0}</span></p>
+                <p className="text-gray-300">Cipher suites observed: <span className="font-medium text-white">{result.ssl_result?.suites?.length ?? 0}</span></p>
+              </div>
+              {Array.isArray(result.ssl_result?.endpoints) && (
+                <div className="space-y-2">
+                  <h5 className="text-sm font-semibold text-white">Endpoint assessments</h5>
+                  {result.ssl_result.endpoints.map((endpoint: any, index: number) => (
+                    <div key={`${endpoint.ipAddress || 'endpoint'}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-700 p-3 text-sm">
+                      <span className="font-mono text-gray-200">{endpoint.ipAddress || 'IP not reported'}</span>
+                      <span className="text-gray-300">{endpoint.statusMessage || 'Status not reported'}</span>
+                      <span className="font-semibold text-white">{endpoint.grade || 'No grade'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {Array.isArray(result.ssl_result?.vulnerabilities) && result.ssl_result.vulnerabilities.length > 0 && (
+                <div className="space-y-2">
+                  <h5 className="text-sm font-semibold text-amber-300">Issues reported by SSL Labs</h5>
+                  {result.ssl_result.vulnerabilities.map((item: any) => (
+                    <div key={item.id} className="rounded border border-amber-500/20 p-3">
+                      <div className="flex flex-wrap justify-between gap-2 text-sm">
+                        <span className="font-medium text-white">{item.name}</span>
+                        <span className="uppercase text-amber-200">{item.severity}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-300">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.additional_checks && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {Object.entries(result.additional_checks).map(([key, value]) => (
+                    <div key={key} className="flex justify-between gap-3 rounded bg-gray-800 p-2 text-sm">
+                      <span className="text-gray-400 capitalize">{key.replace(/_/g, ' ')}</span>
+                      <span className="text-white">{value === null ? 'Not reported' : value ? 'Yes' : 'No'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
