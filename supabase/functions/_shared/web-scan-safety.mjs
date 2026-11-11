@@ -19,6 +19,8 @@ export function normalizeWebTarget(value) {
   if (hostname.length > 253 || hostname.split('.').some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) {
     throw new Error('Enter a valid public DNS hostname.')
   }
+  url.hostname = hostname
+  if (url.toString().length > 500) throw new Error('The normalized target URL must not exceed 500 characters.')
   url.hash = ''
   return url
 }
@@ -38,6 +40,9 @@ export function isPublicIPv4(value) {
   if (a === 169 && b === 254) return false
   if (a === 172 && b >= 16 && b <= 31) return false
   if (a === 192 && b === 0 && c === 0) return false
+  if (a === 192 && b === 31 && c === 196) return false
+  if (a === 192 && b === 52 && c === 193) return false
+  if (a === 192 && b === 175 && c === 48) return false
   if (a === 192 && b === 0 && c === 2) return false
   if (a === 192 && b === 88 && c === 99) return false
   if (a === 192 && b === 168) return false
