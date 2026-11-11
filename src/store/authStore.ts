@@ -47,6 +47,7 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   setUser: (user: User | null) => void;
+  setSession: (session: Session | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setLoading: (loading: boolean) => void;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -114,6 +115,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isAuthenticated: false,
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
+      setSession: (session) => set({ session, user: session?.user ?? null, isAuthenticated: !!session?.user }),
       setProfile: (profile) => set({ profile }),
       setLoading: (isLoading) => set({ isLoading }),
 
@@ -291,6 +293,37 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         });
 
         void listener.subscription;
+
+        // Browsers pause background tabs. Reconcile the shared store when this
+        // document becomes visible again, without treating a transient empty
+        // read or storage error as an explicit sign-out.
+        const reconcileVisibleSession = async () => {
+          if (document.visibilityState !== 'visible') return;
+          const versionAtRequest = authEventVersion;
+          try {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) {
+              console.error('Unable to reconcile the session after tab focus:', error);
+              return;
+            }
+            if (!data.session || versionAtRequest !== authEventVersion) return;
+
+            const current = get();
+            if (
+              current.user?.id !== data.session.user.id ||
+              current.session?.access_token !== data.session.access_token
+            ) {
+              set({
+                session: data.session,
+                user: data.session.user,
+                isAuthenticated: true,
+              });
+            }
+          } catch (error) {
+            console.error('Session reconciliation after tab focus failed:', error);
+          }
+        };
+        document.addEventListener('visibilitychange', reconcileVisibleSession);
 
         const versionAtRequest = authEventVersion;
         supabase.auth.getSession().then(async ({ data: { session }, error }) => {
