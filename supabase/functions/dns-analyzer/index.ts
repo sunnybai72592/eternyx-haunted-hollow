@@ -31,9 +31,9 @@ interface DNSAnalysisResult {
   dns_records: DNSRecord[];
   vulnerabilities: DNSVulnerability[];
   security_features: {
-    dnssec_enabled: boolean;
+    ds_record_present: boolean;
     spf_configured: boolean;
-    dkim_configured: boolean;
+    default_dkim_selector_found: boolean;
     dmarc_configured: boolean;
     caa_configured: boolean;
   };
@@ -243,9 +243,9 @@ async function queryDNSRecords(domain: string, recordType: string): Promise<DNSR
 
 async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]): Promise<any> {
   const features = {
-    dnssec_enabled: false,
+    ds_record_present: false,
     spf_configured: false,
-    dkim_configured: false,
+    default_dkim_selector_found: false,
     dmarc_configured: false,
     caa_configured: false
   }
@@ -265,7 +265,7 @@ async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]):
   // Check for DKIM records (common selector)
   try {
     const dkimRecords = await queryDNSRecords(`default._domainkey.${domain}`, 'TXT')
-    features.dkim_configured = dkimRecords.length > 0
+    features.default_dkim_selector_found = dkimRecords.length > 0
   } catch (error) {
     console.error('DKIM check error:', error)
   }
@@ -277,7 +277,7 @@ async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]):
   // Check for DNSSEC (simplified check)
   try {
     const dsRecords = await queryDNSRecords(domain, 'DS')
-    features.dnssec_enabled = dsRecords.length > 0
+    features.ds_record_present = dsRecords.length > 0
   } catch (error) {
     console.error('DNSSEC check error:', error)
   }
@@ -293,11 +293,11 @@ async function analyzeDNSSEC(domain: string): Promise<{ vulnerabilities: DNSVuln
     
     if (dsRecords.length === 0) {
       vulnerabilities.push({
-        type: 'DNSSEC Not Configured',
+        type: 'No DS Record Observed',
         severity: 'medium',
-        description: 'Domain does not have DNSSEC enabled',
+        description: 'No DS record was returned for this domain. Confirm DNSSEC delegation with the registrar; this lookup is not a complete DNSSEC validation.',
         location: 'DNS Configuration',
-        remediation: 'Enable DNSSEC to prevent DNS spoofing and cache poisoning attacks',
+        remediation: 'Verify DNSSEC signing and DS delegation with the DNS provider and domain registrar.',
       })
     }
   } catch (error) {
@@ -436,10 +436,10 @@ function calculateDNSRiskScore(vulnerabilities: DNSVulnerability[], securityFeat
   })
   
   // Deduct points for security features
-  if (securityFeatures.dnssec_enabled) score -= 5
+  if (securityFeatures.ds_record_present) score -= 5
   if (securityFeatures.spf_configured) score -= 3
   if (securityFeatures.dmarc_configured) score -= 3
-  if (securityFeatures.dkim_configured) score -= 2
+  if (securityFeatures.default_dkim_selector_found) score -= 2
   if (securityFeatures.caa_configured) score -= 2
   
   return Math.max(0, Math.min(100, score))
@@ -448,8 +448,8 @@ function calculateDNSRiskScore(vulnerabilities: DNSVulnerability[], securityFeat
 function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securityFeatures: any): string[] {
   const recommendations: string[] = []
   
-  if (!securityFeatures.dnssec_enabled) {
-    recommendations.push('Enable DNSSEC to protect against DNS spoofing and cache poisoning')
+  if (!securityFeatures.ds_record_present) {
+    recommendations.push('No DS record was observed. Verify DNSSEC signing and DS delegation with your DNS provider and registrar.')
   }
   
   if (!securityFeatures.spf_configured) {
@@ -460,8 +460,8 @@ function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securit
     recommendations.push('Implement DMARC policy for email authentication enforcement')
   }
   
-  if (!securityFeatures.dkim_configured) {
-    recommendations.push('Set up DKIM signing for email authentication')
+  if (!securityFeatures.default_dkim_selector_found) {
+    recommendations.push('No TXT record was found at default._domainkey. Check the DKIM selector configured by your email provider; this analyzer checks only the default selector.')
   }
   
   if (!securityFeatures.caa_configured) {
@@ -469,10 +469,6 @@ function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securit
   }
   
   const vulnTypes = new Set(vulnerabilities.map(v => v.type))
-  
-  if (vulnTypes.has('Zone Transfer Allowed')) {
-    recommendations.push('Restrict DNS zone transfers to authorized servers only')
-  }
   
   if (vulnTypes.has('Multiple SPF Records')) {
     recommendations.push('Consolidate multiple SPF records into a single record')
