@@ -18,7 +18,7 @@ test("DNS analyzer validates and normalizes public domain input", async () => {
   const source = await read("supabase/functions/dns-analyzer/index.ts");
 
   assert.match(source, /domain\.trim\(\)\.toLowerCase\(\)/);
-  assert.match(source, /const domainRegex = \/\^\(\?=\.\{1,253\}\)/);
+  assert.match(source, /const domainRegex = \/\^\(\?=\.\{1,253\}\$\)/);
   assert.match(source, /Enter a valid public domain name/);
 });
 
