@@ -126,8 +126,8 @@ const CyberArena = () => {
           break;
         case 'web-scanner':
           functionName = 'web-scanner';
+          delete payload.user_id; // Ownership is derived from the verified JWT.
           payload.target_url = input;
-          payload.scan_depth = 1;
           break;
         default:
           throw new Error('Unknown tool');
@@ -206,15 +206,15 @@ const CyberArena = () => {
     },
     {
       id: 'web-scanner',
-      name: 'Web Application Scanner',
-      description: 'OWASP Top 10 vulnerability scanning for web applications',
+      name: 'Web Configuration Inspector',
+      description: 'Single-request passive HTTP security-header and cookie configuration inspection; no intrusive vulnerability probes.',
       icon: Code,
       category: 'scan',
       difficulty: 'advanced',
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      inputPlaceholder: 'Enter web application URL',
+      inputPlaceholder: 'https://example.com',
       inputLabel: 'URL'
     },
     // Premium Tools
