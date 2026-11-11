@@ -26,7 +26,7 @@ const domains = [
     description: "Build context around domains, assets, exposure, and the signals defenders can verify.",
     icon: Radar,
     href: "/vulnerability-scanner",
-    capabilities: ["Exposure review", "Public CVE references", "HTTP signals"],
+    capabilities: ["Public CVE records", "CVSS data", "CPE version criteria"],
   },
   {
     id: "web",
@@ -77,8 +77,8 @@ const domains = [
 
 const destinations: Destination[] = [
   {
-    name: "Vulnerability exposure review",
-    description: "Check basic HTTPS and security-header signals and look up public CVE references associated with a hostname.",
+    name: "CVE research workbench",
+    description: "Search public NVD CVE records by vendor, software product, and version; review CPE criteria before confirming applicability.",
     href: "/vulnerability-scanner",
     icon: Bug,
     category: "Security intelligence",
