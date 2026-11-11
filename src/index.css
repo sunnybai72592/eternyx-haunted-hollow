@@ -766,3 +766,39 @@ html[data-eter-theme="matrix"] {
   --cyber-pink: 160 55% 35%;
   --cyber-green: 142 71% 45%;
 }
+
+
+html.dark body {
+  background:
+    radial-gradient(circle at 18% 12%, hsl(215 28% 32% / 0.12), transparent 42%),
+    radial-gradient(circle at 82% 78%, hsl(235 24% 35% / 0.10), transparent 46%),
+    hsl(var(--background));
+  animation: none;
+}
+
+html.dark body::before,
+html.dark body::after {
+  opacity: 0.035;
+  animation: none;
+}
+
+html[data-eter-theme="matrix"] body {
+  background:
+    radial-gradient(circle at 18% 12%, hsl(142 71% 45% / 0.13), transparent 42%),
+    radial-gradient(circle at 82% 78%, hsl(155 55% 28% / 0.10), transparent 46%),
+    hsl(var(--background));
+  animation: none;
+}
+
+html[data-eter-theme="matrix"] body::before {
+  background-image:
+    linear-gradient(0deg, transparent 24%, hsl(142 71% 45% / 0.05) 25%, hsl(142 71% 45% / 0.05) 26%, transparent 27%),
+    linear-gradient(90deg, transparent 24%, hsl(142 71% 45% / 0.04) 25%, hsl(142 71% 45% / 0.04) 26%, transparent 27%);
+  opacity: 0.16;
+  animation: none;
+}
+
+html[data-eter-theme="matrix"] body::after {
+  opacity: 0.025;
+  animation: none;
+}
