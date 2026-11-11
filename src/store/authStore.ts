@@ -104,6 +104,7 @@ async function createDefaultProfile(user: User, username?: string): Promise<User
 let authInitialized = false;
 let authEventVersion = 0;
 let profileLoadVersion = 0;
+let profileLoadInFlightUserId: string | null = null;
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
       user: null,
@@ -241,31 +242,51 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         authInitialized = true;
         set({ isLoading: true });
 
-        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
           authEventVersion += 1;
           const currentUser = session?.user ?? null;
           const previousUserId = get().user?.id ?? null;
-          const loadVersion = ++profileLoadVersion;
+          const existingProfile = get().profile;
 
+          // Token rotation changes credentials, not identity. Preserve the profile
+          // and avoid issuing another profile query for every TOKEN_REFRESHED event.
           set({
             session: session ?? null,
             user: currentUser,
             isAuthenticated: !!currentUser,
-            profile: currentUser?.id === previousUserId ? get().profile : null,
-            isLoading: !!currentUser && (currentUser.id !== previousUserId || !get().profile),
+            profile: currentUser?.id === previousUserId ? existingProfile : null,
+            isLoading: currentUser
+              ? (currentUser.id !== previousUserId || (!existingProfile && profileLoadInFlightUserId !== currentUser.id))
+              : false,
           });
 
           if (!currentUser) {
+            profileLoadVersion += 1;
+            profileLoadInFlightUserId = null;
             set({ profile: null, isLoading: false });
             return;
           }
 
+          const identityChanged = currentUser.id !== previousUserId;
+          const profileNeedsLoading = !existingProfile && profileLoadInFlightUserId !== currentUser.id;
+          const profileNeedsRefresh = event === 'USER_UPDATED';
+          if (!identityChanged && !profileNeedsLoading && !profileNeedsRefresh) return;
+
+          const loadVersion = ++profileLoadVersion;
+          profileLoadInFlightUserId = currentUser.id;
+
           // Defer database work until the auth callback has returned.
           setTimeout(async () => {
-            let profile = await fetchUserProfile(currentUser.id);
-            if (!profile) profile = await createDefaultProfile(currentUser);
-            if (loadVersion !== profileLoadVersion || get().user?.id !== currentUser.id) return;
-            set({ profile, isLoading: false });
+            try {
+              let profile = await fetchUserProfile(currentUser.id);
+              if (!profile) profile = await createDefaultProfile(currentUser);
+              if (loadVersion !== profileLoadVersion || get().user?.id !== currentUser.id) return;
+              set({ profile, isLoading: false });
+            } finally {
+              if (profileLoadInFlightUserId === currentUser.id) {
+                profileLoadInFlightUserId = null;
+              }
+            }
           }, 0);
         });
 
