@@ -14,6 +14,7 @@ import { MobileResponsiveNavigation } from "@/components/MobileResponsiveNavigat
 import { PageTransitionWrapper } from "@/components/PageTransitionWrapper";
 import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
+import { applyAccountTheme } from "@/lib/accountTheme";
 import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
 import RequireAuth from "@/components/auth/RequireAuth";
 
@@ -128,12 +129,17 @@ const LoginRedirect = () => {
 // Component to handle routing and back button logic
 const AppContent = () => {
   const location = useLocation();
-  const { initialize } = useAuthStore();
+  const { initialize, profile } = useAuthStore();
 
   useEffect(() => {
     // Initialize auth store when app starts
     initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    // Keep the saved account appearance consistent across every route and refresh.
+    applyAccountTheme(profile?.preferences?.theme);
+  }, [profile?.preferences?.theme]);
 
   // Determine if the back button should be shown
   const showBackButton = location.pathname !== '/';
