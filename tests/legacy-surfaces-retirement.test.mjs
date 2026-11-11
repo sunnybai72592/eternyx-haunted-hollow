@@ -67,6 +67,6 @@ test('profile keeps real account management without fabricated arsenal progressi
   assert.match(profile, /\.from\('profiles'\)/);
   assert.match(profile, /handleSave/);
   assert.match(profile, /handlePrivacyUpdate/);
-  assert.ok(profile.includes('onClick={signOut}'));
+  assert.match(profile, /updateProfile\\(local\\)/);\n  assert.match(profile, /updateProfile\\(\\{ \\[field\\]: value \\}\\)/);\n  assert.match(profile, /handleSave/);
   assert.doesNotMatch(profile, /fetchTools|userTools|loadingTools|ARSENAL|\bXP\b|\bLVL\b|handleDeleteAccount/);
 });
