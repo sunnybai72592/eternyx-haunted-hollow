@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import AdminWorkspaceNav from '@/components/admin/AdminWorkspaceNav';
 
 type BugStatus = 'open' | 'triaged' | 'in_progress' | 'resolved' | 'closed';
 type BugReport = {
@@ -173,6 +174,7 @@ export default function AdminBugReports() {
   return (
     <main className="relative mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 lg:px-8">
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 -z-10 h-72 rounded-full bg-cyan-400/[0.06] blur-[100px]" />
+      <AdminWorkspaceNav />
 
       <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
