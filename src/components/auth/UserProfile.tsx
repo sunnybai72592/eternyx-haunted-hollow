@@ -121,12 +121,12 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
                 <Avatar className="h-10 w-10 ring-2 ring-primary/50">
                   <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={profile?.username} />
                   <AvatarFallback className="bg-primary/20 text-primary font-bold">
-                    {profile.username.slice(0, 2).toUpperCase()}
+                    {displayName.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="text-sm font-semibold text-foreground">
-                    {profile.username}
+                    {displayName}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {user.email}
@@ -152,7 +152,7 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
             </>
           )}
           <DropdownMenuSeparator className="bg-border" />
-          <DropdownMenuItem onSelect={() => navigate('/account') className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+          <DropdownMenuItem onSelect={() => navigate('/account')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
             <LayoutDashboard className="mr-2 h-4 w-4" /><span>Account Overview</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/profile')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
