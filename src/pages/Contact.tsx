@@ -15,6 +15,7 @@ import {
   Building
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabaseAPI } from '@/lib/supabase';
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -34,11 +35,23 @@ export default function Contact() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    if (isSubmitting) return;
 
-    // Simulate form submission
-    setTimeout(() => {
-      toast.success('Message sent successfully! We\'ll respond within 24 hours.');
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabaseAPI.submitContactForm({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim() || undefined,
+        company: formData.company.trim() || undefined,
+        subject: formData.subject.trim(),
+        message: formData.message.trim(),
+        service_interested: formData.service || undefined,
+      });
+
+      if (error) throw error;
+
+      toast.success('Your message has been received. Thank you for contacting Eternyx.');
       setFormData({
         name: '',
         email: '',
@@ -48,8 +61,12 @@ export default function Contact() {
         message: '',
         service: ''
       });
+    } catch (error) {
+      console.error('Contact form submission failed:', error);
+      toast.error('We could not send your message. Please try again.');
+    } finally {
       setIsSubmitting(false);
-    }, 2000);
+    }
   };
 
   return (
