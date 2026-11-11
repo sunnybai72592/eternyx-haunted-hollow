@@ -279,9 +279,19 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
           <div className="hidden lg:flex items-center">
             {!isAuthenticated ? (
-              <div className="flex items-center gap-2 flex-shrink-0"><UserProfile className="scale-90" /></div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button onClick={handleSignIn} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                  <LogIn className="w-4 h-4 mr-2" />Sign In
+                </Button>
+                <Button onClick={handleSignUp} className="px-3 py-2 text-sm font-medium bg-white text-black hover:bg-white/90 rounded-lg transition-all">
+                  <UserPlus className="w-4 h-4 mr-2" />Sign Up
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <UserProfile className="scale-90" />
+              </div>
             )}
-            
           </div>
 
           {/* Mobile Menu Button */}
