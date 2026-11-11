@@ -78,8 +78,6 @@ const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
 
 
-const SecurityAuditing = lazy(() => import("./pages/SecurityAuditing"));
-const IncidentResponse = lazy(() => import("./pages/IncidentResponse"));
 const PenetrationTesting = lazy(() => import("./pages/PenetrationTesting"));
 const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessment"));
 
@@ -235,8 +233,8 @@ const AppContent = () => {
                         <Route path="/hacked" element={<Hacked />} />
                         <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
                         <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
-                        <Route path="/security-auditing" element={<SecurityAuditing />} />
-                        <Route path="/incident-response" element={<IncidentResponse />} />
+                        <Route path="/security-auditing" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
+                        <Route path="/incident-response" element={<Navigate to="/cybersecurity/incident-playbooks" replace />} />
                         <Route path="/penetration-testing" element={<PenetrationTesting />} />
                         <Route path="/vulnerability-assessment" element={<VulnerabilityAssessment />} />
                         <Route path="/vulnerability-scanner" element={<VulnerabilityScanner />} />

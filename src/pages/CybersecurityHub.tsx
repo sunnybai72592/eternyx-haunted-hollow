@@ -31,11 +31,11 @@ const sections: HubSection[] = [
   },
   {
     id: "network",
-    title: "Network Security",
-    description: "Inspect network exposure and troubleshoot connectivity on systems you own or are authorized to assess.",
+    title: "Network Security Planning",
+    description: "Organize authorized network-security observations, record supporting evidence, and track remediation. Direct network scanning is not currently available in this workspace.",
     icon: Network,
-    tools: ["Network scanner", "Port assessment", "Service discovery", "Connectivity diagnostics"],
-    href: "/tools/network-scanner",
+    tools: ["Assessment scoping", "Exposure findings register", "Evidence tracking", "Remediation ownership"],
+    href: "/cybersecurity/assessment-remediation",
     status: "Available",
   },
   {
@@ -86,7 +86,7 @@ const sections: HubSection[] = [
 ];
 
 const featuredTools = [
-  { name: "Network Scanner", detail: "Explore network discovery and diagnostics.", href: "/tools/network-scanner", icon: Network, tag: "Network" },
+  { name: "Network Security Assessment Register", detail: "Record authorized network-security observations, evidence, owners, and remediation status.", href: "/cybersecurity/assessment-remediation", icon: Network, tag: "Network security" },
   { name: "Vulnerability Scanner", detail: "Assess authorized web targets for security issues.", href: "/vulnerability-scanner", icon: ShieldCheck, tag: "Web security" },
   { name: "Web Application Security Readiness", detail: "Review security headers, cookies, CSP, CSRF/session settings, and security.txt.", href: "/cybersecurity/web-security", icon: ShieldCheck, tag: "Application security" },
   { name: "STRIDE Threat Modeling", detail: "Map assets, entry points, trust boundaries, and prioritized security threats.", href: "/cybersecurity/threat-modeling", icon: ShieldAlert, tag: "Architecture security" },
@@ -94,8 +94,6 @@ const featuredTools = [
   { name: "Incident Response Playbook Workbench", detail: "Coordinate response checklists, incident ownership, event timelines, and reports.", href: "/cybersecurity/incident-playbooks", icon: Siren, tag: "Incident response" },
   { name: "AWS IAM Policy Security Review", detail: "Inspect wildcard permissions, broad resource access, privilege-sensitive actions, and role trust policies.", href: "/cybersecurity/aws-iam-policy", icon: LockKeyhole, tag: "Cloud identity security" },
   { name: "Platform Security Monitoring", detail: "Review the current scope of trusted platform security telemetry.", href: "/threat-monitoring", icon: Activity, tag: "Monitoring" },
-  { name: "Security Auditing", detail: "Explore security review and assessment services.", href: "/security-auditing", icon: FileSearch, tag: "Assessment" },
-  { name: "Incident Response", detail: "Explore incident handling and response workflows.", href: "/incident-response", icon: Siren, tag: "Response" },
   { name: "Knowledge Hub", detail: "Continue learning security concepts and practices.", href: "/knowledge", icon: BookOpen, tag: "Learning" },
 ];
 
