@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -15,7 +16,10 @@ import {
   Settings, 
   LogOut, 
   Shield, 
-  Activity, 
+  Activity,
+  Bell,
+  LayoutDashboard,
+  ClipboardList,
   Crown,
   Zap,
   ChevronDown
@@ -27,6 +31,7 @@ interface UserProfileProps {
 
 export const UserProfile = ({ className = '' }: UserProfileProps) => {
   const { user, profile, signOut } = useAuthStore();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
 
   if (!user || !profile) return null;
@@ -131,20 +136,20 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
           </DropdownMenuLabel>
           
           <DropdownMenuSeparator className="bg-border" />
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
-            <User className="mr-2 h-4 w-4" />
-            <span>Profile Settings</span>
+          <DropdownMenuItem onSelect={() => navigate('/account')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <LayoutDashboard className="mr-2 h-4 w-4" /><span>Account Overview</span>
           </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Preferences</span>
+          <DropdownMenuItem onSelect={() => navigate('/profile')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <User className="mr-2 h-4 w-4" /><span>My Profile</span>
           </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
-            <Activity className="mr-2 h-4 w-4" />
-            <span>Activity Log</span>
+          <DropdownMenuItem onSelect={() => navigate('/settings')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <Settings className="mr-2 h-4 w-4" /><span>Settings & Preferences</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/notifications')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <Bell className="mr-2 h-4 w-4" /><span>Notifications</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/my-bug-reports')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <ClipboardList className="mr-2 h-4 w-4" /><span>My Bug Reports</span>
           </DropdownMenuItem>
           
           {profile.access_level === 'basic' && (
