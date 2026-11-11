@@ -279,45 +279,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
 
           <div className="hidden lg:flex items-center">
             {!isAuthenticated ? (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Button
-                  onClick={handleSignIn}
-                  variant="ghost"
-                  className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                >
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Sign In
-                </Button>
-                <Button
-                  onClick={handleSignUp}
-                  className="px-3 py-2 text-sm font-medium bg-white text-black hover:bg-white/90 rounded-lg transition-all"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Sign Up
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Button onClick={() => handleNavigation('/account', 'Account')} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
-                  <LayoutDashboard className="w-4 h-4 mr-2" />Account
-                </Button>
-                <Button onClick={handleProfileClick} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
-                  <User className="w-4 h-4 mr-2" />Profile
-                </Button>
-                <Button onClick={() => handleNavigation('/notifications', 'Notifications')} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
-                  <Bell className="w-4 h-4 mr-2" />Notifications
-                </Button>
-                <Button onClick={() => handleNavigation('/settings', 'Settings')} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
-                  <Settings className="w-4 h-4 mr-2" />Settings
-                </Button>
-                <Button
-                  onClick={handleSignOut}
-                  variant="ghost"
-                  className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                >
-                  Sign Out
-                </Button>
-              </div>
+              <div className="flex items-center gap-2 flex-shrink-0"><UserProfile className="scale-90" /></div>
             )}
             
           </div>
