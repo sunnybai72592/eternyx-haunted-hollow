@@ -118,21 +118,21 @@ const Services = () => {
     },
     {
       id: "monitoring",
-      title: "24/7 Threat Monitoring",
-      description: "Round-the-clock security operations center monitoring your infrastructure with instant threat response.",
+      title: "Platform Security Monitoring",
+      description: "Review selected ETERNYX platform security events recorded at trusted backend authorization boundaries."
       icon: <Wifi className="h-8 w-8" />,
       color: "red",
       link: "/threat-monitoring",
       features: [
-        "Real-time SIEM Integration",
-        "Incident Response Team",
-        "Security Analytics Dashboard",
-        "Automated Alert Triage",
-        "Compliance Reporting",
-        "Threat Intelligence Feeds"
+        "Verified authorization event capture",
+        "Admin-only event review",
+        "Severity and event-type filtering",
+        "Best-effort backend event persistence",
+        "Restricted security telemetry access",
+        "Documented event-source coverage"
       ],
-      pricing: "Starting at $10,000/month",
-      duration: "Ongoing",
+      pricing: "Platform capability",
+      duration: "Current coverage is limited",
     },
   ];
 
@@ -149,7 +149,7 @@ const Services = () => {
         <div className="relative max-w-5xl mx-auto">
           <Badge className="mb-4 bg-primary/20 text-primary border-primary/30">
             <Shield className="h-3 w-3 mr-1" />
-            Enterprise-Grade Security
+            Security capabilities
           </Badge>
           <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-cyan-400 to-purple-400 bg-clip-text text-transparent">
             Cybersecurity Services
@@ -161,15 +161,15 @@ const Services = () => {
           <div className="flex flex-wrap justify-center gap-4 mb-12">
             <Badge variant="outline" className="border-green-500/50 text-green-400">
               <CheckCircle className="h-3 w-3 mr-1" />
-              ISO 27001 Certified
+              Security-first approach
             </Badge>
             <Badge variant="outline" className="border-blue-500/50 text-blue-400">
               <Lock className="h-3 w-3 mr-1" />
-              SOC 2 Compliant
+              Scope-led engagements
             </Badge>
             <Badge variant="outline" className="border-purple-500/50 text-purple-400">
               <Zap className="h-3 w-3 mr-1" />
-              24/7 Support
+              Transparent coverage
             </Badge>
           </div>
         </div>
@@ -250,7 +250,7 @@ const Services = () => {
                           <div>
                             <div className="font-semibold mb-1">Global Expertise</div>
                             <div className="text-sm text-muted-foreground">
-                              Team of certified experts with decades of combined experience
+                              Clear descriptions of current platform capabilities and their limits
                             </div>
                           </div>
                         </div>
@@ -259,7 +259,7 @@ const Services = () => {
                           <div>
                             <div className="font-semibold mb-1">Enterprise-Grade</div>
                             <div className="text-sm text-muted-foreground">
-                              Solutions trusted by Fortune 500 companies worldwide
+                              Security telemetry is limited to documented, trusted event sources
                             </div>
                           </div>
                         </div>
@@ -268,7 +268,7 @@ const Services = () => {
                           <div>
                             <div className="font-semibold mb-1">Cutting-Edge Tech</div>
                             <div className="text-sm text-muted-foreground">
-                              Latest tools and methodologies in cybersecurity
+                              Practical security workflows with clearly defined scope
                             </div>
                           </div>
                         </div>
@@ -277,7 +277,7 @@ const Services = () => {
                           <div>
                             <div className="font-semibold mb-1">Rapid Response</div>
                             <div className="text-sm text-muted-foreground">
-                              24/7 incident response team ready to act immediately
+                              Monitoring claims are limited to functionality currently implemented
                             </div>
                           </div>
                         </div>

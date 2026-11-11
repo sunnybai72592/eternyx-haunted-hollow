@@ -78,8 +78,8 @@ const ServicesHub: React.FC = () => {
       color: "cyan",
     },
     {
-      title: "24/7 Threat Monitoring",
-      description: "Round-the-clock security operations center monitoring your infrastructure with instant threat response.",
+      title: "Platform Security Monitoring",
+      description: "Review ETERNYX platform security telemetry from selected verified backend authorization checks.",
       icon: <Wifi className="h-8 w-8 text-red-500" />,
       link: "/threat-monitoring",
       color: "red",
