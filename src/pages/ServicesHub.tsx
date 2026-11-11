@@ -79,7 +79,7 @@ const ServicesHub: React.FC = () => {
     },
     {
       title: "Platform Security Monitoring",
-      description: "Review ETERNYX platform security telemetry from selected verified backend authorization checks."
+      description: "Review ETERNYX platform security telemetry from selected verified backend authorization checks.",
       icon: <Wifi className="h-8 w-8 text-red-500" />,
       link: "/threat-monitoring",
       color: "red",
