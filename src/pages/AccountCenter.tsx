@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowRight, Bell, Bug, ClipboardList, LifeBuoy, Settings, UserRound } from 'lucide-react';
+import { ArrowRight, Bell, Bug, ClipboardList, LifeBuoy, Settings, UserRound, ShieldCheck } from 'lucide-react';
 
 export default function AccountCenter() {
   const navigate = useNavigate();
@@ -13,14 +13,18 @@ export default function AccountCenter() {
   const [reportCount, setReportCount] = useState<number | null>(null);
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) navigate('/auth', { replace: true });
   }, [isLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setIsAdmin(false); return; }
     let active = true;
+    void supabase.rpc('is_admin').then(({ data, error }) => {
+      if (active) setIsAdmin(!error && data === true);
+    });
     const loadSummary = async () => {
       setDataLoading(true);
       const [reports, notifications] = await Promise.all([
@@ -48,6 +52,7 @@ export default function AccountCenter() {
     { title: 'Notifications', description: 'View messages and updates sent to your account.', href: '/notifications', icon: Bell },
     { title: 'My Bug Reports', description: 'Follow the status of issues you have submitted.', href: '/my-bug-reports', icon: Bug },
     { title: 'Help & Support', description: 'Find help or contact the ETERNYX team.', href: '/help', icon: LifeBuoy },
+    ...(isAdmin ? [{ title: 'Administrator Console', description: 'Review and manage submitted bug reports with trusted administrator access.', href: '/admin/bug-reports', icon: ShieldCheck }] : []),
   ];
 
   return (
@@ -59,7 +64,7 @@ export default function AccountCenter() {
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-sm text-primary">YOUR ETERNYX</p>
+            <p className="text-sm text-primary">{isAdmin ? 'ETERNYX · TRUSTED ADMINISTRATOR' : 'YOUR ETERNYX'}</p>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Account overview</h1>
             <p className="text-sm text-muted-foreground">{name} · {user?.email}</p>
           </div>
