@@ -166,6 +166,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
                 value={parameters.hostname || ''}
                 onChange={(e) => handleParameterChange('hostname', e.target.value)}
               />
+              <p className="mt-2 text-xs leading-5 text-amber-200/80">Only assess domains you own or are authorized to test. Qualys SSL Labs performs the assessment from its external infrastructure.</p>
             </div>
           </div>
         );
@@ -255,7 +256,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-lg bg-gray-800 p-4">
                 <div className="text-sm text-gray-400">Execution Time</div>
-                <div className="text-lg font-semibold text-white">{result.scan_duration || result.analysis_duration || 'N/A'}s</div>
+                <div className="text-lg font-semibold text-white">{result.analysis_time ?? result.scan_duration ?? result.analysis_duration ?? 'N/A'}s</div>
               </div>
               <div className="rounded-lg bg-gray-800 p-4">
                 <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : toolId === 'ssl-analyzer' ? 'SSL Labs grade' : 'Risk Score'}</div>
