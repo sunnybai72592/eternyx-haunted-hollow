@@ -10,15 +10,23 @@ import {
   Settings2, ShieldCheck, Sparkles, UserRound, Zap
 } from 'lucide-react';
 
+type LatestReport = {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+};
+
 type AccountSummary = {
   reports: number | null;
   unread: number | null;
+  latestReport: LatestReport | null;
 };
 
 export default function AccountCenter() {
   const navigate = useNavigate();
   const { user, profile, isAuthenticated, isLoading } = useAuthStore();
-  const [summary, setSummary] = useState<AccountSummary>({ reports: null, unread: null });
+  const [summary, setSummary] = useState<AccountSummary>({ reports: null, unread: null, latestReport: null });
   const [dataLoading, setDataLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -29,7 +37,7 @@ export default function AccountCenter() {
   useEffect(() => {
     if (!user) {
       setIsAdmin(false);
-      setSummary({ reports: null, unread: null });
+      setSummary({ reports: null, unread: null, latestReport: null });
       setDataLoading(false);
       return;
     }
@@ -38,10 +46,12 @@ export default function AccountCenter() {
     setDataLoading(true);
 
     const loadAccount = async () => {
-      const [admin, reports, notifications] = await Promise.all([
+      const [admin, reports, notifications, latestReport] = await Promise.all([
         supabase.rpc('is_admin'),
-        supabase.from('bug_reports').select('id', { count: 'exact', head: true }),
-        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('is_read', false),
+        // Scope account metrics explicitly to the signed-in user; never rely on RLS alone for presentation.
+        supabase.from('bug_reports').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+        supabase.from('bug_reports').select('id,title,status,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
 
       if (!active) return;
@@ -49,6 +59,7 @@ export default function AccountCenter() {
       setSummary({
         reports: reports.error ? null : reports.count ?? 0,
         unread: notifications.error ? null : notifications.count ?? 0,
+        latestReport: latestReport.error ? null : latestReport.data as LatestReport | null,
       });
       setDataLoading(false);
     };
@@ -62,6 +73,22 @@ export default function AccountCenter() {
   const joined = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
     : null;
+  const completionFields = [
+    profile?.full_name,
+    profile?.username,
+    profile?.bio,
+    profile?.avatar_url,
+    profile?.location,
+    profile?.job_title,
+  ];
+  const profileCompletion = Math.round((completionFields.filter((value) => typeof value === 'string' && value.trim().length > 0).length / completionFields.length) * 100);
+  const reportStatus = (status: string) => ({
+    open: 'Received',
+    triaged: 'Under review',
+    in_progress: 'In progress',
+    resolved: 'Resolved',
+    closed: 'Closed',
+  }[status] || 'Status update');
 
   const destinations = [
     { title: 'Profile & identity', description: 'Your personal details, profile image and public presence.', href: '/profile', icon: UserRound, eyebrow: 'IDENTITY', count: undefined },
@@ -156,6 +183,56 @@ export default function AccountCenter() {
             </div>
             <div className="rounded-xl border border-violet-200/15 bg-violet-200/[0.07] p-3 text-violet-200"><Bell className="h-5 w-5" /></div>
           </div>
+        </div>
+      </section>
+
+      <section className="mt-7 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Identity strength</p>
+              <h2 className="mt-2 text-lg font-semibold text-white">Profile completeness</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-400">A few details help make your ETERNYX identity more recognizable.</p>
+            </div>
+            <span className="text-2xl font-semibold tabular-nums text-cyan-100">{profileCompletion}%</span>
+          </div>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-label="Profile completeness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={profileCompletion}>
+            <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300 transition-[width] duration-500" style={{ width: `${profileCompletion}%` }} />
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-500">{completionFields.filter((value) => typeof value === 'string' && value.trim().length > 0).length} of 6 identity details added</span>
+            <Link to="/profile" className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-200 transition hover:text-white">Complete profile <ArrowRight className="h-3.5 w-3.5" /></Link>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-200/65">Support activity</p>
+              <h2 className="mt-2 text-lg font-semibold text-white">Latest bug report</h2>
+            </div>
+            <div className="rounded-xl border border-violet-200/15 bg-violet-200/[0.07] p-2.5 text-violet-200"><Bug className="h-5 w-5" /></div>
+          </div>
+          {dataLoading ? (
+            <p className="mt-5 text-sm text-slate-400">Loading your report activity…</p>
+          ) : summary.latestReport ? (
+            <div className="mt-4">
+              <p className="truncate text-sm font-semibold text-slate-100">{summary.latestReport.title}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-cyan-200/15 bg-cyan-200/[0.06] px-2.5 py-1 text-[10px] font-semibold text-cyan-100">{reportStatus(summary.latestReport.status)}</span>
+                <span className="text-[11px] text-slate-500">{new Date(summary.latestReport.created_at).toLocaleDateString()}</span>
+              </div>
+              <Link to="/my-bug-reports" className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-200 transition hover:text-white">Track all reports <ArrowRight className="h-3.5 w-3.5" /></Link>
+            </div>
+          ) : summary.reports === null ? (
+            <p className="mt-4 text-sm text-slate-400">Report activity is temporarily unavailable. You can still open your report history.</p>
+          ) : (
+            <div className="mt-4">
+              <p className="text-sm text-slate-300">No reports submitted yet.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">If you spot an issue, send it to the team and track progress here.</p>
+              <Link to="/bug-report" className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-200 transition hover:text-white">Submit a report <ArrowRight className="h-3.5 w-3.5" /></Link>
+            </div>
+          )}
         </div>
       </section>
 
