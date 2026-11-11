@@ -18,7 +18,8 @@ import {
   LogIn,
   UserPlus,
   Bot,
-  GraduationCap
+  GraduationCap,
+  Bug
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { AuthModal } from '@/components/AuthModal';
@@ -133,6 +134,13 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
       path: '/contact',
       icon: User,
       color: 'from-gray-400 to-slate-600',
+    },
+    {
+      id: 'report-bug',
+      name: 'Report a Bug',
+      path: '/bug-report',
+      icon: Bug,
+      color: 'from-rose-400 to-red-600',
     }
   ];
 
