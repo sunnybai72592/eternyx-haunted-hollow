@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -15,7 +16,9 @@ import {
   Settings, 
   LogOut, 
   Shield, 
-  Activity, 
+  Bell,
+  LayoutDashboard,
+  ClipboardList,
   Crown,
   Zap,
   ChevronDown
@@ -27,9 +30,13 @@ interface UserProfileProps {
 
 export const UserProfile = ({ className = '' }: UserProfileProps) => {
   const { user, profile, signOut } = useAuthStore();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
 
   if (!user || !profile) return null;
+
+  const displayName = profile.username || profile.full_name || user.email?.split('@')[0] || 'Member';
+  const accessLevel = profile.access_level || 'basic';
 
   const getAccessLevelIcon = (level: string) => {
     switch (level) {
@@ -68,21 +75,21 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
           >
             <div className="flex items-center space-x-3">
               <Avatar className="h-8 w-8 ring-2 ring-primary/50">
-                <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={profile?.username} />
+                <AvatarImage src={(profile as any)?.avatar_url || '/placeholder.svg'} alt={displayName} />
                 <AvatarFallback className="bg-primary/20 text-primary font-bold">
-                  {profile.username.slice(0, 2).toUpperCase()}
+                  {displayName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               
               <div className="hidden sm:flex flex-col items-start">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-semibold text-foreground">
-                    {profile.username}
+                    {displayName}
                   </span>
-                  {getAccessLevelIcon(profile.access_level)}
+                  {getAccessLevelIcon(accessLevel)}
                 </div>
-                <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
-                  {profile.access_level}
+                <span className={`text-xs ${getAccessLevelColor(accessLevel)} uppercase font-medium`}>
+                  {accessLevel}
                 </span>
               </div>
               
@@ -115,39 +122,33 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
                 </div>
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  {getAccessLevelIcon(profile.access_level)}
-                  <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
-                    {profile.access_level} ACCESS
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                  <Activity className="h-3 w-3" />
-                  <span>Online</span>
-                </div>
+              <div className="flex items-center space-x-2">
+                {getAccessLevelIcon(profile.access_level)}
+                <span className={`text-xs ${getAccessLevelColor(profile.access_level)} uppercase font-medium`}>
+                  {profile.access_level} ACCESS
+                </span>
               </div>
             </div>
           </DropdownMenuLabel>
           
           <DropdownMenuSeparator className="bg-border" />
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
-            <User className="mr-2 h-4 w-4" />
-            <span>Profile Settings</span>
+          <DropdownMenuItem onSelect={() => navigate('/account')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <LayoutDashboard className="mr-2 h-4 w-4" /><span>Account Overview</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/profile')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <User className="mr-2 h-4 w-4" /><span>My Profile</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/settings')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <Settings className="mr-2 h-4 w-4" /><span>Settings & Preferences</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/notifications')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <Bell className="mr-2 h-4 w-4" /><span>Notifications</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/my-bug-reports')} className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
+            <ClipboardList className="mr-2 h-4 w-4" /><span>My Bug Reports</span>
           </DropdownMenuItem>
           
-          <DropdownMenuItem className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Preferences</span>
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-primary/10 focus:bg-primary/10">
-            <Activity className="mr-2 h-4 w-4" />
-            <span>Activity Log</span>
-          </DropdownMenuItem>
-          
-          {profile.access_level === 'basic' && (
+          {accessLevel === 'basic' && (
             <>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem className="cursor-pointer hover:bg-blue-500/10 focus:bg-blue-500/10 text-blue-400">
