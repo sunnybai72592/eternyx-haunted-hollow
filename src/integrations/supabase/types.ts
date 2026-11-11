@@ -1998,6 +1998,22 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean },
       admin_update_bug_report_status: { Args: { p_report_id: string; p_status: string }; Returns: boolean }
+      admin_list_users: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string | null }
+        Returns: {
+          access_level: string
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          is_profile_public: boolean | null
+          job_title: string | null
+          location: string | null
+          profile_id: string
+          total_count: number
+          user_id: string
+          username: string | null
+        }[]
+      }
     }
     Enums: {
       access_level: "basic" | "premium" | "elite"
