@@ -168,7 +168,9 @@ export class SupabaseAPI {
     timeline?: string;
   }) {
     try {
-      const { data, error } = await supabase
+      // Public visitors are allowed to INSERT contact submissions, but RLS
+      // intentionally limits SELECT to admins. Do not request returned rows here.
+      const { error } = await supabase
         .from('contact_submissions')
         .insert([{
           name: formData.name,
@@ -181,13 +183,11 @@ export class SupabaseAPI {
           budget_range: formData.budget_range,
           timeline: formData.timeline,
           status: 'new',
-        }])
-        .select()
-        .single();
+        }]);
 
       if (error) throw error;
 
-      return { data, error: null };
+      return { data: null, error: null };
     } catch (error) {
       console.error('Supabase insert error:', error);
       return { data: null, error };
