@@ -17,36 +17,31 @@ class ToolExecutionService {
   private baseUrl = 'https://wcncuarekaofmfurbtbh.supabase.co/functions/v1';
 
   async executeVulnerabilityScanner(params: {
-    target_url: string;
-    scan_type: string;
-    user_id: string;
+    vendor?: string;
+    product: string;
+    version?: string;
   }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+      if (!session?.access_token) {
+        return { success: false, error: 'Your session has expired. Please sign in again.' };
+      }
+
       const response = await fetch(`${this.baseUrl}/vulnerability-scanner`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(params),
       });
 
       const result = await response.json();
-
       if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'Vulnerability scan failed',
-        };
+        return { success: false, error: result.error || 'CVE research failed' };
       }
 
-      return {
-        success: true,
-        data: result,
-        executionId: result.scan_id,
-      };
+      return { success: true, data: result, executionId: result.scan_id };
     } catch (error) {
       return {
         success: false,
@@ -63,150 +58,64 @@ class ToolExecutionService {
   }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await fetch(`${this.baseUrl}/port-scanner`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify(params),
       });
-
       const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'Port scan failed',
-        };
-      }
-
-      return {
-        success: true,
-        data: result,
-        executionId: result.scan_id,
-      };
+      if (!response.ok) return { success: false, error: result.error || 'Port scan failed' };
+      return { success: true, data: result, executionId: result.scan_id };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
   }
 
-  async executeSSLAnalyzer(params: {
-    hostname: string;
-    user_id: string;
-  }): Promise<ToolExecutionResult> {
+  async executeSSLAnalyzer(params: { hostname: string; user_id: string }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await fetch(`${this.baseUrl}/ssl-analyzer`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify(params),
       });
-
       const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'SSL analysis failed',
-        };
-      }
-
-      return {
-        success: true,
-        data: result,
-        executionId: result.analysis_id,
-      };
+      if (!response.ok) return { success: false, error: result.error || 'SSL analysis failed' };
+      return { success: true, data: result, executionId: result.analysis_id };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
   }
 
-  async executeWebScanner(params: {
-    target_url: string;
-    scan_depth?: number;
-    user_id: string;
-  }): Promise<ToolExecutionResult> {
+  async executeWebScanner(params: { target_url: string; scan_depth?: number; user_id: string }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await fetch(`${this.baseUrl}/web-scanner`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify(params),
       });
-
       const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'Web application scan failed',
-        };
-      }
-
-      return {
-        success: true,
-        data: result,
-        executionId: result.scan_id,
-      };
+      if (!response.ok) return { success: false, error: result.error || 'Web application scan failed' };
+      return { success: true, data: result, executionId: result.scan_id };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
   }
 
-  async executeDNSAnalyzer(params: {
-    domain: string;
-    user_id: string;
-  }): Promise<ToolExecutionResult> {
+  async executeDNSAnalyzer(params: { domain: string; user_id: string }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await fetch(`${this.baseUrl}/dns-analyzer`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify(params),
       });
-
       const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'DNS analysis failed',
-        };
-      }
-
-      return {
-        success: true,
-        data: result,
-        executionId: result.analysis_id,
-      };
+      if (!response.ok) return { success: false, error: result.error || 'DNS analysis failed' };
+      return { success: true, data: result, executionId: result.analysis_id };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
   }
 
@@ -218,23 +127,10 @@ class ToolExecutionService {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit);
-
-      if (error) {
-        return {
-          success: false,
-          error: error.message,
-        };
-      }
-
-      return {
-        success: true,
-        data: data || [],
-      };
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || [] };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
   }
 
@@ -242,32 +138,15 @@ class ToolExecutionService {
     try {
       const { data, error } = await supabase
         .from('vulnerability_scans')
-        .select(`
-          *,
-          vulnerability_details (*)
-        `)
+        .select(`*, vulnerability_details (*)`)
         .eq('id', executionId)
         .single();
-
-      if (error) {
-        return {
-          success: false,
-          error: error.message,
-        };
-      }
-
-      return {
-        success: true,
-        data,
-      };
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
   }
 }
 
 export const toolExecutionService = new ToolExecutionService();
-
