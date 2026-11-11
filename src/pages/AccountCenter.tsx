@@ -64,7 +64,7 @@ export default function AccountCenter() {
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-sm text-primary">{isAdmin ? 'ETERN YX · TRUSTED ADMINISTRATOR' : 'YOUR ETERNYX'}</p>
+            <p className="text-sm text-primary">{isAdmin ? 'ETERNYX · TRUSTED ADMINISTRATOR' : 'YOUR ETERNYX'}</p>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Account overview</h1>
             <p className="text-sm text-muted-foreground">{name} · {user?.email}</p>
           </div>
