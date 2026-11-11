@@ -228,7 +228,7 @@ const AppContent = () => {
                         <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                         <Route path="/help" element={<Help />} />
                         <Route path="/hacked" element={<Hacked />} />
-                        <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
+                        <Route path="/black-hat-pentesting" element={<RequireAuth><BlackHatPentesting /></RequireAuth>} />
                         <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
                         <Route path="/security-auditing" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
                         <Route path="/incident-response" element={<Navigate to="/cybersecurity/incident-playbooks" replace />} />
