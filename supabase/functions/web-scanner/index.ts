@@ -40,8 +40,12 @@ serve(async (req) => {
 
     const declaredLength = Number(req.headers.get('content-length') || 0)
     if (declaredLength > REQUEST_LIMIT) return json({ error: 'Request body is too large' }, 413)
-    const rawBody = await req.text()
-    if (rawBody.length > REQUEST_LIMIT) return json({ error: 'Request body is too large' }, 413)
+    let rawBody: string
+    try {
+      rawBody = await readRequestBody(req, REQUEST_LIMIT)
+    } catch {
+      return json({ error: 'Request body is too large' }, 413)
+    }
 
     let body: { target_url?: unknown }
     try { body = JSON.parse(rawBody) } catch { return json({ error: 'Request body must be valid JSON' }, 400) }
@@ -213,6 +217,34 @@ serve(async (req) => {
     return json({ error: 'Web configuration inspection failed. No vulnerability conclusion was produced.' }, 502)
   }
 })
+
+async function readRequestBody(req: Request, limit: number): Promise<string> {
+  if (!req.body) return ''
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > limit) {
+        await reader.cancel()
+        throw new Error('Request body exceeds limit')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(merged)
+}
 
 async function resolvePublicAddresses(hostname: string): Promise<{ ok: true; addresses: string[] } | { ok: false; error: string }> {
   const answers = await Promise.allSettled([Deno.resolveDns(hostname, 'A'), Deno.resolveDns(hostname, 'AAAA')])
