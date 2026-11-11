@@ -70,6 +70,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const AdminBugReports = lazy(() => import("./pages/AdminBugReports"));
 const AdminOverview = lazy(() => import("./pages/AdminOverview"));
 const AdminContactSubmissions = lazy(() => import("./pages/AdminContactSubmissions"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
@@ -258,6 +259,7 @@ const AppContent = () => {
                         <Route path="/admin" element={<AdminOverview />} />
                         <Route path="/admin/bug-reports" element={<AdminBugReports />} />
                         <Route path="/admin/enquiries" element={<AdminContactSubmissions />} />
+                        <Route path="/admin/users" element={<AdminUsers />} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
                         <Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />
