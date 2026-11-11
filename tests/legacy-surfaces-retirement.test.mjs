@@ -90,3 +90,18 @@ test('profile avatar upload and public URL use the provisioned storage bucket', 
   assert.match(uploader.replace(/\s+/g, ' '), /storage\s*\.from\('avatars'\)\s*\.getPublicUrl/);
   assert.doesNotMatch(uploader, /user-avatars/);
 });
+
+test('retired Black Hat Pentesting console is not shipped or advertised as an operational tool', async () => {
+  const app = await read('src/App.tsx');
+  const navigation = await read('src/components/UnifiedNavigation.tsx');
+  const servicesHub = await read('src/pages/ServicesHub.tsx');
+  const services = await read('src/pages/Services.tsx');
+
+  assert.match(app, /<Route path="\\/black-hat-pentesting" element={<Navigate to="\\/cybersecurity\\/assessment-remediation" replace \/>} \/>/);
+  assert.doesNotMatch(app, /import\\("\\.\\/pages\\/BlackHatPentesting"\\)/);
+  assert.doesNotMatch(navigation, /Black Hat Pentesting|\\/black-hat-pentesting/);
+  assert.match(navigation, /Assessment & Remediation/);
+  assert.doesNotMatch(servicesHub, /Black Hat Pentesting|\\/black-hat-pentesting/);
+  assert.match(servicesHub, /Assessment & Remediation/);
+  assert.doesNotMatch(services, /Black Hat Pentesting|\\/black-hat-pentesting|Social Engineering Assessments/);
+});
