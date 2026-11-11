@@ -51,13 +51,21 @@ test('legacy dashboard opens the account center while retired catalogue URLs res
   }
 });
 
-test('the retained public exposure check does not invent scan progress or capabilities', async () => {
+test('CVE research uses public NVD records and does not claim live target scanning', async () => {
   const scanner = await read('src/pages/VulnerabilityScanner.tsx');
+  const edgeFunction = await read('supabase/functions/vulnerability-scanner/index.ts');
+  const hub = await read('src/pages/CybersecurityHub.tsx');
 
-  assert.match(scanner, /toolExecutionService\.executeVulnerabilityScanner/);
-  assert.match(scanner, /Public CVE & HTTP Security Check/);
-  assert.match(scanner, /not a full vulnerability assessment/);
-  assert.doesNotMatch(scanner, /setInterval|setTimeout|Math\.random|Zero-Day Detection|Military-grade|AI-powered analysis/);
+  assert.match(scanner, /CVE Research Workbench/);
+  assert.match(scanner, /Candidate CVE references/);
+  assert.match(scanner, /keyword match is not a confirmed vulnerability/);
+  assert.match(edgeFunction, /services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0/);
+  assert.match(edgeFunction, /cpeMatch/);
+  assert.match(edgeFunction, /getUser\(\)/);
+  assert.match(edgeFunction, /cve-keyword-research/);
+  assert.doesNotMatch(edgeFunction, /fetch\(target_url|calculateRiskScore|cve\.circl\.lu/);
+  assert.doesNotMatch(scanner, /Risk Score|vulnerabilities_found|target_url/);
+  assert.match(hub, /Search public NVD CVE records by vendor, software product, and version/);
 });
 
 test('profile keeps real account management without fabricated arsenal progression', async () => {
