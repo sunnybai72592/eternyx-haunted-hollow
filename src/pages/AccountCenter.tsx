@@ -64,12 +64,12 @@ export default function AccountCenter() {
     : null;
 
   const destinations = [
-    { title: 'Profile & identity', description: 'Your personal details, profile image and public presence.', href: '/profile', icon: UserRound, eyebrow: 'IDENTITY' },
-    { title: 'Preferences', description: 'Tune notifications, appearance and account preferences.', href: '/settings', icon: Settings2, eyebrow: 'CONTROL' },
+    { title: 'Profile & identity', description: 'Your personal details, profile image and public presence.', href: '/profile', icon: UserRound, eyebrow: 'IDENTITY', count: undefined },
+    { title: 'Preferences', description: 'Tune notifications, appearance and account preferences.', href: '/settings', icon: Settings2, eyebrow: 'CONTROL', count: undefined },
     { title: 'Notifications', description: 'Keep up with important updates from your ETERNYX account.', href: '/notifications', icon: Bell, eyebrow: 'INBOX', count: summary.unread },
     { title: 'Bug reports', description: 'Follow the issues you have submitted and their progress.', href: '/my-bug-reports', icon: Bug, eyebrow: 'SUPPORT', count: summary.reports },
-    { title: 'Help & support', description: 'Find guidance or get in touch with the ETERNYX team.', href: '/help', icon: LifeBuoy, eyebrow: 'ASSISTANCE' },
-    ...(isAdmin ? [{ title: 'Administrator console', description: 'Review and manage reports with trusted administrator access.', href: '/admin/bug-reports', icon: ShieldCheck, eyebrow: 'ADMINISTRATION' }] : []),
+    { title: 'Help & support', description: 'Find guidance or get in touch with the ETERNYX team.', href: '/help', icon: LifeBuoy, eyebrow: 'ASSISTANCE', count: undefined },
+    ...(isAdmin ? [{ title: 'Administrator console', description: 'Review and manage reports with trusted administrator access.', href: '/admin/bug-reports', icon: ShieldCheck, eyebrow: 'ADMINISTRATION', count: undefined }] : []),
   ];
 
   if (isLoading || (!isAuthenticated && !user)) {
