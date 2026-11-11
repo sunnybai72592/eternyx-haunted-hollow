@@ -99,8 +99,8 @@ function inspectCriterion(configuration, vendor, product, version) {
   if (configuration.vulnerable !== true) {
     return { identity: "match", version: "not_vulnerable", reason: "NVD marks this related CPE as non-vulnerable.", cpe: configuration.cpe };
   }
-  const result = evaluateVersion(version, { ...configuration, parts });
-  return { identity: "match", ...result, cpe: configuration.cpe };
+  const assessment = evaluateVersion(version, { ...configuration, parts });
+  return { identity: "match", version: assessment.result, reason: assessment.reason, cpe: configuration.cpe };
 }
 
 /**
