@@ -1,10 +1,19 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @ts-ignore Deno resolves the shared JavaScript module at runtime.
+import {
+  collectSslLabsFindings,
+  deriveSslLabsChecks,
+  flattenProtocolSuites,
+} from "../_shared/ssl-labs-assessment.mjs";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const SSL_LABS_API = "https://api.ssllabs.com/api/v3/analyze";
+const MAX_POLL_ATTEMPTS = 12;
 
 interface SSLAnalysisRequest {
   hostname: string;
@@ -15,407 +24,280 @@ interface SSLResult {
   hasWarnings: boolean;
   isExceptional: boolean;
   progress: number;
-  endpoints: SSLEndpoint[];
-  certificates: SSLCertificate[];
-  protocols: SSLProtocol[];
-  suites: SSLSuite[];
+  endpoints: any[];
+  certificates: any[];
+  protocols: any[];
+  suites: any[];
   serverSignature: string;
   prefixDelegation: boolean;
   nonPrefixDelegation: boolean;
-  vulnerabilities: SSLVulnerability[];
+  vulnerabilities: Array<{
+    id: string;
+    name: string;
+    severity: string;
+    description: string;
+  }>;
 }
 
-interface SSLEndpoint {
-  ipAddress: string;
-  serverName: string;
-  statusMessage: string;
-  grade: string;
-  gradeTrustIgnored: string;
-  hasWarnings: boolean;
-  isExceptional: boolean;
-  progress: number;
-  duration: number;
-  eta: number;
-}
-
-interface SSLCertificate {
-  subject: string;
-  commonNames: string[];
-  altNames: string[];
-  notBefore: number;
-  notAfter: number;
-  issuerSubject: string;
-  sigAlg: string;
-  issuerLabel: string;
-  revocationInfo: number;
-  crlURIs: string[];
-  ocspURIs: string[];
-  keyAlg: string;
-  keySize: number;
-  keyStrength: number;
-  keyKnownDebianInsecure: boolean;
-  raw: string;
-}
-
-interface SSLProtocol {
-  id: number;
-  name: string;
-  version: string;
-  v2SuitesDisabled: boolean;
-  errorMessage: string;
-}
-
-interface SSLSuite {
-  id: number;
-  name: string;
-  cipherStrength: number;
-  dhStrength: number;
-  dhP: number;
-  dhG: number;
-  dhYs: number;
-  ecdhBits: number;
-  ecdhStrength: number;
-}
-
-interface SSLVulnerability {
-  id: string;
-  name: string;
-  severity: string;
-  description: string;
+class SSLLabsApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "SSLLabsApiError";
+    this.status = status;
+  }
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: corsHeaders })
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
+
+  const authorization = req.headers.get("Authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    return jsonResponse({ error: "Authentication required" }, 401);
+  }
 
   try {
-    const authorization = req.headers.get('Authorization')
-    if (!authorization?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: authorization } } },
-    )
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    );
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: "Invalid or expired session" }, 401);
     }
 
-    const { hostname }: SSLAnalysisRequest = await req.json()
-    const normalizedHostname = validatePublicHostname(hostname)
-    const user_id = user.id
-
-    if (!normalizedHostname) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    let body: SSLAnalysisRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Request body must be valid JSON." }, 400);
     }
 
-    const startTime = Date.now()
+    const hostname = validatePublicHostname(body?.hostname);
+    if (!hostname) {
+      return jsonResponse({
+        error: "Enter a valid public DNS hostname, such as example.com. URLs, IP addresses and local hostnames are not accepted.",
+      }, 400);
+    }
 
-    // SSL Labs performs the remote TLS assessment. Do not fetch user-supplied hosts
-    // from this function: that would create an SSRF path from the Edge Runtime.
-    const sslResult = await performSSLAnalysis(normalizedHostname)
-    const additionalChecks = performAdditionalSSLChecks(sslResult)
-    
-    const analysisTime = Math.floor((Date.now() - startTime) / 1000)
+    const startedAt = Date.now();
+    // The target is assessed by Qualys infrastructure. This function never
+    // opens a connection to a user-supplied host, avoiding a direct SSRF path.
+    const sslResult = await performSSLAnalysis(hostname);
+    const readyEndpoint = sslResult.endpoints.find((endpoint) => endpoint.statusMessage === "Ready");
+    const additionalChecks = deriveSslLabsChecks(readyEndpoint, sslResult.certificates);
+    const analysisTime = Math.floor((Date.now() - startedAt) / 1000);
+    const recommendations = generateSSLRecommendations(sslResult, additionalChecks);
 
-    // Calculate overall security score
-    const securityScore = calculateSSLSecurityScore(sslResult, additionalChecks)
-
-    // Store analysis results in database
     const { data: analysisData, error: analysisError } = await supabaseClient
-      .from('ai_security_analysis')
+      .from("ai_security_analysis")
       .insert({
-        user_id,
-        analysis_type: 'ssl_analysis',
+        user_id: user.id,
+        analysis_type: "ssl_analysis",
         input_data: {
-          hostname: normalizedHostname,
-          timestamp: new Date().toISOString()
+          hostname,
+          timestamp: new Date().toISOString(),
         },
         results: {
+          source: "Qualys SSL Labs API v3",
           ssl_labs_result: sslResult,
           additional_checks: additionalChecks,
-          security_score: securityScore,
+          security_score: null,
           analysis_duration: analysisTime,
           summary: {
             overall_grade: sslResult.grade,
+            assessed_endpoints: sslResult.endpoints.filter((endpoint) => endpoint.statusMessage === "Ready").length,
+            total_endpoints: sslResult.endpoints.length,
             has_warnings: sslResult.hasWarnings,
-            certificate_valid: additionalChecks.certificate_valid,
-            supports_tls13: additionalChecks.supports_tls13,
-            hsts_enabled: additionalChecks.hsts_enabled,
-            vulnerabilities_found: sslResult.vulnerabilities?.length || 0
-          }
+            vulnerabilities_found: sslResult.vulnerabilities.length,
+          },
         },
-        confidence_score: securityScore / 100,
-        processing_time: analysisTime * 1000
+        // SSL Labs supplies a grade, not a statistical confidence score.
+        confidence_score: null,
+        processing_time: analysisTime * 1000,
       })
-      .select()
-      .single()
+      .select("id")
+      .single();
 
-    if (analysisError) {
-      throw analysisError
-    }
+    if (analysisError) throw analysisError;
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        analysis_id: analysisData.id,
-        hostname: normalizedHostname,
-        overall_grade: sslResult.grade,
-        security_score: securityScore,
-        analysis_time: analysisTime,
-        ssl_result: sslResult,
-        additional_checks: additionalChecks,
-        recommendations: generateSSLRecommendations(sslResult, additionalChecks)
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-
+    return jsonResponse({
+      success: true,
+      analysis_id: analysisData.id,
+      hostname,
+      source: "Qualys SSL Labs API v3",
+      overall_grade: sslResult.grade,
+      security_score: null,
+      analysis_time: analysisTime,
+      ssl_result: sslResult,
+      additional_checks: additionalChecks,
+      recommendations,
+      coverage_limitations: [
+        "Qualys SSL Labs performs the TLS assessment from its own external infrastructure; results may differ from a specific client network path.",
+        "Only endpoints whose individual assessment status is Ready are used to derive protocol and vulnerability findings. Other endpoint statuses remain visible in the returned endpoint list.",
+        "Unknown checks are reported as unknown, not as absent or insecure. This assessment does not independently crawl the site or test application-layer vulnerabilities.",
+      ],
+    });
   } catch (error) {
-    console.error('SSL analyzer error:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        details: 'The SSL/TLS assessment could not be completed.' 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    console.error("SSL analyzer error:", error);
+    if (error instanceof SSLLabsApiError) {
+      return jsonResponse({ error: error.message }, error.status);
+    }
+    return jsonResponse({
+      error: "The SSL/TLS assessment could not be completed. Please try again later.",
+    }, 500);
   }
-})
+});
+
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function requestSslLabs(hostname: string, startNew = false): Promise<any> {
+  const url = new URL(SSL_LABS_API);
+  url.searchParams.set("host", hostname);
+  url.searchParams.set("all", "done");
+  if (startNew) url.searchParams.set("startNew", "on");
+
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  } catch {
+    throw new SSLLabsApiError("Qualys SSL Labs could not be reached. Please retry later.", 502);
+  }
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      throw new SSLLabsApiError("Qualys SSL Labs rate limit reached. Please wait before starting another assessment.", 429);
+    }
+    if (response.status === 503 || response.status === 529) {
+      throw new SSLLabsApiError("Qualys SSL Labs is temporarily unavailable or overloaded. Please retry later.", 503);
+    }
+    throw new SSLLabsApiError("Qualys SSL Labs rejected or could not process the assessment request.", 502);
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    throw new SSLLabsApiError("Qualys SSL Labs returned an unreadable assessment response.", 502);
+  }
+}
 
 async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
-  try {
-    // Start SSL Labs analysis
-    const startResponse = await fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(hostname)}&startNew=on&all=done`)
-    
-    if (!startResponse.ok) {
-      throw new Error('Failed to start SSL Labs analysis')
-    }
+  // startNew is used once only. Polling requests must not restart the assessment.
+  let analysisData = await requestSslLabs(hostname, true);
+  let attempts = 0;
 
-    let analysisData = await startResponse.json()
-
-    // Poll for results (SSL Labs analysis can take time)
-    let attempts = 0
-    const maxAttempts = 12 // Bound request duration to approximately one minute
-
-    while (analysisData.status !== 'READY' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
-      
-      const pollResponse = await fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(hostname)}&all=done`)
-      if (pollResponse.ok) {
-        analysisData = await pollResponse.json()
-      }
-      
-      attempts++
-    }
-
-    if (analysisData.status !== 'READY' || !analysisData.endpoints?.length) {
-      throw new Error('SSL Labs assessment is not ready or returned no endpoint; retry later.')
-    }
-
-    // Process SSL Labs results
-    const vulnerabilities: SSLVulnerability[] = []
-    
-    if (analysisData.endpoints && analysisData.endpoints.length > 0) {
-      const endpoint = analysisData.endpoints[0]
-      
-      // Check for common SSL vulnerabilities
-      if (endpoint.details) {
-        const details = endpoint.details
-        
-        // Check for weak protocols
-        if (details.protocols) {
-          details.protocols.forEach((protocol: any) => {
-            if (protocol.name === 'SSL' || (protocol.name === 'TLS' && protocol.version === '1.0')) {
-              vulnerabilities.push({
-                id: 'WEAK_PROTOCOL',
-                name: 'Weak Protocol Support',
-                severity: 'medium',
-                description: `Supports weak protocol: ${protocol.name} ${protocol.version}`
-              })
-            }
-          })
-        }
-
-        // Check for weak cipher suites
-        if (details.suites && details.suites.list) {
-          const weakCiphers = details.suites.list.filter((suite: any) => 
-            suite.cipherStrength < 128 || suite.name.includes('RC4') || suite.name.includes('DES')
-          )
-          
-          if (weakCiphers.length > 0) {
-            vulnerabilities.push({
-              id: 'WEAK_CIPHER',
-              name: 'Weak Cipher Suites',
-              severity: 'high',
-              description: `${weakCiphers.length} weak cipher suites detected`
-            })
-          }
-        }
-
-        // Check certificate issues
-        if (details.cert) {
-          const cert = details.cert
-          const now = Date.now()
-          const notAfter = cert.notAfter > 1e12 ? cert.notAfter : cert.notAfter * 1000
-          const daysUntilExpiry = Math.floor((notAfter - now) / (1000 * 60 * 60 * 24))
-          
-          if (daysUntilExpiry < 30) {
-            vulnerabilities.push({
-              id: 'CERT_EXPIRING',
-              name: 'Certificate Expiring Soon',
-              severity: daysUntilExpiry < 7 ? 'high' : 'medium',
-              description: `Certificate expires in ${daysUntilExpiry} days`
-            })
-          }
-        }
-      }
-    }
-
-    return {
-      grade: analysisData.endpoints?.[0]?.grade || 'T',
-      hasWarnings: analysisData.endpoints?.[0]?.hasWarnings || false,
-      isExceptional: analysisData.endpoints?.[0]?.isExceptional || false,
-      progress: analysisData.endpoints?.[0]?.progress || 100,
-      endpoints: analysisData.endpoints || [],
-      certificates: analysisData.certs || [],
-      protocols: analysisData.endpoints?.[0]?.details?.protocols || [],
-      suites: analysisData.endpoints?.[0]?.details?.suites?.list || [],
-      serverSignature: analysisData.endpoints?.[0]?.serverSignature || '',
-      prefixDelegation: analysisData.endpoints?.[0]?.prefixDelegation || false,
-      nonPrefixDelegation: analysisData.endpoints?.[0]?.nonPrefixDelegation || false,
-      vulnerabilities
-    }
-
-  } catch (error) {
-    console.error('SSL Labs API error:', error)
-    throw new Error('SSL Labs assessment failed; no result was generated.')
+  while (analysisData.status !== "READY" && analysisData.status !== "ERROR" && attempts < MAX_POLL_ATTEMPTS) {
+    const delayMs = analysisData.status === "IN_PROGRESS" ? 10000 : 5000;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    analysisData = await requestSslLabs(hostname);
+    attempts += 1;
   }
-}
 
-function performAdditionalSSLChecks(sslResult: SSLResult): Record<string, boolean | null> {
-  const certificate = sslResult.certificates?.[0] as any
-  const now = Date.now()
-  const notBefore = certificate?.notBefore > 1e12 ? certificate.notBefore : (certificate?.notBefore ? certificate.notBefore * 1000 : null)
-  const notAfter = certificate?.notAfter > 1e12 ? certificate.notAfter : (certificate?.notAfter ? certificate.notAfter * 1000 : null)
-  const certificateValid = notBefore && notAfter ? now >= notBefore && now <= notAfter : null
-  const supportsTls13 = sslResult.protocols.length > 0
-    ? sslResult.protocols.some((protocol) => protocol.name === 'TLS' && protocol.version === '1.3')
-    : null
-  const perfectForwardSecrecy = sslResult.suites.length > 0
-    ? sslResult.suites.every((suite) => suite.dhStrength > 0 || suite.ecdhBits > 0)
-    : null
+  if (analysisData.status === "ERROR") {
+    throw new SSLLabsApiError("Qualys SSL Labs could not complete this hostname assessment. Check the hostname and retry later.", 422);
+  }
+  if (analysisData.status !== "READY") {
+    throw new SSLLabsApiError("The SSL Labs assessment is still running. Please retry in a little while; no partial grade was saved.", 202);
+  }
+
+  const endpoints = Array.isArray(analysisData.endpoints) ? analysisData.endpoints : [];
+  const readyEndpoints = endpoints.filter((endpoint: any) =>
+    endpoint?.statusMessage === "Ready" && endpoint?.details,
+  );
+  if (readyEndpoints.length === 0) {
+    throw new SSLLabsApiError("SSL Labs completed the host request but did not return a successfully assessed endpoint.", 422);
+  }
+
+  const gradeOrder: Record<string, number> = {
+    "A+": 0, "A": 1, "A-": 2, "B": 3, "C": 4, "D": 5, "E": 6, "F": 7, "T": 8, "M": 9,
+  };
+  const grades = readyEndpoints
+    .map((endpoint: any) => endpoint.grade)
+    .filter((grade: unknown): grade is string => typeof grade === "string" && grade in gradeOrder);
+  const grade = grades.length > 0
+    ? grades.reduce((worst, current) => gradeOrder[current] > gradeOrder[worst] ? current : worst)
+    : "N/A";
+  const certificates = Array.isArray(analysisData.certs) ? analysisData.certs : [];
+  const protocols = readyEndpoints.flatMap((endpoint: any) =>
+    Array.isArray(endpoint.details.protocols) ? endpoint.details.protocols : [],
+  );
+  const suites = readyEndpoints.flatMap((endpoint: any) =>
+    flattenProtocolSuites(endpoint.details.suites),
+  );
 
   return {
-    certificate_valid: certificateValid,
-    supports_tls13: supportsTls13,
-    // These require an HTTP response or a dedicated certificate-status check.
-    // SSL Labs' TLS protocol response alone does not establish them.
-    hsts_enabled: null,
-    certificate_transparency: null,
-    ocsp_stapling: null,
-    perfect_forward_secrecy: perfectForwardSecrecy,
-    certificate_chain_valid: null,
-  }
+    grade,
+    hasWarnings: readyEndpoints.some((endpoint: any) => endpoint.hasWarnings === true),
+    isExceptional: readyEndpoints.some((endpoint: any) => endpoint.isExceptional === true),
+    progress: 100,
+    endpoints,
+    certificates,
+    protocols,
+    suites,
+    serverSignature: readyEndpoints.map((endpoint: any) => endpoint.details.serverSignature).find(Boolean) ?? "",
+    prefixDelegation: readyEndpoints.some((endpoint: any) => endpoint.details.prefixDelegation === true),
+    nonPrefixDelegation: readyEndpoints.some((endpoint: any) => endpoint.details.nonPrefixDelegation === true),
+    vulnerabilities: collectSslLabsFindings(readyEndpoints, certificates),
+  };
 }
 
-function validatePublicHostname(input: string): string | null {
-  if (typeof input !== 'string') return null
-  const hostname = input.trim().toLowerCase().replace(/\.$/, '')
-  if (!hostname || hostname.length > 253 || hostname.includes('://') || /[\/@?#:\s\\]/.test(hostname)) return null
-  if (hostname === 'localhost' || hostname.endsWith('.localhost') ||
-      hostname.endsWith('.local') || hostname.endsWith('.internal') ||
-      hostname.endsWith('.test') || hostname.endsWith('.example') ||
-      hostname.endsWith('.invalid')) return null
+function validatePublicHostname(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const hostname = input.trim().toLowerCase().replace(/\.$/, "");
+  if (!hostname || hostname.length > 253 || hostname.includes("://") || /[\/@?#:\s\\]/.test(hostname)) return null;
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".internal") ||
+    hostname.endsWith(".test") ||
+    hostname.endsWith(".example") ||
+    hostname.endsWith(".invalid")
+  ) return null;
   // Accept DNS names only. IP literals (including IPv6) are deliberately rejected.
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':')) return null
-  const labels = hostname.split('.')
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":")) return null;
+  const labels = hostname.split(".");
   if (labels.length < 2 || labels.some((label) =>
     label.length < 1 || label.length > 63 ||
     !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
-  )) return null
-  return hostname
+  )) return null;
+  return hostname;
 }
 
-function calculateSSLSecurityScore(sslResult: SSLResult, additionalChecks: any): number {
-  let score = 0
-
-  // Base score from SSL Labs grade
-  const gradeScores: { [key: string]: number } = {
-    'A+': 95,
-    'A': 90,
-    'A-': 85,
-    'B': 75,
-    'C': 60,
-    'D': 40,
-    'E': 20,
-    'F': 10,
-    'T': 5
+function generateSSLRecommendations(
+  sslResult: SSLResult,
+  additionalChecks: Record<string, boolean | null>,
+): string[] {
+  const recommendations: string[] = [];
+  if (["F", "T", "M"].includes(sslResult.grade)) {
+    recommendations.push("Review the SSL Labs endpoint details and certificate trust or hostname findings before considering the service secure.");
   }
-
-  score = gradeScores[sslResult.grade] || 0
-
-  // Bonus points for additional security features
-  if (additionalChecks.supports_tls13) score += 5
-  if (additionalChecks.hsts_enabled) score += 3
-  if (additionalChecks.certificate_transparency) score += 2
-  if (additionalChecks.ocsp_stapling) score += 2
-  if (additionalChecks.perfect_forward_secrecy) score += 3
-
-  // Deduct points for vulnerabilities
-  if (sslResult.vulnerabilities) {
-    sslResult.vulnerabilities.forEach(vuln => {
-      switch (vuln.severity) {
-        case 'high': score -= 10; break
-        case 'medium': score -= 5; break
-        case 'low': score -= 2; break
-      }
-    })
-  }
-
-  return Math.max(0, Math.min(100, score))
-}
-
-function generateSSLRecommendations(sslResult: SSLResult, additionalChecks: any): string[] {
-  const recommendations: string[] = []
-
-  if (sslResult.grade === 'F' || sslResult.grade === 'T') {
-    recommendations.push('Critical: SSL/TLS configuration has serious security issues that need immediate attention')
-  }
-
   if (additionalChecks.supports_tls13 === false) {
-    recommendations.push('Enable TLS 1.3 support for improved security and performance')
+    recommendations.push("Consider enabling TLS 1.3 while retaining only protocols required for compatibility.");
   }
-
   if (additionalChecks.hsts_enabled === false) {
-    recommendations.push('Implement HTTP Strict Transport Security (HSTS) headers')
+    recommendations.push("Review the site's HSTS policy and enable it where HTTPS is enforced across the intended domain scope.");
   }
-
   if (additionalChecks.certificate_transparency === false) {
-    recommendations.push('Enable Certificate Transparency monitoring')
+    recommendations.push("Review certificate transparency logging and ensure certificates are issued with the expected SCT evidence.");
   }
-
-  if (sslResult.vulnerabilities && sslResult.vulnerabilities.length > 0) {
-    recommendations.push(`Address ${sslResult.vulnerabilities.length} SSL/TLS vulnerabilities found`)
+  if (additionalChecks.ocsp_stapling === false) {
+    recommendations.push("Consider enabling OCSP stapling where supported by the certificate and server platform.");
   }
-
+  if (sslResult.vulnerabilities.length > 0) {
+    recommendations.push(`Review and remediate the ${sslResult.vulnerabilities.length} issue(s) reported by SSL Labs.`);
+  }
   if (recommendations.length === 0) {
-    recommendations.push('SSL/TLS configuration appears to be well-configured')
+    recommendations.push("No actionable issues were identified in the returned SSL Labs assessment data. This is not a guarantee that the host is free of security weaknesses.");
   }
-
-  return recommendations
+  return recommendations;
 }
-
