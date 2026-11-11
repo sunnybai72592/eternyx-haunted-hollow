@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,9 +37,9 @@ interface ConversationSession {
 
 const EternixAI: React.FC = () => {
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user: authUser, isLoading: isAuthLoading } = useAuthStore();
+  const isAuthenticated = !!authUser;
+  const userId = authUser?.id ?? null;
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -49,63 +50,19 @@ const EternixAI: React.FC = () => {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Restore the existing session before deciding whether to redirect.
-  // Redirecting while this async check is pending incorrectly sends signed-in users home.
+  // The global auth store is the single source of truth for session restoration.
+  // This page must not create another auth listener or independently call getSession().
   useEffect(() => {
-    let isMounted = true;
+    if (isAuthLoading) return;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isMounted) return;
+    if (!authUser) {
+      navigate('/login?redirect=%2Feternyx-ai', { replace: true });
+      return;
+    }
 
-      if (session?.user) {
-        setUserId(session.user.id);
-        setIsAuthenticated(true);
-        setIsAuthLoading(false);
-        loadDocuments(session.user.id);
-        loadSessions(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        setUserId(null);
-        setIsAuthenticated(false);
-        setIsAuthLoading(false);
-        navigate('/login?redirect=%2Feternyx-ai', { replace: true });
-      }
-    });
-
-    const restoreSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (!isMounted) return;
-
-        if (session?.user) {
-          setUserId(session.user.id);
-          setIsAuthenticated(true);
-          loadDocuments(session.user.id);
-          loadSessions(session.user.id);
-        } else {
-          setUserId(null);
-          setIsAuthenticated(false);
-          navigate('/login?redirect=%2Feternyx-ai', { replace: true });
-        }
-      } catch (error) {
-        if (!isMounted) return;
-        console.error('Unable to restore the Eternyx AI session:', error);
-        toast.error('We could not verify your session. Please sign in again.');
-        setUserId(null);
-        setIsAuthenticated(false);
-        navigate('/login?redirect=%2Feternyx-ai', { replace: true });
-      } finally {
-        if (isMounted) setIsAuthLoading(false);
-      }
-    };
-
-    void restoreSession();
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
+    loadDocuments(authUser.id);
+    loadSessions(authUser.id);
+  }, [authUser?.id, isAuthLoading, navigate]);
 
   // Auto-scroll to bottom
   useEffect(() => {
