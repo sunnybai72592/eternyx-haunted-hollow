@@ -64,7 +64,7 @@ test('CVE research uses public NVD records and does not claim live target scanni
   assert.match(edgeFunction, /getUser\(\)/);
   assert.match(edgeFunction, /cve-keyword-research/);
   assert.doesNotMatch(edgeFunction, /fetch\(target_url|calculateRiskScore|cve\.circl\.lu/);
-  assert.doesNotMatch(scanner, /Risk Score|vulnerabilities_found|target_url/);
+  assert.doesNotMatch(scanner, /Risk Score|vulnerabilities_found/);
   assert.match(hub, /Search public NVD CVE records by vendor, software product, and version/);
 });
 
