@@ -108,7 +108,7 @@ export const UnifiedNavigation = ({ className = '' }: NavigationProps) => {
         { name: 'Zero-Day Protection', path: '/zero-day-protection', description: 'Advanced vulnerability shields' },
         { name: 'Quantum Encryption', path: '/quantum-encryption', description: 'Unbreakable data protection' },
         { name: 'AI Security', path: '/ai-powered-security', description: 'Machine learning defense' },
-        { name: 'Black Hat Pentesting', path: '/black-hat-pentesting', description: 'Ethical hacking tools', level: 20 }
+        { name: 'Assessment & Remediation', path: '/cybersecurity/assessment-remediation', description: 'Track evidence, findings, and remediation' }
       ]
     },
     { 

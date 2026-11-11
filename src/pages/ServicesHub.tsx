@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TypingText } from '@/components/TypingText';
 import { MobileViewport } from '@/components/MobileViewport';
 import {
-  Shield, Code, Lightbulb, Skull, AlertTriangle, Gem, Eye, Wifi, Database, Cloud, Zap, Brain, Rocket, Cpu, Globe, Smartphone, Server
+  Shield, Code, Lightbulb, AlertTriangle, Gem, Eye, Wifi, Database, Cloud, Zap, Brain, Rocket, Cpu, Globe, Smartphone, Server
 } from 'lucide-react';
 
 interface ServiceCardProps {
@@ -43,10 +43,10 @@ const ServicesHub: React.FC = () => {
 
   const cybersecurityServices = [
     {
-      title: "Black Hat Pentesting",
-      description: "Advanced penetration testing using cutting-edge techniques. We think like attackers to protect your systems from real threats.",
-      icon: <Skull className="h-8 w-8 text-green-500" />,
-      link: "/black-hat-pentesting",
+      title: "Assessment & Remediation",
+      description: "Organize security findings, supporting evidence, ownership, severity, and remediation validation.",
+      icon: <Shield className="h-8 w-8 text-green-500" />,
+      link: "/cybersecurity/assessment-remediation",
       color: "green",
     },
     {
