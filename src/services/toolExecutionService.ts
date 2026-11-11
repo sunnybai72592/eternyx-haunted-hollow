@@ -66,15 +66,17 @@ class ToolExecutionService {
   async executePortScanner(params: {
     target: string;
     ports?: number[];
-    scan_type: string;
-    user_id: string;
+    user_id?: string;
   }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        return { success: false, error: 'Your session has expired. Please sign in again.' };
+      }
       const response = await fetch(`${this.baseUrl}/port-scanner`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify(params),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ target: params.target, ports: params.ports }),
       });
       const result = await response.json();
       if (!response.ok) return { success: false, error: result.error || 'Port scan failed' };
