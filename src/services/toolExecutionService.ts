@@ -66,7 +66,6 @@ class ToolExecutionService {
   async executePortScanner(params: {
     target: string;
     ports?: number[];
-    user_id?: string;
   }): Promise<ToolExecutionResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -80,7 +79,7 @@ class ToolExecutionService {
       });
       const result = await response.json();
       if (!response.ok) return { success: false, error: result.error || 'Port scan failed' };
-      return { success: true, data: result, executionId: result.scan_id };
+      return { success: true, data: result, executionId: result.lookup_id || result.scan_id };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
