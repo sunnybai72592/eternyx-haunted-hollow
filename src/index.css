@@ -741,3 +741,28 @@ All colors MUST be HSL.
   }
 }
 
+
+
+/* ETERNYX account appearance: the selected theme is applied at the document root. */
+html[data-eter-theme="matrix"] {
+  --background: 145 45% 4%;
+  --foreground: 142 70% 88%;
+  --card: 145 40% 7%;
+  --card-foreground: 142 70% 88%;
+  --popover: 145 40% 6%;
+  --popover-foreground: 142 70% 88%;
+  --primary: 142 71% 45%;
+  --primary-foreground: 145 50% 4%;
+  --secondary: 155 38% 15%;
+  --secondary-foreground: 142 70% 88%;
+  --muted: 145 28% 12%;
+  --muted-foreground: 142 22% 62%;
+  --accent: 142 71% 35%;
+  --accent-foreground: 145 50% 4%;
+  --border: 145 38% 18%;
+  --input: 145 38% 9%;
+  --ring: 142 71% 45%;
+  --cyber-cyan: 142 71% 45%;
+  --cyber-pink: 160 55% 35%;
+  --cyber-green: 142 71% 45%;
+}
