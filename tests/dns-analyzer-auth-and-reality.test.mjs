@@ -36,6 +36,9 @@ test("DNS analyzer discloses checks outside its actual coverage", async () => {
   assert.match(source, /DNS cache-poisoning resistance is not tested/);
   assert.match(source, /default\._domainkey selector/);
   assert.match(source, /not a full DNSSEC validation/);
+  assert.match(source, /ds_record_present: false/);
+  assert.match(source, /default_dkim_selector_found: false/);
+  assert.match(source, /No issues were detected by the checks completed/);
   assert.match(source, /coverage_limitations: coverageLimitations/);
   assert.doesNotMatch(source, /confidence_score: 0\.95/);
 });
