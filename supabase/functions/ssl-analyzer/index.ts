@@ -13,7 +13,7 @@ const corsHeaders = {
 };
 
 const SSL_LABS_API = "https://api.ssllabs.com/api/v3/analyze";
-const MAX_POLL_ATTEMPTS = 12;
+const MAX_POLL_ATTEMPTS = 8;
 
 interface SSLAnalysisRequest {
   hostname: string;
@@ -168,7 +168,7 @@ async function requestSslLabs(hostname: string, startNew = false): Promise<any> 
 
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    response = await fetch(url, { signal: AbortSignal.timeout(8000) });
   } catch {
     throw new SSLLabsApiError("Qualys SSL Labs could not be reached. Please retry later.", 502);
   }
