@@ -32,10 +32,10 @@ test('retired legacy dashboard and fake tool engine are no longer shipped', asyn
   }
 });
 
-test('legacy dashboard and catalogue URLs resolve to the real Explore surface', async () => {
+test('legacy dashboard opens the account center while retired catalogue URLs resolve to Explore', async () => {
   const app = await read('src/App.tsx');
 
-  assert.match(app, /<Route path="\/dashboard" element={<Navigate to="\/explore" replace \/>} \/>/);
+  assert.match(app, /<Route path="\/dashboard" element={<Navigate to="\/account" replace \/>} \/>/);
   assert.match(app, /<Route path="\/tools" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.match(app, /<Route path="\/tools\/category\/:categoryId" element={<Navigate to="\/explore" replace \/>} \/>/);
   assert.ok(app.includes('<Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />'));
