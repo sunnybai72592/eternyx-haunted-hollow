@@ -20,7 +20,9 @@ import {
   Bot,
   GraduationCap,
   Bug,
-  ClipboardList
+  ClipboardList,
+  Bell,
+  Settings
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { AuthModal } from '@/components/AuthModal';
@@ -125,7 +127,7 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
     {
       id: 'dashboard',
       name: 'Dashboard',
-      path: '/dashboard',
+      path: '/account',
       icon: LayoutDashboard,
       color: 'from-indigo-400 to-purple-600',
     },
@@ -295,13 +297,17 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button
-                  onClick={handleProfileClick}
-                  variant="ghost"
-                  className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  Profile
+                <Button onClick={() => handleNavigation('/account', 'Account')} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                  <LayoutDashboard className="w-4 h-4 mr-2" />Account
+                </Button>
+                <Button onClick={handleProfileClick} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                  <User className="w-4 h-4 mr-2" />Profile
+                </Button>
+                <Button onClick={() => handleNavigation('/notifications', 'Notifications')} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                  <Bell className="w-4 h-4 mr-2" />Notifications
+                </Button>
+                <Button onClick={() => handleNavigation('/settings', 'Settings')} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                  <Settings className="w-4 h-4 mr-2" />Settings
                 </Button>
                 <Button
                   onClick={handleSignOut}
@@ -353,13 +359,17 @@ export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) 
                 </div>
               ) : (
                 <div className="space-y-2 pb-3 border-b border-white/10">
-                  <Button
-                    onClick={handleProfileClick}
-                    variant="ghost"
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]"
-                  >
-                    <User className="w-5 h-5" />
-                    <span className="font-medium text-base">Profile</span>
+                  <Button onClick={() => handleNavigation('/account', 'Account')} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
+                    <LayoutDashboard className="w-5 h-5" /><span className="font-medium text-base">Account Overview</span>
+                  </Button>
+                  <Button onClick={handleProfileClick} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
+                    <User className="w-5 h-5" /><span className="font-medium text-base">My Profile</span>
+                  </Button>
+                  <Button onClick={() => handleNavigation('/notifications', 'Notifications')} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
+                    <Bell className="w-5 h-5" /><span className="font-medium text-base">Notifications</span>
+                  </Button>
+                  <Button onClick={() => handleNavigation('/settings', 'Settings')} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
+                    <Settings className="w-5 h-5" /><span className="font-medium text-base">Settings</span>
                   </Button>
                   <Button
                     onClick={handleSignOut}
