@@ -57,7 +57,7 @@ const ProfileAvatarUploader = ({ currentAvatarUrl, username }: ProfileAvatarUplo
         .upload(path, selectedFile, { upsert: true, contentType: selectedFile.type });
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { data } = supabase.storage.from('user-avatars').getPublicUrl(path);
       const newAvatarUrl = data.publicUrl;
       const result = await updateProfile({ avatar_url: newAvatarUrl });
       if (!result.success) throw new Error(result.error || 'The image uploaded, but the profile could not be updated.');
