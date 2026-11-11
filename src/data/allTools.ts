@@ -53,11 +53,11 @@ export const cybersecurityTools: Tool[] = [
   },
   {
     id: 'port-scanner',
-    name: 'Stealth Port Scanner',
-    description: 'High-speed stealth port scanning with evasion techniques',
+    name: 'Shodan Host Exposure Lookup',
+    description: 'Passive lookup of Shodan-observed public IPv4 host ports; not a live port scan.',
     category: 'cybersecurity',
     icon: React.createElement(Target),
-    features: ['SYN stealth scanning', 'UDP scanning', 'Firewall evasion', 'Custom timing controls'],
+    features: ['Shodan host observations', 'Observed service banners', 'Reported vulnerability associations', 'Observation-age disclosure']
     tier: 'free',
     difficulty: 'beginner',
     executionTime: '1-10 minutes',
