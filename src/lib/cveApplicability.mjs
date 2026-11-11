@@ -44,7 +44,7 @@ function evaluateVersion(version, criterion) {
   if (cpeVersion === "-") return { result: "unknown", reason: "The CPE version is not applicable or is unspecified." };
 
   if (cpeVersion !== "*") {
-    if (normalize(cpeVersion) === normalize(version)) {
+    if (cpeVersion.trim().toLowerCase() === version.trim().toLowerCase()) {
       return { result: "match", reason: `Exact CPE version ${cpeVersion} matches the supplied version.` };
     }
     return { result: "no_match", reason: `CPE specifies version ${cpeVersion}, not ${version}.` };
