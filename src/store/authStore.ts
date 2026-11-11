@@ -252,7 +252,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             user: currentUser,
             isAuthenticated: !!currentUser,
             profile: currentUser?.id === previousUserId ? get().profile : null,
-            isLoading: !!currentUser,
+            isLoading: !!currentUser && (currentUser.id !== previousUserId || !get().profile),
           });
 
           if (!currentUser) {
