@@ -230,9 +230,9 @@ async function queryDNSRecords(domain: string, recordType: string): Promise<DNSR
 
 async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]): Promise<any> {
   const features = {
-    dnssec_enabled: false,
+    ds_record_present: false,
     spf_configured: false,
-    dkim_configured: false,
+    default_dkim_selector_found: false,
     dmarc_configured: false,
     caa_configured: false
   }
@@ -244,13 +244,13 @@ async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]):
   features.dmarc_configured = dmarcRecords.some(r => r.value.includes('v=DMARC1'))
 
   const dkimRecords = await queryDNSRecords(`default._domainkey.${domain}`, 'TXT')
-  features.dkim_configured = dkimRecords.length > 0
+  features.default_dkim_selector_found = dkimRecords.length > 0
 
   const caaRecords = dnsRecords.filter(r => r.type === 'CAA')
   features.caa_configured = caaRecords.length > 0
 
   const dsRecords = await queryDNSRecords(domain, 'DS')
-  features.dnssec_enabled = dsRecords.length > 0
+  features.ds_record_present = dsRecords.length > 0
 
   return features
 }
