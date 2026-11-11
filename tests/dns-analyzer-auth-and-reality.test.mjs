@@ -26,6 +26,8 @@ test("DNS analyzer uses live DNS-over-HTTPS queries without simulated findings",
   const source = await read("supabase/functions/dns-analyzer/index.ts");
 
   assert.match(source, /cloudflare-dns\.com\/dns-query/);
+  assert.match(source, /if \(!response\.ok\) \{[\s\S]*?DNS provider returned HTTP/);
+  assert.match(source, /data\.Status !== 0 && data\.Status !== 3/);
   assert.doesNotMatch(source, /Math\.random|testZoneTransfer|testCachePoisoning|hasZoneTransferVuln/);
 });
 
