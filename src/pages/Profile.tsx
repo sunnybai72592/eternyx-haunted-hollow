@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type UserProfile } from '@/store/authStore';
 import { Card } from '@/components/ui/card';
@@ -8,234 +8,242 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { User as UserIcon, Save, Shield, Settings, Loader2, LogOut } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
-import { motion } from 'framer-motion';
 import ProfileAvatarUploader from '@/components/ProfileAvatarUploader';
+import { toast } from '@/hooks/use-toast';
+import {
+  ArrowRight, AtSign, BadgeCheck, BriefcaseBusiness, Check, ChevronRight,
+  Globe2, KeyRound, Link2, Loader2, LockKeyhole, Mail, MapPin,
+  Save, ShieldCheck, Sparkles, UserRound, UserRoundCog, X
+} from 'lucide-react';
+
+type EditableProfile = Pick<UserProfile,
+  'username' | 'full_name' | 'bio' | 'location' | 'job_title' |
+  'company' | 'website' | 'github_url' | 'twitter_url' | 'linkedin_url'
+>;
+
+const fieldClass = 'h-11 rounded-xl border-white/[0.10] bg-[#070e19]/85 px-3.5 text-sm text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/20 transition focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10';
+const labelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading, user, profile, updateProfile, signOut } = useAuthStore();
-  const [local, setLocal] = useState<Partial<UserProfile>>({});
+  const { isAuthenticated, isLoading: authLoading, user, profile, updateProfile } = useAuthStore();
+  const [local, setLocal] = useState<EditableProfile>({});
   const [saving, setSaving] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
 
   useEffect(() => {
-    document.title = 'Agent Profile | ETERNYX';
+    document.title = 'Your Identity | ETERNYX';
   }, []);
 
   useEffect(() => {
-    // Wait for Supabase to restore the session before deciding the visitor is signed out.
-    // ETERNYX uses an auth modal on the home page; there is no standalone /login route.
     if (!authLoading && !isAuthenticated) navigate('/', { replace: true });
   }, [authLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (profile) {
-      setLocal(profile);
-    }
-  }, [profile]);
+    if (!profile) return;
+    setLocal({
+      username: profile.username || '',
+      full_name: profile.full_name || '',
+      bio: profile.bio || '',
+      location: profile.location || '',
+      job_title: profile.job_title || '',
+      company: profile.company || '',
+      website: profile.website || '',
+      github_url: profile.github_url || '',
+      twitter_url: profile.twitter_url || '',
+      linkedin_url: profile.linkedin_url || '',
+    });
+  }, [profile?.user_id]);
+
+  const displayName = profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'ETERNYX member';
+  const initials = useMemo(() => displayName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'EX', [displayName]);
+
+  const updateField = (field: keyof EditableProfile, value: string) => {
+    setLocal((current) => ({ ...current, [field]: value }));
+  };
 
   const handleSave = async () => {
-    if (!local || !user) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          username: local.username,
-          full_name: local.full_name,
-          bio: local.bio,
-          phone: local.phone,
-          location: local.location,
-          website: local.website,
-          company: local.company,
-          job_title: local.job_title,
-          github_url: local.github_url,
-          twitter_url: local.twitter_url,
-          linkedin_url: local.linkedin_url,
-          skills: local.skills,
-        })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      
-      await updateProfile(local);
-      toast({
-        title: "Profile Updated",
-        description: "Agent profile data synchronized successfully.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Synchronization Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePrivacyUpdate = async (field: string, value: boolean) => {
     if (!user) return;
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ [field]: value } as any)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      
-      setLocal(prev => ({ ...prev, [field]: value }));
-      toast({
-        title: "Privacy Protocol Updated",
-        description: "Your privacy settings have been reconfigured.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+    setSaving(true);
+    const result = await updateProfile(local);
+    setSaving(false);
+    if (!result.success) {
+      toast({ title: 'Profile could not be saved', description: result.error || 'Please try again.', variant: 'destructive' });
+      return;
     }
+    toast({ title: 'Your identity is up to date', description: 'Your profile changes have been saved.' });
   };
+
+  const handlePrivacyUpdate = async (field: 'is_profile_public' | 'show_email' | 'show_phone', value: boolean) => {
+    setPrivacySaving(true);
+    const result = await updateProfile({ [field]: value });
+    setPrivacySaving(false);
+    if (!result.success) {
+      toast({ title: 'Privacy setting not saved', description: result.error || 'Please try again.', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Privacy preference updated', description: 'Your account preference has been saved.' });
+  };
+
+  if (authLoading || !isAuthenticated || !user) {
+    return (
+      <main className="mx-auto flex min-h-[55vh] max-w-6xl items-center justify-center px-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0a1020]/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
+          Restoring your ETERNYX identity…
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <motion.main
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="min-h-screen bg-background"
-    >
-      <header className="mx-auto mb-8 max-w-6xl px-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border border-border bg-card p-3">
-            <UserIcon className="h-6 w-6 text-primary" />
+    <main className="relative mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 lg:px-8">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 -z-10 h-80 rounded-full bg-cyan-400/[0.055] blur-[100px]" />
+
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.23em] text-cyan-200/70">
+          <UserRoundCog className="h-4 w-4" />
+          Account environment
+          <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+          <span className="text-slate-400">Identity</span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
+          <LockKeyhole className="h-3.5 w-3.5 text-emerald-300/80" />
+          Private account space
+        </div>
+      </div>
+
+      <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-[#080f1e] shadow-[0_28px_100px_rgba(0,0,0,.38)]">
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_82%_8%,rgba(34,211,238,.14),transparent_34%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_58%,rgba(13,20,43,.92))]" />
+        <div aria-hidden="true" className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+        <div className="relative flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:p-10">
+          <div className="max-w-2xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/[0.07] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-100">
+              <Sparkles className="h-3.5 w-3.5" />
+              Your digital identity
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Make your mark in <span className="bg-gradient-to-r from-cyan-200 via-sky-200 to-violet-300 bg-clip-text text-transparent">ETERNYX.</span></h1>
+            <p className="mt-3 max-w-xl text-sm leading-7 text-slate-400 sm:text-base">Shape how your identity appears across your personal digital environment. Your details, your presence, your control.</p>
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Account profile</h1>
-            <p className="text-sm text-muted-foreground">Manage your personal details, privacy and account settings.</p>
+          <div className="flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 backdrop-blur-xl sm:min-w-[300px] sm:p-5">
+            <div className="relative shrink-0">
+              <div className="absolute -inset-1 rounded-full bg-cyan-300/15 blur-md" />
+              <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-cyan-200/30 bg-cyan-200/10 text-lg font-semibold text-cyan-100">{profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : initials}</div>
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+              <p className="mt-1 truncate text-xs text-slate-400">{user.email}</p>
+              <p className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-200/80"><BadgeCheck className="h-3.5 w-3.5" /> {profile?.access_level || 'Basic'} member</p>
+            </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      <section className="container mx-auto px-4 py-8 max-w-6xl">
-        <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8 bg-card/70 backdrop-blur-sm border border-border/50 shadow-lg">
-            <TabsTrigger value="profile" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-primary/30 data-[state=active]:shadow-md transition-all duration-300">
-              <UserIcon className="h-4 w-4 mr-2" />
-              IDENTITY
-            </TabsTrigger>
-            <TabsTrigger value="privacy" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-primary/30 data-[state=active]:shadow-md transition-all duration-300">
-              <Shield className="h-4 w-4 mr-2" />
-              PROTOCOL
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-primary/30 data-[state=active]:shadow-md transition-all duration-300">
-              <Settings className="h-4 w-4 mr-2" />
-              SYSTEM
-            </TabsTrigger>
+      <section className="mt-8">
+        <Tabs defaultValue="identity" className="w-full">
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.09] bg-[#09111f]/90 p-1.5 shadow-xl sm:max-w-[520px]">
+            <TabsTrigger value="identity" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><UserRound className="h-4 w-4" /> Identity</TabsTrigger>
+            <TabsTrigger value="privacy" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><ShieldCheck className="h-4 w-4" /> Privacy</TabsTrigger>
+            <TabsTrigger value="security" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><KeyRound className="h-4 w-4" /> Account</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="profile" className="space-y-8">
-            <Card className="cyber-card p-8 space-y-6">
-              <div className="flex flex-col lg:flex-row gap-8">
-                {/* Avatar Uploader */}
-                <div className="lg:w-1/3 flex justify-center">
-                  <ProfileAvatarUploader 
-                    currentAvatarUrl={local?.avatar_url}
-                    username={local?.username}
-                  />
+          <TabsContent value="identity" className="mt-5">
+            <div className="grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
+              <Card className="overflow-hidden rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-6">
+                <div className="mb-5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Profile image</p>
+                  <h2 className="mt-2 text-lg font-semibold text-white">Your presence</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">A recognizable image makes your account feel like yours.</p>
+                </div>
+                <ProfileAvatarUploader currentAvatarUrl={profile?.avatar_url} username={profile?.username || displayName} />
+                <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+                  <p className="flex items-center gap-2 text-[11px] font-medium text-slate-300"><LockKeyhole className="h-3.5 w-3.5 text-emerald-200/80" /> Your image belongs to your account</p>
+                  <p className="mt-1.5 text-[10px] leading-5 text-slate-500">Use an image you are comfortable associating with your ETERNYX identity.</p>
+                </div>
+              </Card>
+
+              <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Personal information</p>
+                    <h2 className="mt-2 text-xl font-semibold text-white">Identity details</h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Keep your information current and meaningful.</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/15 bg-emerald-200/[0.05] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.13em] text-emerald-200"><Check className="h-3 w-3" /> Account linked</span>
                 </div>
 
-                {/* Profile Form */}
-                <div className="lg:w-2/3 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="username" className="text-cyber-green font-mono">AGENT_HANDLE</Label>
-                      <Input id="username" value={local?.username || ''} onChange={(e) => setLocal((p) => ({ ...p, username: e.target.value }))} className="neon-input" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="full_name" className="text-cyber-green font-mono">FULL_NAME</Label>
-                      <Input id="full_name" value={local?.full_name || ''} onChange={(e) => setLocal((p) => ({ ...p, full_name: e.target.value }))} className="neon-input" />
-                    </div>
-                  </div>
+                <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+                  <div className="space-y-2"><Label htmlFor="username" className={labelClass}>Username</Label><div className="relative"><AtSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="username" autoComplete="nickname" value={local.username || ''} onChange={(e) => updateField('username', e.target.value)} placeholder="Your unique handle" className={fieldClass + ' pl-9'} /></div></div>
+                  <div className="space-y-2"><Label htmlFor="full_name" className={labelClass}>Full name</Label><div className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="full_name" autoComplete="name" value={local.full_name || ''} onChange={(e) => updateField('full_name', e.target.value)} placeholder="How should we address you?" className={fieldClass + ' pl-9'} /></div></div>
+                  <div className="space-y-2 sm:col-span-2"><Label htmlFor="email" className={labelClass}>Email address</Label><div className="relative"><Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="email" value={user.email || ''} readOnly aria-readonly="true" className={fieldClass + ' cursor-not-allowed pl-9 text-slate-400'} /></div><p className="text-[10px] text-slate-600">Your sign-in email is managed by your authentication provider.</p></div>
+                  <div className="space-y-2 sm:col-span-2"><Label htmlFor="bio" className={labelClass}>About you</Label><Textarea id="bio" value={local.bio || ''} onChange={(e) => updateField('bio', e.target.value)} rows={4} maxLength={500} placeholder="A short introduction, what you build, or what you're interested in…" className="min-h-[112px] resize-y rounded-xl border-white/[0.10] bg-[#070e19]/85 px-3.5 py-3 text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10" /><p className="text-right text-[10px] text-slate-600">{(local.bio || '').length}/500</p></div>
+                  <div className="space-y-2"><Label htmlFor="location" className={labelClass}>Location</Label><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="location" autoComplete="address-level2" value={local.location || ''} onChange={(e) => updateField('location', e.target.value)} placeholder="City or region" className={fieldClass + ' pl-9'} /></div></div>
+                  <div className="space-y-2"><Label htmlFor="job_title" className={labelClass}>Role / profession</Label><div className="relative"><BriefcaseBusiness className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="job_title" autoComplete="organization-title" value={local.job_title || ''} onChange={(e) => updateField('job_title', e.target.value)} placeholder="Your professional role" className={fieldClass + ' pl-9'} /></div></div>
+                  <div className="space-y-2"><Label htmlFor="company" className={labelClass}>Organization</Label><Input id="company" autoComplete="organization" value={local.company || ''} onChange={(e) => updateField('company', e.target.value)} placeholder="Company or organization" className={fieldClass} /></div>
+                  <div className="space-y-2"><Label htmlFor="website" className={labelClass}>Website</Label><div className="relative"><Globe2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="website" type="url" value={local.website || ''} onChange={(e) => updateField('website', e.target.value)} placeholder="https://" className={fieldClass + ' pl-9'} /></div></div>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-cyber-green font-mono">EMAIL_ID (Read-Only)</Label>
-                    <Input id="email" value={local?.email || user?.email || ''} readOnly className="bg-muted/50 neon-input-disabled" />
-                  </div>
+                <div className="my-7 border-t border-white/[0.08]" />
+                <div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Connected presence</p><h3 className="mt-1 text-base font-semibold text-white">Around the web</h3><p className="mt-1 text-xs text-slate-500">Optional links to your public work and profiles.</p></div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2"><Label htmlFor="github_url" className={labelClass}>GitHub</Label><Input id="github_url" type="url" value={local.github_url || ''} onChange={(e) => updateField('github_url', e.target.value)} placeholder="https://github.com/…" className={fieldClass} /></div>
+                  <div className="space-y-2"><Label htmlFor="linkedin_url" className={labelClass}>LinkedIn</Label><Input id="linkedin_url" type="url" value={local.linkedin_url || ''} onChange={(e) => updateField('linkedin_url', e.target.value)} placeholder="https://linkedin.com/in/…" className={fieldClass} /></div>
+                  <div className="space-y-2"><Label htmlFor="twitter_url" className={labelClass}>X / Twitter</Label><Input id="twitter_url" type="url" value={local.twitter_url || ''} onChange={(e) => updateField('twitter_url', e.target.value)} placeholder="https://x.com/…" className={fieldClass} /></div>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="bio" className="text-cyber-green font-mono">BIO_LOG</Label>
-                    <Textarea id="bio" value={local?.bio || ''} onChange={(e) => setLocal((p) => ({ ...p, bio: e.target.value }))} rows={3} placeholder="Describe your operational focus..." className="neon-input" />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="location" className="text-cyber-green font-mono">LOCATION_TAG</Label>
-                      <Input id="location" value={local?.location || ''} onChange={(e) => setLocal((p) => ({ ...p, location: e.target.value }))} placeholder="City, Sector" className="neon-input" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="job_title" className="text-cyber-green font-mono">OPERATIONAL_ROLE</Label>
-                      <Input id="job_title" value={local?.job_title || ''} onChange={(e) => setLocal((p) => ({ ...p, job_title: e.target.value }))} className="neon-input" />
-                    </div>
-                  </div>
-
-                  <Button onClick={handleSave} disabled={saving} className="w-full md:w-auto neon-border-lg bg-primary hover:bg-primary/90 transition-all duration-300">
-                    {saving ? <Loader2 className="h-5 w-5 mr-2 animate-spin"/> : <Save className="h-5 w-5 mr-2"/>}
-                    {saving ? 'SYNCHRONIZING DATA...' : 'SYNCHRONIZE CHANGES'}
+                <div className="mt-7 flex flex-col-reverse gap-3 border-t border-white/[0.08] pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[10px] text-slate-500">Changes are saved to your signed-in profile.</p>
+                  <Button onClick={handleSave} disabled={saving} className="h-11 rounded-xl bg-cyan-200 px-5 font-semibold text-slate-950 shadow-[0_8px_30px_rgba(103,232,249,.12)] hover:bg-cyan-100">
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {saving ? 'Saving identity…' : 'Save profile changes'}
                   </Button>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </TabsContent>
 
-          <TabsContent value="privacy" className="space-y-6">
-            <Card className="cyber-card p-8 space-y-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-primary">
-                <Shield className="h-6 w-6 text-primary" />
-                PRIVACY PROTOCOL CONFIGURATION
-              </h3>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border-b border-border/50 hover:bg-card/50 transition-colors duration-200 rounded-md">
-                  <Label htmlFor="public-profile" className="flex flex-col space-y-1">
-                    <span className="font-mono text-base">PUBLIC_PROFILE_VISIBILITY</span>
-                    <span className="text-xs text-muted-foreground">Allow other agents to view your profile data.</span>
-                  </Label>
-                  <Switch
-                    id="public-profile"
-                    checked={local?.is_profile_public || false}
-                    onCheckedChange={(checked) => handlePrivacyUpdate('is_profile_public', checked)}
-                  />
+          <TabsContent value="privacy" className="mt-5">
+            <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
+              <div className="mb-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Visibility & consent</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Your privacy, your call.</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Choose which parts of your profile may be visible. These controls update your existing account privacy fields.</p>
+              </div>
+              <div className="divide-y divide-white/[0.07]">
+                <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3"><div className="rounded-xl border border-cyan-200/15 bg-cyan-200/[0.07] p-2.5 text-cyan-100"><Globe2 className="h-4 w-4" /></div><div><Label htmlFor="public-profile" className="text-sm font-semibold text-slate-100">Public profile</Label><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">Allow other people to view the profile information your public profile exposes.</p></div></div>
+                  <Switch id="public-profile" checked={!!profile?.is_profile_public} disabled={privacySaving} onCheckedChange={(checked) => handlePrivacyUpdate('is_profile_public', checked)} />
                 </div>
-                {/* Add more privacy settings here based on your schema */}
+                <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3"><div className="rounded-xl border border-cyan-200/15 bg-cyan-200/[0.07] p-2.5 text-cyan-100"><Mail className="h-4 w-4" /></div><div><Label htmlFor="show-email" className="text-sm font-semibold text-slate-100">Show email on public profile</Label><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">Permit your email address to appear where public profile details are displayed.</p></div></div>
+                  <Switch id="show-email" checked={!!profile?.show_email} disabled={privacySaving} onCheckedChange={(checked) => handlePrivacyUpdate('show_email', checked)} />
+                </div>
+                <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3"><div className="rounded-xl border border-cyan-200/15 bg-cyan-200/[0.07] p-2.5 text-cyan-100"><AtSign className="h-4 w-4" /></div><div><Label htmlFor="show-phone" className="text-sm font-semibold text-slate-100">Show phone on public profile</Label><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">Permit a phone number to appear where public profile details are displayed. No phone number is collected here.</p></div></div>
+                  <Switch id="show-phone" checked={!!profile?.show_phone} disabled={privacySaving} onCheckedChange={(checked) => handlePrivacyUpdate('show_phone', checked)} />
+                </div>
               </div>
+              <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200/10 bg-amber-200/[0.035] p-3 text-xs leading-5 text-amber-100/70"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /> Visibility switches control profile preferences; they do not change database access policies or override private account protections.</div>
             </Card>
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-6">
-            <Card className="cyber-card p-8 space-y-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-primary">
-                <Settings className="h-6 w-6 text-primary" />
-                SYSTEM OPERATIONS
-              </h3>
-              
-              <div className="space-y-4">
-                <Button 
-                  onClick={signOut} 
-                  className="w-full bg-orange-600 hover:bg-orange-700 neon-border-sm transition-all duration-300"
-                >
-                  <LogOut className="h-5 w-5 mr-2" />
-                  LOGOUT (END SESSION)
-                </Button>
-
-              </div>
-            </Card>
+          <TabsContent value="security" className="mt-5">
+            <div className="grid gap-5 lg:grid-cols-2">
+              <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-6">
+                <div className="flex items-center gap-3"><div className="rounded-xl border border-emerald-200/15 bg-emerald-200/[0.07] p-3 text-emerald-100"><ShieldCheck className="h-5 w-5" /></div><div><h2 className="font-semibold text-white">Account session</h2><p className="mt-1 text-xs text-slate-500">Your current authenticated identity.</p></div></div>
+                <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Signed-in email</p><p className="mt-2 break-all text-sm text-slate-200">{user.email}</p><p className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-emerald-200"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Authenticated session</p></div>
+                <p className="mt-4 text-xs leading-5 text-slate-500">Password and sign-in methods are managed securely through your authentication provider.</p>
+              </Card>
+              <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-6">
+                <div className="flex items-center gap-3"><div className="rounded-xl border border-violet-200/15 bg-violet-200/[0.07] p-3 text-violet-100"><KeyRound className="h-5 w-5" /></div><div><h2 className="font-semibold text-white">Access & recovery</h2><p className="mt-1 text-xs text-slate-500">Manage how you enter your account.</p></div></div>
+                <Button variant="outline" onClick={() => navigate('/reset-password')} className="mt-5 h-11 w-full justify-between rounded-xl border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07] hover:text-white">Change or reset password <ArrowRight className="h-4 w-4" /></Button>
+                <p className="mt-3 text-xs leading-5 text-slate-500">If you use a third-party sign-in provider, password changes may need to be managed with that provider.</p>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </section>
-    </motion.main>
+    </main>
   );
 };
 
