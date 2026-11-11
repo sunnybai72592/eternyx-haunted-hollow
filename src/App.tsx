@@ -63,6 +63,7 @@ const Innovation = lazy(() => import("./pages/Innovation"));
 const KillerEdge = lazy(() => import("./pages/KillerEdge"));
 const Premium = lazy(() => import("./pages/Premium"));
 const BugReport = lazy(() => import("./pages/BugReport"));
+const AdminBugReports = lazy(() => import("./pages/AdminBugReports"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
@@ -240,6 +241,7 @@ const AppContent = () => {
                         <Route path="/killer-edge" element={<KillerEdge />} />
                         <Route path="/premium" element={<Premium />} />
                         <Route path="/bug-report" element={<BugReport />} />
+                        <Route path="/admin/bug-reports" element={<AdminBugReports />} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
                         <Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />

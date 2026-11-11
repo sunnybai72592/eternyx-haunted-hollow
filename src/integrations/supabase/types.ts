@@ -30,7 +30,9 @@ export type Database = {
           title: string
           user_id: string
         }
-        Update: {}
+        Update: {
+          status?: string
+        }
         Relationships: []
       }
       admin_users: {
