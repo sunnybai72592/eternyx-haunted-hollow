@@ -1,35 +1,42 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Github, Twitter, Linkedin, Bug, ClipboardList } from 'lucide-react';
+import React from "react";
+import { Link } from "react-router-dom";
+import { ArrowUpRight, Bug, ClipboardList, Github, Zap } from "lucide-react";
 
 const Footer: React.FC = () => (
-  <footer className="w-full bg-black/70 backdrop-blur-md border-t border-cyber-cyan/30 shadow-lg mt-8 py-6 relative overflow-hidden">
-    <div className="absolute inset-0 pointer-events-none z-0 opacity-20">
-      {[...Array(20)].map((_, i) => (
-        <div key={i} className="absolute animate-data-stream text-cyber-green" style={{
-          left: `${i * 5}%`, animationDelay: `${i * 0.3}s`,
-          fontSize: `${Math.random() * 10 + 10}px`, fontFamily: 'Fira Code, monospace',
-          top: '-100%', height: '200%', width: '2px',
-          background: 'linear-gradient(to bottom, rgba(0,255,0,0) 0%, rgba(0,255,0,1) 50%, rgba(0,255,0,0) 100%)',
-          animationDuration: `${5 + Math.random() * 5}s`, animationIterationCount: 'infinite', animationTimingFunction: 'linear',
-        }}>{Array.from({ length: 50 }, () => Math.random() > 0.5 ? '1' : '0').join('')}</div>
-      ))}
+  <footer className="relative isolate mt-0 overflow-hidden border-t border-white/[0.08] bg-[#050914] text-slate-300">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent" />
+      <div className="absolute -bottom-40 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-cyan-400/[0.045] blur-3xl" />
+      <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: "radial-gradient(rgba(103,232,249,.8) .7px, transparent .7px)", backgroundSize: "22px 22px" }} />
     </div>
-    <div className="container mx-auto px-4 relative z-10 flex flex-col md:flex-row justify-between items-center text-cyber-cyan text-sm">
-      <div className="mb-4 md:mb-0"><p>&copy; {new Date().getFullYear()} EterNyx. All rights reserved.</p><p className="mt-1">"Unlocking the Digital Underworld."</p></div>
-      <div className="mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 md:mb-0">
-        <Link to="/bug-report" className="inline-flex items-center gap-2 hover:text-neon-green transition-colors duration-300"><Bug className="h-4 w-4" />Report a Bug</Link>
-        <Link to="/my-bug-reports" className="inline-flex items-center gap-2 hover:text-neon-green transition-colors duration-300"><ClipboardList className="h-4 w-4" />My Bug Reports</Link>
-        <Link to="/contact" className="hover:text-neon-green transition-colors duration-300">Contact Us</Link>
-        <a href="#" className="hover:text-neon-green transition-colors duration-300">Privacy Policy</a>
-        <a href="#" className="hover:text-neon-green transition-colors duration-300">Terms of Service</a>
+
+    <div className="mx-auto grid max-w-7xl gap-9 px-5 py-10 sm:px-8 sm:py-12 lg:grid-cols-[1.2fr_1fr_auto] lg:items-center lg:gap-12">
+      <div className="min-w-0 text-center lg:text-left">
+        <Link to="/" aria-label="ETERNYX home" className="inline-flex items-center justify-center gap-2.5 rounded-lg text-white transition hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 lg:justify-start">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-200/20 bg-cyan-200/[0.07] text-cyan-200"><Zap className="h-5 w-5" /></span>
+          <span className="text-lg font-black tracking-[.18em]">ETERNYX</span>
+        </Link>
+        <p className="mt-3 text-sm leading-6 text-slate-400">One ecosystem. Endless possibilities.</p>
+        <p className="mt-5 text-xs text-slate-500">© {new Date().getFullYear()} ETERNYX. All rights reserved.</p>
       </div>
-      <div className="flex space-x-4">
-        <a href="#" aria-label="ETERNYX on GitHub" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Github className="h-5 w-5" /></a>
-        <a href="#" aria-label="ETERNYX on Twitter" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Twitter className="h-5 w-5" /></a>
-        <a href="#" aria-label="ETERNYX on LinkedIn" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Linkedin className="h-5 w-5" /></a>
+
+      <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-4 text-sm lg:justify-start">
+        <Link to="/bug-report" className="inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-slate-300 transition hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"><Bug className="h-4 w-4" />Report a bug</Link>
+        <Link to="/my-bug-reports" className="inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-slate-300 transition hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"><ClipboardList className="h-4 w-4" />My bug reports</Link>
+        <Link to="/contact" className="inline-flex min-h-10 items-center rounded-lg px-1 text-slate-300 transition hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">Contact</Link>
+        <Link to="/explore" className="inline-flex min-h-10 items-center rounded-lg px-1 text-slate-300 transition hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">Explore</Link>
+      </nav>
+
+      <div className="flex items-center justify-center lg:justify-end">
+        <a href="https://github.com/sunnybai72592/eternyx-haunted-hollow" target="_blank" rel="noreferrer" aria-label="ETERNYX on GitHub" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-slate-300 transition hover:border-cyan-200/25 hover:bg-cyan-200/[0.06] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
+          <Github className="h-4 w-4" /> GitHub <ArrowUpRight className="h-3.5 w-3.5" />
+        </a>
       </div>
+    </div>
+    <div className="border-t border-white/[0.06] px-5 py-3 text-center text-[10px] tracking-[.12em] text-slate-600">
+      BUILT WITH INTENTION · GROWING WITH PURPOSE
     </div>
   </footer>
 );
+
 export default Footer;
