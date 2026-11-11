@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface DNSAnalysisRequest {
   domain: string;
-  user_id: string;
 }
 
 interface DNSRecord {
@@ -32,109 +31,111 @@ interface DNSAnalysisResult {
   dns_records: DNSRecord[];
   vulnerabilities: DNSVulnerability[];
   security_features: {
-    dnssec_enabled: boolean;
+    ds_record_present: boolean;
     spf_configured: boolean;
-    dkim_configured: boolean;
+    default_dkim_selector_found: boolean;
     dmarc_configured: boolean;
     caa_configured: boolean;
   };
   nameservers: string[];
   analysis_duration: number;
   risk_score: number;
+  coverage_limitations: string[];
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
+  }
 
   try {
-    // Initialize Supabase client
+    const authorization = req.headers.get('Authorization')
+    if (!authorization?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authorization } } },
     )
-
-    const { domain, user_id }: DNSAnalysisRequest = await req.json()
-
-    // Validate input
-    if (!domain || !user_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
 
-    // Validate domain format
-    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
-    if (!domainRegex.test(domain)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid domain format' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    const { domain }: DNSAnalysisRequest = await req.json()
+    const normalizedDomain = typeof domain === 'string'
+      ? domain.trim().toLowerCase().replace(/\.$/, '')
+      : ''
+    const domainRegex = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
+    if (!domainRegex.test(normalizedDomain)) {
+      return new Response(JSON.stringify({ error: 'Enter a valid public domain name' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
-
+    const domainName = normalizedDomain
+    const user_id = user.id
     const startTime = Date.now()
     const vulnerabilities: DNSVulnerability[] = []
     const dnsRecords: DNSRecord[] = []
     let nameservers: string[] = []
 
-    console.log(`Starting DNS security analysis for: ${domain}`)
+    console.log(`Starting DNS configuration review for: ${domainName}`)
 
     // 1. DNS Record Enumeration
     const recordTypes = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
     
     for (const recordType of recordTypes) {
-      try {
-        const records = await queryDNSRecords(domain, recordType)
-        dnsRecords.push(...records)
-        
-        if (recordType === 'NS') {
-          nameservers = records.map(r => r.value)
-        }
-      } catch (error) {
-        console.error(`Error querying ${recordType} records:`, error)
+      const records = await queryDNSRecords(domainName, recordType)
+      dnsRecords.push(...records)
+
+      if (recordType === 'NS') {
+        nameservers = records.map(r => r.value)
       }
     }
 
     // 2. Security Features Analysis
-    const securityFeatures = await analyzeSecurityFeatures(domain, dnsRecords)
+    const securityFeatures = await analyzeSecurityFeatures(domainName, dnsRecords)
 
-    // 3. DNSSEC Validation
-    const dnssecAnalysis = await analyzeDNSSEC(domain)
+    // 3. Observe DS record presence (not a full DNSSEC validation)
+    const dnssecAnalysis = await analyzeDNSSEC(domainName)
     vulnerabilities.push(...dnssecAnalysis.vulnerabilities)
 
     // 4. Email Security Analysis
-    const emailSecurityAnalysis = await analyzeEmailSecurity(domain, dnsRecords)
+    const emailSecurityAnalysis = await analyzeEmailSecurity(domainName, dnsRecords)
     vulnerabilities.push(...emailSecurityAnalysis.vulnerabilities)
 
     // 5. DNS Configuration Security
-    const configAnalysis = await analyzeDNSConfiguration(domain, dnsRecords, nameservers)
+    const configAnalysis = await analyzeDNSConfiguration(domainName, dnsRecords, nameservers)
     vulnerabilities.push(...configAnalysis.vulnerabilities)
 
-    // 6. Zone Transfer Testing
-    const zoneTransferAnalysis = await testZoneTransfer(domain, nameservers)
-    vulnerabilities.push(...zoneTransferAnalysis.vulnerabilities)
-
-    // 7. DNS Cache Poisoning Tests
-    const cachePoisoningAnalysis = await testCachePoisoning(domain)
-    vulnerabilities.push(...cachePoisoningAnalysis.vulnerabilities)
+    const coverageLimitations = [
+      'DNS zone transfers (AXFR) are not tested by this analyzer.',
+      'DNS cache-poisoning resistance is not tested by this analyzer.',
+      'DKIM lookup checks only the default._domainkey selector; other provider-specific selectors may exist.',
+      'DNSSEC status is inferred from the presence of a DS record; this is not a full DNSSEC validation.'
+    ]
 
     const analysisDuration = Math.floor((Date.now() - startTime) / 1000)
     const riskScore = calculateDNSRiskScore(vulnerabilities, securityFeatures)
 
     const analysisResult: DNSAnalysisResult = {
-      domain,
+      domain: domainName,
       dns_records: dnsRecords,
       vulnerabilities,
       security_features: securityFeatures,
+      coverage_limitations: coverageLimitations,
       nameservers,
       analysis_duration: analysisDuration,
       risk_score: riskScore
@@ -147,11 +148,10 @@ serve(async (req) => {
         user_id,
         analysis_type: 'dns_security',
         input_data: {
-          domain,
+          domain: domainName,
           timestamp: new Date().toISOString()
         },
         results: analysisResult,
-        confidence_score: 0.95,
         processing_time: analysisDuration * 1000
       })
       .select()
@@ -165,12 +165,13 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         analysis_id: analysisData.id,
-        domain,
+        domain: domainName,
         vulnerabilities_found: vulnerabilities.length,
         risk_score: riskScore,
         analysis_duration: analysisDuration,
         dns_records: dnsRecords.length,
         security_features: securityFeatures,
+        coverage_limitations: coverageLimitations,
         nameservers: nameservers.length,
         summary: {
           critical: vulnerabilities.filter(v => v.severity === 'critical').length,
@@ -203,100 +204,69 @@ serve(async (req) => {
 })
 
 async function queryDNSRecords(domain: string, recordType: string): Promise<DNSRecord[]> {
-  const records: DNSRecord[] = []
-  
-  try {
-    // Use DNS over HTTPS (DoH) for DNS queries
-    const dohUrl = `https://cloudflare-dns.com/dns-query?name=${domain}&type=${recordType}`
-    
-    const response = await fetch(dohUrl, {
-      headers: {
-        'Accept': 'application/dns-json'
-      }
-    })
+  const dohUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(recordType)}`
+  const response = await fetch(dohUrl, {
+    headers: { 'Accept': 'application/dns-json' }
+  })
 
-    if (response.ok) {
-      const data = await response.json()
-      
-      if (data.Answer) {
-        data.Answer.forEach((answer: any) => {
-          records.push({
-            type: recordType,
-            name: answer.name,
-            value: answer.data,
-            ttl: answer.TTL
-          })
-        })
-      }
-    }
-  } catch (error) {
-    console.error(`DNS query error for ${recordType}:`, error)
+  if (!response.ok) {
+    throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
   }
 
-  return records
+  const data = await response.json()
+  if (data.Status !== undefined && data.Status !== 0 && data.Status !== 3) {
+    throw new Error(`DNS provider returned status ${data.Status} for ${recordType} query`)
+  }
+
+  return Array.isArray(data.Answer)
+    ? data.Answer.map((answer: any) => ({
+        type: recordType,
+        name: answer.name,
+        value: answer.data,
+        ttl: answer.TTL
+      }))
+    : []
 }
 
 async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]): Promise<any> {
   const features = {
-    dnssec_enabled: false,
+    ds_record_present: false,
     spf_configured: false,
-    dkim_configured: false,
+    default_dkim_selector_found: false,
     dmarc_configured: false,
     caa_configured: false
   }
 
-  // Check for SPF records
   const txtRecords = dnsRecords.filter(r => r.type === 'TXT')
   features.spf_configured = txtRecords.some(r => r.value.includes('v=spf1'))
 
-  // Check for DMARC records
-  try {
-    const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
-    features.dmarc_configured = dmarcRecords.some(r => r.value.includes('v=DMARC1'))
-  } catch (error) {
-    console.error('DMARC check error:', error)
-  }
+  const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
+  features.dmarc_configured = dmarcRecords.some(r => r.value.includes('v=DMARC1'))
 
-  // Check for DKIM records (common selector)
-  try {
-    const dkimRecords = await queryDNSRecords(`default._domainkey.${domain}`, 'TXT')
-    features.dkim_configured = dkimRecords.length > 0
-  } catch (error) {
-    console.error('DKIM check error:', error)
-  }
+  const dkimRecords = await queryDNSRecords(`default._domainkey.${domain}`, 'TXT')
+  features.default_dkim_selector_found = dkimRecords.length > 0
 
-  // Check for CAA records
   const caaRecords = dnsRecords.filter(r => r.type === 'CAA')
   features.caa_configured = caaRecords.length > 0
 
-  // Check for DNSSEC (simplified check)
-  try {
-    const dsRecords = await queryDNSRecords(domain, 'DS')
-    features.dnssec_enabled = dsRecords.length > 0
-  } catch (error) {
-    console.error('DNSSEC check error:', error)
-  }
+  const dsRecords = await queryDNSRecords(domain, 'DS')
+  features.ds_record_present = dsRecords.length > 0
 
   return features
 }
 
 async function analyzeDNSSEC(domain: string): Promise<{ vulnerabilities: DNSVulnerability[] }> {
   const vulnerabilities: DNSVulnerability[] = []
+  const dsRecords = await queryDNSRecords(domain, 'DS')
 
-  try {
-    const dsRecords = await queryDNSRecords(domain, 'DS')
-    
-    if (dsRecords.length === 0) {
-      vulnerabilities.push({
-        type: 'DNSSEC Not Configured',
-        severity: 'medium',
-        description: 'Domain does not have DNSSEC enabled',
-        location: 'DNS Configuration',
-        remediation: 'Enable DNSSEC to prevent DNS spoofing and cache poisoning attacks',
-      })
-    }
-  } catch (error) {
-    console.error('DNSSEC analysis error:', error)
+  if (dsRecords.length === 0) {
+    vulnerabilities.push({
+      type: 'No DS Record Observed',
+      severity: 'medium',
+      description: 'No DS record was returned for this domain. Confirm DNSSEC delegation with the registrar; this lookup is not a complete DNSSEC validation.',
+      location: 'DNS Configuration',
+      remediation: 'Verify DNSSEC signing and DS delegation with the DNS provider and domain registrar.',
+    })
   }
 
   return { vulnerabilities }
@@ -304,11 +274,9 @@ async function analyzeDNSSEC(domain: string): Promise<{ vulnerabilities: DNSVuln
 
 async function analyzeEmailSecurity(domain: string, dnsRecords: DNSRecord[]): Promise<{ vulnerabilities: DNSVulnerability[] }> {
   const vulnerabilities: DNSVulnerability[] = []
-
-  // Check SPF configuration
   const txtRecords = dnsRecords.filter(r => r.type === 'TXT')
   const spfRecords = txtRecords.filter(r => r.value.includes('v=spf1'))
-  
+
   if (spfRecords.length === 0) {
     vulnerabilities.push({
       type: 'Missing SPF Record',
@@ -327,11 +295,8 @@ async function analyzeEmailSecurity(domain: string, dnsRecords: DNSRecord[]): Pr
       remediation: 'Consolidate into a single SPF record',
     })
   } else {
-    // Analyze SPF record quality
     const spfRecord = spfRecords[0].value
-    if (spfRecord.includes('~all') || spfRecord.includes('-all')) {
-      // Good SPF policy
-    } else if (spfRecord.includes('+all')) {
+    if (spfRecord.includes('+all')) {
       vulnerabilities.push({
         type: 'Weak SPF Policy',
         severity: 'high',
@@ -343,33 +308,27 @@ async function analyzeEmailSecurity(domain: string, dnsRecords: DNSRecord[]): Pr
     }
   }
 
-  // Check DMARC configuration
-  try {
-    const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
-    
-    if (dmarcRecords.length === 0) {
+  const dmarcRecords = await queryDNSRecords(`_dmarc.${domain}`, 'TXT')
+  if (dmarcRecords.length === 0) {
+    vulnerabilities.push({
+      type: 'Missing DMARC Record',
+      severity: 'medium',
+      description: 'Domain lacks DMARC record for email policy enforcement',
+      location: '_dmarc subdomain',
+      remediation: 'Configure DMARC record to enforce email authentication policies',
+    })
+  } else {
+    const dmarcRecord = dmarcRecords[0].value
+    if (dmarcRecord.includes('p=none')) {
       vulnerabilities.push({
-        type: 'Missing DMARC Record',
-        severity: 'medium',
-        description: 'Domain lacks DMARC record for email policy enforcement',
-        location: '_dmarc subdomain',
-        remediation: 'Configure DMARC record to enforce email authentication policies',
+        type: 'Weak DMARC Policy',
+        severity: 'low',
+        description: 'DMARC policy is set to none, providing no protection',
+        location: 'DMARC Record',
+        proof_of_concept: dmarcRecord,
+        remediation: 'Strengthen DMARC policy to quarantine or reject',
       })
-    } else {
-      const dmarcRecord = dmarcRecords[0].value
-      if (dmarcRecord.includes('p=none')) {
-        vulnerabilities.push({
-          type: 'Weak DMARC Policy',
-          severity: 'low',
-          description: 'DMARC policy is set to none, providing no protection',
-          location: 'DMARC Record',
-          proof_of_concept: dmarcRecord,
-          remediation: 'Strengthen DMARC policy to quarantine or reject',
-        })
-      }
     }
-  } catch (error) {
-    console.error('DMARC analysis error:', error)
   }
 
   return { vulnerabilities }
@@ -417,63 +376,6 @@ async function analyzeDNSConfiguration(domain: string, dnsRecords: DNSRecord[], 
   return { vulnerabilities }
 }
 
-async function testZoneTransfer(domain: string, nameservers: string[]): Promise<{ vulnerabilities: DNSVulnerability[] }> {
-  const vulnerabilities: DNSVulnerability[] = []
-
-  // Note: In a real implementation, you would attempt AXFR queries
-  // This is a simplified simulation since Edge Functions have limited DNS capabilities
-  
-  // Simulate zone transfer test results
-  const hasZoneTransferVuln = Math.random() < 0.1 // 10% chance for demonstration
-  
-  if (hasZoneTransferVuln) {
-    vulnerabilities.push({
-      type: 'Zone Transfer Allowed',
-      severity: 'high',
-      description: 'DNS zone transfer is allowed from unauthorized sources',
-      location: 'DNS Server Configuration',
-      remediation: 'Restrict zone transfers to authorized secondary nameservers only',
-    })
-  }
-
-  return { vulnerabilities }
-}
-
-async function testCachePoisoning(domain: string): Promise<{ vulnerabilities: DNSVulnerability[] }> {
-  const vulnerabilities: DNSVulnerability[] = []
-
-  // Note: This is a simplified simulation
-  // Real cache poisoning tests would require more sophisticated techniques
-  
-  try {
-    // Check for DNS response inconsistencies that might indicate vulnerabilities
-    const responses = []
-    
-    for (let i = 0; i < 3; i++) {
-      const records = await queryDNSRecords(domain, 'A')
-      responses.push(records)
-    }
-
-    // Check for response consistency
-    const firstResponse = JSON.stringify(responses[0])
-    const inconsistent = responses.some(r => JSON.stringify(r) !== firstResponse)
-    
-    if (inconsistent) {
-      vulnerabilities.push({
-        type: 'DNS Response Inconsistency',
-        severity: 'low',
-        description: 'DNS responses show inconsistencies that may indicate configuration issues',
-        location: 'DNS Resolution',
-        remediation: 'Review DNS configuration for consistency and proper load balancing',
-      })
-    }
-  } catch (error) {
-    console.error('Cache poisoning test error:', error)
-  }
-
-  return { vulnerabilities }
-}
-
 function calculateDNSRiskScore(vulnerabilities: DNSVulnerability[], securityFeatures: any): number {
   let score = 0
   
@@ -488,10 +390,10 @@ function calculateDNSRiskScore(vulnerabilities: DNSVulnerability[], securityFeat
   })
   
   // Deduct points for security features
-  if (securityFeatures.dnssec_enabled) score -= 5
+  if (securityFeatures.ds_record_present) score -= 5
   if (securityFeatures.spf_configured) score -= 3
   if (securityFeatures.dmarc_configured) score -= 3
-  if (securityFeatures.dkim_configured) score -= 2
+  if (securityFeatures.default_dkim_selector_found) score -= 2
   if (securityFeatures.caa_configured) score -= 2
   
   return Math.max(0, Math.min(100, score))
@@ -500,8 +402,8 @@ function calculateDNSRiskScore(vulnerabilities: DNSVulnerability[], securityFeat
 function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securityFeatures: any): string[] {
   const recommendations: string[] = []
   
-  if (!securityFeatures.dnssec_enabled) {
-    recommendations.push('Enable DNSSEC to protect against DNS spoofing and cache poisoning')
+  if (!securityFeatures.ds_record_present) {
+    recommendations.push('No DS record was observed. Verify DNSSEC signing and DS delegation with your DNS provider and registrar.')
   }
   
   if (!securityFeatures.spf_configured) {
@@ -512,8 +414,8 @@ function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securit
     recommendations.push('Implement DMARC policy for email authentication enforcement')
   }
   
-  if (!securityFeatures.dkim_configured) {
-    recommendations.push('Set up DKIM signing for email authentication')
+  if (!securityFeatures.default_dkim_selector_found) {
+    recommendations.push('No TXT record was found at default._domainkey. Check the DKIM selector configured by your email provider; this analyzer checks only the default selector.')
   }
   
   if (!securityFeatures.caa_configured) {
@@ -522,16 +424,12 @@ function generateDNSRecommendations(vulnerabilities: DNSVulnerability[], securit
   
   const vulnTypes = new Set(vulnerabilities.map(v => v.type))
   
-  if (vulnTypes.has('Zone Transfer Allowed')) {
-    recommendations.push('Restrict DNS zone transfers to authorized servers only')
-  }
-  
   if (vulnTypes.has('Multiple SPF Records')) {
     recommendations.push('Consolidate multiple SPF records into a single record')
   }
   
   if (recommendations.length === 0) {
-    recommendations.push('DNS configuration appears secure, continue monitoring for changes')
+    recommendations.push('No issues were detected by the checks completed. Review the coverage limitations before treating this as a full DNS security assessment.')
   }
   
   return recommendations
