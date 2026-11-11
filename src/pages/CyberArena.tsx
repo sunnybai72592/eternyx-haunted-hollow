@@ -113,8 +113,8 @@ const CyberArena = () => {
           break;
         case 'vuln-scanner':
           functionName = 'vulnerability-scanner';
-          payload.target_url = input;
-          payload.scan_type = 'basic';
+          delete payload.user_id; // Ownership is derived from the verified JWT.
+          payload.product = input;
           break;
         case 'dns-analyzer':
           functionName = 'dns-analyzer';
@@ -168,16 +168,16 @@ const CyberArena = () => {
     },
     {
       id: 'vuln-scanner',
-      name: 'Vulnerability Scanner',
-      description: 'Comprehensive vulnerability assessment and CVE detection',
+      name: 'CVE Research',
+      description: 'Search public NVD CVE records for a software product; keyword matches require manual version verification.',
       icon: Shield,
       category: 'scan',
       difficulty: 'advanced',
       requiresAuth: true,
       isPremium: false,
       isElite: false,
-      inputPlaceholder: 'Enter target URL or IP',
-      inputLabel: 'Target'
+      inputPlaceholder: 'Enter software product and version',
+      inputLabel: 'Product / version'
     },
     {
       id: 'dns-analyzer',

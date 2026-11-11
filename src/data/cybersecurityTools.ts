@@ -23,14 +23,14 @@ export const cybersecurityTools: CyberTool[] = [
   // Vulnerability Assessment Tools
   {
     id: 'vuln-scanner',
-    name: 'Advanced Vulnerability Scanner',
-    description: 'Military-grade vulnerability detection with AI-powered analysis',
+    name: 'CVE Research Workbench',
+    description: 'Search public NVD CVE records by vendor, product and version; verify affected-version criteria manually.',
     category: 'cybersecurity',
     icon: React.createElement(Scan),
-    features: ['Zero-day detection', 'CVE database integration', 'Custom exploit generation', 'AI-powered risk assessment'],
+    features: ['NVD keyword search', 'Published CVE descriptions', 'CVSS data when available', 'CPE configuration review'],
     tier: 'elite',
     difficulty: 'expert',
-    executionTime: '15-45 minutes',
+    executionTime: 'Usually under a minute',
     tags: ['vulnerability', 'scanning', 'ai', 'cve']
   },
   {
