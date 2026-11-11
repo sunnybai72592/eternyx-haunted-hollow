@@ -165,12 +165,12 @@ const AppContent = () => {
               
               {/* Back Button Placement */}
               {showBackButton && (
-                <div className="fixed top-[4.75rem] left-3 sm:left-4 z-40">
+                <div className="fixed top-[5.5rem] left-3 right-3 z-40 sm:left-5 sm:right-auto">
                   <BackButton />
                 </div>
               )}
 
-              <main className="flex-1 p-4 pt-32 transition-all duration-300">
+              <main id="main-content" tabIndex={-1} className="flex-1 p-4 pt-36 outline-none transition-[padding] duration-300 sm:pt-32">
                 <Suspense fallback={
                   <div className="min-h-screen bg-background flex items-center justify-center">
                     <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
