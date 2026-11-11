@@ -24,9 +24,9 @@ const Footer: React.FC = () => (
         <a href="#" className="hover:text-neon-green transition-colors duration-300">Terms of Service</a>
       </div>
       <div className="flex space-x-4">
-        <a href="#" aria-label="ETERNXY on GitHub" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Github className="h-5 w-5" /></a>
-        <a href="#" aria-label="ETERNXY on Twitter" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Twitter className="h-5 w-5" /></a>
-        <a href="#" aria-label="ETERNXY on LinkedIn" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Linkedin className="h-5 w-5" /></a>
+        <a href="#" aria-label="ETERNYX on GitHub" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Github className="h-5 w-5" /></a>
+        <a href="#" aria-label="ETERNYX on Twitter" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Twitter className="h-5 w-5" /></a>
+        <a href="#" aria-label="ETERNYX on LinkedIn" className="text-cyber-cyan hover:text-neon-green transition-colors duration-300"><Linkedin className="h-5 w-5" /></a>
       </div>
     </div>
   </footer>
