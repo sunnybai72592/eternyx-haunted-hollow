@@ -100,7 +100,7 @@ export class SupabaseAPI {
         action: 'signup'
       });
 
-      return { data: null, error: null };
+      return { data, error: null };
     } catch (error) {
       await this.logSecurityEvent('login', undefined, {
         email,
@@ -187,7 +187,7 @@ export class SupabaseAPI {
 
       if (error) throw error;
 
-      return { data, error: null };
+      return { data: null, error: null };
     } catch (error) {
       console.error('Supabase insert error:', error);
       return { data: null, error };
