@@ -112,7 +112,7 @@ serve(async (req) => {
     // 2. Security Features Analysis
     const securityFeatures = await analyzeSecurityFeatures(domainName, dnsRecords)
 
-    // 3. DNSSEC Validation
+    // 3. Observe DS record presence (not a full DNSSEC validation)
     const dnssecAnalysis = await analyzeDNSSEC(domainName)
     vulnerabilities.push(...dnssecAnalysis.vulnerabilities)
 
@@ -184,8 +184,7 @@ serve(async (req) => {
           low: vulnerabilities.filter(v => v.severity === 'low').length
         },
         vulnerabilities: vulnerabilities.slice(0, 10), // Return first 10 for preview
-        recommendations: generateDNSRecommendations(vulnerabilities, securityFeatures),
-        coverage_limitations: coverageLimitations
+        recommendations: generateDNSRecommendations(vulnerabilities, securityFeatures)
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
