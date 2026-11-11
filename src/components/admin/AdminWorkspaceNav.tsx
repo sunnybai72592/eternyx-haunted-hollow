@@ -1,4 +1,4 @@
-import { LayoutDashboard, Bug, Mail, Users } from 'lucide-react';
+import { LayoutDashboard, Bug, Mail, Users, ShieldAlert } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const items = [
@@ -6,6 +6,7 @@ const items = [
   { href: '/admin/bug-reports', label: 'Bug reports', icon: Bug, exact: false },
   { href: '/admin/enquiries', label: 'Business enquiries', icon: Mail, exact: false },
   { href: '/admin/users', label: 'Users', icon: Users, exact: false },
+  { href: '/admin/security', label: 'Security', icon: ShieldAlert, exact: false },
 ];
 
 export default function AdminWorkspaceNav() {
