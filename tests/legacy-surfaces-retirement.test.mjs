@@ -78,7 +78,7 @@ test('profile avatar upload and public URL use the provisioned storage bucket', 
   const migration = await read('supabase/migrations/20251004122829_a8554bfe-efa3-4057-858d-edee58f73e61.sql');
 
   assert.match(migration, /'avatars'/);
-  assert.match(uploader.replace(/\s+/g, ' '), /storage\.from\('avatars'\)\.upload/);
-  assert.match(uploader.replace(/\s+/g, ' '), /storage\.from\('avatars'\)\.getPublicUrl/);
+  assert.match(uploader.replace(/\s+/g, ' '), /storage\s*\.from\('avatars'\)\s*\.upload/);
+  assert.match(uploader.replace(/\s+/g, ' '), /storage\s*\.from\('avatars'\)\s*\.getPublicUrl/);
   assert.doesNotMatch(uploader, /user-avatars/);
 });
