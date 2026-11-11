@@ -50,6 +50,7 @@ const GitHubActionsIntelligence = lazy(() => import("./pages/GitHubActionsIntell
 const GitHubReleaseIntelligence = lazy(() => import("./pages/GitHubReleaseIntelligence"));
 const Hacked = lazy(() => import("./pages/Hacked"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const BlackHatPentesting = lazy(() => import("./pages/BlackHatPentesting"));
 const ZeroDayProtection = lazy(() => import("./pages/ZeroDayProtection"));
 const QuantumEncryption = lazy(() => import("./pages/QuantumEncryption"));
 const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
@@ -76,9 +77,6 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
 const Profile = lazy(() => import("./pages/Profile"));
 
-
-const PenetrationTesting = lazy(() => import("./pages/PenetrationTesting"));
-const VulnerabilityAssessment = lazy(() => import("./pages/VulnerabilityAssessment"));
 
 // Tool pages
 const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
@@ -230,12 +228,12 @@ const AppContent = () => {
                         <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                         <Route path="/help" element={<Help />} />
                         <Route path="/hacked" element={<Hacked />} />
-                        <Route path="/black-hat-pentesting" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
+                        <Route path="/black-hat-pentesting" element={<BlackHatPentesting />} />
                         <Route path="/zero-day-protection" element={<ZeroDayProtection />} />
                         <Route path="/security-auditing" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
                         <Route path="/incident-response" element={<Navigate to="/cybersecurity/incident-playbooks" replace />} />
-                        <Route path="/penetration-testing" element={<PenetrationTesting />} />
-                        <Route path="/vulnerability-assessment" element={<VulnerabilityAssessment />} />
+                        <Route path="/penetration-testing" element={<Navigate to="/black-hat-pentesting" replace />} />
+                        <Route path="/vulnerability-assessment" element={<Navigate to="/cybersecurity/assessment-remediation" replace />} />
                         <Route path="/vulnerability-scanner" element={<VulnerabilityScanner />} />
                         <Route path="/quantum-encryption" element={<QuantumEncryption />} />
                         <Route path="/ai-powered-security" element={<AIPoweredSecurity />} />
