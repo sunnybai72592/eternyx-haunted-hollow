@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { AuthModal } from '@/components/AuthModal';
+import { UserProfile } from '@/components/auth/UserProfile';
 
 interface NavigationProps {
   className?: string;
