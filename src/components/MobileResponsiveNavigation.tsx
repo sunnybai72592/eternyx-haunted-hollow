@@ -1,419 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { 
-  Home,
-  Compass,
-  Shield, 
-  Code, 
-  Lightbulb, 
-  LayoutDashboard, 
-  User, 
-  Crown, 
-  Menu,
-  X,
-  ChevronDown,
-  Wrench,
-  Zap,
-  LogIn,
-  UserPlus,
-  Bot,
-  GraduationCap,
-  Bug,
-  ClipboardList,
-  Bell,
-  Settings
-} from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
-import { AuthModal } from '@/components/AuthModal';
-import { UserProfile } from '@/components/auth/UserProfile';
+import React, { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowRight, ArrowUpRight, BookOpen, ChevronDown, Compass, Menu,
+  PanelsTopLeft, ShieldCheck, Sparkles, X, Zap
+} from "lucide-react";
+import { ecosystemPillars } from "@/data/ecosystem";
+import { UserProfile } from "@/components/auth/UserProfile";
+import { useAuthStore } from "@/store/authStore";
 
 interface NavigationProps {
   className?: string;
 }
 
-interface NavCategory {
-  id: string;
-  name: string;
-  path: string;
-  icon: React.ComponentType<any>;
-  color: string;
-  children?: {
-    name: string;
-    path: string;
-    description: string;
-  }[];
-}
-
-export const MobileResponsiveNavigation = ({ className = '' }: NavigationProps) => {
+export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  
-  const { user, isAuthenticated, signOut } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [ecosystemOpen, setEcosystemOpen] = useState(false);
 
   useEffect(() => {
-    const checkScreenSize = () => {
-      const mobile = window.innerWidth < 1024;
-      setIsMobile(mobile);
-      if (!mobile) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
-
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-    setActiveDropdown(null);
+    setMobileOpen(false);
+    setEcosystemOpen(false);
   }, [location.pathname]);
 
-  const categories: NavCategory[] = [
-    {
-      id: 'home',
-      name: 'Home',
-      path: '/',
-      icon: Home,
-      color: 'from-green-400 to-emerald-600',
-    },
-    {
-      id: 'explore',
-      name: 'Explore',
-      path: '/explore',
-      icon: Compass,
-      color: 'from-cyan-400 to-violet-600',
-    },
-    {
-      id: 'cybersecurity',
-      name: 'Cybersecurity',
-      path: '/cybersecurity',
-      icon: Shield,
-      color: 'from-cyan-400 to-blue-600',
-    },
-    {
-      id: 'services-hub',
-      name: 'Services',
-      path: '/services-hub',
-      icon: Zap,
-      color: 'from-purple-400 to-indigo-600',
-    },
-    {
-      id: 'tools-hub',
-      name: 'Tools',
-      path: '/tools',
-      icon: Wrench,
-      color: 'from-cyan-400 to-teal-600',
-    },
-    {
-      id: 'eternyx-ai',
-      name: 'Eternyx AI',
-      path: '/eternyx-ai',
-      icon: Bot,
-      color: 'from-pink-400 to-rose-600',
-    },
-    {
-      id: 'education',
-      name: 'Education',
-      path: '/education',
-      icon: GraduationCap,
-      color: 'from-amber-400 to-orange-600',
-    },
-    {
-      id: 'dashboard',
-      name: 'Dashboard',
-      path: '/account',
-      icon: LayoutDashboard,
-      color: 'from-indigo-400 to-purple-600',
-    },
-    {
-      id: 'contact',
-      name: 'Contact',
-      path: '/contact',
-      icon: User,
-      color: 'from-gray-400 to-slate-600',
-    },
-    {
-      id: 'my-bug-reports',
-      name: 'My Bug Reports',
-      path: '/my-bug-reports',
-      icon: ClipboardList,
-      color: 'from-cyan-400 to-blue-600',
-    },
-    {
-      id: 'report-bug',
-      name: 'Report a Bug',
-      path: '/bug-report',
-      icon: Bug,
-      color: 'from-rose-400 to-red-600',
-    }
-  ];
+  useEffect(() => {
+    if (!mobileOpen && !ecosystemOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        setEcosystemOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen, ecosystemOpen]);
 
-  const handleNavigation = (path: string, categoryName?: string) => {
-    navigate(path);
-    setActiveDropdown(null);
-    setIsMobileMenuOpen(false);
-  };
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
 
-  const toggleDropdown = (categoryId: string, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    setActiveDropdown(activeDropdown === categoryId ? null : categoryId);
-  };
+  const isActive = (path: string) =>
+    path === "/" ? location.pathname === "/" : location.pathname === path || location.pathname.startsWith(path + "/");
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-    setActiveDropdown(null);
-  };
-
-  const isActivePath = (path: string) => {
-    return location.pathname === path || 
-           (path !== '/' && location.pathname.startsWith(path));
-  };
-
-  const handleSignIn = () => {
-    setIsMobileMenuOpen(false);
-    navigate('/auth');
-  };
-
-  const handleSignUp = () => {
-    navigate('/auth?mode=signup');
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
-  };
-
-  const handleProfileClick = () => {
-    navigate('/profile');
-    setIsMobileMenuOpen(false);
+  const closeMenus = () => {
+    setMobileOpen(false);
+    setEcosystemOpen(false);
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-b border-white/10 ${className}`}>
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-2 h-16">
-          {/* Logo */}
-          <div className="flex-shrink-0 flex items-center">
-            <button
-              onClick={() => handleNavigation('/', 'Logo')}
-              className="text-xl sm:text-2xl font-bold text-white hover:text-white/80 transition-all duration-300 flex items-center gap-2"
-            >
-              <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
-              ETERNYX
-            </button>
-          </div>
+    <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 ${className}`}>
+      <nav aria-label="Main navigation" className="relative mx-auto max-w-7xl rounded-2xl border border-white/[0.10] bg-[#080d19]/85 shadow-[0_16px_60px_rgba(0,0,0,.34)] backdrop-blur-2xl">
+        <div className="flex h-[68px] items-center justify-between gap-3 px-4 sm:px-5">
+          <Link to="/" onClick={closeMenus} aria-label="ETERNYX home" className="group inline-flex min-w-0 items-center gap-2.5">
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/[0.09] text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,.10)] transition group-hover:border-cyan-200/50 group-hover:bg-cyan-300/[0.14]">
+              <Zap className="h-[19px] w-[19px]" />
+            </span>
+            <span className="text-lg font-black tracking-[0.13em] text-white sm:text-xl">ETERNYX</span>
+          </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex flex-1 min-w-0 items-center justify-center gap-0.5 px-4">
-            {categories.map((category) => (
-              <div key={category.id} className="relative group">
-                <Button
-                  variant="ghost"
-                  title={category.name}
-                  aria-label={category.name}
-                  onClick={() => category.children ? toggleDropdown(category.id) : handleNavigation(category.path, category.name)}
-                  className={`
-                    px-2.5 xl:px-3 py-2 text-sm font-medium whitespace-nowrap transition-all duration-300 rounded-lg
-                    ${isActivePath(category.path) 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-white/60 hover:text-white hover:bg-white/5'
-                    }
-                    ${category.children ? 'pr-8' : ''}
-                  `}
-                  onMouseEnter={() => category.children && setActiveDropdown(category.id)}
-                  onMouseLeave={() => setTimeout(() => setActiveDropdown(null), 300)}
-                >
-                  <category.icon className="w-4 h-4 2xl:mr-2" />
-                  <span className="hidden 2xl:inline">{category.name}</span>
-                  
-                  {category.children && (
-                    <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-200 ${
-                      activeDropdown === category.id ? 'rotate-180' : ''
-                    }`} />
-                  )}
-                </Button>
-
-                {/* Desktop Dropdown */}
-                {category.children && activeDropdown === category.id && (
-                  <div 
-                    className="absolute top-full left-0 mt-2 w-80 bg-black/95 backdrop-blur-md border border-white/10 rounded-lg shadow-xl z-50"
-                    onMouseEnter={() => setActiveDropdown(category.id)}
-                    onMouseLeave={() => setTimeout(() => setActiveDropdown(null), 300)}
-                  >
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                        <category.icon className="w-5 h-5 text-white/60" />
-                        {category.name}
-                      </h3>
-                      <div className="grid gap-2">
-                        {category.children.map((child) => (
-                          <button
-                            key={child.path}
-                            onClick={() => handleNavigation(child.path, child.name)}
-                            className="text-left p-3 rounded-lg hover:bg-white/5 transition-all duration-200"
-                          >
-                            <div className="text-white font-medium">
-                              {child.name}
-                            </div>
-                            <div className="text-white/40 text-sm mt-1">
-                              {child.description}
-                            </div>
-                          </button>
-                        ))}
+          <div className="hidden items-center gap-1 lg:flex">
+            <Link to="/explore" aria-current={isActive("/explore") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/explore") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>
+              Explore
+            </Link>
+            <div className="relative" onMouseEnter={() => setEcosystemOpen(true)} onMouseLeave={() => setEcosystemOpen(false)}>
+              <button type="button" aria-haspopup="true" aria-expanded={ecosystemOpen} onClick={() => setEcosystemOpen((open) => !open)} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setEcosystemOpen(true); } }} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${ecosystemOpen || ecosystemPillars.some((pillar) => isActive(pillar.href)) ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>
+                Ecosystem <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${ecosystemOpen ? "rotate-180" : ""}`} />
+              </button>
+              {ecosystemOpen && (
+                <div className="absolute left-1/2 top-full z-50 w-[min(780px,calc(100vw-2rem))] -translate-x-1/2 pt-4">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a1020]/[.98] p-5 shadow-[0_24px_80px_rgba(0,0,0,.58)] backdrop-blur-2xl">
+                    <div className="mb-4 flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[.24em] text-cyan-300">One ecosystem</p>
+                        <h2 className="mt-1 text-lg font-semibold text-white">Explore the six pillars</h2>
                       </div>
+                      <Link to="/explore" onClick={closeMenus} className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-200 transition hover:text-white">Full directory <ArrowUpRight className="h-3.5 w-3.5" /></Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+                      {ecosystemPillars.map((pillar, index) => {
+                        const Icon = pillar.icon;
+                        return (
+                          <Link key={pillar.id} to={pillar.href} onClick={closeMenus} className="group flex min-h-[112px] gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/25 hover:bg-cyan-200/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-200/15 bg-cyan-200/[0.07] text-cyan-200"><Icon className="h-[18px] w-[18px]" /></span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold text-white group-hover:text-cyan-100">{pillar.shortTitle}</span>
+                              <span className="mt-1 block text-xs leading-5 text-slate-400">{pillar.description}</span>
+                              <span className="mt-2 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">0{index + 1} · {pillar.status === "Existing foundation" ? "Foundation" : "In development"}</span>
+                            </span>
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="hidden lg:flex items-center">
-            {!isAuthenticated ? (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Button onClick={handleSignIn} variant="ghost" className="px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all">
-                  <LogIn className="w-4 h-4 mr-2" />Sign In
-                </Button>
-                <Button onClick={handleSignUp} className="px-3 py-2 text-sm font-medium bg-white text-black hover:bg-white/90 rounded-lg transition-all">
-                  <UserPlus className="w-4 h-4 mr-2" />Sign Up
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <UserProfile className="scale-90" />
-              </div>
-            )}
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={toggleMobileMenu}
-            className="lg:hidden p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Toggle mobile menu"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-6 h-6" />
-            ) : (
-              <Menu className="w-6 h-6" />
-            )}
-          </button>
-        </div>
-
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-md border-b border-white/10 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
-            <div className="px-4 py-6 space-y-3">
-              {!isAuthenticated ? (
-                <div className="space-y-2 pb-3 border-b border-white/10">
-                  <Button
-                    onClick={handleSignIn}
-                    variant="ghost"
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]"
-                  >
-                    <LogIn className="w-5 h-5" />
-                    <span className="font-medium text-base">Sign In</span>
-                  </Button>
-                  <Button
-                    onClick={handleSignUp}
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg bg-white text-black hover:bg-white/90 min-h-[56px]"
-                  >
-                    <UserPlus className="w-5 h-5" />
-                    <span className="font-medium text-base">Sign Up</span>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2 pb-3 border-b border-white/10">
-                  <Button onClick={() => handleNavigation('/account', 'Account')} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
-                    <LayoutDashboard className="w-5 h-5" /><span className="font-medium text-base">Account Overview</span>
-                  </Button>
-                  <Button onClick={handleProfileClick} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
-                    <User className="w-5 h-5" /><span className="font-medium text-base">My Profile</span>
-                  </Button>
-                  <Button onClick={() => handleNavigation('/notifications', 'Notifications')} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
-                    <Bell className="w-5 h-5" /><span className="font-medium text-base">Notifications</span>
-                  </Button>
-                  <Button onClick={() => handleNavigation('/settings', 'Settings')} variant="ghost" className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]">
-                    <Settings className="w-5 h-5" /><span className="font-medium text-base">Settings</span>
-                  </Button>
-                  <Button
-                    onClick={handleSignOut}
-                    variant="ghost"
-                    className="w-full flex items-center justify-center gap-2 p-4 rounded-lg text-white/70 hover:text-white hover:bg-white/10 min-h-[56px]"
-                  >
-                    <X className="w-5 h-5" />
-                    <span className="font-medium text-base">Sign Out</span>
-                  </Button>
                 </div>
               )}
-              
-              {categories.map((category) => (
-                <div key={category.id} className="space-y-2">
-                  <button
-                    onClick={() => category.children ? 
-                      toggleDropdown(category.id) : 
-                      handleNavigation(category.path, category.name)
-                    }
-                    className={`
-                      w-full flex items-center justify-between p-4 rounded-lg transition-all duration-300 min-h-[56px]
-                      ${isActivePath(category.path)
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/60 hover:text-white hover:bg-white/5 border border-white/5'
-                      }
-                    `}
-                  >
-                    <div className="flex items-center gap-3">
-                      <category.icon className="w-5 h-5 flex-shrink-0" />
-                      <span className="font-medium text-base">{category.name}</span>
-                    </div>
-                    
-                    {category.children && (
-                      <ChevronDown className={`w-5 h-5 transition-transform duration-200 flex-shrink-0 ${
-                        activeDropdown === category.id ? 'rotate-180' : ''
-                      }`} />
-                    )}
-                  </button>
+            </div>
+            <Link to="/education" aria-current={isActive("/education") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/education") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>Education</Link>
+            <Link to="/services-hub" aria-current={isActive("/services-hub") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/services-hub") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>Services</Link>
+            <Link to="/contact" aria-current={isActive("/contact") ? "page" : undefined} className="rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white">Contact</Link>
+          </div>
 
-                  {/* Mobile Dropdown */}
-                  {category.children && activeDropdown === category.id && (
-                    <div className="ml-4 space-y-2">
-                      {category.children.map((child) => (
-                        <button
-                          key={child.path}
-                          onClick={() => handleNavigation(child.path, child.name)}
-                          className="w-full text-left p-3 rounded-lg hover:bg-white/5 transition-all duration-200 border border-white/5 min-h-[48px]"
-                        >
-                          <div className="text-white font-medium text-sm">
-                            {child.name}
-                          </div>
-                          <div className="text-white/40 text-xs mt-1">
-                            {child.description}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+          <div className="hidden items-center gap-2 lg:flex">
+            {isAuthenticated ? (
+              <UserProfile />
+            ) : (
+              <>
+                <Link to="/auth" className="rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-300 transition hover:text-white">Sign in</Link>
+                <Link to="/auth?mode=signup" className="inline-flex items-center gap-2 rounded-xl bg-cyan-200 px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_8px_28px_rgba(103,232,249,.14)] transition hover:-translate-y-0.5 hover:bg-cyan-100">Get started <ArrowUpRight className="h-4 w-4" /></Link>
+              </>
+            )}
+          </div>
+
+          <button type="button" onClick={() => setMobileOpen((open) => !open)} aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={mobileOpen} aria-controls="eternyx-mobile-menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-200 transition hover:border-cyan-200/30 hover:bg-white/[0.08] lg:hidden">
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+      </nav>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 top-[88px] z-40 bg-[#050914]/95 px-3 pb-6 pt-3 backdrop-blur-2xl lg:hidden" id="eternyx-mobile-menu">
+          <div className="mx-auto flex h-full max-w-xl flex-col overflow-y-auto rounded-2xl border border-white/10 bg-[#0a1020] p-4 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between border-b border-white/[0.08] pb-4">
+              <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-cyan-300">Navigate ETERNYX</p><p className="mt-1 text-sm text-slate-400">One ecosystem. Endless possibilities.</p></div>
+              <span className="rounded-lg border border-cyan-200/15 bg-cyan-200/[0.06] p-2 text-cyan-200"><PanelsTopLeft className="h-5 w-5" /></span>
+            </div>
+            <Link to="/explore" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-white transition hover:bg-white/[0.06]"><Compass className="h-4 w-4 text-cyan-200" /> Explore the platform <ArrowRight className="ml-auto h-4 w-4 text-slate-500" /></Link>
+            <button type="button" onClick={() => setEcosystemOpen((open) => !open)} aria-expanded={ecosystemOpen} className="mt-1 flex min-h-12 items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-white transition hover:bg-white/[0.06]"><Sparkles className="h-4 w-4 text-cyan-200" /> The six pillars <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 transition-transform ${ecosystemOpen ? "rotate-180" : ""}`} /></button>
+            {ecosystemOpen && (
+              <div className="mb-2 ml-3 grid gap-1 border-l border-cyan-200/20 pl-3">
+                {ecosystemPillars.map((pillar) => {
+                  const Icon = pillar.icon;
+                  return <Link key={pillar.id} to={pillar.href} onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm text-slate-300 transition hover:bg-cyan-200/[0.06] hover:text-white"><Icon className="h-4 w-4 text-cyan-200" />{pillar.shortTitle}<ArrowUpRight className="ml-auto h-3.5 w-3.5 text-slate-600" /></Link>;
+                })}
+              </div>
+            )}
+            <Link to="/education" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"><BookOpen className="h-4 w-4 text-cyan-200" /> Education</Link>
+            <Link to="/services-hub" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"><ShieldCheck className="h-4 w-4 text-cyan-200" /> Services</Link>
+            <Link to="/contact" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white">Contact</Link>
+            <div className="mt-auto space-y-2 border-t border-white/[0.08] pt-4">
+              {isAuthenticated ? (
+                <>
+                  <Link to="/account" onClick={closeMenus} className="flex min-h-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white">Account center</Link>
+                  <Link to="/profile" onClick={closeMenus} className="flex min-h-12 items-center justify-center rounded-xl border border-white/10 text-sm font-semibold text-slate-300">My profile</Link>
+                  <Link to="/settings" onClick={closeMenus} className="flex min-h-12 items-center justify-center rounded-xl border border-white/10 text-sm font-semibold text-slate-300">Settings</Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/auth" onClick={closeMenus} className="flex min-h-12 items-center justify-center rounded-xl border border-white/10 text-sm font-semibold text-white">Sign in</Link>
+                  <Link to="/auth?mode=signup" onClick={closeMenus} className="flex min-h-12 items-center justify-center rounded-xl bg-cyan-200 text-sm font-bold text-slate-950">Create your account <ArrowUpRight className="ml-2 h-4 w-4" /></Link>
+                </>
+              )}
             </div>
           </div>
-        )}
-      </div>
-      
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        initialMode={authMode === 'signup' ? 'signup' : 'signin'}
-      />
-    </nav>
+        </div>
+      )}
+    </header>
   );
 };
 
