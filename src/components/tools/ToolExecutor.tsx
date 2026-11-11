@@ -82,8 +82,6 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
         case 'web-scanner':
           executionResult = await toolExecutionService.executeWebScanner({
             target_url: parameters.target_url,
-            scan_depth: parameters.scan_depth ? parseInt(parameters.scan_depth) : 2,
-            user_id: user.id,
           });
           break;
 
@@ -183,19 +181,7 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
                 onChange={(e) => handleParameterChange('target_url', e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="scan_depth">Scan Depth</Label>
-              <Select onValueChange={(value) => handleParameterChange('scan_depth', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select scan depth" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Surface (1 level)</SelectItem>
-                  <SelectItem value="2">Standard (2 levels)</SelectItem>
-                  <SelectItem value="3">Deep (3 levels)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-xs text-amber-300">Passive inspection only: one HTTP request, no crawling or exploit payloads. Only scan systems you own or are authorized to assess.</p>
           </div>
         );
 
@@ -259,8 +245,8 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
                 <div className="text-lg font-semibold text-white">{result.scan_duration || result.analysis_duration || 'N/A'}s</div>
               </div>
               <div className="rounded-lg bg-gray-800 p-4">
-                <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : 'Risk Score'}</div>
-                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}</div>
+                <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Candidate CVE references' : toolId === 'web-scanner' ? 'Risk assessment' : 'Risk Score'}</div>
+                <div className="text-lg font-semibold text-white">{toolId === 'vuln-scanner' ? (result.results_returned ?? 0) : toolId === 'web-scanner' ? 'Not scored' : `${result.risk_score ?? result.security_score ?? 'N/A'}/100`}</div>
               </div>
               <div className="rounded-lg bg-gray-800 p-4">
                 <div className="text-sm text-gray-400">{toolId === 'vuln-scanner' ? 'Total matches in NVD' : 'Issues Found'}</div>
@@ -292,6 +278,23 @@ export const ToolExecutor: React.FC<ToolExecutorProps> = ({
               ) : <p className="text-sm text-gray-400">No port observations were returned for this lookup/filter. This does not mean the target has no open ports.</p>}
               {Array.isArray(result.vulnerabilities_reported_by_shodan) && result.vulnerabilities_reported_by_shodan.length > 0 && <p className="text-xs text-amber-200">Shodan vulnerability references: {result.vulnerabilities_reported_by_shodan.map((item: any) => typeof item === 'string' ? item : JSON.stringify(item)).join(', ')}</p>}
               <p className="text-xs text-gray-400">Lookup completed: {result.lookup_completed_at ? new Date(result.lookup_completed_at).toLocaleString() : 'Not supplied'}</p>
+            </div>
+          )}
+
+          {toolId === 'web-scanner' && Array.isArray(result.findings) && (
+            <div className="space-y-3">
+              <h4 className="font-semibold text-cyan-300">Observed configuration findings</h4>
+              {result.findings.length ? result.findings.map((finding: any, index: number) => (
+                <div key={`${finding.type}-${index}`} className="rounded-lg border border-gray-700 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-white">{finding.type}</span>
+                    <Badge variant="outline">{finding.severity}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-300">{finding.description}</p>
+                  <p className="mt-1 text-xs text-gray-500">{finding.location}</p>
+                  <p className="mt-2 text-sm text-cyan-200">Remediation: {finding.remediation}</p>
+                </div>
+              )) : <p className="text-sm text-gray-400">No configuration observations were identified in this response. This does not establish that the application is vulnerability-free.</p>}
             </div>
           )}
 
