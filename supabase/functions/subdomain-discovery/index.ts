@@ -5,6 +5,7 @@ const CT_TIMEOUT_MS = 10000;
 const CT_RESPONSE_LIMIT_BYTES = 1024 * 1024;
 const MAX_CERTIFICATE_ROWS = 5000;
 const MAX_SUBDOMAINS = 250;
+const MAX_REQUEST_BODY_BYTES = 8 * 1024;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,9 +38,10 @@ serve(async (req) => {
 
     let body: { domain?: unknown };
     try {
-      body = await req.json();
+      const requestText = await readLimitedResponseText(req, MAX_REQUEST_BODY_BYTES);
+      body = JSON.parse(requestText);
     } catch {
-      return json({ error: "Request body must be valid JSON" }, 400);
+      return json({ error: "Request body must be valid JSON and no larger than 8 KB" }, 400);
     }
 
     const domain = typeof body.domain === "string"
