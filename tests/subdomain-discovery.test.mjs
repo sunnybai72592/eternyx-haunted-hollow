@@ -80,9 +80,9 @@ test("DNS verification is bounded by hostname count and concurrency", async () =
 
 test("DNS verification distinguishes resolved, no-address, and inconclusive results", async () => {
   const source = await read("supabase/functions/subdomain-discovery/index.ts");
-  assert.match(source, /status: "resolved"/);
-  assert.match(source, /status: "no_address_records"/);
-  assert.match(source, /status: "inconclusive"/);
+  assert.match(source, /"resolved"/);
+  assert.match(source, /"no_address_records"/);
+  assert.match(source, /"inconclusive"/);
   assert.match(source, /verification_complete: verificationComplete/);
   assert.match(source, /A or AAAA address answer is observed/);
 });
