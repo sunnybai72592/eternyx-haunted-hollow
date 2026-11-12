@@ -832,7 +832,7 @@ const CyberArena = () => {
                     </section>
                   )}
                 </div>
-              ) : {activeTool === 'subdomain-discovery' &&
+              ) : activeTool === 'subdomain-discovery' &&
               !scanResults.error &&
               Array.isArray(scanResults.dns_verification?.results) ? (
                 <div className="space-y-5">
