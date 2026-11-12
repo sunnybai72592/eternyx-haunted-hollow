@@ -832,6 +832,209 @@ const CyberArena = () => {
                     </section>
                   )}
                 </div>
+              ) : activeTool === 'ssl-analyzer' &&
+              !scanResults.error &&
+              scanResults.success === true &&
+              scanResults.ssl_result ? (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40">
+                      {scanResults.hostname || 'Assessed hostname'}
+                    </Badge>
+                    <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30">
+                      SSL Labs grade: {scanResults.overall_grade || scanResults.ssl_result.grade || 'N/A'}
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.ssl_result.endpoints?.length ?? 0} endpoint(s)
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.ssl_result.vulnerabilities?.length ?? 0} finding(s)
+                    </Badge>
+                  </div>
+
+                  <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {[
+                      ['Certificate valid', scanResults.additional_checks?.certificate_valid],
+                      ['TLS 1.3 supported', scanResults.additional_checks?.supports_tls13],
+                      ['HSTS enabled', scanResults.additional_checks?.hsts_enabled],
+                      ['Certificate transparency', scanResults.additional_checks?.certificate_transparency],
+                      ['OCSP stapling', scanResults.additional_checks?.ocsp_stapling],
+                      ['Perfect forward secrecy', scanResults.additional_checks?.perfect_forward_secrecy],
+                      ['Certificate chain valid', scanResults.additional_checks?.certificate_chain_valid],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="flex items-center justify-between gap-3 rounded-lg border border-gray-700 bg-black/20 px-3 py-3">
+                        <span className="text-xs text-gray-300">{label}</span>
+                        <Badge className={
+                          value === true ? 'bg-green-500/15 text-green-300 border-green-500/30' :
+                          value === false ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                          'bg-gray-500/15 text-gray-300 border-gray-500/30'
+                        }>
+                          {value === true ? 'Yes' : value === false ? 'No' : 'Unknown'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">Certificate evidence</h3>
+                    {Array.isArray(scanResults.ssl_result.certificates) && scanResults.ssl_result.certificates.length > 0 ? (
+                      <div className="space-y-3">
+                        {scanResults.ssl_result.certificates.map((certificate: any, index: number) => (
+                          <div key={certificate.id || certificate.sha256Hash || index} className="rounded-lg border border-gray-700 bg-black/20 p-4 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-white break-all">{certificate.subject || certificate.commonNames?.[0] || 'Certificate'}</p>
+                              <Badge variant="outline" className="text-gray-300">Certificate {index + 1}</Badge>
+                            </div>
+                            {certificate.issuerLabel && <p className="text-xs text-gray-400">Issuer: {certificate.issuerLabel}</p>}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-300">
+                              {typeof certificate.notBefore === 'number' && (
+                                <p>Valid from: {new Date(certificate.notBefore * 1000).toLocaleString()}</p>
+                              )}
+                              {typeof certificate.notAfter === 'number' && (
+                                <p>Expires: {new Date(certificate.notAfter * 1000).toLocaleString()}</p>
+                              )}
+                              {certificate.keyAlg && <p>Public key: {certificate.keyAlg}{typeof certificate.keySize === 'number' ? ` (${certificate.keySize}-bit)` : ''}</p>}
+                              {certificate.sigAlg && <p>Signature: {certificate.sigAlg}</p>}
+                            </div>
+                            {certificate.sha256Hash && (
+                              <p className="text-xs text-gray-500 font-mono break-all">SHA-256: {certificate.sha256Hash}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-gray-700 bg-black/20 p-4 text-sm text-gray-400">
+                        No certificate details were included in the completed response.
+                      </p>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">Assessed endpoints</h3>
+                    <div className="space-y-2">
+                      {(Array.isArray(scanResults.ssl_result.endpoints) ? scanResults.ssl_result.endpoints : []).map((endpoint: any, index: number) => (
+                        <div key={endpoint.ipAddress || index} className="rounded-lg border border-gray-700 bg-black/20 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm text-white font-mono">{endpoint.ipAddress || `Endpoint ${index + 1}`}</p>
+                            <div className="flex gap-2">
+                              <Badge variant="outline" className="text-gray-300">{endpoint.statusMessage || 'Status unknown'}</Badge>
+                              {endpoint.grade && <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30">Grade {endpoint.grade}</Badge>}
+                            </div>
+                          </div>
+                          {typeof endpoint.duration === 'number' && (
+                            <p className="mt-1 text-xs text-gray-500">Assessment duration: {endpoint.duration} ms</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-white">Protocol support</h3>
+                      <span className="text-xs text-gray-500">{scanResults.ssl_result.protocols?.length ?? 0} protocol entries</span>
+                    </div>
+                    {Array.isArray(scanResults.ssl_result.protocols) && scanResults.ssl_result.protocols.length > 0 ? (
+                      <div className="rounded-lg border border-gray-700 divide-y divide-gray-800">
+                        {scanResults.ssl_result.protocols.map((protocol: any, index: number) => (
+                          <div key={`${protocol.name}-${protocol.version}-${index}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                            <span className="text-sm text-white">{protocol.name} {protocol.version}</span>
+                            <Badge className={
+                              protocol.q === 0 ? 'bg-red-500/15 text-red-300 border-red-500/30' :
+                              protocol.q === 1 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                              'bg-gray-500/15 text-gray-300 border-gray-500/30'
+                            }>
+                              {protocol.q === 0 ? 'Insecure' : protocol.q === 1 ? 'Weak' : 'Reported'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">No protocol details were returned.</p>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-white">Cipher suite evidence</h3>
+                      <span className="text-xs text-gray-500">{scanResults.ssl_result.suites?.length ?? 0} suites reported</span>
+                    </div>
+                    {Array.isArray(scanResults.ssl_result.suites) && scanResults.ssl_result.suites.length > 0 ? (
+                      <div className="rounded-lg border border-gray-700 divide-y divide-gray-800 max-h-72 overflow-y-auto">
+                        {scanResults.ssl_result.suites.slice(0, 30).map((suite: any, index: number) => (
+                          <div key={`${suite.name}-${index}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                            <span className="text-xs text-gray-300 font-mono break-all">{suite.name || 'Unnamed cipher suite'}</span>
+                            {typeof suite.cipherStrength === 'number' && (
+                              <Badge variant="outline" className="text-gray-400">{suite.cipherStrength}-bit</Badge>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">No cipher suite details were returned.</p>
+                    )}
+                    {(scanResults.ssl_result.suites?.length ?? 0) > 30 && (
+                      <p className="text-xs text-gray-500">Showing 30 of {scanResults.ssl_result.suites.length} returned cipher suites.</p>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">Security findings</h3>
+                    {Array.isArray(scanResults.ssl_result.vulnerabilities) && scanResults.ssl_result.vulnerabilities.length > 0 ? (
+                      <div className="space-y-2">
+                        {scanResults.ssl_result.vulnerabilities.map((finding: any, index: number) => {
+                          const severityStyles: Record<string, string> = {
+                            critical: 'bg-red-500/15 text-red-300 border-red-500/30',
+                            high: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+                            medium: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                            low: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
+                          };
+                          return (
+                            <div key={finding.id || index} className="rounded-lg border border-gray-700 bg-black/20 p-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-white">{finding.name || finding.id}</p>
+                                <Badge className={severityStyles[String(finding.severity).toLowerCase()] || severityStyles.low}>
+                                  {finding.severity || 'Unclassified'}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-300">{finding.description}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-gray-700 bg-black/20 p-4 text-sm text-gray-400">
+                        No vulnerabilities were reported in the completed SSL Labs checks. This is limited to the checks represented in this assessment.
+                      </p>
+                    )}
+                  </section>
+
+                  {Array.isArray(scanResults.recommendations) && scanResults.recommendations.length > 0 && (
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-semibold text-white">Recommendations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-gray-300">
+                        {scanResults.recommendations.map((recommendation: string, index: number) => (
+                          <li key={index}>{recommendation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {Array.isArray(scanResults.coverage_limitations) && (
+                    <section className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                      <h3 className="text-sm font-semibold text-amber-200">Coverage limitations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-xs text-gray-400">
+                        {scanResults.coverage_limitations.map((limitation: string, index: number) => (
+                          <li key={index}>{limitation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    Source: {scanResults.source || 'Qualys SSL Labs API v3'}.
+                    This is an external TLS configuration assessment, not an application vulnerability scan.
+                  </p>
+                </div>
               ) : activeTool === 'subdomain-discovery' &&
               !scanResults.error &&
               Array.isArray(scanResults.dns_verification?.results) ? (
