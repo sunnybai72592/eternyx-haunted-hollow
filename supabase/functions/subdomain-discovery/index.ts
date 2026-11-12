@@ -6,6 +6,10 @@ const CT_RESPONSE_LIMIT_BYTES = 1024 * 1024;
 const MAX_CERTIFICATE_ROWS = 5000;
 const MAX_SUBDOMAINS = 250;
 const MAX_REQUEST_BODY_BYTES = 8 * 1024;
+const DNS_TIMEOUT_MS = 5000;
+const DNS_RESPONSE_LIMIT_BYTES = 16 * 1024;
+const MAX_DNS_VERIFICATIONS = 100;
+const DNS_CONCURRENCY = 5;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,6 +105,33 @@ serve(async (req) => {
     }
 
     const subdomains = [...discovered].sort().slice(0, MAX_SUBDOMAINS);
+    const verificationTargets = subdomains.slice(0, MAX_DNS_VERIFICATIONS);
+    const verifiedResults: DNSVerificationResult[] = new Array(verificationTargets.length);
+    let nextIndex = 0;
+    const workers = Array.from(
+      { length: Math.min(DNS_CONCURRENCY, verificationTargets.length) },
+      async () => {
+        while (true) {
+          const index = nextIndex++;
+          if (index >= verificationTargets.length) return;
+          verifiedResults[index] = await verifySubdomainDns(verificationTargets[index]);
+        }
+      },
+    );
+    await Promise.all(workers);
+
+    const dnsResults: DNSVerificationResult[] = subdomains.map((hostname, index) =>
+      index < verifiedResults.length
+        ? verifiedResults[index]
+        : { hostname, status: "not_checked_limit", addresses: [], verification_complete: false }
+    );
+    const dnsSummary = {
+      resolved: dnsResults.filter((item) => item.status === "resolved").length,
+      no_address_records: dnsResults.filter((item) => item.status === "no_address_records").length,
+      inconclusive: dnsResults.filter((item) => item.status === "inconclusive").length,
+      not_checked_limit: dnsResults.filter((item) => item.status === "not_checked_limit").length,
+    };
+
     return json({
       success: true,
       domain,
@@ -111,11 +142,21 @@ serve(async (req) => {
       subdomains,
       subdomains_returned: subdomains.length,
       results_truncated: discovered.size > MAX_SUBDOMAINS || records.length > MAX_CERTIFICATE_ROWS,
+      dns_verification: {
+        provider: "Cloudflare DNS over HTTPS",
+        summary: dnsSummary,
+        verified_subdomains: verificationTargets.length,
+        maximum_verifications: MAX_DNS_VERIFICATIONS,
+        results: dnsResults,
+        note: "A hostname is marked resolved only when an A or AAAA address answer is observed. No address answer does not prove the hostname is unused.",
+      },
       limitations: [
         "This is passive Certificate Transparency discovery, not active DNS enumeration.",
         "Results may include historical names, duplicates, or names that no longer resolve.",
         "Certificates that were not publicly logged will not appear; this is not a complete asset inventory.",
-        "No ports are probed and no target systems are contacted directly by ETERNYX."
+        "No ports are probed and no target systems are contacted directly by ETERNYX.",
+        "DNS verification uses a public recursive resolver and checks at most 100 discovered names per run.",
+        "DNS results are point-in-time observations; resolver errors are marked inconclusive and names beyond the verification cap are not checked."
       ]
     });
   } catch (error) {
@@ -128,6 +169,81 @@ serve(async (req) => {
     }, timedOut ? 504 : 502);
   }
 });
+
+
+interface DNSVerificationResult {
+  hostname: string;
+  status: "resolved" | "no_address_records" | "inconclusive" | "not_checked_limit";
+  addresses: Array<{ type: "A" | "AAAA"; address: string }>;
+  verification_complete: boolean;
+}
+
+async function verifySubdomainDns(hostname: string): Promise<DNSVerificationResult> {
+  const [aResult, aaaaResult] = await Promise.all([
+    queryDnsAddressRecords(hostname, "A", 1),
+    queryDnsAddressRecords(hostname, "AAAA", 28),
+  ]);
+  const addresses = [...aResult.addresses, ...aaaaResult.addresses]
+    .filter((record, index, all) =>
+      all.findIndex((candidate) => candidate.type === record.type && candidate.address === record.address) === index
+    )
+    .slice(0, 20);
+  const verificationComplete = aResult.ok && aaaaResult.ok;
+  return {
+    hostname,
+    status: addresses.length > 0
+      ? "resolved"
+      : verificationComplete
+      ? "no_address_records"
+      : "inconclusive",
+    addresses,
+    verification_complete: verificationComplete,
+  };
+}
+
+async function queryDnsAddressRecords(
+  hostname: string,
+  recordType: "A" | "AAAA",
+  expectedType: 1 | 28,
+): Promise<{ ok: boolean; addresses: Array<{ type: "A" | "AAAA"; address: string }> }> {
+  const query = new URLSearchParams({ name: hostname, type: recordType });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DNS_TIMEOUT_MS);
+  try {
+    const response = await fetch(`https://cloudflare-dns.com/dns-query?${query.toString()}`, {
+      headers: { Accept: "application/dns-json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) return { ok: false, addresses: [] };
+
+    const responseText = await readLimitedResponseText(response, DNS_RESPONSE_LIMIT_BYTES);
+    let data: { Status?: unknown; Answer?: Array<{ type?: unknown; data?: unknown }> };
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      return { ok: false, addresses: [] };
+    }
+    if (!data || typeof data !== "object" ||
+      (data.Status !== 0 && data.Status !== 3)) {
+      return { ok: false, addresses: [] };
+    }
+    if (!Array.isArray(data.Answer)) return { ok: true, addresses: [] };
+
+    const addresses = data.Answer
+      .filter((answer) => answer?.type === expectedType &&
+        typeof answer.data === "string" && answer.data.length <= 255)
+      .slice(0, 10)
+      .map((answer) => ({
+        type: recordType,
+        address: answer.data as string,
+      }));
+    return { ok: true, addresses };
+  } catch {
+    return { ok: false, addresses: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 async function readLimitedResponseText(response: Response, limit: number): Promise<string> {
   if (!response.body) throw new Error("Certificate Transparency provider returned an empty response.");
