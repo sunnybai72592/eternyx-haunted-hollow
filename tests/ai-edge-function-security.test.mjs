@@ -45,3 +45,29 @@ test("document chunking has a terminating final-chunk condition", async () => {
   assert.match(processor, /overlap >= chunkSize/);
   assert.match(processor, /start = end - overlap/);
 });
+
+
+test("NVD CVE research bounds the upstream request and response body", async () => {
+  const source = await read("supabase/functions/vulnerability-scanner/index.ts");
+
+  assert.match(source, /const NVD_TIMEOUT_MS = 12000/);
+  assert.match(source, /const NVD_RESPONSE_LIMIT_BYTES = 2 \* 1024 \* 1024/);
+  assert.match(source, /new AbortController\(\)/);
+  assert.match(source, /setTimeout\(\(\) => controller\.abort\(\), NVD_TIMEOUT_MS\)/);
+  assert.match(source, /readLimitedResponseText\(nvdResponse, NVD_RESPONSE_LIMIT_BYTES\)/);
+  assert.match(source, /total > limit/);
+  assert.match(source, /nvdData\.vulnerabilities\.slice\(0, 20\)/);
+  assert.match(source, /output\.length >= 30/);
+});
+
+test("NVD CVE research validates and bounds provider-supplied fields", async () => {
+  const source = await read("supabase/functions/vulnerability-scanner/index.ts");
+
+  assert.match(source, /description: String\(english \?\?[^\n]+\.slice\(0, 4000\)/);
+  assert.match(source, /reference\.url\.startsWith\("https:\/\/"\)/);
+  assert.match(source, /reference\.url\.slice\(0, 2048\)/);
+  assert.match(source, /tags\.filter\(\(tag: any\) => typeof tag === "string"\)/);
+  assert.match(source, /NVD returned an invalid response/);
+  assert.match(source, /CVE research could not be completed/);
+  assert.doesNotMatch(source, /const safeMessage = error instanceof Error\s*\?\s*error\.message/);
+});
