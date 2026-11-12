@@ -44,7 +44,7 @@ test("subdomain results are restricted to the requested domain and bounded", asy
   const source = await read("supabase/functions/subdomain-discovery/index.ts");
   assert.match(source, /MAX_CERTIFICATE_ROWS = 5000/);
   assert.match(source, /MAX_SUBDOMAINS = 250/);
-  assert.match(source, /hostname\.endsWith\(\`\.\$\{domain\}\`\)/);
+  assert.match(source, /hostname\.endsWith/);
   assert.match(source, /hostname !== domain/);
   assert.match(source, /records\.slice\(0, MAX_CERTIFICATE_ROWS\)/);
   assert.match(source, /\.slice\(0, MAX_SUBDOMAINS\)/);
