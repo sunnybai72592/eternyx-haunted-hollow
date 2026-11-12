@@ -198,7 +198,7 @@ const CyberArena = () => {
     {
       id: 'dns-analyzer',
       name: 'DNS Analyzer',
-      description: 'Deep DNS record analysis and subdomain enumeration',
+      description: 'DNS record, DNSSEC signal, and email security configuration analysis',
       icon: Globe,
       category: 'analyze',
       difficulty: 'basic',
@@ -510,7 +510,7 @@ const CyberArena = () => {
             Welcome to the battlefield, <span className="text-cyan-400 font-bold">{username}</span>
           </p>
           <p className="text-gray-400 font-mono">
-            20 Elite Cybersecurity Tools at Your Command
+            Security workbenches with real, evidence-based execution
           </p>
           
           {/* Access Level Badge */}
@@ -604,7 +604,7 @@ const CyberArena = () => {
                         onClick={() => executeToolAction(tool.id, toolInputs[tool.id] || '')}
                         disabled={isScanning || !toolInputs[tool.id]?.trim()}
                         className={`w-full ${
-                          ['port-scanner', 'vuln-scanner', 'dns-analyzer', 'ssl-analyzer', 'web-scanner'].includes(tool.id)
+                          ['port-scanner', 'vuln-scanner', 'dns-analyzer', 'subdomain-discovery', 'ssl-analyzer', 'web-scanner'].includes(tool.id)
                             ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500'
                             : tool.isPremium
                             ? 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500'
