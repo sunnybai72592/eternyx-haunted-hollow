@@ -45,3 +45,24 @@ test("Cyber Arena and tool catalog describe passive Shodan lookup honestly", asy
   }
   assert.match(arena, /delete payload\.user_id/);
 });
+
+
+test("Shodan lookup keeps its timeout active through a bounded response read", async () => {
+  const source = await read("supabase/functions/port-scanner/index.ts");
+  assert.match(source, /const SHODAN_TIMEOUT_MS = 12000/);
+  assert.match(source, /const SHODAN_RESPONSE_LIMIT_BYTES = 1024 \* 1024/);
+  assert.match(source, /setTimeout\(\(\) => controller\.abort\(\), SHODAN_TIMEOUT_MS\)/);
+  assert.match(source, /readLimitedResponseText\(providerResponse, SHODAN_RESPONSE_LIMIT_BYTES\)/);
+  assert.match(source, /total > limit/);
+  assert.match(source, /clearTimeout\(timeout\)/);
+});
+
+test("Shodan provider data is validated and bounded before storage and response", async () => {
+  const source = await read("supabase/functions/port-scanner/index.ts");
+  assert.match(source, /JSON\.parse\(providerResponseText \?\? ''\)/);
+  assert.match(source, /MAX_OBSERVED_PORTS = 1000/);
+  assert.match(source, /\.slice\(0, MAX_OBSERVED_PORTS\)/);
+  assert.match(source, /boundedString\(service\?\.banner, 200\)/);
+  assert.match(source, /\.slice\(0, 100\)\.map\(item => item\.slice\(0, 100\)\)/);
+  assert.match(source, /Shodan returned an invalid response/);
+});
