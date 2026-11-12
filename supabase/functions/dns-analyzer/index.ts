@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const DOH_TIMEOUT_MS = 5000
+const DOH_RESPONSE_LIMIT_BYTES = 128 * 1024
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -189,15 +192,12 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('DNS analyzer error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const timedOut = error instanceof Error && error.name === 'AbortError'
     return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        details: errorMessage 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      JSON.stringify({ error: timedOut ? 'DNS provider request timed out' : 'DNS analysis could not be completed' }),
+      {
+        status: timedOut ? 504 : 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
   }
@@ -205,27 +205,71 @@ serve(async (req) => {
 
 async function queryDNSRecords(domain: string, recordType: string): Promise<DNSRecord[]> {
   const dohUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(recordType)}`
-  const response = await fetch(dohUrl, {
-    headers: { 'Accept': 'application/dns-json' }
-  })
-
-  if (!response.ok) {
-    throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), DOH_TIMEOUT_MS)
+  let response: Response
+  let responseText: string
+  try {
+    response = await fetch(dohUrl, {
+      headers: { 'Accept': 'application/dns-json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
+    }
+    // Keep the timeout active while reading the response body, not just until headers arrive.
+    responseText = await readLimitedResponseText(response, DOH_RESPONSE_LIMIT_BYTES)
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const data = await response.json()
-  if (data.Status !== undefined && data.Status !== 0 && data.Status !== 3) {
+  let data: { Status?: number; Answer?: Array<{ name?: unknown; data?: unknown; TTL?: unknown }> }
+  try {
+    data = JSON.parse(responseText)
+  } catch {
+    throw new Error('DNS provider returned an invalid response')
+  }
+  if (!data || typeof data !== 'object' || (data.Status !== undefined && data.Status !== 0 && data.Status !== 3)) {
     throw new Error(`DNS provider returned status ${data.Status} for ${recordType} query`)
   }
 
-  return Array.isArray(data.Answer)
-    ? data.Answer.map((answer: any) => ({
-        type: recordType,
-        name: answer.name,
-        value: answer.data,
-        ttl: answer.TTL
-      }))
-    : []
+  if (!Array.isArray(data.Answer)) return []
+  return data.Answer
+    .filter(answer => typeof answer.name === 'string' && typeof answer.data === 'string')
+    .slice(0, 100)
+    .map(answer => ({
+      type: recordType,
+      name: answer.name as string,
+      value: (answer.data as string).slice(0, 4096),
+      ttl: typeof answer.TTL === 'number' && Number.isFinite(answer.TTL) ? answer.TTL : undefined,
+    }))
+}
+
+async function readLimitedResponseText(response: Response, limit: number): Promise<string> {
+  if (!response.body) throw new Error('DNS provider returned an empty response')
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > limit) {
+        await reader.cancel()
+        throw new Error('DNS provider response exceeded the size limit')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(bytes)
 }
 
 async function analyzeSecurityFeatures(domain: string, dnsRecords: DNSRecord[]): Promise<any> {
