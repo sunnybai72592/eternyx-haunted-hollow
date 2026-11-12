@@ -65,3 +65,17 @@ test("DNS analyzer does not return upstream exception details to callers", async
   assert.match(source, /DNS analysis could not be completed/);
   assert.doesNotMatch(source, /details:\\s*errorMessage/);
 });
+
+
+test("Cyber Arena renders DNS analyzer findings, records, recommendations, and coverage", async () => {
+  const source = await read("src/pages/CyberArena.tsx");
+
+  assert.match(source, /activeTool === 'dns-analyzer'/);
+  assert.match(source, /Security findings/);
+  assert.match(source, /DNS records/);
+  assert.match(source, /Risk score:/);
+  assert.match(source, /Observed security configuration/);
+  assert.match(source, /Coverage limitations/);
+  assert.match(source, /Remediation:/);
+  assert.match(source, /scanResults\.recommendations/);
+});
