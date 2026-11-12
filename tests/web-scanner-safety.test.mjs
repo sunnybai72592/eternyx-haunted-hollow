@@ -32,3 +32,14 @@ test('accepts global-unicast IPv6 and rejects special-use ranges', () => {
   assert.equal(isPublicIpAddress('8.8.8.8'), true);
   assert.equal(isPublicIpAddress('fd00::1'), false);
 });
+
+
+test('requires identical non-empty DNS answer sets across validation lookups', async () => {
+  const { hasSameDnsAnswers } = await import('../supabase/functions/_shared/web-scan-safety.mjs');
+  assert.equal(hasSameDnsAnswers(['8.8.8.8', '1.1.1.1'], ['1.1.1.1', '8.8.8.8']), true);
+  assert.equal(hasSameDnsAnswers(['8.8.8.8'], ['8.8.8.8', '1.1.1.1']), false);
+  assert.equal(hasSameDnsAnswers(['8.8.8.8', '1.1.1.1'], ['8.8.8.8']), false);
+  assert.equal(hasSameDnsAnswers(['8.8.8.8'], ['9.9.9.9']), false);
+  assert.equal(hasSameDnsAnswers([], []), false);
+  assert.equal(hasSameDnsAnswers(['8.8.8.8'], []), false);
+});

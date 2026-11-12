@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { isPublicIpAddress, normalizeWebTarget } from '../_shared/web-scan-safety.mjs'
+import { hasSameDnsAnswers, isPublicIpAddress, normalizeWebTarget } from '../_shared/web-scan-safety.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +59,7 @@ serve(async (req) => {
     const firstResolution = await resolvePublicAddresses(target.hostname)
     if (!firstResolution.ok) return json({ error: firstResolution.error }, 400)
     const secondResolution = await resolvePublicAddresses(target.hostname)
-    if (!secondResolution.ok || secondResolution.addresses.some(ip => !firstResolution.addresses.includes(ip))) {
+    if (!secondResolution.ok || !hasSameDnsAnswers(firstResolution.addresses, secondResolution.addresses)) {
       return json({ error: 'Target DNS answers changed during validation. Retry when DNS is stable.' }, 400)
     }
 

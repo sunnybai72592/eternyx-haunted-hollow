@@ -78,3 +78,13 @@ export function isPublicIPv6(value) {
   if (first === 0x3fff && (second & 0xf000) === 0) return false
   return true
 }
+
+
+// DNS answers must remain identical between validation and the outbound request.
+// Compare sets so harmless resolver ordering changes do not cause false rejections.
+export function hasSameDnsAnswers(first, second) {
+  if (!Array.isArray(first) || !Array.isArray(second) || first.length === 0 || second.length === 0) return false
+  const firstSet = new Set(first)
+  const secondSet = new Set(second)
+  return firstSet.size === secondSet.size && [...firstSet].every(address => secondSet.has(address))
+}
