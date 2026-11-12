@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const SHODAN_TIMEOUT_MS = 12000;
+const SHODAN_RESPONSE_LIMIT_BYTES = 1024 * 1024;
+const MAX_OBSERVED_PORTS = 1000;
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -21,6 +25,39 @@ interface ShodanHostResponse {
   country_name?: string;
   city?: string;
   last_update?: string;
+}
+
+
+async function readLimitedResponseText(response: Response, limit: number): Promise<string> {
+  if (!response.body) throw new Error('Shodan returned an empty response.')
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > limit) {
+        await reader.cancel()
+        throw new Error('Shodan response exceeded the size limit.')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(bytes)
+}
+
+function boundedString(value: unknown, maxLength: number): string | null {
+  return typeof value === 'string' && value.length > 0 ? value.slice(0, maxLength) : null
 }
 
 serve(async (req) => {
@@ -59,13 +96,18 @@ serve(async (req) => {
 
     const startedAt = Date.now()
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 12000)
+    const timeout = setTimeout(() => controller.abort(), SHODAN_TIMEOUT_MS)
     let providerResponse: Response
+    let providerResponseText: string | null = null
     try {
       providerResponse = await fetch(
         `https://api.shodan.io/shodan/host/${encodeURIComponent(target)}?key=${encodeURIComponent(shodanApiKey)}`,
         { headers: { 'Accept': 'application/json' }, signal: controller.signal }
       )
+      if (providerResponse.ok) {
+        // Keep the timeout active until the complete bounded response body is read.
+        providerResponseText = await readLimitedResponseText(providerResponse, SHODAN_RESPONSE_LIMIT_BYTES)
+      }
     } finally {
       clearTimeout(timeout)
     }
@@ -95,33 +137,48 @@ serve(async (req) => {
       }, 502)
     }
 
-    const host = await providerResponse.json() as ShodanHostResponse
-    const observedPorts = Array.isArray(host.ports) ? host.ports : []
+    let host: ShodanHostResponse
+    try {
+      const parsed: unknown = JSON.parse(providerResponseText ?? '')
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid Shodan response.')
+      host = parsed as ShodanHostResponse
+    } catch {
+      throw new Error('Shodan returned an invalid response.')
+    }
+    const observedPorts = Array.isArray(host.ports)
+      ? host.ports.filter(port => Number.isInteger(port) && port >= 1 && port <= 65535).slice(0, MAX_OBSERVED_PORTS)
+      : []
+    const serviceData = Array.isArray(host.data) ? host.data.slice(0, MAX_OBSERVED_PORTS) : []
     const filteredPorts = portFilter.length ? observedPorts.filter(port => portFilter.includes(port)) : observedPorts
     const observations = filteredPorts.map(port => {
-      const service = host.data?.find(item => item.port === port)
+      const service = serviceData.find(item => item && item.port === port)
       return {
         port,
         state: 'observed_open' as const,
-        transport: service?.transport || 'unknown',
-        service: service?.product || service?.version || 'unknown',
-        banner: service?.banner?.slice(0, 200) || undefined
+        transport: boundedString(service?.transport, 30) || 'unknown',
+        service: boundedString(service?.product, 100) || boundedString(service?.version, 100) || 'unknown',
+        banner: boundedString(service?.banner, 200) || undefined
       }
     })
+    const reportedVulnerabilities = Array.isArray(host.vulns)
+      ? host.vulns.filter((item): item is string => typeof item === 'string').slice(0, 100).map(item => item.slice(0, 100))
+      : host.vulns && typeof host.vulns === 'object'
+        ? Object.keys(host.vulns).slice(0, 100).map(item => item.slice(0, 100))
+        : []
 
     const result = {
       target,
       source: 'Shodan Host API',
       observation_type: 'passive_internet_scan_observations',
       lookup_completed_at: new Date().toISOString(),
-      shodan_last_update: host.last_update || null,
+      shodan_last_update: boundedString(host.last_update, 100),
       observation_age: 'The lookup completion time is not the scan time. Use Shodan last-update metadata when available; observations may still be stale.',
-      organization: host.org || null,
-      country: host.country_name || null,
-      city: host.city || null,
+      organization: boundedString(host.org, 200),
+      country: boundedString(host.country_name, 100),
+      city: boundedString(host.city, 100),
       observed_ports: observations,
       ports_requested_filter: portFilter,
-      vulnerabilities_reported_by_shodan: host.vulns || [],
+      vulnerabilities_reported_by_shodan: reportedVulnerabilities,
       scan_duration_ms: Date.now() - startedAt,
       risk_level: 'not_scored',
       limitations: [
