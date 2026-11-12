@@ -119,6 +119,10 @@ const CyberArena = () => {
           functionName = 'dns-analyzer';
           payload.domain = input;
           break;
+        case 'subdomain-discovery':
+          functionName = 'subdomain-discovery';
+          payload.domain = input;
+          break;
         case 'ssl-analyzer':
           functionName = 'ssl-analyzer';
           delete payload.user_id; // The Edge Function derives ownership from the verified JWT.
@@ -177,6 +181,19 @@ const CyberArena = () => {
       isElite: false,
       inputPlaceholder: 'Enter software product and version',
       inputLabel: 'Product / version'
+    },
+    {
+      id: 'subdomain-discovery',
+      name: 'Passive Subdomain Discovery',
+      description: 'Discover publicly logged subdomains from Certificate Transparency records; results are not a complete asset inventory or proof of live DNS.',
+      icon: Search,
+      category: 'analyze',
+      difficulty: 'advanced',
+      requiresAuth: true,
+      isPremium: false,
+      isElite: false,
+      inputPlaceholder: 'Enter an authorized domain (example.com)',
+      inputLabel: 'Root domain'
     },
     {
       id: 'dns-analyzer',
