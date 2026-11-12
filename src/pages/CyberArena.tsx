@@ -689,13 +689,109 @@ const CyberArena = () => {
             <CardHeader>
               <CardTitle className="text-white flex items-center">
                 <Activity className="w-5 h-5 mr-2 text-cyan-400" />
-                Scan Results
+                {activeTool === 'subdomain-discovery' ? 'Subdomain Discovery Results' : 'Scan Results'}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="text-green-400 font-mono text-sm bg-black/50 p-4 rounded overflow-auto max-h-96">
-                {JSON.stringify(scanResults, null, 2)}
-              </pre>
+              {activeTool === 'subdomain-discovery' &&
+              !scanResults.error &&
+              Array.isArray(scanResults.dns_verification?.results) ? (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40">
+                      {scanResults.domain || 'Requested domain'}
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.subdomains_returned ?? scanResults.subdomains?.length ?? 0} names discovered
+                    </Badge>
+                    {scanResults.results_truncated && (
+                      <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40">
+                        Discovery results capped
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Resolved', value: scanResults.dns_verification.summary?.resolved ?? 0, tone: 'text-green-300' },
+                      { label: 'No A/AAAA records', value: scanResults.dns_verification.summary?.no_address_records ?? 0, tone: 'text-gray-300' },
+                      { label: 'Inconclusive', value: scanResults.dns_verification.summary?.inconclusive ?? 0, tone: 'text-amber-300' },
+                      { label: 'Not checked', value: scanResults.dns_verification.summary?.not_checked_limit ?? 0, tone: 'text-gray-400' },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-lg border border-gray-700 bg-black/30 p-3">
+                        <p className="text-xs text-gray-400">{item.label}</p>
+                        <p className={`text-2xl font-semibold ${item.tone}`}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-lg border border-gray-700 overflow-hidden">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 bg-black/40 px-4 py-3 text-xs uppercase tracking-wide text-gray-400">
+                      <span>Hostname and address evidence</span>
+                      <span>DNS status</span>
+                    </div>
+                    <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-800">
+                      {scanResults.dns_verification.results.map((item: any) => {
+                        const statusStyles: Record<string, string> = {
+                          resolved: 'bg-green-500/15 text-green-300 border-green-500/30',
+                          no_address_records: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
+                          inconclusive: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                          not_checked_limit: 'bg-gray-700/40 text-gray-400 border-gray-600',
+                        };
+                        const statusLabels: Record<string, string> = {
+                          resolved: 'Resolved',
+                          no_address_records: 'No A/AAAA',
+                          inconclusive: 'Inconclusive',
+                          not_checked_limit: 'Not checked',
+                        };
+                        return (
+                          <div key={item.hostname} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm text-white font-mono break-all">{item.hostname}</p>
+                              {Array.isArray(item.addresses) && item.addresses.length > 0 ? (
+                                <div className="mt-1 flex flex-wrap gap-2">
+                                  {item.addresses.map((address: any, index: number) => (
+                                    <span key={`${address.type}-${address.address}-${index}`} className="text-xs text-cyan-300 font-mono break-all">
+                                      {address.type}: {address.address}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-1 text-xs text-gray-500">
+                                  {item.status === 'no_address_records'
+                                    ? 'No A or AAAA address answer observed at lookup time.'
+                                    : item.status === 'inconclusive'
+                                    ? 'The DNS resolver did not provide a complete answer.'
+                                    : 'This hostname was outside the verification limit.'}
+                                </p>
+                              )}
+                            </div>
+                            <Badge className={statusStyles[item.status] || statusStyles.inconclusive}>
+                              {statusLabels[item.status] || 'Unknown'}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-400">
+                    DNS results are point-in-time observations from {scanResults.dns_verification.provider || 'the configured DNS-over-HTTPS resolver'}.
+                    No A/AAAA answer does not prove a hostname is unused. Only up to {scanResults.dns_verification.maximum_verifications ?? 100} names are DNS-verified per run.
+                  </p>
+                  {Array.isArray(scanResults.limitations) && (
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-gray-500">
+                      {scanResults.limitations.map((limitation: string, index: number) => (
+                        <li key={index}>{limitation}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <pre className="text-green-400 font-mono text-sm bg-black/50 p-4 rounded overflow-auto max-h-96">
+                  {JSON.stringify(scanResults, null, 2)}
+                </pre>
+              )}
             </CardContent>
           </Card>
         )}

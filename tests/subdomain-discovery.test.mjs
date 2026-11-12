@@ -86,3 +86,14 @@ test("DNS verification distinguishes resolved, no-address, and inconclusive resu
   assert.match(source, /verification_complete: verificationComplete/);
   assert.match(source, /A or AAAA address answer is observed/);
 });
+
+
+test("Cyber Arena renders passive subdomain DNS evidence as readable results", async () => {
+  const source = await read("src/pages/CyberArena.tsx");
+  assert.match(source, /Subdomain Discovery Results/);
+  assert.match(source, /scanResults\.dns_verification\.summary/);
+  assert.match(source, /Hostname and address evidence/);
+  assert.match(source, /No A\/AAAA/);
+  assert.match(source, /Not checked/);
+  assert.match(source, /No A\/AAAA answer does not prove a hostname is unused/);
+});
