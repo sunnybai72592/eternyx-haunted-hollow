@@ -58,3 +58,31 @@ test("Cyber Arena exposes and invokes the real passive subdomain discovery funct
   assert.match(source, /payload\.domain = input/);
   assert.match(source, /Passive Subdomain Discovery/);
 });
+
+
+test("DNS verification uses Cloudflare DoH with bounded time and response size", async () => {
+  const source = await read("supabase/functions/subdomain-discovery/index.ts");
+  assert.match(source, /DNS_TIMEOUT_MS = 5000/);
+  assert.match(source, /DNS_RESPONSE_LIMIT_BYTES = 16 \* 1024/);
+  assert.match(source, /cloudflare-dns\.com\/dns-query/);
+  assert.match(source, /signal: controller\.signal/);
+  assert.match(source, /readLimitedResponseText\(response, DNS_RESPONSE_LIMIT_BYTES\)/);
+});
+
+test("DNS verification is bounded by hostname count and concurrency", async () => {
+  const source = await read("supabase/functions/subdomain-discovery/index.ts");
+  assert.match(source, /MAX_DNS_VERIFICATIONS = 100/);
+  assert.match(source, /DNS_CONCURRENCY = 5/);
+  assert.match(source, /subdomains\.slice\(0, MAX_DNS_VERIFICATIONS\)/);
+  assert.match(source, /Math\.min\(DNS_CONCURRENCY, verificationTargets\.length\)/);
+  assert.match(source, /not_checked_limit/);
+});
+
+test("DNS verification distinguishes resolved, no-address, and inconclusive results", async () => {
+  const source = await read("supabase/functions/subdomain-discovery/index.ts");
+  assert.match(source, /status: "resolved"/);
+  assert.match(source, /status: "no_address_records"/);
+  assert.match(source, /status: "inconclusive"/);
+  assert.match(source, /verification_complete: verificationComplete/);
+  assert.match(source, /A or AAAA address answer is observed/);
+});
