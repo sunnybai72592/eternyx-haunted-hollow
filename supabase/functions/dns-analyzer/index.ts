@@ -208,20 +208,20 @@ async function queryDNSRecords(domain: string, recordType: string): Promise<DNSR
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DOH_TIMEOUT_MS)
   let response: Response
+  let responseText: string
   try {
     response = await fetch(dohUrl, {
       headers: { 'Accept': 'application/dns-json' },
       signal: controller.signal,
     })
+    if (!response.ok) {
+      throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
+    }
+    // Keep the timeout active while reading the response body, not just until headers arrive.
+    responseText = await readLimitedResponseText(response, DOH_RESPONSE_LIMIT_BYTES)
   } finally {
     clearTimeout(timeout)
   }
-
-  if (!response.ok) {
-    throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
-  }
-
-  const responseText = await readLimitedResponseText(response, DOH_RESPONSE_LIMIT_BYTES)
   let data: { Status?: number; Answer?: Array<{ name?: unknown; data?: unknown; TTL?: unknown }> }
   try {
     data = JSON.parse(responseText)
