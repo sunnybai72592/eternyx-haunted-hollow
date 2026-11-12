@@ -224,7 +224,7 @@ async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
     .map((endpoint: any) => endpoint.grade)
     .filter((grade: unknown): grade is string => typeof grade === "string" && grade in gradeOrder);
   const grade = grades.length > 0
-    ? grades.reduce((worst, current) => gradeOrder[current] > gradeOrder[worst] ? current : worst)
+    ? grades.reduce((worst: string, current: string) => gradeOrder[current] > gradeOrder[worst] ? current : worst)
     : "N/A";
   const certificates = Array.isArray(analysisData.certs) ? analysisData.certs : [];
   const protocols = readyEndpoints.flatMap((endpoint: any) =>

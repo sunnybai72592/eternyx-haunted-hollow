@@ -130,7 +130,8 @@ const EternixAI: React.FC = () => {
     setUploadingFile(true);
     try {
       // Upload file to Supabase Storage
-      const fileName = `${Date.now()}-${file.name}`;
+      if (!authUser?.id) { toast.error('Please sign in to upload files'); setUploadingFile(false); return; }
+      const fileName = `${authUser.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { data: uploadData, error: uploadError } = await supabase
         .storage
         .from('documents')
