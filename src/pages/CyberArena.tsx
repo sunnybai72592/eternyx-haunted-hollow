@@ -693,7 +693,146 @@ const CyberArena = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {activeTool === 'subdomain-discovery' &&
+              {activeTool === 'dns-analyzer' &&
+              !scanResults.error &&
+              Array.isArray(scanResults.dns_records) ? (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40">
+                      {scanResults.domain || 'Analyzed domain'}
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.dns_records.length} DNS records observed
+                    </Badge>
+                    <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30">
+                      Risk score: {scanResults.risk_score ?? 'N/A'}/100
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Critical', value: scanResults.summary?.critical ?? 0, tone: 'text-red-300' },
+                      { label: 'High', value: scanResults.summary?.high ?? 0, tone: 'text-orange-300' },
+                      { label: 'Medium', value: scanResults.summary?.medium ?? 0, tone: 'text-amber-300' },
+                      { label: 'Low', value: scanResults.summary?.low ?? 0, tone: 'text-gray-300' },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-lg border border-gray-700 bg-black/30 p-3">
+                        <p className="text-xs text-gray-400">{item.label} findings</p>
+                        <p className={`text-2xl font-semibold ${item.tone}`}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">Security findings</h3>
+                    {Array.isArray(scanResults.vulnerabilities) && scanResults.vulnerabilities.length > 0 ? (
+                      <div className="space-y-3">
+                        {scanResults.vulnerabilities.map((finding: any, index: number) => {
+                          const severityStyles: Record<string, string> = {
+                            critical: 'bg-red-500/15 text-red-300 border-red-500/30',
+                            high: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+                            medium: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                            low: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
+                          };
+                          return (
+                            <div key={`${finding.type}-${index}`} className="rounded-lg border border-gray-700 bg-black/20 p-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-white">{finding.type}</p>
+                                <Badge className={severityStyles[finding.severity] || severityStyles.low}>
+                                  {finding.severity || 'Unclassified'}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-300">{finding.description}</p>
+                              <p className="text-xs text-gray-500">Location: {finding.location}</p>
+                              {finding.proof_of_concept && (
+                                <p className="text-xs text-cyan-300 font-mono break-all">{finding.proof_of_concept}</p>
+                              )}
+                              <p className="text-sm text-gray-400">Remediation: {finding.remediation}</p>
+                            </div>
+                          );
+                        })}
+                        {(scanResults.vulnerabilities_found ?? scanResults.vulnerabilities.length) > scanResults.vulnerabilities.length && (
+                          <p className="text-xs text-gray-400">
+                            Showing {scanResults.vulnerabilities.length} preview findings; {scanResults.vulnerabilities_found} were reported in total.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-gray-700 bg-black/20 p-4 text-sm text-gray-400">
+                        No findings were returned by the checks completed. Review the coverage limitations below.
+                      </p>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">DNS records</h3>
+                    <div className="rounded-lg border border-gray-700 overflow-hidden">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-black/40 px-4 py-3 text-xs uppercase tracking-wide text-gray-400">
+                        <span>Type</span>
+                        <span>Record name and value</span>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto divide-y divide-gray-800">
+                        {scanResults.dns_records.map((record: any, index: number) => (
+                          <div key={`${record.type}-${record.name}-${index}`} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-4 py-3">
+                            <Badge variant="outline" className="text-cyan-300 border-cyan-500/30">{record.type}</Badge>
+                            <div className="min-w-0">
+                              <p className="text-xs text-gray-400 font-mono break-all">{record.name}</p>
+                              <p className="text-sm text-white font-mono break-all">{record.value}</p>
+                              {typeof record.ttl === 'number' && (
+                                <p className="text-xs text-gray-500">TTL: {record.ttl}s</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  {Array.isArray(scanResults.recommendations) && scanResults.recommendations.length > 0 && (
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-semibold text-white">Recommendations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-gray-300">
+                        {scanResults.recommendations.map((recommendation: string, index: number) => (
+                          <li key={index}>{recommendation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {scanResults.security_features && (
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-semibold text-white">Observed security configuration</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                          ['DS record observed', scanResults.security_features.ds_record_present],
+                          ['SPF configured', scanResults.security_features.spf_configured],
+                          ['Default DKIM selector found', scanResults.security_features.default_dkim_selector_found],
+                          ['DMARC configured', scanResults.security_features.dmarc_configured],
+                          ['CAA configured', scanResults.security_features.caa_configured],
+                        ].map(([label, configured]) => (
+                          <div key={String(label)} className="flex items-center justify-between gap-3 rounded border border-gray-700 px-3 py-2">
+                            <span className="text-xs text-gray-300">{label}</span>
+                            <Badge className={configured ? 'bg-green-500/15 text-green-300 border-green-500/30' : 'bg-gray-500/15 text-gray-300 border-gray-500/30'}>
+                              {configured ? 'Observed' : 'Not observed'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {Array.isArray(scanResults.coverage_limitations) && (
+                    <section className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                      <h3 className="text-sm font-semibold text-amber-200">Coverage limitations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-xs text-gray-400">
+                        {scanResults.coverage_limitations.map((limitation: string, index: number) => (
+                          <li key={index}>{limitation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+              ) : {activeTool === 'subdomain-discovery' &&
               !scanResults.error &&
               Array.isArray(scanResults.dns_verification?.results) ? (
                 <div className="space-y-5">
