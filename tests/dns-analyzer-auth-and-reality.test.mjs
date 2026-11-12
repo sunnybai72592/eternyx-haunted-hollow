@@ -44,3 +44,24 @@ test("DNS analyzer discloses checks outside its actual coverage", async () => {
   assert.match(source, /coverage_limitations: coverageLimitations/);
   assert.doesNotMatch(source, /confidence_score: 0\.95/);
 });
+
+
+test("DNS-over-HTTPS requests have a timeout and bounded response size", async () => {
+  const source = await read("supabase/functions/dns-analyzer/index.ts");
+
+  assert.match(source, /const DOH_TIMEOUT_MS = 5000/);
+  assert.match(source, /const DOH_RESPONSE_LIMIT_BYTES = 128 \* 1024/);
+  assert.match(source, /new AbortController\(\)/);
+  assert.match(source, /controller\.signal/);
+  assert.match(source, /setTimeout\(\(\) => controller\.abort\(\), DOH_TIMEOUT_MS\)/);
+  assert.match(source, /readLimitedResponseText\(response, DOH_RESPONSE_LIMIT_BYTES\)/);
+  assert.match(source, /total > limit/);
+  assert.match(source, /\.slice\(0, 100\)/);
+});
+
+test("DNS analyzer does not return upstream exception details to callers", async () => {
+  const source = await read("supabase/functions/dns-analyzer/index.ts");
+
+  assert.match(source, /DNS analysis could not be completed/);
+  assert.doesNotMatch(source, /details:\\s*errorMessage/);
+});
