@@ -66,3 +66,17 @@ test("Shodan provider data is validated and bounded before storage and response"
   assert.match(source, /\.slice\(0, 100\)\.map\(item => item\.slice\(0, 100\)\)/);
   assert.match(source, /Shodan returned an invalid response/);
 });
+
+
+test("Shodan lookup bounds request bodies before JSON parsing", async () => {
+  const source = await read("supabase/functions/port-scanner/index.ts");
+
+  assert.match(source, /const REQUEST_BODY_LIMIT_BYTES = 4 \* 1024/);
+  assert.match(source, /readLimitedRequestText\(req, REQUEST_BODY_LIMIT_BYTES\)/);
+  assert.match(source, /declaredLength > REQUEST_BODY_LIMIT_BYTES/);
+  assert.match(source, /total > limit/);
+  assert.match(source, /await reader\.cancel\(\)/);
+  assert.match(source, /JSON\.parse\(rawBody\)/);
+  assert.match(source, /Request body must be a JSON object/);
+  assert.doesNotMatch(source, /await req\.json\(\)/);
+});
