@@ -57,3 +57,23 @@ test("checkout returns generic server errors and rejects non-POST methods", asyn
   assert.match(source, /Unable to create checkout session/);
   assert.doesNotMatch(source, /JSON\.stringify\(\{ error: errorMessage \}\)/);
 });
+
+test("subscription lookup authenticates and matches the Stripe customer by user metadata", async () => {
+  const source = await read("supabase/functions/check-subscription/index.ts");
+  assert.match(source, /req\.method !== "POST"/);
+  assert.match(source, /supabase\.auth\.getUser\(bearerMatch\[1\]\)/);
+  assert.match(source, /candidate\.metadata\?\.user_id === user\.id/);
+  assert.match(source, /status: "all"/);
+  assert.doesNotMatch(source, /customers\.data\[0\]/);
+  assert.doesNotMatch(source, /\.upsert\(/);
+});
+
+test("customer portal authenticates ownership and uses a trusted return URL", async () => {
+  const source = await read("supabase/functions/customer-portal/index.ts");
+  assert.match(source, /req\.method !== "POST"/);
+  assert.match(source, /supabase\.auth\.getUser\(bearerMatch\[1\]\)/);
+  assert.match(source, /candidate\.metadata\?\.user_id === user\.id/);
+  assert.match(source, /Deno\.env\.get\("APP_BASE_URL"\) \|\| DEFAULT_APP_BASE_URL/);
+  assert.match(source, /return_url: getTrustedReturnUrl\(\)/);
+  assert.doesNotMatch(source, /req\.headers\.get\("origin"\)/);
+});

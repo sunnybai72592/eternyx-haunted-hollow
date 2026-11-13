@@ -1,74 +1,79 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { getSupabaseSecretKey } from "../_shared/supabase.ts";
+
+const DEFAULT_APP_BASE_URL = "https://eternyx-haunted-hollow.lovable.app";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Helper logging function for debugging
-const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[CUSTOMER-PORTAL] ${step}${detailsStr}`);
-};
+function jsonResponse(body: Record<string, unknown>, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function getTrustedReturnUrl(): string {
+  const configured = Deno.env.get("APP_BASE_URL") || DEFAULT_APP_BASE_URL;
+  const appUrl = new URL(configured);
+  if (
+    (appUrl.protocol !== "https:" && appUrl.hostname !== "localhost" && appUrl.hostname !== "127.0.0.1") ||
+    appUrl.username ||
+    appUrl.password
+  ) {
+    throw new Error("APP_BASE_URL must be a trusted HTTPS URL");
+  }
+  return new URL("/subscription", appUrl.origin).toString();
+}
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   try {
-    logStep("Function started");
+    const authorization = req.headers.get("Authorization");
+    const bearerMatch = authorization?.match(/^Bearer\s+(.+)$/i);
+    if (!bearerMatch) return jsonResponse({ error: "Authentication required" }, 401);
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
-    logStep("Stripe key verified");
+    if (!supabaseUrl || !supabaseAnonKey || !stripeKey) {
+      return jsonResponse({ error: "Billing service is unavailable" }, 503);
+    }
 
-    // Initialize Supabase client with the server-only secret API key.
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      getSupabaseSecretKey(),
-      { auth: { persistSession: false } }
-    );
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
-    logStep("Authorization header found");
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
-    const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id });
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await supabase.auth.getUser(bearerMatch[1]);
+    const user = data.user;
+    if (error || !user?.id) return jsonResponse({ error: "Authentication required" }, 401);
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    if (customers.data.length === 0) {
-      throw new Error("No Stripe customer found for this user");
+    const customers = await stripe.customers.list({
+      email: user.email ?? undefined,
+      limit: 100,
+    });
+    const customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
+    if (!customer) {
+      return jsonResponse({ error: "No billing account is associated with this user" }, 404);
     }
-    const customerId = customers.data[0].id;
-    logStep("Found Stripe customer", { customerId });
 
-    const origin = req.headers.get("origin") || "http://localhost:3000";
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: `${origin}/subscription`,
+      customer: customer.id,
+      return_url: getTrustedReturnUrl(),
     });
-    logStep("Customer portal session created", { sessionId: portalSession.id });
 
-    return new Response(JSON.stringify({ url: portalSession.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return jsonResponse({ url: portalSession.url }, 200);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in customer-portal", { message: errorMessage });
-    return new Response(JSON.stringify({ error: "Unable to create customer portal session" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    console.error(
+      "[CUSTOMER-PORTAL] Session creation failed:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+    return jsonResponse({ error: "Unable to create customer portal session" }, 500);
   }
 });
