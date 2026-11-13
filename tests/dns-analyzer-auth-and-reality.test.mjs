@@ -79,3 +79,17 @@ test("Cyber Arena renders DNS analyzer findings, records, recommendations, and c
   assert.match(source, /Remediation:/);
   assert.match(source, /scanResults\.recommendations/);
 });
+
+
+test("DNS analyzer bounds request bodies before JSON parsing", async () => {
+  const source = await read("supabase/functions/dns-analyzer/index.ts");
+
+  assert.match(source, /const REQUEST_BODY_LIMIT_BYTES = 4 \* 1024/);
+  assert.match(source, /declaredLength > REQUEST_BODY_LIMIT_BYTES/);
+  assert.match(source, /readLimitedRequestText\(req, REQUEST_BODY_LIMIT_BYTES\)/);
+  assert.match(source, /total > limit/);
+  assert.match(source, /await reader\.cancel\(\)/);
+  assert.match(source, /JSON\.parse\(rawBody\)/);
+  assert.match(source, /Request body must be a JSON object/);
+  assert.doesNotMatch(source, /await req\.json\(\)/);
+});
