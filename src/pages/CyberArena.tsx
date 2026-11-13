@@ -1266,6 +1266,119 @@ const CyberArena = () => {
                     </ul>
                   )}
                 </div>
+              ) : activeTool === 'web-scanner' &&
+              !scanResults.error &&
+              scanResults.success === true &&
+              Array.isArray(scanResults.findings) ? (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40">
+                      {scanResults.target_url || 'Inspected public URL'}
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      HTTP {scanResults.http_status ?? 'Unknown'}
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.findings.length} configuration finding(s)
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.scan_duration ?? 0}s
+                    </Badge>
+                  </div>
+
+                  <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {[
+                      ['Pages inspected', scanResults.pages_scanned ?? 1],
+                      ['Forms observed', scanResults.forms_found ?? 0],
+                      ['Inputs tested', scanResults.inputs_tested ?? 0],
+                      ['Cookies analyzed', scanResults.cookies_analyzed ?? 0],
+                      ['Response headers', scanResults.headers_checked ?? 0],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="rounded-lg border border-gray-700 bg-black/30 p-3">
+                        <p className="text-xs text-gray-400">{label}</p>
+                        <p className="text-xl font-semibold text-white">{value}</p>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-amber-200">Assessment scope</h3>
+                    <p className="text-sm text-gray-300">
+                      This is a single-request passive HTTP configuration inspection, not a penetration test.
+                      No exploit payloads, form submissions, crawling, or vulnerability probes were performed.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Risk score: not scored. Findings are configuration observations and do not establish exploitability.
+                    </p>
+                    {scanResults.content_type && (
+                      <p className="text-xs text-gray-400">Response content type: {scanResults.content_type}</p>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">Configuration findings</h3>
+                    {scanResults.findings.length > 0 ? (
+                      <div className="space-y-3">
+                        {scanResults.findings.map((finding: any, index: number) => {
+                          const severity = String(finding.severity || 'unclassified').toLowerCase();
+                          const severityStyles: Record<string, string> = {
+                            high: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+                            medium: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                            low: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
+                          };
+                          return (
+                            <article key={`${finding.type || 'finding'}-${index}`} className="rounded-lg border border-gray-700 bg-black/20 p-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-white">{finding.type || 'Configuration observation'}</p>
+                                <Badge className={severityStyles[severity] || 'bg-gray-500/15 text-gray-300 border-gray-500/30'}>
+                                  {severity}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-300">{finding.description}</p>
+                              <p className="text-xs text-gray-500">Location: {finding.location || 'HTTP response'}</p>
+                              {finding.proof_of_concept && (
+                                <p className="text-xs text-cyan-300 font-mono break-all">{finding.proof_of_concept}</p>
+                              )}
+                              {finding.owasp_category && (
+                                <p className="text-xs text-gray-500">OWASP: {finding.owasp_category}</p>
+                              )}
+                              <p className="text-sm text-gray-400">Recommendation: {finding.remediation}</p>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-gray-700 bg-black/20 p-4 text-sm text-gray-400">
+                        No configuration observations were identified in this response. This limited inspection does not establish that the application is vulnerability-free.
+                      </p>
+                    )}
+                  </section>
+
+                  {Array.isArray(scanResults.recommendations) && scanResults.recommendations.length > 0 && (
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-semibold text-white">Recommendations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-gray-300">
+                        {scanResults.recommendations.map((recommendation: string, index: number) => (
+                          <li key={index}>{recommendation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {Array.isArray(scanResults.coverage_limitations) && (
+                    <section className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                      <h3 className="text-sm font-semibold text-amber-200">Coverage limitations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-xs text-gray-400">
+                        {scanResults.coverage_limitations.map((limitation: string, index: number) => (
+                          <li key={index}>{limitation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    The inspector checks only the returned response and does not follow redirects or test application behavior.
+                  </p>
+                </div>
               ) : (
                 <pre className="text-green-400 font-mono text-sm bg-black/50 p-4 rounded overflow-auto max-h-96">
                   {JSON.stringify(scanResults, null, 2)}
