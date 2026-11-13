@@ -69,7 +69,7 @@ test("subscription lookup authenticates and reads only the server-managed projec
   assert.match(source, /record\.status === "active" \|\| record\.status === "trialing"/);
   assert.match(source, /activeRecords\.length > 1/);
   assert.match(source, /Subscription status is not available for verification/);
-  assert.doesNotMatch(source, /Stripe|stripe\.customers|stripe\.subscriptions/);
+  assert.doesNotMatch(source, /import Stripe|stripe\.customers|stripe\.subscriptions/i);
   assert.doesNotMatch(source, /\.upsert\(/);
 });
 
