@@ -14,7 +14,6 @@ test("central entitlement and credit tables are private and empty until configur
   assert.match(source, /REVOKE ALL ON TABLE public\.credit_accounts FROM PUBLIC, anon, authenticated/);
   assert.ok(source.includes("REVOKE ALL ON TABLE public.credit_ledger FROM service_role"));
   assert.match(source, /REVOKE ALL ON TABLE public\.credit_accounts FROM service_role/);
-  assert.match(source, /REVOKE ALL ON TABLE public\\.credit_ledger FROM service_role/);
   assert.doesNotMatch(source, /INSERT INTO public\.plan_entitlements/i);
 });
 
