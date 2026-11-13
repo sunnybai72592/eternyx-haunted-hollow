@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import ProfileAvatarUploader from '@/components/ProfileAvatarUploader';
+import AccountControls from '@/components/account/AccountControls';
 import { toast } from '@/hooks/use-toast';
 import {
   ArrowRight, AtSign, BadgeCheck, BriefcaseBusiness, Check, ChevronRight,
@@ -144,10 +145,10 @@ const Profile = () => {
           <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.09] bg-[#09111f]/90 p-1.5 shadow-xl sm:max-w-[520px]">
             <TabsTrigger value="identity" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><UserRound className="h-4 w-4" /> Identity</TabsTrigger>
             <TabsTrigger value="privacy" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><ShieldCheck className="h-4 w-4" /> Privacy</TabsTrigger>
-            <TabsTrigger value="security" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><KeyRound className="h-4 w-4" /> Account</TabsTrigger>
+            <TabsTrigger value="security" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><KeyRound className="h-4 w-4" /> Account & data</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="identity" className="mt-5">
+          <TabsContent value="identity" className="mt-5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
             <div className="grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
               <Card className="overflow-hidden rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-6">
                 <div className="mb-5">
@@ -202,7 +203,7 @@ const Profile = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="privacy" className="mt-5">
+          <TabsContent value="privacy" className="mt-5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
             <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
               <div className="mb-6">
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Visibility & consent</p>
@@ -227,19 +228,8 @@ const Profile = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="security" className="mt-5">
-            <div className="grid gap-5 lg:grid-cols-2">
-              <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-6">
-                <div className="flex items-center gap-3"><div className="rounded-xl border border-emerald-200/15 bg-emerald-200/[0.07] p-3 text-emerald-100"><ShieldCheck className="h-5 w-5" /></div><div><h2 className="font-semibold text-white">Account session</h2><p className="mt-1 text-xs text-slate-500">Your current authenticated identity.</p></div></div>
-                <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Signed-in email</p><p className="mt-2 break-all text-sm text-slate-200">{user.email}</p><p className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-emerald-200"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Authenticated session</p></div>
-                <p className="mt-4 text-xs leading-5 text-slate-500">Password and sign-in methods are managed securely through your authentication provider.</p>
-              </Card>
-              <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-6">
-                <div className="flex items-center gap-3"><div className="rounded-xl border border-violet-200/15 bg-violet-200/[0.07] p-3 text-violet-100"><KeyRound className="h-5 w-5" /></div><div><h2 className="font-semibold text-white">Access & recovery</h2><p className="mt-1 text-xs text-slate-500">Manage how you enter your account.</p></div></div>
-                <Button variant="outline" onClick={() => navigate('/reset-password')} className="mt-5 h-11 w-full justify-between rounded-xl border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07] hover:text-white">Change or reset password <ArrowRight className="h-4 w-4" /></Button>
-                <p className="mt-3 text-xs leading-5 text-slate-500">If you use a third-party sign-in provider, password changes may need to be managed with that provider.</p>
-              </Card>
-            </div>
+          <TabsContent value="security" className="mt-5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
+            <AccountControls />
           </TabsContent>
         </Tabs>
       </section>
