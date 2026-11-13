@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -21,67 +20,70 @@ serve(async (req) => {
 
   try {
     const authorization = req.headers.get("Authorization");
-    const bearerMatch = authorization?.match(/^Bearer\s+(.+)$/i);
+    const bearerMatch = authorization?.match(/^Bearer\\s+(.+)$/i);
     if (!bearerMatch) return jsonResponse({ error: "Authentication required" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!supabaseUrl || !supabaseAnonKey || !stripeKey) {
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
       return jsonResponse({ error: "Subscription service is unavailable" }, 503);
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data, error } = await supabase.auth.getUser(bearerMatch[1]);
-    const user = data.user;
-    if (error || !user?.id) return jsonResponse({ error: "Authentication required" }, 401);
+    const { data: authData, error: authError } = await authClient.auth.getUser(bearerMatch[1]);
+    const user = authData.user;
+    if (authError || !user?.id) return jsonResponse({ error: "Authentication required" }, 401);
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    const customers = await stripe.customers.list({
-      email: user.email ?? undefined,
-      limit: 100,
+    // This table is created by the reviewed webhook migration. If it is not
+    // installed yet, fail closed instead of falling back to a live Stripe lookup.
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
-    const customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
+    const { data: records, error: lookupError } = await admin
+      .from("billing_subscriptions")
+      .select("stripe_subscription_id, status, plan_id, current_period_end, cancel_at_period_end, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(101);
 
-    if (!customer) {
-      return jsonResponse({
-        subscribed: false,
-        subscription_tier: null,
-        subscription_end: null,
-        subscription_status: "none",
-      }, 200);
+    if (lookupError) {
+      console.error("[CHECK-SUBSCRIPTION] Authoritative projection lookup failed");
+      return jsonResponse({ error: "Subscription status is not available for verification" }, 503);
+    }
+    if (!records || records.length > 100) {
+      return jsonResponse({ error: "Subscription records require reconciliation" }, 503);
     }
 
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: "all",
-      limit: 100,
-    });
-    const current = subscriptions.data
-      .filter((subscription) => subscription.status === "active" || subscription.status === "trialing")
-      .sort((a, b) => b.created - a.created)[0];
+    const activeRecords = records.filter(
+      (record) => record.status === "active" || record.status === "trialing",
+    );
+    if (activeRecords.length > 1) {
+      return jsonResponse({ error: "Multiple active subscriptions require reconciliation" }, 409);
+    }
 
+    const current = activeRecords[0];
     if (!current) {
-      const latest = subscriptions.data.sort((a, b) => b.created - a.created)[0];
+      const latest = records[0];
       return jsonResponse({
         subscribed: false,
         subscription_tier: null,
-        subscription_end: latest?.current_period_end
-          ? new Date(latest.current_period_end * 1000).toISOString()
-          : null,
+        subscription_end: latest?.current_period_end ?? null,
         subscription_status: latest?.status ?? "none",
+        cancel_at_period_end: latest?.cancel_at_period_end ?? false,
       }, 200);
     }
 
-    const planId = current.metadata?.plan_id;
-    const tier = planId === "premium" || planId === "elite" ? planId : null;
+    const tier = current.plan_id === "premium" || current.plan_id === "elite"
+      ? current.plan_id
+      : null;
 
     return jsonResponse({
       subscribed: true,
       subscription_tier: tier,
-      subscription_end: new Date(current.current_period_end * 1000).toISOString(),
+      subscription_end: current.current_period_end,
       subscription_status: current.status,
       cancel_at_period_end: current.cancel_at_period_end,
     }, 200);
