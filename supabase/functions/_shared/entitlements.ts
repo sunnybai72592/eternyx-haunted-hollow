@@ -12,7 +12,7 @@ export interface RpcClient {
   rpc(
     functionName: string,
     args: Record<string, unknown>,
-  ): Promise<{ data: unknown; error: { message?: string } | null }>;
+  ): PromiseLike<{ data: unknown; error: { message?: string } | null }>;
 }
 
 export type CreditOperationCode =
