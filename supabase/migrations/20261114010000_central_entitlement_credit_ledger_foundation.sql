@@ -44,9 +44,9 @@ REVOKE ALL ON TABLE public.plan_entitlements FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.credit_accounts FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.credit_ledger FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.plan_entitlements TO service_role;
--- Balance and ledger mutations are available only through the SECURITY DEFINER RPCs.
+-- Balance and ledger access is available only through the SECURITY DEFINER RPCs.
 REVOKE ALL ON TABLE public.credit_accounts FROM service_role;
-GRANT SELECT, INSERT ON TABLE public.credit_ledger TO service_role;
+REVOKE ALL ON TABLE public.credit_ledger FROM service_role;
 
 -- Resolve the current plan, enforce the feature grant, and debit credits in one
 -- transaction. The caller must be a trusted server function and pass the
