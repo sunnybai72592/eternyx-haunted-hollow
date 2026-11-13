@@ -57,7 +57,7 @@ export const cybersecurityTools: Tool[] = [
     description: 'Passive lookup of Shodan-observed public IPv4 host ports; not a live port scan.',
     category: 'cybersecurity',
     icon: React.createElement(Target),
-    features: ['Shodan host observations', 'Observed service banners', 'Reported vulnerability associations', 'Observation-age disclosure']
+    features: ['Shodan host observations', 'Observed service banners', 'Reported vulnerability associations', 'Observation-age disclosure'],
     tier: 'free',
     difficulty: 'beginner',
     executionTime: '1-10 minutes',
