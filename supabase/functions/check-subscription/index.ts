@@ -20,7 +20,7 @@ serve(async (req) => {
 
   try {
     const authorization = req.headers.get("Authorization");
-    const bearerMatch = authorization?.match(/^Bearer\\s+(.+)$/i);
+    const bearerMatch = authorization?.match(/^Bearer\s+(.+)$/i);
     if (!bearerMatch) return jsonResponse({ error: "Authentication required" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
