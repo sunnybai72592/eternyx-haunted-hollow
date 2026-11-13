@@ -77,3 +77,14 @@ test("customer portal authenticates ownership and uses a trusted return URL", as
   assert.match(source, /return_url: getTrustedReturnUrl\(\)/);
   assert.doesNotMatch(source, /req\.headers\.get\("origin"\)/);
 });
+
+
+test("subscription hub does not present fabricated subscription, usage, or payment data", async () => {
+  const source = await read("src/pages/enhanced/SubscriptionHub.tsx");
+  assert.doesNotMatch(source, /sub_1234567890|4242|Dec 1, 2024|Nov 1, 2024|Oct 1, 2024/);
+  assert.doesNotMatch(source, /usageMetrics|setCurrentSubscription|setUsageMetrics/);
+  assert.match(source, /Usage reporting is not available yet/);
+  assert.match(source, /Billing history and saved payment-method details are not connected yet/);
+  assert.match(source, /create-checkout/);
+  assert.match(source, /noopener,noreferrer/);
+});
