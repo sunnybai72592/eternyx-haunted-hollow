@@ -830,7 +830,7 @@ const CyberArena = () => {
                     {scanResults.source_url && <> <a href={scanResults.source_url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:underline">Open NVD</a>.</>}
                   </p>
                 </div>
-              ) : {activeTool === 'dns-analyzer' &&
+              ) : activeTool === 'dns-analyzer' &&
               !scanResults.error &&
               Array.isArray(scanResults.dns_records) ? (
                 <div className="space-y-5">

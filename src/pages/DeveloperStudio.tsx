@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { decodeBase64Utf8, decodeJwt as decodeJwtToken, decodeUriComponent, encodeBase64Utf8, encodeUriComponent, formatJson as formatJsonInput, generateUuids } from "@/lib/developerStudioUtils.mjs";
+import { decodeBase64Utf8, decodeJwt as decodeJwtToken, decodeUriComponent, encodeBase64Utf8, encodeUriComponent, formatJson as formatJsonInput, generateUuids as generateUuidList } from "@/lib/developerStudioUtils.mjs";
 
 type Feedback = { kind: "success" | "error" | "info"; message: string } | null;
 
@@ -97,7 +97,7 @@ export default function DeveloperStudio() {
       setUuidOutput("");
       return;
     }
-    setUuidOutput(generateUuids(count));
+    setUuidOutput(generateUuidList(count));
   };
 
   const decodeJwt = () => {
