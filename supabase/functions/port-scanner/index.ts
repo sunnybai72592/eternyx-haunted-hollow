@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const SHODAN_TIMEOUT_MS = 12000;
 const SHODAN_RESPONSE_LIMIT_BYTES = 1024 * 1024;
 const MAX_OBSERVED_PORTS = 1000;
+const REQUEST_BODY_LIMIT_BYTES = 4 * 1024;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,6 +57,35 @@ async function readLimitedResponseText(response: Response, limit: number): Promi
   return new TextDecoder().decode(bytes)
 }
 
+
+async function readLimitedRequestText(req: Request, limit: number): Promise<string> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new Error("Request body exceeded the size limit.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 function boundedString(value: unknown, maxLength: number): string | null {
   return typeof value === 'string' && value.length > 0 ? value.slice(0, maxLength) : null
 }
@@ -76,7 +106,26 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     if (authError || !user) return json({ error: 'Invalid or expired session' }, 401)
 
-    const body = await req.json() as PortScanRequest
+    const declaredLength = Number(req.headers.get('content-length') || 0)
+    if (declaredLength > REQUEST_BODY_LIMIT_BYTES) return json({ error: 'Request body is too large' }, 413)
+
+    let rawBody: string
+    try {
+      rawBody = await readLimitedRequestText(req, REQUEST_BODY_LIMIT_BYTES)
+    } catch {
+      return json({ error: 'Request body is too large' }, 413)
+    }
+
+    let body: PortScanRequest
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      return json({ error: 'Request body must be valid JSON' }, 400)
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return json({ error: 'Request body must be a JSON object' }, 400)
+    }
+
     const target = typeof body.target === 'string' ? body.target.trim() : ''
     if (!isPublicIPv4(target)) {
       return json({ error: 'Enter a public IPv4 address. Hostnames, private addresses, and reserved ranges are not accepted.' }, 400)
