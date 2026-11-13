@@ -71,3 +71,17 @@ test("NVD CVE research validates and bounds provider-supplied fields", async () 
   assert.match(source, /CVE research could not be completed/);
   assert.doesNotMatch(source, /const safeMessage = error instanceof Error\s*\?\s*error\.message/);
 });
+
+
+test("NVD CVE research bounds request bodies before JSON parsing", async () => {
+  const source = await read("supabase/functions/vulnerability-scanner/index.ts");
+
+  assert.match(source, /const REQUEST_BODY_LIMIT_BYTES = 4 \* 1024/);
+  assert.match(source, /readLimitedRequestText\(req, REQUEST_BODY_LIMIT_BYTES\)/);
+  assert.match(source, /declaredLength > REQUEST_BODY_LIMIT_BYTES/);
+  assert.match(source, /total > limit/);
+  assert.match(source, /await reader\.cancel\(\)/);
+  assert.match(source, /JSON\.parse\(rawBody\)/);
+  assert.match(source, /Request body must be a JSON object/);
+  assert.doesNotMatch(source, /body = await req\.json\(\)/);
+});
