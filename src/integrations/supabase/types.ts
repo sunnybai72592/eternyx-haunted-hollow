@@ -14,150 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      bug_reports: {
-        Row: {
-          created_at: string
-          description: string
-          id: string
-          severity: string
-          status: string
-          title: string
-          user_id: string
-        }
-        Insert: {
-          description: string
-          severity?: string
-          title: string
-          user_id: string
-        }
-        Update: {
-          status?: string
-        }
-        Relationships: []
-      }
-      pentest_engagements: {
-        Row: {
-          authorization_attested: boolean
-          authorization_attested_at: string | null
-          authorization_reference: string | null
-          client_name: string | null
-          created_at: string
-          emergency_contact: string | null
-          end_at: string | null
-          engagement_name: string
-          id: string
-          notes: string | null
-          owner_id: string
-          permitted_methods: string[]
-          scope_targets: string[]
-          excluded_targets: string[]
-          start_at: string | null
-          status: "draft" | "authorized" | "in_progress" | "on_hold" | "completed" | "cancelled"
-          updated_at: string
-        }
-        Insert: {
-          authorization_attested?: boolean
-          authorization_attested_at?: string | null
-          authorization_reference?: string | null
-          client_name?: string | null
-          created_at?: string
-          emergency_contact?: string | null
-          end_at?: string | null
-          engagement_name: string
-          id?: string
-          notes?: string | null
-          owner_id: string
-          permitted_methods?: string[]
-          scope_targets?: string[]
-          excluded_targets?: string[]
-          start_at?: string | null
-          status?: "draft" | "authorized" | "in_progress" | "on_hold" | "completed" | "cancelled"
-          updated_at?: string
-        }
-        Update: {
-          authorization_attested?: boolean
-          authorization_attested_at?: string | null
-          authorization_reference?: string | null
-          client_name?: string | null
-          emergency_contact?: string | null
-          end_at?: string | null
-          engagement_name?: string
-          notes?: string | null
-          permitted_methods?: string[]
-          scope_targets?: string[]
-          excluded_targets?: string[]
-          start_at?: string | null
-          status?: "draft" | "authorized" | "in_progress" | "on_hold" | "completed" | "cancelled"
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      pentest_evidence: {
-        Row: {
-          created_at: string
-          description: string | null
-          engagement_id: string
-          file_name: string
-          file_size: number
-          id: string
-          mime_type: string
-          owner_id: string
-          storage_path: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          engagement_id: string
-          file_name: string
-          file_size: number
-          id?: string
-          mime_type: string
-          owner_id: string
-          storage_path: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          engagement_id?: string
-          file_name?: string
-          file_size?: number
-          id?: string
-          mime_type?: string
-          owner_id?: string
-          storage_path?: string
-        }
-        Relationships: []
-      }
-      pentest_audit_events: {
-        Row: {
-          actor_id: string | null
-          created_at: string
-          details: Json
-          engagement_id: string | null
-          event_type: "engagement_created" | "engagement_updated" | "engagement_deleted" | "evidence_uploaded"
-          id: string
-          owner_id: string
-        }
-        Insert: {
-          actor_id?: string | null
-          created_at?: string
-          details?: Json
-          engagement_id?: string | null
-          event_type: "engagement_created" | "engagement_updated" | "engagement_deleted" | "evidence_uploaded"
-          id?: string
-          owner_id: string
-        }
-        Update: {
-          actor_id?: string | null
-          created_at?: string
-          details?: Json
-          engagement_id?: string | null
-          event_type?: "engagement_created" | "engagement_updated" | "engagement_deleted" | "evidence_uploaded"
-          id?: string
-          owner_id?: string
-        }
-        Relationships: []
-      }
       admin_users: {
         Row: {
           created_at: string
@@ -216,15 +72,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "ai_documents_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       ai_security_analysis: {
         Row: {
@@ -403,6 +251,36 @@ export type Database = {
         }
         Relationships: []
       }
+      bug_reports: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          severity: string
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          severity?: string
+          status?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          severity?: string
+          status?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_history: {
         Row: {
           content: string
@@ -447,13 +325,6 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "conversation_sessions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chat_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -549,13 +420,6 @@ export type Database = {
             columns: ["document_id"]
             isOneToOne: false
             referencedRelation: "ai_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_sessions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -914,6 +778,148 @@ export type Database = {
             columns: ["question_id"]
             isOneToOne: false
             referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pentest_audit_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          details: Json
+          engagement_id: string | null
+          event_type: string
+          id: string
+          owner_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          engagement_id?: string | null
+          event_type: string
+          id?: string
+          owner_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          engagement_id?: string | null
+          event_type?: string
+          id?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pentest_audit_events_engagement_id_fkey"
+            columns: ["engagement_id"]
+            isOneToOne: false
+            referencedRelation: "pentest_engagements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pentest_engagements: {
+        Row: {
+          authorization_attested: boolean
+          authorization_attested_at: string | null
+          authorization_reference: string | null
+          client_name: string | null
+          created_at: string
+          emergency_contact: string | null
+          end_at: string | null
+          engagement_name: string
+          excluded_targets: string[]
+          id: string
+          notes: string | null
+          owner_id: string
+          permitted_methods: string[]
+          scope_targets: string[]
+          start_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          authorization_attested?: boolean
+          authorization_attested_at?: string | null
+          authorization_reference?: string | null
+          client_name?: string | null
+          created_at?: string
+          emergency_contact?: string | null
+          end_at?: string | null
+          engagement_name: string
+          excluded_targets?: string[]
+          id?: string
+          notes?: string | null
+          owner_id: string
+          permitted_methods?: string[]
+          scope_targets?: string[]
+          start_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          authorization_attested?: boolean
+          authorization_attested_at?: string | null
+          authorization_reference?: string | null
+          client_name?: string | null
+          created_at?: string
+          emergency_contact?: string | null
+          end_at?: string | null
+          engagement_name?: string
+          excluded_targets?: string[]
+          id?: string
+          notes?: string | null
+          owner_id?: string
+          permitted_methods?: string[]
+          scope_targets?: string[]
+          start_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pentest_evidence: {
+        Row: {
+          created_at: string
+          description: string | null
+          engagement_id: string
+          file_name: string
+          file_size: number
+          id: string
+          mime_type: string
+          owner_id: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          engagement_id: string
+          file_name: string
+          file_size: number
+          id?: string
+          mime_type: string
+          owner_id: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          engagement_id?: string
+          file_name?: string
+          file_size?: number
+          id?: string
+          mime_type?: string
+          owner_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pentest_evidence_engagement_id_fkey"
+            columns: ["engagement_id"]
+            isOneToOne: false
+            referencedRelation: "pentest_engagements"
             referencedColumns: ["id"]
           },
         ]
@@ -2103,6 +2109,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_users: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          access_level: string
+          avatar_url: string
+          created_at: string
+          full_name: string
+          is_profile_public: boolean
+          job_title: string
+          location: string
+          profile_id: string
+          total_count: number
+          user_id: string
+          username: string
+        }[]
+      }
+      admin_update_bug_report_status: {
+        Args: { p_report_id: string; p_status: string }
+        Returns: boolean
+      }
       calculate_risk_score: { Args: { scan_id: string }; Returns: number }
       check_and_auto_submit_test: {
         Args: { p_attempt_id: string }
@@ -2119,24 +2145,7 @@ export type Database = {
           total_threats: number
         }[]
       }
-      is_admin: { Args: never; Returns: boolean },
-      admin_update_bug_report_status: { Args: { p_report_id: string; p_status: string }; Returns: boolean }
-      admin_list_users: {
-        Args: { p_limit?: number; p_offset?: number; p_search?: string | null }
-        Returns: {
-          access_level: string
-          avatar_url: string | null
-          created_at: string
-          full_name: string | null
-          is_profile_public: boolean | null
-          job_title: string | null
-          location: string | null
-          profile_id: string
-          total_count: number
-          user_id: string
-          username: string | null
-        }[]
-      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       access_level: "basic" | "premium" | "elite"
