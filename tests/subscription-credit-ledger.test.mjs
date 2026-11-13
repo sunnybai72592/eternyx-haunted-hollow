@@ -12,7 +12,7 @@ test("central entitlement and credit tables are private and empty until configur
   assert.equal((source.match(/ENABLE ROW LEVEL SECURITY/g) ?? []).length, 3);
   assert.match(source, /REVOKE ALL ON TABLE public\.plan_entitlements FROM PUBLIC, anon, authenticated/);
   assert.match(source, /REVOKE ALL ON TABLE public\.credit_accounts FROM PUBLIC, anon, authenticated/);
-  assert.match(source, /REVOKE ALL ON TABLE public\.credit_ledger FROM service_role/);
+  assert.ok(source.includes("REVOKE ALL ON TABLE public.credit_ledger FROM service_role"));
   assert.match(source, /REVOKE ALL ON TABLE public\.credit_accounts FROM service_role/);
   assert.match(source, /REVOKE ALL ON TABLE public\\.credit_ledger FROM service_role/);
   assert.doesNotMatch(source, /INSERT INTO public\.plan_entitlements/i);
