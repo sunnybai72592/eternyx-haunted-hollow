@@ -100,7 +100,7 @@ const Services = () => {
     {
       id: "monitoring",
       title: "Platform Security Monitoring",
-      description: "Review selected ETERNYX platform security events recorded at trusted backend authorization boundaries."
+      description: "Review selected ETERNYX platform security events recorded at trusted backend authorization boundaries.",
       icon: <Wifi className="h-8 w-8" />,
       color: "red",
       link: "/threat-monitoring",
