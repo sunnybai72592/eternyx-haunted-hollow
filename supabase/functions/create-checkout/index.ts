@@ -141,7 +141,7 @@ serve(async (req) => {
           currency: "usd",
           product_data: {
             name: selectedPlan.name,
-            description: \`\${selectedPlan.name} subscription plan\`,
+            description: selectedPlan.name + " subscription plan",
           },
           unit_amount: selectedPlan.amount,
           recurring: { interval: "month" },
@@ -149,8 +149,8 @@ serve(async (req) => {
         quantity: 1,
       }],
       mode: "subscription",
-      success_url: \`\${appUrl.origin}/subscription?session_id={CHECKOUT_SESSION_ID}\`,
-      cancel_url: \`\${appUrl.origin}/subscription?cancelled=true\`,
+      success_url: appUrl.origin + "/subscription?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: appUrl.origin + "/subscription?cancelled=true",
       metadata: { user_id: user.id, plan_id: planId },
       subscription_data: {
         metadata: { user_id: user.id, plan_id: planId },
