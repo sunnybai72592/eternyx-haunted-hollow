@@ -88,3 +88,15 @@ test("subscription hub does not present fabricated subscription, usage, or payme
   assert.match(source, /create-checkout/);
   assert.match(source, /noopener,noreferrer/);
 });
+
+
+test("subscription manager never assumes free access when status lookup fails", async () => {
+  const source = await read("src/components/SubscriptionManager.tsx");
+  assert.match(source, /type LookupState = 'loading' \| 'ready' \| 'error'/);
+  assert.match(source, /Your subscription status could not be verified/);
+  assert.match(source, /No plan or access level is being assumed/);
+  assert.match(source, /typeof data\.subscribed !== 'boolean'/);
+  assert.match(source, /An active subscription was found, but its plan could not be identified/);
+  assert.match(source, /subscriptionData\.cancel_at_period_end/);
+  assert.doesNotMatch(source, /window\.open\(data\.url, '_blank'\)/);
+});
