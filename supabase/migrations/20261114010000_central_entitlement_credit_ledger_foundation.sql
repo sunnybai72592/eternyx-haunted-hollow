@@ -59,7 +59,7 @@ CREATE OR REPLACE FUNCTION public.consume_tool_credits(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $$
 DECLARE
   v_active_count INTEGER;
@@ -180,7 +180,7 @@ CREATE OR REPLACE FUNCTION public.grant_tool_credits(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $$
 DECLARE
   v_balance INTEGER;
@@ -253,7 +253,7 @@ CREATE OR REPLACE FUNCTION public.refund_tool_credits(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $$
 DECLARE
   v_spend public.credit_ledger%ROWTYPE;
