@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const read = (path) => readFile(new URL(\`../\${path}\`, import.meta.url), "utf8");
+const read = (path) => readFile(new URL("../" + path, import.meta.url), "utf8");
 
 test("checkout authenticates the caller before parsing request data", async () => {
   const source = await read("supabase/functions/create-checkout/index.ts");
@@ -45,8 +45,8 @@ test("checkout binds Stripe customer and subscription metadata to the authentica
 test("checkout redirects only to a server-configured application URL", async () => {
   const source = await read("supabase/functions/create-checkout/index.ts");
   assert.match(source, /Deno\.env\.get\("APP_BASE_URL"\) \|\| DEFAULT_APP_BASE_URL/);
-  assert.match(source, /success_url: \`\\\$\{appUrl\.origin\}/);
-  assert.match(source, /cancel_url: \`\\\$\{appUrl\.origin\}/);
+  assert.match(source, /success_url: appUrl\.origin \+/);
+  assert.match(source, /cancel_url: appUrl\.origin \+/);
   assert.doesNotMatch(source, /req\.headers\.get\("origin"\).*success_url|req\.headers\.get\("origin"\).*cancel_url/);
 });
 
