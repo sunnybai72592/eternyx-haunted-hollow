@@ -693,7 +693,144 @@ const CyberArena = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {activeTool === 'dns-analyzer' &&
+              {activeTool === 'vuln-scanner' &&
+              !scanResults.error &&
+              scanResults.success === true &&
+              Array.isArray(scanResults.candidate_cves) ? (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40">
+                      {scanResults.research_type || 'NVD keyword research'}
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.results_returned ?? scanResults.candidate_cves.length} candidates returned
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.total_matches_reported_by_nvd ?? scanResults.candidate_cves.length} NVD matches
+                    </Badge>
+                    <Badge variant="outline" className="text-gray-300">
+                      {scanResults.scan_duration ?? 0}s
+                    </Badge>
+                  </div>
+
+                  <section className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-cyan-200">Research query</h3>
+                    <p className="text-sm text-gray-200">
+                      {[scanResults.search_terms?.vendor, scanResults.search_terms?.product, scanResults.search_terms?.version]
+                        .filter(Boolean).join(' / ') || scanResults.search_terms?.query || 'Product keyword search'}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      These are keyword-matched research candidates, not confirmed vulnerabilities in your installed product.
+                    </p>
+                  </section>
+
+                  {scanResults.candidate_cves.length > 0 ? (
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-semibold text-white">Candidate CVEs</h3>
+                      {scanResults.candidate_cves.map((cve: any, index: number) => {
+                        const severity = String(cve.cvss_severity || 'Not rated').toUpperCase();
+                        const severityStyles: Record<string, string> = {
+                          CRITICAL: 'bg-red-500/15 text-red-300 border-red-500/30',
+                          HIGH: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+                          MEDIUM: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                          LOW: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+                        };
+                        return (
+                          <article key={cve.id || index} className="rounded-lg border border-gray-700 bg-black/20 p-4 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <a
+                                href={cve.nvd_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-cyan-300 hover:text-cyan-200 underline underline-offset-2"
+                              >
+                                {cve.id || 'Unknown CVE'}
+                              </a>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={severityStyles[severity] || 'bg-gray-500/15 text-gray-300 border-gray-500/30'}>
+                                  {severity}
+                                </Badge>
+                                <Badge variant="outline" className="text-gray-300">
+                                  {typeof cve.cvss_score === 'number' ? `CVSS ${cve.cvss_version || ''} · ${cve.cvss_score.toFixed(1)}` : 'No CVSS score'}
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-300 leading-relaxed">{cve.description}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                              {cve.published && <span>Published: {new Date(cve.published).toLocaleDateString()}</span>}
+                              {cve.last_modified && <span>Updated: {new Date(cve.last_modified).toLocaleDateString()}</span>}
+                            </div>
+
+                            {Array.isArray(cve.affected_product_configurations) && cve.affected_product_configurations.length > 0 && (
+                              <div className="space-y-2">
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">NVD product configurations</h4>
+                                <div className="space-y-2">
+                                  {cve.affected_product_configurations.map((configuration: any, configIndex: number) => (
+                                    <div key={`${configuration.cpe}-${configIndex}`} className="rounded border border-gray-800 bg-black/30 p-3 space-y-1">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs font-mono text-gray-300 break-all">{configuration.cpe}</span>
+                                        <Badge variant="outline" className={configuration.vulnerable === true ? 'text-amber-300 border-amber-500/30' : 'text-gray-400'}>
+                                          {configuration.vulnerable === true ? 'Marked vulnerable by NVD' : 'Not marked vulnerable'}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-xs text-gray-500">
+                                        {[
+                                          configuration.version_start_including && `from ${configuration.version_start_including} (inclusive)`,
+                                          configuration.version_start_excluding && `after ${configuration.version_start_excluding}`,
+                                          configuration.version_end_including && `through ${configuration.version_end_including} (inclusive)`,
+                                          configuration.version_end_excluding && `before ${configuration.version_end_excluding}`,
+                                        ].filter(Boolean).join(' · ') || 'No explicit version boundary supplied in this CPE match.'}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {Array.isArray(cve.references) && cve.references.length > 0 && (
+                              <div className="space-y-2">
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">External references</h4>
+                                <ul className="space-y-1">
+                                  {cve.references.map((reference: any, referenceIndex: number) => (
+                                    <li key={reference.url || referenceIndex} className="text-xs break-all">
+                                      <a href={reference.url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:underline">
+                                        {reference.url}
+                                      </a>
+                                      {Array.isArray(reference.tags) && reference.tags.length > 0 && (
+                                        <span className="ml-2 text-gray-500">({reference.tags.join(', ')})</span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </section>
+                  ) : (
+                    <p className="rounded-lg border border-gray-700 bg-black/20 p-4 text-sm text-gray-400">
+                      NVD returned no candidate CVEs for these search terms. This does not prove the product has no known vulnerabilities.
+                    </p>
+                  )}
+
+                  {Array.isArray(scanResults.coverage_limitations) && (
+                    <section className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                      <h3 className="text-sm font-semibold text-amber-200">Research limitations</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-xs text-gray-400">
+                        {scanResults.coverage_limitations.map((limitation: string, index: number) => (
+                          <li key={index}>{limitation}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    Source: {scanResults.source || 'National Vulnerability Database (NVD), NIST'}.
+                    CVSS severity and CPE version ranges are reported data; verify applicability with the vendor advisory and exact installed build.
+                    {scanResults.source_url && <> <a href={scanResults.source_url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:underline">Open NVD</a>.</>}
+                  </p>
+                </div>
+              ) : {activeTool === 'dns-analyzer' &&
               !scanResults.error &&
               Array.isArray(scanResults.dns_records) ? (
                 <div className="space-y-5">
