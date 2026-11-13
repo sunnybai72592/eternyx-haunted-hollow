@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const DOH_TIMEOUT_MS = 5000
 const DOH_RESPONSE_LIMIT_BYTES = 128 * 1024
+const REQUEST_BODY_LIMIT_BYTES = 4 * 1024
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -76,7 +77,40 @@ serve(async (req) => {
       })
     }
 
-    const { domain }: DNSAnalysisRequest = await req.json()
+    const declaredLength = Number(req.headers.get('content-length') || 0)
+    if (declaredLength > REQUEST_BODY_LIMIT_BYTES) {
+      return new Response(JSON.stringify({ error: 'Request body is too large' }), {
+        status: 413,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    let rawBody: string
+    try {
+      rawBody = await readLimitedRequestText(req, REQUEST_BODY_LIMIT_BYTES)
+    } catch {
+      return new Response(JSON.stringify({ error: 'Request body is too large' }), {
+        status: 413,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    let body: DNSAnalysisRequest
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      return new Response(JSON.stringify({ error: 'Request body must be valid JSON' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return new Response(JSON.stringify({ error: 'Request body must be a JSON object' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    const { domain } = body
     const normalizedDomain = typeof domain === 'string'
       ? domain.trim().toLowerCase().replace(/\.$/, '')
       : ''
@@ -202,6 +236,35 @@ serve(async (req) => {
     )
   }
 })
+
+
+async function readLimitedRequestText(req: Request, limit: number): Promise<string> {
+  if (!req.body) return ""
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > limit) {
+        await reader.cancel()
+        throw new Error("Request body exceeded the size limit.")
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(bytes)
+}
 
 async function queryDNSRecords(domain: string, recordType: string): Promise<DNSRecord[]> {
   const dohUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(recordType)}`
