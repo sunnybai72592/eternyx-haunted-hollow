@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL("../" + path, import.meta.url), "utf8");
 
 test("checkout authenticates the caller before parsing request data", async () => {
   const source = await read("supabase/functions/create-checkout/index.ts");
-  assert.ok(source.indexOf('req.headers.get("Authorization")') < source.indexOf("readLimitedRequestText(req"));
+  assert.ok(source.indexOf('req.headers.get("Authorization")') < source.indexOf("const rawBody = await readLimitedRequestText(req"));
   assert.match(source, /authorization\?\.match\(\/\^Bearer/);
   assert.match(source, /supabaseClient\.auth\.getUser\(bearerMatch\[1\]\)/);
   assert.match(source, /!user\?\.id \|\| !user\.email/);
