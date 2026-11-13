@@ -58,14 +58,27 @@ test("checkout returns generic server errors and rejects non-POST methods", asyn
   assert.doesNotMatch(source, /JSON\.stringify\(\{ error: errorMessage \}\)/);
 });
 
-test("subscription lookup authenticates and matches the Stripe customer by user metadata", async () => {
+test("subscription lookup authenticates and reads only the server-managed projection", async () => {
   const source = await read("supabase/functions/check-subscription/index.ts");
   assert.match(source, /req\.method !== "POST"/);
-  assert.match(source, /supabase\.auth\.getUser\(bearerMatch\[1\]\)/);
-  assert.match(source, /candidate\.metadata\?\.user_id === user\.id/);
-  assert.match(source, /status: "all"/);
-  assert.doesNotMatch(source, /customers\.data\[0\]/);
+  assert.match(source, /authClient\.auth\.getUser\(bearerMatch\[1\]\)/);
+  assert.match(source, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(source, /from\("billing_subscriptions"\)/);
+  assert.match(source, /\.eq\("user_id", user\.id\)/);
+  assert.match(source, /\.limit\(101\)/);
+  assert.match(source, /record\.status === "active" \|\| record\.status === "trialing"/);
+  assert.match(source, /activeRecords\.length > 1/);
+  assert.match(source, /Subscription status is not available for verification/);
+  assert.doesNotMatch(source, /Stripe|stripe\.customers|stripe\.subscriptions/);
   assert.doesNotMatch(source, /\.upsert\(/);
+});
+
+test("subscription lookup fails closed for ambiguous or excessive subscription records", async () => {
+  const source = await read("supabase/functions/check-subscription/index.ts");
+  assert.match(source, /records\.length > 100/);
+  assert.match(source, /Multiple active subscriptions require reconciliation/);
+  assert.match(source, /subscription_tier: tier/);
+  assert.match(source, /current\.plan_id === "premium" \|\| current\.plan_id === "elite"/);
 });
 
 test("customer portal authenticates ownership and uses a trusted return URL", async () => {
