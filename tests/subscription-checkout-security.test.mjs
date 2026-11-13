@@ -100,3 +100,46 @@ test("subscription manager never assumes free access when status lookup fails", 
   assert.match(source, /subscriptionData\.cancel_at_period_end/);
   assert.doesNotMatch(source, /window\.open\(data\.url, '_blank'\)/);
 });
+
+
+test("Stripe webhook verifies the raw request body signature before processing", async () => {
+  const source = await read("supabase/functions/stripe-webhook/index.ts");
+  assert.match(source, /Stripe-Signature/);
+  assert.match(source, /STRIPE_WEBHOOK_SECRET/);
+  assert.match(source, /constructEventAsync\(/);
+  assert.match(source, /Invalid webhook signature/);
+  assert.match(source, /MAX_WEBHOOK_BODY_BYTES/);
+  assert.doesNotMatch(source, /req\.json\(\)/);
+});
+
+test("Stripe webhook claims events idempotently and retries failed processing", async () => {
+  const source = await read("supabase/functions/stripe-webhook/index.ts");
+  assert.match(source, /claim_stripe_webhook_event/);
+  assert.match(source, /complete_stripe_webhook_event/);
+  assert.match(source, /fail_stripe_webhook_event/);
+  assert.match(source, /claim === "processed"/);
+  assert.match(source, /claim === "processing"/);
+  assert.match(source, /return jsonResponse\(\{ error: "Webhook processing failed" \}, 500\)/);
+});
+
+test("Stripe webhook binds subscription state to verified customer metadata", async () => {
+  const source = await read("supabase/functions/stripe-webhook/index.ts");
+  assert.match(source, /subscription\.metadata\?\.user_id/);
+  assert.match(source, /customer\.metadata\?\.user_id !== userId/);
+  assert.match(source, /checkout\.session\.completed/);
+  assert.match(source, /customer\.subscription\.updated/);
+  assert.match(source, /billing_subscriptions/);
+  assert.match(source, /onConflict: "stripe_subscription_id"/);
+});
+
+test("Stripe webhook lifecycle migration keeps billing tables server-managed", async () => {
+  const source = await read("supabase/migrations/20261113200000_stripe_webhook_lifecycle_foundation.sql");
+  assert.match(source, /CREATE TABLE IF NOT EXISTS public\.billing_subscriptions/);
+  assert.match(source, /CREATE TABLE IF NOT EXISTS public\.stripe_webhook_events/);
+  assert.match(source, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(source, /REVOKE ALL ON TABLE public\.billing_subscriptions FROM PUBLIC, anon, authenticated/);
+  assert.match(source, /REVOKE ALL ON TABLE public\.stripe_webhook_events FROM PUBLIC, anon, authenticated/);
+  assert.match(source, /claim_stripe_webhook_event/);
+  assert.match(source, /processing_started_at < now\(\) - interval '10 minutes'/);
+  assert.match(source, /GRANT EXECUTE ON FUNCTION public\.claim_stripe_webhook_event\(TEXT, TEXT\) TO service_role/);
+});
