@@ -14,7 +14,7 @@ type Job = ReturnType<typeof normalizeWorkflowJobs>[number];
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString() : "Not available";
 const duration = (ms: number | null) => ms === null ? "Not available" : ms < 60000 ? Math.round(ms / 1000) + " sec" : (ms / 60000).toFixed(1) + " min";
 const stateClass = (status: string, conclusion: string | null) => conclusion === "success" ? "text-emerald-300" : conclusion && conclusion !== "neutral" && conclusion !== "skipped" ? "text-rose-300" : status === "in_progress" ? "text-cyan-300" : "text-amber-300";
-const stateText = (status: string, conclusion: string | null) => conclusion || status.replaceAll("_", " ");
+const stateText = (status: string, conclusion: string | null) => conclusion || status.split("_").join(" ");
 
 async function githubGet<T>(url: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, { headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }, credentials: "omit", cache: "no-store", redirect: "error", signal });
