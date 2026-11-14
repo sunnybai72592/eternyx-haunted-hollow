@@ -33,8 +33,9 @@ test("AI Chat refunds a charged request only when provider generation fails", as
   const providerIndex = edge.indexOf("await generateResponse(systemPrompt");
   assert.ok(refundIndex > providerIndex, "Refund path must follow provider execution failure");
   assert.match(edge, /spendTransactionId\s*=\s*creditResult\.transactionId/);
-  assert.match(edge, /if \(spendTransactionId\)/);
+  assert.match(edge, /if \(spendTransactionId && error instanceof AIProviderError && error\.safeToRefund\)/);
   assert.match(edge, /AI chat credit refund requires reconciliation/);
+  assert.match(edge, /Groq network request failed[\s\S]*?AIProviderError\([\s\S]*?false\)/);
 });
 
 test("AI Chat maps entitlement failures to safe client-facing errors", async () => {
