@@ -21,6 +21,7 @@ test("reservation is idempotent and requires the current worker lease", async ()
   assert.match(sql, /v_job\.lease_expires_at <= now\(\)/);
   assert.match(sql, /reserve_ai_generation_job_credits/);
   assert.match(sql, /already_processed/);
+  assert.match(sql, /Return the original reservation before checking the lease/);
 });
 
 test("settlement requires confirmed success and cannot exceed the reserved amount", async () => {
