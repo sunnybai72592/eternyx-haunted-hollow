@@ -203,6 +203,7 @@ const EternixAI: React.FC = () => {
           sessionId: currentSessionId,
           documentId: selectedDocument,
           userId,
+          requestId: crypto.randomUUID(),
         },
       });
 
