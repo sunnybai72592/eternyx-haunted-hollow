@@ -40,13 +40,13 @@ export interface AIStudioDefinition {
   readonly id: AIStudioId;
   readonly title: string;
   readonly description: string;
-  readonly route: string;
+  readonly slug: string;
   readonly flagship?: boolean;
 }
 
 export interface AIFeatureDefinition {
   readonly id: string;
-  readonly studioId: AIStudioId;
+  readonly studioId: AIStudioId | null;
   readonly title: string;
   readonly description: string;
   readonly capability: AICapability;
@@ -79,14 +79,14 @@ export interface AIModelDefinition {
 }
 
 export const AI_STUDIOS: readonly AIStudioDefinition[] = [
-  { id: "video", title: "AI Video Studio", description: "Create and transform video with controlled, asynchronous generation workflows.", route: "/ai-arsenal/video", flagship: true },
-  { id: "image", title: "AI Image Studio", description: "Generate, edit and prepare visual assets.", route: "/ai-arsenal/image" },
-  { id: "writing", title: "AI Writing Studio", description: "Draft, revise, summarize and translate content.", route: "/ai-arsenal/writing" },
-  { id: "audio", title: "AI Audio Studio", description: "Transcribe, synthesize and process audio.", route: "/ai-arsenal/audio" },
-  { id: "coding", title: "AI Coding Studio", description: "Assist software development and integrate with Developer Studio.", route: "/ai-arsenal/coding" },
-  { id: "documents", title: "AI Document Intelligence", description: "Understand, extract and analyze user-owned documents.", route: "/ai-arsenal/documents" },
-  { id: "research", title: "AI Research Studio", description: "Research topics with traceable sources and structured findings.", route: "/ai-arsenal/research" },
-  { id: "agents", title: "AI Agents Studio", description: "Plan controlled multi-step tasks with explicit permission boundaries.", route: "/ai-arsenal/agents" },
+  { id: "video", title: "AI Video Studio", description: "Create and transform video with controlled, asynchronous generation workflows.", slug: "video", flagship: true },
+  { id: "image", title: "AI Image Studio", description: "Generate, edit and prepare visual assets.", slug: "image" },
+  { id: "writing", title: "AI Writing Studio", description: "Draft, revise, summarize and translate content.", slug: "writing" },
+  { id: "audio", title: "AI Audio Studio", description: "Transcribe, synthesize and process audio.", slug: "audio" },
+  { id: "coding", title: "AI Coding Studio", description: "Assist software development and integrate with Developer Studio.", slug: "coding" },
+  { id: "documents", title: "AI Document Intelligence", description: "Understand, extract and analyze user-owned documents.", slug: "documents" },
+  { id: "research", title: "AI Research Studio", description: "Research topics with traceable sources and structured findings.", slug: "research" },
+  { id: "agents", title: "AI Agents Studio", description: "Plan controlled multi-step tasks with explicit permission boundaries.", slug: "agents" },
 ] as const;
 
 /**
@@ -95,7 +95,7 @@ export const AI_STUDIOS: readonly AIStudioDefinition[] = [
  * No feature is marked enabled in this foundation milestone.
  */
 export const AI_FEATURES: readonly AIFeatureDefinition[] = [
-  { id: "ai.chat", studioId: "writing", title: "AI Chat", description: "Conversational AI workspace; backend activation remains pending.", capability: "reasoning", inputModalities: ["text", "image", "document"], outputModalities: ["text"], execution: "request_response", status: "backend_pending", entitlementKey: "ai.chat" },
+  { id: "ai.chat", studioId: null, title: "AI Chat", description: "Conversational AI workspace; backend activation remains pending.", capability: "reasoning", inputModalities: ["text", "image", "document"], outputModalities: ["text"], execution: "request_response", status: "backend_pending", entitlementKey: "ai.chat" },
 
   { id: "ai.video.text_to_video", studioId: "video", title: "Text to Video", description: "Generate video from a text prompt.", capability: "video_generation", inputModalities: ["text"], outputModalities: ["video"], execution: "asynchronous_job", status: "planned", entitlementKey: "ai.video.text_to_video" },
   { id: "ai.video.image_to_video", studioId: "video", title: "Image to Video", description: "Animate a user-provided image into a video.", capability: "video_generation", inputModalities: ["text", "image"], outputModalities: ["video"], execution: "asynchronous_job", status: "planned", entitlementKey: "ai.video.image_to_video" },
@@ -166,13 +166,13 @@ export function validateAIRegistry(): readonly string[] {
   for (const studio of AI_STUDIOS) {
     if (studioIds.has(studio.id)) errors.push(`Duplicate studio ID: ${studio.id}`);
     studioIds.add(studio.id);
-    if (!studio.route.startsWith("/")) errors.push(`Invalid studio route: ${studio.id}`);
+    if (!/^[a-z][a-z0-9-]*$/.test(studio.slug)) errors.push(`Invalid studio slug: ${studio.id}`);
   }
 
   for (const feature of AI_FEATURES) {
     if (featureIds.has(feature.id)) errors.push(`Duplicate feature ID: ${feature.id}`);
     featureIds.add(feature.id);
-    if (!studioIds.has(feature.studioId)) errors.push(`Unknown studio for feature: ${feature.id}`);
+    if (feature.studioId !== null && !studioIds.has(feature.studioId)) errors.push(`Unknown studio for feature: ${feature.id}`);
     if (feature.entitlementKey !== feature.id) errors.push(`Entitlement key must match feature ID: ${feature.id}`);
     if (feature.inputModalities.length === 0 || feature.outputModalities.length === 0) {
       errors.push(`Feature modalities are incomplete: ${feature.id}`);
