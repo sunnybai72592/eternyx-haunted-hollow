@@ -61,7 +61,13 @@ interface AuthState {
 }
 
 async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
+  // Don't let a slow or unreachable database freeze sign-in forever.
+  const timeout = new Promise<{ data: null; error: Error }>((resolve) =>
+    setTimeout(() => resolve({ data: null, error: new Error('Profile request timed out') }), 8000));
+  const { data, error } = await Promise.race([
+    supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+    timeout,
+  ]) as { data: any; error: any };
   if (error) {
     console.error('fetchUserProfile error', error);
     return null;

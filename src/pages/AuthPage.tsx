@@ -67,7 +67,7 @@ export default function AuthPage() {
   const [info, setInfo] = useState<string | null>(null);
   const redirect = params.get('redirect') || '/dashboard';
   const score = useMemo(() => strength(password), [password]);
-  const loading = busy || isLoading;
+  const loading = busy; // never lock the form while the session check runs
 
   useEffect(() => {
     if (isAuthenticated && !isLoading) navigate(redirect, { replace: true });
