@@ -146,6 +146,25 @@ BEGIN
     RAISE EXCEPTION 'Invalid AI job claim request';
   END IF;
 
+  -- A worker may have submitted to an external provider and crashed before
+  -- persisting its provider task ID. Never blindly submit that job again.
+  WITH uncertain AS (
+    UPDATE public.ai_generation_jobs
+    SET status = 'reconciliation_required',
+        failure_code = 'SUBMISSION_OUTCOME_UNKNOWN',
+        lease_owner = NULL,
+        lease_token = NULL,
+        lease_expires_at = NULL,
+        updated_at = now()
+    WHERE status = 'reserved'
+      AND lease_expires_at < now()
+      AND provider_task_id IS NULL
+    RETURNING id
+  )
+  INSERT INTO public.ai_generation_job_events (job_id, from_status, to_status, event_code)
+  SELECT id, 'reserved', 'reconciliation_required', 'job.submission_outcome_unknown'
+  FROM uncertain;
+
   FOR v_job IN
     SELECT *
     FROM public.ai_generation_jobs
