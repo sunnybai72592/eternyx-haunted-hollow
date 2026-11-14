@@ -154,8 +154,7 @@ export default function SubscriptionHub() {
               <Card className="p-6 bg-card/50 border-primary/20 space-y-4">
                 <h2 className="text-xl font-semibold">Usage and credits</h2>
                 <p className="text-muted-foreground">
-                  Credit information is not available for verification yet. Usage reporting is
-                  not available yet because the ledger migration and snapshot service must be
+                  Credit information is not available for verification yet. Usage reporting is not available yet because the ledger migration and snapshot service must be
                   installed before balances or feature access can be displayed. No plan,
                   balance, or usage is assumed.
                 </p>
