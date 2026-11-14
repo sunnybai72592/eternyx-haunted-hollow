@@ -58,8 +58,8 @@ test("AI job client contracts expose only safe status fields", async () => {
 
 test("AI jobs with an unknown provider submission outcome are quarantined, not resubmitted", async () => {
   const sql = await read("supabase/migrations/20261114040000_ai_durable_generation_jobs.sql");
-  assert.match(sql, /status = 'reserved'[\\s\\S]*?lease_expires_at < now\\(\\)[\\s\\S]*?provider_task_id IS NULL/);
+  assert.match(sql, /status = 'reserved'[\s\S]*?lease_expires_at < now\(\)[\s\S]*?provider_task_id IS NULL/);
   assert.match(sql, /SUBMISSION_OUTCOME_UNKNOWN/);
-  assert.match(sql, /lease_expires_at IS NULL OR lease_expires_at < now\\(\\)/);
+  assert.match(sql, /lease_expires_at IS NULL OR lease_expires_at < now\(\)/);
   assert.match(sql, /status <> 'reserved' OR provider_task_id IS NOT NULL/);
 });
