@@ -90,6 +90,7 @@ BEGIN
      OR length(p_idempotency_key) NOT BETWEEN 1 AND 200
      OR p_input_payload IS NULL
      OR jsonb_typeof(p_input_payload) <> 'object'
+     OR pg_column_size(p_input_payload) > 65536
      OR p_max_attempts IS NULL OR p_max_attempts NOT BETWEEN 1 AND 10 THEN
     RAISE EXCEPTION 'Invalid AI generation job request';
   END IF;
