@@ -387,7 +387,7 @@ const AIPoweredSecurity = () => {
     setChatInput("");
     setChatLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("security-assistant", { body: { messages: next.slice(-20) } });
+      const { data, error } = await supabase.functions.invoke("security-assistant", { body: { messages: next.slice(-20), requestId: crypto.randomUUID() } });
       if (error || data?.error) throw new Error(data?.error || error?.message);
       setChat([...next, { role: "assistant", content: data.reply }]);
     } catch (e: any) {
