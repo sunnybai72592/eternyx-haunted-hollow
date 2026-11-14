@@ -69,12 +69,12 @@ BEGIN
   WHERE id = p_job_id AND user_id = p_user_id
   FOR UPDATE;
 
-  IF NOT FOUND OR v_job.status <> 'reserved'
-     OR v_job.lease_token IS DISTINCT FROM p_lease_token
-     OR v_job.lease_expires_at <= now() THEN
-    RAISE EXCEPTION 'AI job is not held by the active worker lease';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'AI job was not found for this user';
   END IF;
 
+  -- Return the original reservation before checking the lease: retries remain
+  -- idempotent even if the worker already advanced the job lifecycle.
   SELECT * INTO v_reservation
   FROM public.ai_generation_job_credit_reservations
   WHERE job_id = p_job_id;
@@ -92,6 +92,12 @@ BEGIN
       'reserved_credits', v_reservation.reserved_credits,
       'balance', (SELECT balance FROM public.credit_accounts WHERE user_id = p_user_id)
     );
+  END IF;
+
+  IF v_job.status <> 'reserved'
+     OR v_job.lease_token IS DISTINCT FROM p_lease_token
+     OR v_job.lease_expires_at <= now() THEN
+    RAISE EXCEPTION 'AI job is not held by the active worker lease';
   END IF;
 
   SELECT count(*), min(plan_id)
