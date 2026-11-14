@@ -18,7 +18,7 @@ test("reservation is idempotent and requires the current worker lease", async ()
   const sql = await read("supabase/migrations/20261114050000_ai_generation_job_credit_reservations.sql");
   assert.match(sql, /UNIQUE \(user_id, idempotency_key\)/);
   assert.match(sql, /v_job\.lease_token IS DISTINCT FROM p_lease_token/);
-  assert.match(sql, /v_job\.lease_expires_at <= now\(\)/);
+  assert.match(sql, /v_job\.lease_expires_at IS NULL OR v_job\.lease_expires_at <= now\(\)/);
   assert.match(sql, /reserve_ai_generation_job_credits/);
   assert.match(sql, /already_processed/);
   assert.match(sql, /Return the original reservation before checking the lease/);
