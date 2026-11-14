@@ -43,7 +43,7 @@ test("feature IDs and central entitlement keys are stable and unique", () => {
 test("every feature belongs to a known studio and declares input/output modalities", () => {
   const studios = new Set(registry.AI_STUDIOS.map((studio) => studio.id));
   for (const feature of registry.AI_FEATURES) {
-    assert.ok(studios.has(feature.studioId), `Unknown studio for ${feature.id}`);
+    if (feature.studioId !== null) assert.ok(studios.has(feature.studioId), `Unknown studio for ${feature.id}`);
     assert.ok(feature.inputModalities.length > 0);
     assert.ok(feature.outputModalities.length > 0);
   }
@@ -61,6 +61,7 @@ test("no provider, model, paid capability or feature is accidentally activated",
 test("studio and feature lookup helpers return only matching entries", () => {
   assert.equal(registry.getAIStudio("video").title, "AI Video Studio");
   assert.equal(registry.getAIFeature("ai.video.text_to_video").studioId, "video");
+  assert.equal(registry.getAIFeature("ai.chat").studioId, null);
   assert.equal(registry.getFeaturesForStudio("audio").every((feature) => feature.studioId === "audio"), true);
   assert.equal(registry.getAIFeature("ai.not_real"), undefined);
 });
