@@ -96,7 +96,7 @@ BEGIN
 
   IF v_job.status <> 'reserved'
      OR v_job.lease_token IS DISTINCT FROM p_lease_token
-     OR v_job.lease_expires_at <= now() THEN
+     OR v_job.lease_expires_at IS NULL OR v_job.lease_expires_at <= now() THEN
     RAISE EXCEPTION 'AI job is not held by the active worker lease';
   END IF;
 
