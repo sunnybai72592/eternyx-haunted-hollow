@@ -35,7 +35,8 @@ test("AI Chat refunds a charged request only when provider generation fails", as
   assert.match(edge, /spendTransactionId\s*=\s*creditResult\.transactionId/);
   assert.match(edge, /if \(spendTransactionId && error instanceof AIProviderError && error\.safeToRefund\)/);
   assert.match(edge, /AI chat credit refund requires reconciliation/);
-  assert.match(edge, /Groq network request failed[\s\S]*?AIProviderError\([\s\S]*?false\)/);
+  const gateway = await read("supabase/functions/_shared/ai-provider.ts");
+  assert.match(gateway, /AI provider network request failed[\s\S]*?"network",\s*false/);
 });
 
 test("AI Chat maps entitlement failures to safe client-facing errors", async () => {
