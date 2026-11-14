@@ -138,10 +138,11 @@ AS $$
 DECLARE
   v_job public.ai_generation_jobs%ROWTYPE;
   v_next_status TEXT;
+  v_previous_status TEXT;
 BEGIN
   IF p_worker_id IS NULL OR length(p_worker_id) NOT BETWEEN 1 AND 120
-     OR p_lease_seconds NOT BETWEEN 10 AND 900
-     OR p_limit NOT BETWEEN 1 AND 25 THEN
+     OR p_lease_seconds IS NULL OR p_lease_seconds NOT BETWEEN 10 AND 900
+     OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 25 THEN
     RAISE EXCEPTION 'Invalid AI job claim request';
   END IF;
 
@@ -158,6 +159,7 @@ BEGIN
     FOR UPDATE SKIP LOCKED
     LIMIT p_limit
   LOOP
+    v_previous_status := v_job.status;
     v_next_status := CASE WHEN v_job.status = 'queued' THEN 'reserved' ELSE v_job.status END;
 
     UPDATE public.ai_generation_jobs
@@ -171,12 +173,12 @@ BEGIN
     WHERE id = v_job.id
     RETURNING * INTO v_job;
 
-    IF v_next_status <> 'reserved' OR v_job.attempt_count > 1 THEN
-      INSERT INTO public.ai_generation_job_events (job_id, from_status, to_status, event_code)
-      VALUES (v_job.id, v_job.status, v_job.status, 'job.lease_recovered');
-    ELSE
+    IF v_previous_status = 'queued' THEN
       INSERT INTO public.ai_generation_job_events (job_id, from_status, to_status, event_code)
       VALUES (v_job.id, 'queued', 'reserved', 'job.claimed');
+    ELSE
+      INSERT INTO public.ai_generation_job_events (job_id, from_status, to_status, event_code)
+      VALUES (v_job.id, v_previous_status, v_previous_status, 'job.lease_recovered');
     END IF;
 
     RETURN NEXT v_job;
@@ -207,9 +209,10 @@ DECLARE
   v_job public.ai_generation_jobs%ROWTYPE;
   v_allowed BOOLEAN := false;
   v_completed_at TIMESTAMPTZ;
+  v_previous_status TEXT;
 BEGIN
   IF p_job_id IS NULL OR p_lease_token IS NULL
-     OR p_next_status NOT IN (
+     OR p_next_status IS NULL OR p_next_status NOT IN (
        'submitted', 'processing', 'cancel_requested',
        'succeeded', 'failed', 'cancelled', 'reconciliation_required', 'queued'
      )
@@ -237,6 +240,12 @@ BEGIN
 
   IF NOT v_allowed THEN
     RAISE EXCEPTION 'AI job state transition is not allowed';
+  END IF;
+
+  v_previous_status := v_job.status;
+
+  IF p_next_status = 'queued' AND v_job.attempt_count >= v_job.max_attempts THEN
+    RAISE EXCEPTION 'AI job retry limit has been reached';
   END IF;
 
   IF p_next_status = 'succeeded' AND
@@ -270,7 +279,7 @@ BEGIN
   RETURNING * INTO v_job;
 
   INSERT INTO public.ai_generation_job_events (job_id, from_status, to_status, event_code)
-  VALUES (v_job.id, (SELECT status FROM public.ai_generation_jobs WHERE id = v_job.id), p_next_status, p_event_code);
+  VALUES (v_job.id, v_previous_status, p_next_status, p_event_code);
 
   RETURN jsonb_build_object('job_id', v_job.id, 'status', v_job.status);
 END;
