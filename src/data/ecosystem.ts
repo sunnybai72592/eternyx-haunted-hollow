@@ -55,7 +55,7 @@ export const ecosystemPillars: EcosystemPillar[] = [
     description: "A structured home for AI assistants, document intelligence, and focused productivity workflows.",
     purpose: "Make AI capabilities discoverable while clearly explaining what each assistant can and cannot do.",
     href: "/ai-arsenal",
-    status: "Planned",
+    status: "Existing foundation",
     icon: BrainCircuit,
     accent: "fuchsia",
     domains: ["AI assistants", "Document intelligence", "Text workflows", "Research support", "Image workflows", "AI productivity"],

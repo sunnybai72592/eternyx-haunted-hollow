@@ -23,6 +23,7 @@ const Index = lazy(() => import("./pages/Index"));
 const CybersecurityHub = lazy(() => import("./pages/CybersecurityHub"));
 const Explore = lazy(() => import("./pages/Explore"));
 const EcosystemPillarPage = lazy(() => import("./pages/EcosystemPillarPage"));
+const AIArsenal = lazy(() => import("./pages/AIArsenal"));
 const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
 const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
@@ -217,7 +218,7 @@ const AppContent = () => {
                         <Route path="/developer-studio/github-changes" element={<GitHubChangeIntelligence />} />
                         <Route path="/developer-studio/github-actions" element={<GitHubActionsIntelligence />} />
                         <Route path="/developer-studio/github-releases" element={<GitHubReleaseIntelligence />} />
-                        <Route path="/ai-arsenal" element={<EcosystemPillarPage pillarId="ai-arsenal" />} />
+                        <Route path="/ai-arsenal" element={<AIArsenal />} />
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
                         <Route path="/automation" element={<EcosystemPillarPage pillarId="automation" />} />
