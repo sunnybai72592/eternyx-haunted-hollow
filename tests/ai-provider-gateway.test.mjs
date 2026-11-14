@@ -8,7 +8,7 @@ test("AI provider gateway keeps provider credentials server-side", async () => {
   const gateway = await read("supabase/functions/_shared/ai-provider.ts");
   assert.match(gateway, /Deno\.env\.get\("GROQ_API_KEY"\)/);
   assert.doesNotMatch(gateway, /import\.meta\.env|VITE_GROQ_API_KEY/);
-  assert.match(gateway, /Authorization:\s*`Bearer \\${apiKey}`/);
+  assert.ok(gateway.includes("Authorization: `Bearer ${apiKey}`"));
 });
 
 test("AI provider gateway preserves the existing Groq adapter and model default", async () => {
