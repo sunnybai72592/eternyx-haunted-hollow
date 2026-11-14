@@ -90,7 +90,7 @@ BEGIN
      OR length(p_idempotency_key) NOT BETWEEN 1 AND 200
      OR p_input_payload IS NULL
      OR jsonb_typeof(p_input_payload) <> 'object'
-     OR p_max_attempts NOT BETWEEN 1 AND 10 THEN
+     OR p_max_attempts IS NULL OR p_max_attempts NOT BETWEEN 1 AND 10 THEN
     RAISE EXCEPTION 'Invalid AI generation job request';
   END IF;
 
@@ -171,7 +171,8 @@ BEGIN
     WHERE (
       (status = 'queued' AND available_at <= now())
       OR (status IN ('reserved', 'submitted', 'processing', 'cancel_requested')
-          AND lease_expires_at < now())
+          AND lease_expires_at < now()
+          AND (status <> 'reserved' OR provider_task_id IS NOT NULL))
     )
     AND (status <> 'queued' OR attempt_count < max_attempts)
     ORDER BY available_at, created_at
