@@ -172,7 +172,7 @@ BEGIN
     WHERE (
       (status = 'queued' AND available_at <= now())
       OR (status IN ('reserved', 'submitted', 'processing', 'cancel_requested')
-          AND lease_expires_at < now()
+          AND (lease_expires_at IS NULL OR lease_expires_at < now())
           AND (status <> 'reserved' OR provider_task_id IS NOT NULL))
     )
     AND (status <> 'queued' OR attempt_count < max_attempts)
