@@ -1,17 +1,74 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import SubscriptionTiers from '@/components/enhanced/SubscriptionTiers';
 import { SubscriptionManager } from '@/components/SubscriptionManager';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
-import { Activity, CreditCard, Crown, Shield } from 'lucide-react';
+import { Activity, CreditCard, Crown, RefreshCw, Shield } from 'lucide-react';
+
+interface CreditSnapshot {
+  planId: 'free' | 'premium' | 'elite';
+  balance: number;
+  features: Array<{ featureKey: string; creditsPerUse: number }>;
+}
+
+type SnapshotState = 'idle' | 'loading' | 'ready' | 'error';
 
 export default function SubscriptionHub() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('plans');
   const [isLoading, setIsLoading] = useState(false);
+  const [snapshot, setSnapshot] = useState<CreditSnapshot | null>(null);
+  const [snapshotState, setSnapshotState] = useState<SnapshotState>('idle');
+
+  const loadCreditSnapshot = async () => {
+    if (!user) {
+      setSnapshot(null);
+      setSnapshotState('error');
+      return;
+    }
+
+    setSnapshotState('loading');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Your session has expired. Please sign in again.');
+
+      const { data, error } = await supabase.functions.invoke('credit-snapshot', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (error) throw error;
+      if (!data ||
+          !['free', 'premium', 'elite'].includes(data.planId) ||
+          !Number.isInteger(data.balance) ||
+          data.balance < 0 ||
+          !Array.isArray(data.features) ||
+          data.features.some((feature: unknown) =>
+            !feature ||
+            typeof feature !== 'object' ||
+            typeof (feature as { featureKey?: unknown }).featureKey !== 'string' ||
+            !Number.isInteger((feature as { creditsPerUse?: unknown }).creditsPerUse) ||
+            (feature as { creditsPerUse: number }).creditsPerUse < 0
+          )) {
+        throw new Error('The credit service returned an invalid response.');
+      }
+
+      setSnapshot(data as CreditSnapshot);
+      setSnapshotState('ready');
+    } catch (error) {
+      console.error('Credit snapshot could not be verified:', error);
+      setSnapshot(null);
+      setSnapshotState('error');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'usage') void loadCreditSnapshot();
+  }, [activeTab, user]);
 
   const handleSubscribe = async (planId: string) => {
     if (!user) {
@@ -87,14 +144,58 @@ export default function SubscriptionHub() {
           </TabsContent>
 
           <TabsContent value="usage" className="space-y-6">
-            <Card className="p-6 bg-card/50 border-primary/20">
-              <h2 className="text-xl font-semibold mb-2">Usage and credits</h2>
-              <p className="text-muted-foreground">
-                Usage reporting is not available yet. ETERNYX is preparing its shared
-                entitlement and credit ledger; no usage totals or limits are displayed
-                until they can be read from the authoritative backend.
-              </p>
-            </Card>
+            {snapshotState === 'loading' && (
+              <Card className="p-6 bg-card/50 border-primary/20" aria-live="polite">
+                <p className="text-muted-foreground">Verifying your plan and credit balance…</p>
+              </Card>
+            )}
+
+            {snapshotState === 'error' && (
+              <Card className="p-6 bg-card/50 border-primary/20 space-y-4">
+                <h2 className="text-xl font-semibold">Usage and credits</h2>
+                <p className="text-muted-foreground">
+                  Credit information is not available for verification yet. Usage reporting is not available yet because the ledger migration and snapshot service must be
+                  installed before balances or feature access can be displayed. No plan,
+                  balance, or usage is assumed.
+                </p>
+                <Button variant="outline" onClick={() => void loadCreditSnapshot()}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+              </Card>
+            )}
+
+            {snapshotState === 'ready' && snapshot && (
+              <>
+                <Card className="p-6 bg-card/50 border-primary/20 space-y-3">
+                  <h2 className="text-xl font-semibold">Verified credit balance</h2>
+                  <p className="text-3xl font-bold tabular-nums">{snapshot.balance.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Plan: {snapshot.planId === 'free' ? 'Ghost Access' : snapshot.planId === 'premium' ? 'Shadow Operative' : 'Cyber Overlord'}
+                  </p>
+                </Card>
+                <Card className="p-6 bg-card/50 border-primary/20 space-y-3">
+                  <h2 className="text-xl font-semibold">Enabled features</h2>
+                  {snapshot.features.length === 0 ? (
+                    <p className="text-muted-foreground">
+                      No feature entitlements have been configured for this plan yet.
+                      Tool access and credit costs remain unconfigured.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {snapshot.features.map((feature) => (
+                        <li key={feature.featureKey} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <span>{feature.featureKey}</span>
+                          <span className="text-muted-foreground">
+                            {feature.creditsPerUse === 0 ? 'No credit cost configured' : `${feature.creditsPerUse} credits per use`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="billing" className="space-y-6">
