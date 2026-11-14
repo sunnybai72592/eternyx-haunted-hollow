@@ -15,7 +15,7 @@ test("Eternyx AI Chat requires a client-generated request UUID", async () => {
 test("AI Chat consumes the central ai.chat entitlement before calling the provider", async () => {
   const edge = await read("supabase/functions/eternyx-ai-chat/index.ts");
   const consumeIndex = edge.indexOf("await consumeToolCredits(supabase");
-  const providerIndex = edge.indexOf("await generateResponse(systemPrompt");
+  const providerIndex = edge.indexOf("await generateChatCompletion({ systemPrompt");
   assert.ok(consumeIndex >= 0, "Expected central credit consumption");
   assert.ok(providerIndex > consumeIndex, "Credits must be checked before provider execution");
   assert.match(edge, /featureKey:\s*"ai\.chat"/);
@@ -30,7 +30,7 @@ test("duplicate AI Chat requests are rejected before another provider call", asy
 test("AI Chat refunds a charged request only when provider generation fails", async () => {
   const edge = await read("supabase/functions/eternyx-ai-chat/index.ts");
   const refundIndex = edge.indexOf("await refundToolCredits(supabase");
-  const providerIndex = edge.indexOf("await generateResponse(systemPrompt");
+  const providerIndex = edge.indexOf("await generateChatCompletion({ systemPrompt");
   assert.ok(refundIndex > providerIndex, "Refund path must follow provider execution failure");
   assert.match(edge, /spendTransactionId\s*=\s*creditResult\.transactionId/);
   assert.match(edge, /if \(spendTransactionId && error instanceof AIProviderError && error\.safeToRefund\)/);
