@@ -42,6 +42,7 @@ const ALLOWED_TRANSITIONS: Readonly<Record<AIJobStatus, readonly AIJobStatus[]>>
   reserved: [
     "submitted",
     "processing",
+    "cancel_requested",
     "failed",
     "cancelled",
     "reconciliation_required",
