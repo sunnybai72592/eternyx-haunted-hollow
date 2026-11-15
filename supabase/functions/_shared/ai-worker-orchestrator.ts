@@ -36,7 +36,6 @@ export interface AIWorkerOrchestratorDependencies {
 
 export type AIWorkerOrchestratorResult =
   | { outcome: "submitted"; jobId: string; providerTaskId: string }
-  | { outcome: "requeued"; jobId: string }
   | { outcome: "finalized"; jobId: string; status: "cancelled" | "reconciliation_required" | "failed" }
   | { outcome: "requires_reconciliation" | "stopped"; jobId: string; reason: string };
 
@@ -131,20 +130,13 @@ export async function submitReservedAIJob(
     );
   } catch (error) {
     if (error instanceof AIGenerationAdapterError && error.safeToRetrySubmission) {
-      try {
-        await dependencies.transition({
-          jobId: job.id, leaseToken: job.leaseToken,
-          currentStatus: "submitted", nextStatus: "queued",
-          eventCode: "worker.provider_confirmed_not_accepted",
-          providerId: job.providerId, modelId: job.modelId,
-          retryAfterSeconds: dependencies.retryAfterSeconds ?? 30,
-        });
-        return { outcome: "requeued", jobId: job.id };
-      } catch {
-        // The provider proved non-acceptance, but a failed requeue must not
-        // trigger another submit in this invocation.
-        return { outcome: "stopped", jobId: job.id, reason: "safe_retry_requeue_failed" };
-      }
+      await dependencies.finalize({
+        jobId: job.id, leaseToken: job.leaseToken, nextStatus: "failed",
+        eventCode: "worker.provider_confirmed_not_accepted",
+        failureCode: "PROVIDER_REJECTED_BEFORE_ACCEPTANCE",
+        providerId: job.providerId, modelId: job.modelId,
+      });
+      return { outcome: "finalized", jobId: job.id, status: "failed" };
     }
 
     await dependencies.finalize({
