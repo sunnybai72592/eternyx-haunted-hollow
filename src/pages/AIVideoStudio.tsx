@@ -75,6 +75,7 @@ const AIVideoStudio = () => {
     try {
       const result = await getAIJobStatus(jobId.trim());
       setJob(result);
+      setJobId(result.id);
       toast.success("AI job status refreshed.");
     } catch (error) {
       setJob(null);
@@ -113,7 +114,7 @@ const AIVideoStudio = () => {
     }
   };
 
-  const canCancel = !!job && !isTerminalAIJobStatus(job.status) && job.status !== "cancel_requested";
+  const canCancel = !!job && !isTerminalAIJobStatus(job.status) && job.status !== "cancel_requested" && job.status !== "reconciliation_required";
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white">
