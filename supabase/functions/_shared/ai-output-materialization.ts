@@ -141,7 +141,7 @@ function hasValidOutputSignature(bytes: Uint8Array, contentType: AIGenerationOut
     case "application/json":
       try {
         const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-        if (text.includes("\\u0000")) return false;
+        if (text.includes("\u0000")) return false;
         if (contentType === "application/json") JSON.parse(text);
         return true;
       } catch {
