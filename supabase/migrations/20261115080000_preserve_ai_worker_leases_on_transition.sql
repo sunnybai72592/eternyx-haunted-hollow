@@ -91,5 +91,10 @@ END;
 $$;
 
 
+REVOKE ALL ON FUNCTION public.transition_ai_generation_job(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.transition_ai_generation_job(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER)
+  TO service_role;
+
 COMMENT ON FUNCTION public.transition_ai_generation_job(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER) IS
   'Lease-protected non-terminal AI job transition; worker leases persist through provider submission, polling, and cancellation. Terminal outcomes use atomic finalization.';
