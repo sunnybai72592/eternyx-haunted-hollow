@@ -108,6 +108,8 @@ async function completeSnapshot(
     try {
       output = await dependencies.materializeSuccess(job, snapshot);
     } catch {
+      // Do not mark success or release/settle the credit hold when output
+      // materialization is incomplete. A later lease can retry this callback.
       return { outcome: "retry_later", jobId: job.id, reason: "output_materialization_unavailable" };
     }
     try {
@@ -229,6 +231,7 @@ export async function reconcileClaimedAIJob(
   }
 
   if (job.status === "cancel_requested") {
+    // Cancellation acceptance is not completion. Always inspect the task state.
     try {
       await dependencies.provider.cancel(job.providerTaskId!);
     } catch {
@@ -245,6 +248,7 @@ export async function reconcileClaimedAIJob(
   try {
     rawSnapshot = await dependencies.provider.getStatus(job.providerTaskId!);
   } catch {
+    // Provider outages and network errors are not proof of terminal failure.
     return { outcome: "retry_later", jobId: job.id, reason: "provider_status_unavailable" };
   }
 
