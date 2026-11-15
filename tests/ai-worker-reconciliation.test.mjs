@@ -143,6 +143,26 @@ test("success finalization failure remains retryable after materialization", asy
   assert.equal(result.reason, "success_finalization_unavailable");
 });
 
+test("reserved job with an existing queued provider task transitions to submitted without resubmitting", async () => {
+  const ctx = setup("queued", "reserved");
+  const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
+  assert.deepEqual(result, { outcome: "pending", jobId: ctx.job.id, status: "submitted" });
+  const transition = ctx.calls.find((x) => Array.isArray(x) && x[0] === "transition")[1];
+  assert.equal(transition.currentStatus, "reserved");
+  assert.equal(transition.nextStatus, "submitted");
+  assert.equal(ctx.calls.includes("submit"), false);
+});
+
+test("reserved job with an existing processing task transitions directly to processing", async () => {
+  const ctx = setup("processing", "reserved");
+  const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
+  assert.deepEqual(result, { outcome: "pending", jobId: ctx.job.id, status: "processing" });
+  const transition = ctx.calls.find((x) => Array.isArray(x) && x[0] === "transition")[1];
+  assert.equal(transition.currentStatus, "reserved");
+  assert.equal(transition.nextStatus, "processing");
+  assert.equal(ctx.calls.includes("submit"), false);
+});
+
 test("missing task ID or unsupported status stops before provider access", async () => {
   const ctx = setup("processing", "processing");
   ctx.job.providerTaskId = null;
