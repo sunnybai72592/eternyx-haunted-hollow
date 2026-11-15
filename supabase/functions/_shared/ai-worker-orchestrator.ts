@@ -107,6 +107,8 @@ export async function submitReservedAIJob(
     return { outcome: "finalized", jobId: job.id, status: "failed" };
   }
 
+  // Persist submitted before the external side effect. If this fails, the
+  // provider is never called.
   try {
     await dependencies.transition({
       jobId: job.id,
@@ -170,6 +172,8 @@ export async function submitReservedAIJob(
     return { outcome: "finalized", jobId: job.id, status: "reconciliation_required" };
   }
 
+  // The provider accepted the request. Persist its task ID before returning;
+  // if persistence fails, quarantine rather than risk a duplicate submission.
   try {
     await dependencies.transition({
       jobId: job.id, leaseToken: job.leaseToken,
