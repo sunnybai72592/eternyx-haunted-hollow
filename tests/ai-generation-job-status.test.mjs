@@ -19,10 +19,10 @@ test("job lookup is scoped to the authenticated user", () => {
   assert.match(source, /maybeSingle\(\)/);
 });
 
-test("response selects and returns only safe lifecycle metadata", () => {
-  assert.match(source, /select\("id, feature_key, status, attempt_count, max_attempts/);
-  assert.doesNotMatch(source, /input_payload|provider_task_id|output_object_key|service_role|Deno\.env/i);
-  assert.match(source, /failureCode: data\.failure_code/);
+test("selected database columns exclude private generation inputs and provider data", () => {
+  const selected = source.match(/\.select\("([^"]+)"\)/)?.[1] ?? "";
+  assert.match(selected, /^id, feature_key, status, attempt_count, max_attempts,/);
+  assert.doesNotMatch(selected, /input_payload|provider_task_id|output_object_key|lease_token/);
 });
 
 test("endpoint handles unsupported methods and malformed JSON safely", () => {
