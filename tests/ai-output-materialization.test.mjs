@@ -22,7 +22,10 @@ const job = {
 const snapshot = {
   providerTaskId: "task_123", state: "succeeded", outputReference: "opaque-output-reference",
 };
-const bytes = new TextEncoder().encode("sample-video-output");
+const bytes = new Uint8Array([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+  0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00,
+]);
 
 function setup(overrides = {}) {
   const calls = [];
@@ -97,7 +100,7 @@ test("rejects task mismatch and non-success snapshots before downloading", async
   assert.equal(ctx.calls.length, 0);
 });
 
-test("rejects unsupported MIME types and oversized output before storage", async () => {
+test("rejects unsupported or signature-mismatched MIME types before storage", async () => {
   const unsupported = setup({
     downloadProviderOutput: async () => ({ bytes, contentType: "text/html" }),
   });
@@ -106,6 +109,37 @@ test("rejects unsupported MIME types and oversized output before storage", async
     (error) => error.code === "INVALID_PROVIDER_OUTPUT",
   );
 
+  const spoofed = setup({
+    downloadProviderOutput: async () => ({ bytes: new TextEncoder().encode("<html>not a video</html>"), contentType: "video/mp4" }),
+  });
+  await assert.rejects(
+    materializer.materializeAIProviderOutput(job, snapshot, spoofed.dependencies),
+    (error) => error.code === "INVALID_PROVIDER_OUTPUT",
+  );
+  assert.equal(spoofed.calls.some((call) => call[0] === "store"), false);
+});
+
+test("validates image, audio, PDF and structured text signatures", async () => {
+  const validOutputs = [
+    { contentType: "image/png", bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+    { contentType: "image/jpeg", bytes: [0xff, 0xd8, 0xff, 0xd9] },
+    { contentType: "image/webp", bytes: [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50] },
+    { contentType: "audio/wav", bytes: [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45] },
+    { contentType: "audio/mpeg", bytes: [0x49, 0x44, 0x33, 0, 0] },
+    { contentType: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31] },
+    { contentType: "application/json", bytes: Array.from(new TextEncoder().encode('{"ok":true}')) },
+    { contentType: "text/plain", bytes: Array.from(new TextEncoder().encode("hello")) },
+  ];
+  for (const item of validOutputs) {
+    const ctx = setup({
+      downloadProviderOutput: async () => ({ bytes: new Uint8Array(item.bytes), contentType: item.contentType }),
+    });
+    const result = await materializer.materializeAIProviderOutput(job, snapshot, ctx.dependencies);
+    assert.equal(result.contentType, item.contentType);
+  }
+});
+
+test("rejects oversized output before storage", async () => {
   const oversized = setup({ maxBytes: 2 });
   await assert.rejects(
     materializer.materializeAIProviderOutput(job, snapshot, oversized.dependencies),
