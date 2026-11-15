@@ -14,7 +14,8 @@ function webpX(w,h) {
   const put=(o,n)=>b.set([n&255,(n>>>8)&255,(n>>>16)&255],o); put(24,w-1); put(27,h-1); return b;
 }
 function jpeg(w,h) {
-  return new Uint8Array([0xff,0xd8,0xff,0xc0,0,8,8,(h>>8)&255,h&255,(w>>8)&255,w&255,1,0xff,0xd9]);
+  // SOF segment length includes its two length bytes and one component record.
+  return new Uint8Array([0xff,0xd8,0xff,0xc0,0,11,8,(h>>8)&255,h&255,(w>>8)&255,w&255,1,1,0x11,0,0xff,0xd9]);
 }
 test("reads PNG, JPEG and WebP dimensions", () => {
   assert.deepEqual(mod.inspectImageDimensions(png(1920,1080),"image/png"),{width:1920,height:1080,format:"png"});
