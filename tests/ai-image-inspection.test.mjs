@@ -34,6 +34,9 @@ test("rejects dimensions exceeding axis or total pixel limits", () => {
 test("input verification inspects dimensions before marking the asset ready", async () => {
   const endpoint=await readFile(new URL("../supabase/functions/ai-generation-input-verify/index.ts",import.meta.url),"utf8");
   assert.match(endpoint,/inspectImageDimensions\(bytes, asset\.declared_content_type\)/);
-  assert.ok(endpoint.indexOf("inspectImageDimensions(bytes, asset.declared_content_type)") < endpoint.indexOf('status: "ready"'));
+  const dimensionInspection = endpoint.indexOf("inspectImageDimensions(bytes, asset.declared_content_type)");
+  const readyTransition = endpoint.indexOf('.update({\n        status: "ready"');
+  assert.ok(dimensionInspection >= 0, "dimension inspection must be present");
+  assert.ok(readyTransition > dimensionInspection, "dimension inspection must precede the ready-state database update");
   assert.match(endpoint,/status: "rejected"/);
 });
