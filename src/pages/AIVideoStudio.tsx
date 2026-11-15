@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -113,6 +113,34 @@ const AIVideoStudio = () => {
       setIsCancelling(false);
     }
   };
+
+  useEffect(() => {
+    if (!job || isTerminalAIJobStatus(job.status) || job.status === "reconciliation_required") {
+      return;
+    }
+
+    let isActive = true;
+    let timeoutId: number | undefined;
+
+    const refreshStatus = async () => {
+      try {
+        const latest = await getAIJobStatus(job.id);
+        if (isActive) setJob(latest);
+      } catch {
+        // Keep the last confirmed state visible; the next scheduled poll can retry.
+      }
+
+      if (isActive) {
+        timeoutId = window.setTimeout(refreshStatus, 15_000);
+      }
+    };
+
+    timeoutId = window.setTimeout(refreshStatus, 15_000);
+    return () => {
+      isActive = false;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [job?.id, job?.status]);
 
   const canCancel = !!job && !isTerminalAIJobStatus(job.status) && job.status !== "cancel_requested" && job.status !== "reconciliation_required";
 
