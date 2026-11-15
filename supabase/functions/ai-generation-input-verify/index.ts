@@ -23,6 +23,41 @@ const SIGNATURES: Record<string, (bytes: Uint8Array) => boolean> = {
     String.fromCharCode(...b.slice(8, 12)) === "WEBP",
 };
 
+/**
+ * Persist rejection before attempting object cleanup. A failed state transition
+ * must never be reported as a completed rejection because the asset could
+ * otherwise remain pending and be retried.
+ */
+async function rejectPendingAsset(
+  supabase: any,
+  asset: { id: string; object_path: string },
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("ai_generation_input_assets")
+    .update({ status: "rejected" })
+    .eq("id", asset.id)
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error("AI input asset rejection update failed", { code: error?.code ?? null });
+    return false;
+  }
+
+  const { error: removeError } = await supabase.storage
+    .from("ai-generation-inputs")
+    .remove([asset.object_path]);
+
+  if (removeError) {
+    // The rejected database state prevents use; cleanup can be retried operationally.
+    console.error("Rejected AI input object cleanup failed", { message: removeError.message ?? null });
+  }
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "Method not allowed" }, 405);
@@ -75,30 +110,29 @@ serve(async (req) => {
       return reply({ error: "Image upload has not completed" }, 409);
     }
 
+    const reject = async (message: string) => {
+      const rejected = await rejectPendingAsset(supabase, asset, user.id);
+      return reply(
+        { error: rejected ? message : "Image verification is temporarily unavailable" },
+        rejected ? 415 : 503,
+      );
+    };
+
     if (file.size < 1 || file.size > MAX_FILE_SIZE || file.size !== asset.declared_size) {
-      await supabase.from("ai_generation_input_assets").update({ status: "rejected" })
-        .eq("id", asset.id).eq("user_id", user.id).eq("status", "pending");
-      await supabase.storage.from("ai-generation-inputs").remove([asset.object_path]);
-      return reply({ error: "Uploaded image size does not match the permitted upload" }, 415);
+      return await reject("Uploaded image size does not match the permitted upload");
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const signatureMatches = SIGNATURES[asset.declared_content_type]?.(bytes) === true;
     if (!signatureMatches) {
-      await supabase.from("ai_generation_input_assets").update({ status: "rejected" })
-        .eq("id", asset.id).eq("user_id", user.id).eq("status", "pending");
-      await supabase.storage.from("ai-generation-inputs").remove([asset.object_path]);
-      return reply({ error: "Uploaded file content does not match its declared image type" }, 415);
+      return await reject("Uploaded file content does not match its declared image type");
     }
 
     try {
       // Header inspection bounds decompression risk; it is not full decoding or moderation.
       inspectImageDimensions(bytes, asset.declared_content_type);
     } catch {
-      await supabase.from("ai_generation_input_assets").update({ status: "rejected" })
-        .eq("id", asset.id).eq("user_id", user.id).eq("status", "pending");
-      await supabase.storage.from("ai-generation-inputs").remove([asset.object_path]);
-      return reply({ error: "Uploaded image dimensions or header are invalid or exceed permitted limits" }, 415);
+      return await reject("Uploaded image dimensions or header are invalid or exceed permitted limits");
     }
 
     const { data: updated, error: updateError } = await supabase
