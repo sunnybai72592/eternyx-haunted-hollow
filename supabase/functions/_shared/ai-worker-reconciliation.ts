@@ -41,7 +41,7 @@ export interface AIWorkerReconciliationDependencies {
 
 export type AIWorkerReconciliationResult =
   | { outcome: "completed"; jobId: string; status: "succeeded" | "failed" | "cancelled" }
-  | { outcome: "pending"; jobId: string; status: "submitted" | "processing" | "cancel_requested" }
+  | { outcome: "pending"; jobId: string; status: "reserved" | "submitted" | "processing" | "cancel_requested" }
   | { outcome: "retry_later"; jobId: string; reason: string }
   | { outcome: "quarantined"; jobId: string; reason: string }
   | { outcome: "stopped"; jobId: string; reason: string };
@@ -157,12 +157,34 @@ async function completeSnapshot(
     }
   }
 
-  if (job.status === "submitted" && snapshot.state === "processing") {
+  if (snapshot.state === "queued") {
+    if (job.status === "reserved") {
+      try {
+        await dependencies.transition({
+          jobId: job.id,
+          leaseToken: job.leaseToken,
+          currentStatus: "reserved",
+          nextStatus: "submitted",
+          eventCode: "worker.provider_queued_confirmed",
+          providerId: job.providerId ?? undefined,
+          modelId: job.modelId ?? undefined,
+          providerTaskId: job.providerTaskId ?? undefined,
+        });
+      } catch {
+        return { outcome: "retry_later", jobId: job.id, reason: "queued_transition_unavailable" };
+      }
+      return { outcome: "pending", jobId: job.id, status: "submitted" };
+    }
+    return { outcome: "pending", jobId: job.id, status: job.status };
+  }
+
+  if (snapshot.state === "processing" &&
+      (job.status === "reserved" || job.status === "submitted")) {
     try {
       await dependencies.transition({
         jobId: job.id,
         leaseToken: job.leaseToken,
-        currentStatus: "submitted",
+        currentStatus: job.status,
         nextStatus: "processing",
         eventCode: "worker.provider_processing_confirmed",
         providerId: job.providerId ?? undefined,
@@ -175,7 +197,7 @@ async function completeSnapshot(
     return { outcome: "pending", jobId: job.id, status: "processing" };
   }
 
-  return { outcome: "pending", jobId: job.id, status: job.status as "submitted" | "processing" | "cancel_requested" };
+  return { outcome: "pending", jobId: job.id, status: job.status };
 }
 
 /**
@@ -187,7 +209,7 @@ export async function reconcileClaimedAIJob(
   dependencies: AIWorkerReconciliationDependencies,
 ): Promise<AIWorkerReconciliationResult> {
   if (!hasExistingTask(job) ||
-      !["submitted", "processing", "cancel_requested"].includes(job.status)) {
+      !["reserved", "submitted", "processing", "cancel_requested"].includes(job.status)) {
     return { outcome: "stopped", jobId: job.id, reason: "job_is_not_reconcilable" };
   }
   if (!validProviderSelection(job, dependencies.provider)) {
