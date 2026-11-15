@@ -32,7 +32,7 @@ export type AICapability =
   | "agent_planning";
 
 export type AIExecutionMode = "request_response" | "asynchronous_job";
-export type AIFeatureStatus = "planned" | "backend_pending" | "disabled";
+export type AIFeatureStatus = "planned" | "backend_pending" | "disabled" | "enabled";
 export type AIProviderStatus = "unconfigured" | "disabled" | "enabled";
 export type AIModelStatus = "unavailable" | "disabled" | "enabled";
 
@@ -152,6 +152,24 @@ export function getAvailableAIModels(capability?: AICapability): readonly AIMode
       provider.status === "enabled" &&
       model.capabilities.every((item) => provider.supportedCapabilities.includes(item))
     );
+  });
+}
+
+/**
+ * Returns only models that are explicitly enabled and can satisfy an enabled
+ * feature's complete modality/capability contract. Async features additionally
+ * require an async-capable model. This is routing metadata only; it does not
+ * authorize billing, provider calls, or job submission.
+ */
+export function getAvailableAIModelsForFeature(featureId: string): readonly AIModelDefinition[] {
+  const feature = getAIFeature(featureId);
+  if (!feature || feature.status !== "enabled") return [];
+
+  return getAvailableAIModels(feature.capability).filter((model) => {
+    if (!feature.inputModalities.every((item) => model.inputModalities.includes(item))) return false;
+    if (!feature.outputModalities.every((item) => model.outputModalities.includes(item))) return false;
+    if (feature.execution === "asynchronous_job" && !model.supportsAsyncJobs) return false;
+    return true;
   });
 }
 
