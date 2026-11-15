@@ -30,7 +30,6 @@ export interface AIWorkerOrchestratorDependencies {
     modelId?: string;
     providerTaskId?: string;
   }): Promise<unknown>;
-  retryAfterSeconds?: number;
   leaseSeconds?: number;
 }
 
