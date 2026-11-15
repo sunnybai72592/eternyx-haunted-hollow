@@ -38,7 +38,7 @@ function setup(state, status = "processing", overrides = {}) {
       cancel: async () => { calls.push("cancel"); return "accepted"; },
       getStatus: async () => { calls.push("status"); return snapshot(state, overrides.snapshot); },
     },
-    renewLease: async () => { calls.push("renew"); },
+    renewLease: async (input) => { calls.push("renew"); return { jobId: input.jobId, status, leaseExpiresAt: new Date(Date.now() + 120000).toISOString() }; },
     transition: async (input) => { calls.push(["transition", input]); return { jobId: input.jobId, status: input.nextStatus }; },
     finalize: async (input) => { calls.push(["finalize", input]); },
     materializeSuccess: async () => { calls.push("materialize"); return { outputObjectKey: "private/job/output.mp4", finalCredits: 3 }; },
@@ -119,6 +119,16 @@ test("provider status outage is retryable and never falsely fails or releases cr
 test("lease loss before provider read prevents all provider calls", async () => {
   const ctx = setup("processing", "processing", {
     dependencies: { renewLease: async () => { throw new Error("lease lost"); } },
+  });
+  const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
+  assert.equal(result.outcome, "stopped");
+  assert.equal(ctx.calls.includes("status"), false);
+  assert.equal(ctx.calls.includes("cancel"), false);
+});
+
+test("lease renewal receipt must match the job and current status before provider access", async () => {
+  const ctx = setup("processing", "processing", {
+    dependencies: { renewLease: async () => ({ jobId: uuid("9"), status: "processing", leaseExpiresAt: new Date(Date.now() + 120000).toISOString() }) },
   });
   const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
   assert.equal(result.outcome, "stopped");
