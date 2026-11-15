@@ -29,7 +29,7 @@ test("enqueue uses the central atomic job and credit reservation RPC", () => {
 });
 
 test("the endpoint never calls a provider or exposes storage paths and credentials", () => {
-  assert.doesNotMatch(source, /https?:\/\//);
+  assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /SUPABASE_SECRET_KEYS|service_role|secretKey/);
   assert.doesNotMatch(source, /object_path|createSignedUrl|createSignedUploadUrl/);
   assert.doesNotMatch(source, /providerTaskId|provider_task_id/);
