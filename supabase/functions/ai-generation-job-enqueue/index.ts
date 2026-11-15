@@ -4,6 +4,10 @@ import {
   AIVideoRequestValidationError,
   validateAIVideoGenerationRequest,
 } from "../_shared/ai-video-request.ts";
+import {
+  AIGenerationSafetyGateError,
+  requireAIGenerationSafetyApproval,
+} from "../_shared/ai-generation-safety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,6 +97,25 @@ serve(async (req) => {
     version: 1,
     ...generationRequest,
   };
+
+
+  // No moderation provider or policy is approved/configured yet: fail closed.
+  // This happens before the credit/job RPC, so blocked requests reserve nothing.
+  const digestBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(inputPayload)),
+  );
+  const requestDigestHex = Array.from(new Uint8Array(digestBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  try {
+    requireAIGenerationSafetyApproval(null, requestDigestHex);
+  } catch (error) {
+    if (!(error instanceof AIGenerationSafetyGateError)) {
+      console.error("AI generation safety gate failed unexpectedly");
+    }
+    return reply({ error: "AI generation safety checks are not currently available" }, 503);
+  }
 
   try {
     const { data, error } = await supabase.rpc("enqueue_ai_generation_job_with_credits", {
