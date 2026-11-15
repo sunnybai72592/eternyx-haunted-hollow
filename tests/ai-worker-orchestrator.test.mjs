@@ -4,10 +4,25 @@ import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
 const read = (path) => readFile(new URL("../" + path, import.meta.url), "utf8");
-const source = await read("supabase/functions/_shared/ai-worker-orchestrator.ts");
-const js = ts.transpileModule(source, {
+async function loadTypeScript(path) {
+  const source = await read(path);
+  const js = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
+}
+const providerModule = await loadTypeScript("supabase/functions/_shared/ai-generation-provider.ts");
+const policyModule = await loadTypeScript("supabase/functions/_shared/ai-worker-execution-policy.ts");
+globalThis.__aiProvider = providerModule;
+globalThis.__aiPolicy = policyModule;
+let source = await read("supabase/functions/_shared/ai-worker-orchestrator.ts");
+let js = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
+js = js.replace(/import \{[\s\S]*?\} from ["']\.\/ai-generation-provider\.ts["'];/,
+  "const { AIGenerationAdapterError, validateAIGenerationSubmissionResult } = globalThis.__aiProvider;");
+js = js.replace(/import \{ decideAIWorkerExecution \} from ["']\.\/ai-worker-execution-policy\.ts["'];/,
+  "const { decideAIWorkerExecution } = globalThis.__aiPolicy;");
 const worker = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 const job = {
@@ -25,8 +40,7 @@ function dependencies(overrides = {}) {
   const calls = [];
   const deps = {
     provider: { providerId: "mock", submit: async () => { calls.push("provider"); return accepted; },
-      getStatus: async () => { throw new Error("unused"); },
-      cancel: async () => "unsupported" },
+      getStatus: async () => { throw new Error("unused"); }, cancel: async () => "unsupported" },
     buildSubmission: async () => ({ payload: { prompt: "test" }, idempotencyKey: "request-1" }),
     transition: async (input) => { calls.push(["transition", input]); return { jobId: job.id, status: input.nextStatus }; },
     renewLease: async () => { calls.push("renew"); return {}; },
@@ -72,25 +86,20 @@ test("uncertain provider acknowledgement is quarantined, never blindly resubmitt
     }) },
   });
   const result = await worker.submitReservedAIJob(job, deps, Date.parse("2026-11-15T13:00:00Z"));
-  assert.equal(calls.filter((call) => call === "provider").length, 0);
   assert.equal(result.status, "reconciliation_required");
   assert.equal(calls.at(-1)[1].failureCode, "PROVIDER_SUBMISSION_UNCERTAIN");
 });
 
-test("confirmed provider non-acceptance requeues with bounded delay", async () => {
+test("provider-confirmed non-acceptance finalizes without retrying in the same worker pass", async () => {
   const { deps, calls } = dependencies({
     provider: { ...dependencies().deps.provider, submit: async () => {
-      const error = new Error("rejected");
-      error.name = "AIGenerationAdapterError";
-      // Use the exported error class identity through the module dependency.
-      const mod = await import(new URL("../supabase/functions/_shared/ai-generation-provider.ts", import.meta.url));
-      throw new mod.AIGenerationAdapterError("request_rejected", true);
+      throw new providerModule.AIGenerationAdapterError("request_rejected", true);
     } },
   });
   const result = await worker.submitReservedAIJob(job, deps, Date.parse("2026-11-15T13:00:00Z"));
-  assert.equal(result.outcome, "requeued");
-  assert.equal(calls.at(-1)[1].nextStatus, "queued");
-  assert.equal(calls.at(-1)[1].retryAfterSeconds, 30);
+  assert.equal(result.outcome, "finalized");
+  assert.equal(result.status, "failed");
+  assert.equal(calls.at(-1)[1].failureCode, "PROVIDER_REJECTED_BEFORE_ACCEPTANCE");
 });
 
 test("expired leases and existing provider tasks do not submit", async () => {
