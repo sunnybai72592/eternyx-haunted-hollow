@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { inspectImageDimensions } from "../_shared/ai-image-inspection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,6 +89,16 @@ serve(async (req) => {
         .eq("id", asset.id).eq("user_id", user.id).eq("status", "pending");
       await supabase.storage.from("ai-generation-inputs").remove([asset.object_path]);
       return reply({ error: "Uploaded file content does not match its declared image type" }, 415);
+    }
+
+    try {
+      // Header inspection bounds decompression risk; it is not full decoding or moderation.
+      inspectImageDimensions(bytes, asset.declared_content_type);
+    } catch {
+      await supabase.from("ai_generation_input_assets").update({ status: "rejected" })
+        .eq("id", asset.id).eq("user_id", user.id).eq("status", "pending");
+      await supabase.storage.from("ai-generation-inputs").remove([asset.object_path]);
+      return reply({ error: "Uploaded image dimensions or header are invalid or exceed permitted limits" }, 415);
     }
 
     const { data: updated, error: updateError } = await supabase
