@@ -43,7 +43,7 @@ function dependencies(overrides = {}) {
       getStatus: async () => { throw new Error("unused"); }, cancel: async () => "unsupported" },
     buildSubmission: async () => ({ payload: { prompt: "test" }, idempotencyKey: "request-1" }),
     transition: async (input) => { calls.push(["transition", input]); return { jobId: job.id, status: input.nextStatus }; },
-    renewLease: async () => { calls.push("renew"); return {}; },
+    renewLease: async (input) => { calls.push("renew"); return { jobId: input.jobId, status: "submitted", leaseExpiresAt: new Date(Date.now() + 120000).toISOString() }; },
     finalize: async (input) => { calls.push(["finalize", input]); return {}; },
     ...overrides,
   };
@@ -77,6 +77,16 @@ test("failed lease renewal prevents provider call", async () => {
   assert.deepEqual(calls.map((call) => Array.isArray(call) ? call[0] : call),
     ["transition", "renew_failed"]);
   assert.equal(result.reason, "lease_not_confirmed_before_provider");
+});
+
+test("invalid lease renewal receipt prevents provider submission", async () => {
+  const { deps, calls } = dependencies({
+    renewLease: async () => ({ jobId: job.id, status: "reserved", leaseExpiresAt: new Date(Date.now() + 120000).toISOString() }),
+  });
+  const result = await worker.submitReservedAIJob(job, deps, Date.parse("2026-11-15T13:00:00Z"));
+  assert.equal(result.outcome, "stopped");
+  assert.equal(result.reason, "lease_not_confirmed_before_provider");
+  assert.equal(calls.includes("provider"), false);
 });
 
 test("uncertain provider acknowledgement is quarantined, never blindly resubmitted", async () => {

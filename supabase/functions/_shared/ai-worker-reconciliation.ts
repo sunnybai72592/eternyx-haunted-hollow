@@ -15,6 +15,7 @@ import {
 import type { AIClaimedJob } from "./ai-job-claim.ts";
 import type { TransitionAIJobInput } from "./ai-job-transition.ts";
 import type { FinalizeAIGenerationJobInput } from "./ai-job-finalization.ts";
+import type { RenewAIJobLeaseResult } from "./ai-job-lease.ts";
 
 export interface AIReconciledOutput {
   /** Safe relative object key in the user's private output storage. */
@@ -25,7 +26,7 @@ export interface AIReconciledOutput {
 
 export interface AIWorkerReconciliationDependencies {
   provider: AIGenerationProviderAdapter;
-  renewLease(input: { jobId: string; leaseToken: string; leaseSeconds?: number }): Promise<unknown>;
+  renewLease(input: { jobId: string; leaseToken: string; leaseSeconds?: number }): Promise<RenewAIJobLeaseResult>;
   transition(input: TransitionAIJobInput): Promise<{ jobId: string; status: string }>;
   finalize(input: FinalizeAIGenerationJobInput): Promise<unknown>;
   /**
@@ -60,11 +61,18 @@ async function renew(
   job: AIClaimedJob,
   dependencies: AIWorkerReconciliationDependencies,
 ): Promise<void> {
-  await dependencies.renewLease({
+  const receipt = await dependencies.renewLease({
     jobId: job.id,
     leaseToken: job.leaseToken,
     leaseSeconds: dependencies.leaseSeconds ?? 60,
   });
+  const expiresAt = Date.parse(receipt.leaseExpiresAt);
+  if (receipt.jobId !== job.id ||
+      receipt.status !== job.status ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()) {
+    throw new Error("Lease renewal receipt does not confirm current ownership");
+  }
 }
 
 async function quarantine(
