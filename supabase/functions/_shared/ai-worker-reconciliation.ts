@@ -13,7 +13,7 @@ import {
   validateAIGenerationSnapshot,
 } from "./ai-generation-provider.ts";
 import type { AIClaimedJob } from "./ai-job-claim.ts";
-import type { AIJobTransitionInput } from "./ai-job-transition.ts";
+import type { TransitionAIJobInput } from "./ai-job-transition.ts";
 import type { FinalizeAIGenerationJobInput } from "./ai-job-finalization.ts";
 
 export interface AIReconciledOutput {
@@ -26,7 +26,7 @@ export interface AIReconciledOutput {
 export interface AIWorkerReconciliationDependencies {
   provider: AIGenerationProviderAdapter;
   renewLease(input: { jobId: string; leaseToken: string; leaseSeconds?: number }): Promise<unknown>;
-  transition(input: AIJobTransitionInput): Promise<{ jobId: string; status: string }>;
+  transition(input: TransitionAIJobInput): Promise<{ jobId: string; status: string }>;
   finalize(input: FinalizeAIGenerationJobInput): Promise<unknown>;
   /**
    * Must be idempotent by job ID, validate the provider reference, and write
@@ -175,7 +175,7 @@ async function completeSnapshot(
     return { outcome: "pending", jobId: job.id, status: "processing" };
   }
 
-  return { outcome: "pending", jobId: job.id, status: job.status };
+  return { outcome: "pending", jobId: job.id, status: job.status as "submitted" | "processing" | "cancel_requested" };
 }
 
 /**
