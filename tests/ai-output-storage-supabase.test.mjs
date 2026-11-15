@@ -4,9 +4,15 @@ import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
 const source = await readFile(new URL("../supabase/functions/_shared/ai-output-storage-supabase.ts", import.meta.url), "utf8");
+const materializationStub = Buffer.from(
+  'export const AI_GENERATION_OUTPUT_BUCKET = "ai-generation-outputs"; export class AIOutputMaterializationError extends Error {}',
+).toString("base64");
 const js = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
-}).outputText.replace('"./ai-output-materialization.ts"', '"data:text/javascript,export const AI_GENERATION_OUTPUT_BUCKET = "ai-generation-outputs"; export class AIOutputMaterializationError extends Error {}"');
+}).outputText.replace(
+  '"./ai-output-materialization.ts"',
+  `"data:text/javascript;base64,${materializationStub}"`,
+);
 const adapter = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 const key = "00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002/output.mp4";
