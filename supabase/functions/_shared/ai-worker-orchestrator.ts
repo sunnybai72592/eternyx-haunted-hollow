@@ -14,12 +14,13 @@ import {
 import type { AIClaimedJob } from "./ai-job-claim.ts";
 import { decideAIWorkerExecution } from "./ai-worker-execution-policy.ts";
 import type { TransitionAIJobInput } from "./ai-job-transition.ts";
+import type { RenewAIJobLeaseResult } from "./ai-job-lease.ts";
 
 export interface AIWorkerOrchestratorDependencies {
   provider: AIGenerationProviderAdapter;
   buildSubmission(job: AIClaimedJob): Promise<AIGenerationSubmission>;
   transition(input: TransitionAIJobInput): Promise<{ jobId: string; status: string }>;
-  renewLease(input: { jobId: string; leaseToken: string; leaseSeconds?: number }): Promise<unknown>;
+  renewLease(input: { jobId: string; leaseToken: string; leaseSeconds?: number }): Promise<RenewAIJobLeaseResult>;
   finalize(input: {
     jobId: string;
     leaseToken: string;
@@ -44,6 +45,16 @@ function validProviderMetadata(job: AIClaimedJob): job is AIClaimedJob & {
 } {
   return typeof job.providerId === "string" && job.providerId.length > 0 &&
     typeof job.modelId === "string" && job.modelId.length > 0;
+}
+
+function confirmedLeaseRenewal(
+  receipt: RenewAIJobLeaseResult,
+  jobId: string,
+): boolean {
+  return receipt.jobId === jobId &&
+    receipt.status === "submitted" &&
+    Number.isFinite(Date.parse(receipt.leaseExpiresAt)) &&
+    Date.parse(receipt.leaseExpiresAt) > Date.now();
 }
 
 /**
@@ -96,8 +107,6 @@ export async function submitReservedAIJob(
     return { outcome: "finalized", jobId: job.id, status: "failed" };
   }
 
-  // Persist submitted before the external side effect. If this fails, the
-  // provider is never called.
   try {
     await dependencies.transition({
       jobId: job.id,
@@ -112,12 +121,14 @@ export async function submitReservedAIJob(
     return { outcome: "stopped", jobId: job.id, reason: "submission_intent_not_persisted" };
   }
 
-  // Revalidate ownership immediately before crossing the provider boundary.
   try {
-    await dependencies.renewLease({
+    const receipt = await dependencies.renewLease({
       jobId: job.id, leaseToken: job.leaseToken,
       leaseSeconds: dependencies.leaseSeconds ?? 60,
     });
+    if (!confirmedLeaseRenewal(receipt, job.id)) {
+      return { outcome: "stopped", jobId: job.id, reason: "lease_not_confirmed_before_provider" };
+    }
   } catch {
     return { outcome: "stopped", jobId: job.id, reason: "lease_not_confirmed_before_provider" };
   }
@@ -159,8 +170,6 @@ export async function submitReservedAIJob(
     return { outcome: "finalized", jobId: job.id, status: "reconciliation_required" };
   }
 
-  // The provider accepted the request. Persist its task ID before returning;
-  // if persistence fails, quarantine rather than risk a duplicate submission.
   try {
     await dependencies.transition({
       jobId: job.id, leaseToken: job.leaseToken,
