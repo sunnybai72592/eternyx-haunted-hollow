@@ -108,6 +108,48 @@ function isOutputContentType(value: string): value is AIGenerationOutputContentT
   return Object.hasOwn(OUTPUT_TYPES, value);
 }
 
+function startsWith(bytes: Uint8Array, signature: readonly number[]): boolean {
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+function hasValidOutputSignature(bytes: Uint8Array, contentType: AIGenerationOutputContentType): boolean {
+  switch (contentType) {
+    case "video/mp4":
+      return bytes.byteLength >= 12 &&
+        String.fromCharCode(...bytes.subarray(4, 8)) === "ftyp";
+    case "video/webm":
+      return startsWith(bytes, [0x1a, 0x45, 0xdf, 0xa3]);
+    case "image/jpeg":
+      return startsWith(bytes, [0xff, 0xd8, 0xff]);
+    case "image/png":
+      return startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case "image/webp":
+      return bytes.byteLength >= 12 &&
+        String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+        String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
+    case "audio/mpeg":
+      return startsWith(bytes, [0x49, 0x44, 0x33]) ||
+        (bytes.byteLength >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0);
+    case "audio/wav":
+      return bytes.byteLength >= 12 &&
+        String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+        String.fromCharCode(...bytes.subarray(8, 12)) === "WAVE";
+    case "application/pdf":
+      return startsWith(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d]);
+    case "text/plain":
+    case "text/markdown":
+    case "application/json":
+      try {
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        if (text.includes("\u0000")) return false;
+        if (contentType === "application/json") JSON.parse(text);
+        return true;
+      } catch {
+        return false;
+      }
+  }
+}
+
 function outputObjectKey(userId: string, jobId: string, contentType: AIGenerationOutputContentType): string {
   return `${userId}/${jobId}/output.${OUTPUT_TYPES[contentType]}`;
 }
@@ -147,7 +189,8 @@ export async function materializeAIProviderOutput(
   if (!providerOutput || !(providerOutput.bytes instanceof Uint8Array) ||
       providerOutput.bytes.byteLength < 1 ||
       typeof providerOutput.contentType !== "string" ||
-      !isOutputContentType(providerOutput.contentType)) {
+      !isOutputContentType(providerOutput.contentType) ||
+      !hasValidOutputSignature(providerOutput.bytes, providerOutput.contentType)) {
     throw new AIOutputMaterializationError("INVALID_PROVIDER_OUTPUT");
   }
   if (providerOutput.bytes.byteLength > dependencies.maxBytes) {
