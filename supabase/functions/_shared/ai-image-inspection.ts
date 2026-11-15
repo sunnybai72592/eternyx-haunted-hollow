@@ -93,7 +93,7 @@ function webp(b: Uint8Array): ImageDimensions {
   return checked(((b[27] & 0x3f) << 8) | b[26], ((b[29] & 0x3f) << 8) | b[28], "webp");
 }
 export function inspectImageDimensions(bytes: Uint8Array, contentType: string): ImageDimensions {
-  if (!(bytes instanceof Uint8Array) || bytes.length < 24) return fail();
+  if (!(bytes instanceof Uint8Array) || bytes.length < 4) return fail();
   if (contentType === "image/jpeg") return jpeg(bytes);
   if (contentType === "image/png") return png(bytes);
   if (contentType === "image/webp") return webp(bytes);
