@@ -69,6 +69,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isSafeObjectKey(value: string): boolean {
+  if (value.length < 1 || value.length > 500 || value.startsWith("/") ||
+      value.includes("\\\\") || value.includes("\\0")) return false;
+  const segments = value.split("/");
+  return segments.every((segment) =>
+    segment.length > 0 && segment !== "." && segment !== ".." &&
+    /^[a-zA-Z0-9._-]+$/.test(segment)
+  );
+}
+
 function validOptional(value: string | undefined, pattern: RegExp, max: number): boolean {
   return value === undefined || (typeof value === "string" && value.length <= max && pattern.test(value));
 }
@@ -81,8 +91,7 @@ function validateInput(input: FinalizeAIGenerationJobInput): void {
       !validOptional(input.modelId, MODEL_ID, 150) ||
       !validOptional(input.providerTaskId, TASK_ID, 255) ||
       (input.outputObjectKey !== undefined &&
-        (typeof input.outputObjectKey !== "string" ||
-          input.outputObjectKey.length < 1 || input.outputObjectKey.length > 500)) ||
+        (typeof input.outputObjectKey !== "string" || !isSafeObjectKey(input.outputObjectKey))) ||
       (input.failureCode !== undefined &&
         (typeof input.failureCode !== "string" || !FAILURE_CODE.test(input.failureCode))) ||
       (input.finalCredits !== undefined &&
