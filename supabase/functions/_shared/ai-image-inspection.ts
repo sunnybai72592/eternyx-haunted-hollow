@@ -24,6 +24,9 @@ function u24le(b: Uint8Array, o: number): number {
 function u32le(b: Uint8Array, o: number): number {
   return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
 }
+function u32be(b: Uint8Array, o: number): number {
+  return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+}
 function ascii(b: Uint8Array, o: number, s: string): boolean {
   if (o + s.length > b.length) return false;
   for (let i = 0; i < s.length; i++) if (b[o + i] !== s.charCodeAt(i)) return false;
@@ -59,7 +62,7 @@ function jpeg(b: Uint8Array): ImageDimensions {
   return fail();
 }
 function png(b: Uint8Array): ImageDimensions {
-  if (b.length < 24 || !ascii(b, 12, "IHDR") || u32le(b, 8) !== 13) fail();
+  if (b.length < 24 || !ascii(b, 12, "IHDR") || u32be(b, 8) !== 13) fail();
   return checked(
     ((b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19]) >>> 0,
     ((b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23]) >>> 0,
