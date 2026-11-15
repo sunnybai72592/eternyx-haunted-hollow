@@ -69,3 +69,39 @@ test("studio and feature lookup helpers return only matching entries", () => {
 test("registry structural validation reports no catalogue inconsistencies", () => {
   assert.deepEqual(registry.validateAIRegistry(), []);
 });
+
+test("feature-aware routing requires enabled features and complete model compatibility", () => {
+  const feature = registry.AI_FEATURES.find((item) => item.id === "ai.video.text_to_video");
+  feature.status = "enabled";
+  registry.AI_PROVIDERS.push({
+    id: "test-provider",
+    displayName: "Test Provider",
+    status: "enabled",
+    supportedCapabilities: ["video_generation"],
+    requiredSecretNames: ["TEST_PROVIDER_KEY"],
+  });
+  registry.AI_MODELS.push({
+    id: "test-video-model",
+    providerId: "test-provider",
+    displayName: "Test Video Model",
+    status: "enabled",
+    capabilities: ["video_generation"],
+    inputModalities: ["text"],
+    outputModalities: ["video"],
+    supportsAsyncJobs: true,
+  });
+
+  assert.deepEqual(
+    registry.getAvailableAIModelsForFeature("ai.video.text_to_video").map((model) => model.id),
+    ["test-video-model"],
+  );
+  assert.deepEqual(registry.getAvailableAIModelsForFeature("ai.video.image_to_video"), []);
+
+  registry.AI_MODELS[0].supportsAsyncJobs = false;
+  assert.deepEqual(registry.getAvailableAIModelsForFeature("ai.video.text_to_video"), []);
+
+  registry.AI_MODELS.length = 0;
+  registry.AI_PROVIDERS.length = 0;
+  feature.status = "planned";
+  assert.deepEqual(registry.getAvailableAIModelsForFeature("ai.video.text_to_video"), []);
+});
