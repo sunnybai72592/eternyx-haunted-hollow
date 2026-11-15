@@ -94,6 +94,9 @@ const AIArsenal = () => {
                 <p className="rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm leading-6 text-slate-400">
                   No video is generated yet. We have not selected or configured a generation provider, and no paid provider calls are made.
                 </p>
+                <Button asChild variant="outline" className="w-full justify-between border-violet-400/30 bg-transparent text-violet-100 hover:bg-violet-400/10">
+                  <Link to="/ai-arsenal/video">Open AI Video Studio <ArrowRight className="h-4 w-4" /></Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
