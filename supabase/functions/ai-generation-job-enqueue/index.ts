@@ -29,6 +29,9 @@ function mapEnqueueError(message: string): { status: number; error: string } {
   if (message.includes("idempotency key conflicts")) {
     return { status: 409, error: "This request key was already used for a different feature" };
   }
+  if (message.includes("idempotency key was reused with a different request")) {
+    return { status: 409, error: "This request key was already used for a different generation request" };
+  }
   if (message.includes("Invalid AI generation enqueue request")) {
     return { status: 400, error: "The generation request could not be accepted" };
   }
