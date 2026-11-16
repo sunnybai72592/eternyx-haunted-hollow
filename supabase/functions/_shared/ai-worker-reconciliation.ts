@@ -50,7 +50,7 @@ export type AIWorkerReconciliationResult =
   | { outcome: "stopped"; jobId: string; reason: string };
 
 function hasExistingTask(job: AIClaimedJob): boolean {
-  return typeof job.providerTaskId === "string" && job.providerTaskId.length > 0;
+  return typeof job.providerTaskId === "string" && job.providerTaskId.trim().length > 0;
 }
 
 function validProviderSelection(job: AIClaimedJob, provider: AIGenerationProviderAdapter): boolean {
@@ -93,7 +93,7 @@ async function quarantine(
       failureCode,
       providerId: job.providerId ?? undefined,
       modelId: job.modelId ?? undefined,
-      providerTaskId: job.providerTaskId ?? undefined,
+      providerTaskId: hasExistingTask(job) ? job.providerTaskId! : undefined,
     });
     return { outcome: "quarantined", jobId: job.id, reason };
   } catch {
@@ -237,6 +237,14 @@ export async function reconcileClaimedAIJob(
   job: AIClaimedJob,
   dependencies: AIWorkerReconciliationDependencies,
 ): Promise<AIWorkerReconciliationResult> {
+  if ((job.status === "submitted" || job.status === "processing") && !hasExistingTask(job)) {
+    return quarantine(
+      job,
+      dependencies,
+      "PROVIDER_TASK_ID_MISSING",
+      "provider_task_id_missing",
+    );
+  }
   if (!hasExistingTask(job) ||
       !["reserved", "submitted", "processing", "cancel_requested"].includes(job.status)) {
     return { outcome: "stopped", jobId: job.id, reason: "job_is_not_reconcilable" };
