@@ -18,6 +18,7 @@ import {
   createAIWorkerReconciliation,
   type AIWorkerReconciliationCompositionDependencies,
 } from "./ai-worker-reconciliation-composition.ts";
+import type { AIWorkerReconciliationResult } from "./ai-worker-reconciliation.ts";
 import type { AIClaimedJob } from "./ai-job-claim.ts";
 
 export interface AIWorkerJobDispatcherDependencies {
@@ -31,7 +32,7 @@ export interface AIWorkerJobDispatcherDependencies {
  */
 export function createAIWorkerJobDispatcher(
   dependencies: AIWorkerJobDispatcherDependencies,
-): (job: AIClaimedJob) => Promise<AIWorkerOrchestratorResult | Awaited<ReturnType<ReturnType<typeof createAIWorkerReconciliation>>>> {
+): (job: AIClaimedJob) => Promise<AIWorkerOrchestratorResult | AIWorkerReconciliationResult> {
   if (!dependencies?.submission?.provider ||
       !dependencies.reconciliation?.outputMaterializer) {
     throw new Error("AI worker job dispatcher dependencies are incomplete");
