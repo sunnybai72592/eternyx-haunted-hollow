@@ -130,11 +130,11 @@ export function createAIWorkerHttpHandler(
       let raw: string;
       try {
         raw = await readBoundedBody(request);
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message === "body_too_large") {
+          return json({ error: "Request body is too large" }, 413);
+        }
         return json({ error: "Invalid request body" }, 400);
-      }
-      if (new TextEncoder().encode(raw).length > 1024) {
-        return json({ error: "Request body is too large" }, 413);
       }
       let parsed: unknown;
       try {
