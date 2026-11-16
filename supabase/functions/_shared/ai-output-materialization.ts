@@ -1,11 +1,10 @@
 /**
  * Secure, retry-safe materialization of a completed provider output.
  *
- * This is an injected server-side execution core. It never fetches arbitrary
- * URLs and is not wired to a provider, worker endpoint, or deployed storage
- * client. The provider-specific downloader must resolve opaque references
- * using an approved adapter; the storage adapter must implement atomic
- * create-if-absent semantics.
+ * This injected server-side execution core never fetches arbitrary URLs and is
+ * not wired to a provider, worker endpoint, or deployed storage client. The
+ * provider-specific downloader resolves opaque references using an approved
+ * adapter; storage uses atomic create-if-absent semantics.
  */
 import type { AIClaimedJob } from "./ai-job-claim.ts";
 import type { AIGenerationProviderSnapshot } from "./ai-generation-provider.ts";
@@ -45,11 +44,7 @@ export interface AIOutputObjectReceipt {
 }
 
 export interface AIOutputStorage {
-  /**
-   * Must atomically create the object only when absent. If it already exists,
-   * return its stored metadata without overwriting it. The caller verifies
-   * that an existing object is byte-for-byte equivalent by SHA-256 and size.
-   */
+  /** Atomically create only when absent; never overwrite an existing object. */
   putIfAbsent(input: {
     bucket: typeof AI_GENERATION_OUTPUT_BUCKET;
     objectKey: string;
@@ -72,6 +67,8 @@ export interface AIOutputMaterializationDependencies {
     job: AIClaimedJob,
     output: { contentType: AIGenerationOutputContentType; size: number; sha256: string },
   ): Promise<number>;
+  /** Re-confirm the same job lease after download and immediately before storage. */
+  confirmLease(): Promise<void>;
   /** Must come from the approved feature/model output-size policy. */
   maxBytes: number;
 }
@@ -90,6 +87,7 @@ export type AIOutputMaterializationErrorCode =
   | "INVALID_PROVIDER_OUTPUT"
   | "OUTPUT_TOO_LARGE"
   | "OUTPUT_DOWNLOAD_UNAVAILABLE"
+  | "OUTPUT_LEASE_UNAVAILABLE"
   | "OUTPUT_STORAGE_UNAVAILABLE"
   | "OUTPUT_OBJECT_CONFLICT"
   | "OUTPUT_PRICING_UNAVAILABLE";
@@ -171,6 +169,7 @@ export async function materializeAIProviderOutput(
       snapshot.providerTaskId !== job.providerTaskId ||
       typeof snapshot.outputReference !== "string" ||
       snapshot.outputReference.length < 1 || snapshot.outputReference.length > 1000 ||
+      typeof dependencies.confirmLease !== "function" ||
       !Number.isSafeInteger(dependencies.maxBytes) || dependencies.maxBytes < 1) {
     throw new AIOutputMaterializationError("INVALID_JOB");
   }
@@ -201,6 +200,14 @@ export async function materializeAIProviderOutput(
   const size = providerOutput.bytes.byteLength;
   const digest = await sha256(providerOutput.bytes);
   const objectKey = outputObjectKey(job.userId, job.id, contentType);
+
+  // A provider download may outlive the worker lease. Re-confirm ownership
+  // after the bytes are validated and immediately before any storage mutation.
+  try {
+    await dependencies.confirmLease();
+  } catch {
+    throw new AIOutputMaterializationError("OUTPUT_LEASE_UNAVAILABLE");
+  }
 
   let receipt: AIOutputObjectReceipt;
   try {

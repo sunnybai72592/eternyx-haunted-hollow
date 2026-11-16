@@ -45,18 +45,30 @@ function setup(overrides = {}) {
       },
     },
     calculateFinalCredits: async () => 7,
+    confirmLease: async () => { calls.push(["lease"]); },
     ...overrides,
   };
   return { calls, dependencies };
 }
 
-test("stores successful output under deterministic user and job namespace", async () => {
+test("confirms lease after provider download and immediately before storage", async () => {
   const ctx = setup();
   const result = await materializer.materializeAIProviderOutput(job, snapshot, ctx.dependencies);
   assert.equal(result.outputObjectKey, `${userId}/${jobId}/output.mp4`);
   assert.equal(result.finalCredits, 7);
   assert.equal(result.alreadyExisted, false);
-  assert.equal(ctx.calls[1][1].bucket, "ai-generation-outputs");
+  assert.equal(ctx.calls[1][0], "lease");
+  assert.equal(ctx.calls[2][0], "store");
+  assert.equal(ctx.calls[2][1].bucket, "ai-generation-outputs");
+});
+
+test("lease loss after download prevents any storage mutation", async () => {
+  const ctx = setup({ confirmLease: async () => { ctx.calls.push(["lease"]); throw new Error("lease lost"); } });
+  await assert.rejects(
+    materializer.materializeAIProviderOutput(job, snapshot, ctx.dependencies),
+    (error) => error.code === "OUTPUT_LEASE_UNAVAILABLE",
+  );
+  assert.equal(ctx.calls.some((call) => call[0] === "store"), false);
 });
 
 test("retry accepts an existing object only when its digest and metadata match", async () => {

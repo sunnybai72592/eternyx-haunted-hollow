@@ -41,7 +41,11 @@ function setup(state, status = "processing", overrides = {}) {
     renewLease: async (input) => { calls.push("renew"); return { jobId: input.jobId, status, leaseExpiresAt: new Date(Date.now() + 120000).toISOString() }; },
     transition: async (input) => { calls.push(["transition", input]); return { jobId: input.jobId, status: input.nextStatus }; },
     finalize: async (input) => { calls.push(["finalize", input]); },
-    materializeSuccess: async () => { calls.push("materialize"); return { outputObjectKey: "private/job/output.mp4", finalCredits: 3 }; },
+    materializeSuccess: async (_job, _snapshot, confirmLease) => {
+      calls.push("materialize");
+      await confirmLease();
+      return { outputObjectKey: "private/job/output.mp4", finalCredits: 3 };
+    },
   };
   Object.assign(dependencies, overrides.dependencies || {});
   return { calls, dependencies, job: job(status) };
@@ -56,14 +60,52 @@ test("reconciles a confirmed processing task without submitting it again", async
   assert.equal(ctx.calls.filter((x) => Array.isArray(x) && x[0] === "transition").length, 1);
 });
 
-test("provider-confirmed success materializes output before atomic finalization", async () => {
+test("success renews before materialization, passes a storage lease guard, and renews before finalization", async () => {
   const ctx = setup("succeeded", "processing", { snapshot: { outputReference: "opaque-output-ref" } });
   const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
   assert.equal(result.status, "succeeded");
   const materializeIndex = ctx.calls.indexOf("materialize");
   const finalizeIndex = ctx.calls.findIndex((x) => Array.isArray(x) && x[0] === "finalize");
-  assert.ok(materializeIndex >= 0 && finalizeIndex > materializeIndex);
+  assert.ok(materializeIndex > 0 && ctx.calls[materializeIndex - 1] === "renew");
+  assert.ok(finalizeIndex > materializeIndex);
+  assert.equal(ctx.calls[finalizeIndex - 1], "renew");
   assert.equal(ctx.calls[finalizeIndex][1].outputObjectKey, "private/job/output.mp4");
+  assert.equal(ctx.calls.filter((x) => x === "renew").length, 4);
+});
+
+test("lease loss before materialization prevents the storage callback", async () => {
+  const ctx = setup("succeeded", "processing", {
+    snapshot: { outputReference: "opaque-output-ref" },
+    dependencies: {
+      renewLease: async (input) => {
+        ctx.calls.push("renew");
+        if (ctx.calls.filter((x) => x === "renew").length === 2) throw new Error("lease lost");
+        return { jobId: input.jobId, status: "processing", leaseExpiresAt: new Date(Date.now() + 120000).toISOString() };
+      },
+    },
+  });
+  const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
+  assert.equal(result.outcome, "stopped");
+  assert.equal(ctx.calls.includes("materialize"), false);
+  assert.equal(ctx.calls.some((x) => Array.isArray(x) && x[0] === "finalize"), false);
+});
+
+test("lease loss after storage materialization prevents terminal finalization", async () => {
+  const ctx = setup("succeeded", "processing", {
+    snapshot: { outputReference: "opaque-output-ref" },
+    dependencies: {
+      renewLease: async (input) => {
+        ctx.calls.push("renew");
+        if (ctx.calls.filter((x) => x === "renew").length === 4) throw new Error("lease expired before finalize");
+        return { jobId: input.jobId, status: "processing", leaseExpiresAt: new Date(Date.now() + 120000).toISOString() };
+      },
+    },
+  });
+  const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
+  assert.equal(result.outcome, "stopped");
+  assert.equal(result.reason, "lease_not_confirmed_before_success_finalization");
+  assert.equal(ctx.calls.includes("materialize"), true);
+  assert.equal(ctx.calls.some((x) => Array.isArray(x) && x[0] === "finalize"), false);
 });
 
 test("materialization failure does not finalize success or release credits", async () => {
