@@ -45,7 +45,7 @@ export function createAIWorkerJobDispatcher(
 
   return (job) => {
     const hasProviderTask = typeof job.providerTaskId === "string" &&
-      job.providerTaskId.length > 0;
+      job.providerTaskId.trim().length > 0;
 
     if ((job.status === "reserved" && !hasProviderTask) ||
         (job.status === "cancel_requested" && !hasProviderTask)) {
