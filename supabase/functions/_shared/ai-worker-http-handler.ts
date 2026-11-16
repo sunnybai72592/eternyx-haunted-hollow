@@ -42,6 +42,34 @@ function constantTimeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
+async function readBoundedBody(request: Request): Promise<string> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > 1024) {
+        await reader.cancel();
+        throw new Error("body_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
 function parseBatchOptions(value: unknown): Pick<RunAIWorkerBatchInput, "limit" | "leaseSeconds"> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -90,18 +118,18 @@ export function createAIWorkerHttpHandler(
     }
 
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (!Number.isFinite(declaredLength) || declaredLength > 1024) {
+    if (!Number.isFinite(declaredLength) || declaredLength < 0 || declaredLength > 1024) {
       return json({ error: "Request body is too large" }, 413);
     }
 
     let options: Pick<RunAIWorkerBatchInput, "limit" | "leaseSeconds"> = {};
-    if (declaredLength > 0) {
+    if (request.body) {
       if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
         return json({ error: "JSON content type required" }, 415);
       }
       let raw: string;
       try {
-        raw = await request.text();
+        raw = await readBoundedBody(request);
       } catch {
         return json({ error: "Invalid request body" }, 400);
       }
