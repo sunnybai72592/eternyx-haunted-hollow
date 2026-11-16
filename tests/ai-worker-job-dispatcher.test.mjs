@@ -95,3 +95,13 @@ test("rejects incomplete dispatcher configuration", () => {
     /dispatcher dependencies are incomplete/,
   );
 });
+
+
+test("treats whitespace-only provider task IDs as absent when routing", async () => {
+  const ctx = setup();
+  const dispatch = dispatcherModule.createAIWorkerJobDispatcher(ctx.dependencies);
+  await dispatch({ id: "job-reserved-blank-task", status: "reserved", providerTaskId: "   " });
+  await dispatch({ id: "job-processing-blank-task", status: "processing", providerTaskId: "   " });
+  assert.equal(globalThis.__aiDispatcherCalls.filter((call) => call[0] === "submit").length, 1);
+  assert.equal(globalThis.__aiDispatcherCalls.filter((call) => call[0] === "reconcile").length, 1);
+});
