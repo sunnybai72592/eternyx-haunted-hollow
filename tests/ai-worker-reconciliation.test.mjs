@@ -215,10 +215,26 @@ test("reserved job with an existing processing task transitions directly to proc
   assert.equal(ctx.calls.includes("submit"), false);
 });
 
-test("missing task ID or unsupported status stops before provider access", async () => {
-  const ctx = setup("processing", "processing");
+test("reserved jobs without a provider task stop before reconciliation provider access", async () => {
+  const ctx = setup("processing", "reserved");
   ctx.job.providerTaskId = null;
   const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
   assert.equal(result.outcome, "stopped");
   assert.equal(ctx.calls.includes("status"), false);
+});
+
+
+test("quarantines submitted or processing jobs with missing or blank provider task IDs", async () => {
+  for (const status of ["submitted", "processing"]) {
+    const ctx = setup("processing", status);
+    ctx.job.providerTaskId = "   ";
+    const result = await reconciliation.reconcileClaimedAIJob(ctx.job, ctx.dependencies);
+    assert.equal(result.outcome, "quarantined");
+    assert.equal(result.reason, "provider_task_id_missing");
+    assert.equal(ctx.calls.includes("status"), false);
+    assert.equal(ctx.calls.includes("cancel"), false);
+    const final = ctx.calls.find((x) => Array.isArray(x) && x[0] === "finalize")[1];
+    assert.equal(final.failureCode, "PROVIDER_TASK_ID_MISSING");
+    assert.equal(final.providerTaskId, undefined);
+  }
 });
