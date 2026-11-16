@@ -31,11 +31,13 @@ export interface AIWorkerReconciliationDependencies {
   finalize(input: FinalizeAIGenerationJobInput): Promise<unknown>;
   /**
    * Must be idempotent by job ID, validate the provider reference, and write
-   * only to the authenticated user's private output namespace.
+   * only to the authenticated user's private output namespace. It must call
+   * confirmLease immediately before its storage write.
    */
   materializeSuccess(
     job: AIClaimedJob,
     snapshot: AIGenerationProviderSnapshot,
+    confirmLease: () => Promise<void>,
   ): Promise<AIReconciledOutput>;
   leaseSeconds?: number;
 }
@@ -82,6 +84,7 @@ async function quarantine(
   reason: string,
 ): Promise<AIWorkerReconciliationResult> {
   try {
+    await renew(job, dependencies);
     await dependencies.finalize({
       jobId: job.id,
       leaseToken: job.leaseToken,
@@ -106,11 +109,27 @@ async function completeSnapshot(
   if (snapshot.state === "succeeded") {
     let output: AIReconciledOutput;
     try {
-      output = await dependencies.materializeSuccess(job, snapshot);
+      await renew(job, dependencies);
+    } catch {
+      return { outcome: "stopped", jobId: job.id, reason: "lease_not_confirmed_before_output_materialization" };
+    }
+    try {
+      output = await dependencies.materializeSuccess(
+        job,
+        snapshot,
+        () => renew(job, dependencies),
+      );
     } catch {
       // Do not mark success or release/settle the credit hold when output
       // materialization is incomplete. A later lease can retry this callback.
       return { outcome: "retry_later", jobId: job.id, reason: "output_materialization_unavailable" };
+    }
+    try {
+      // The storage operation may take time. Re-confirm ownership immediately
+      // before the terminal RPC; that RPC independently checks token + expiry.
+      await renew(job, dependencies);
+    } catch {
+      return { outcome: "stopped", jobId: job.id, reason: "lease_not_confirmed_before_success_finalization" };
     }
     try {
       await dependencies.finalize({
@@ -132,6 +151,7 @@ async function completeSnapshot(
 
   if (snapshot.state === "failed") {
     try {
+      await renew(job, dependencies);
       await dependencies.finalize({
         jobId: job.id,
         leaseToken: job.leaseToken,
@@ -150,6 +170,7 @@ async function completeSnapshot(
 
   if (snapshot.state === "cancelled") {
     try {
+      await renew(job, dependencies);
       await dependencies.finalize({
         jobId: job.id,
         leaseToken: job.leaseToken,
