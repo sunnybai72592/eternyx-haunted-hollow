@@ -183,3 +183,22 @@ test("rejects duplicate job IDs regardless of UUID letter casing", async () => {
   const payload = await response.json();
   assert.deepEqual(payload, { error: "AI worker batch is temporarily unavailable" });
 });
+
+
+test("requires the exact application/json media type for request bodies", async () => {
+  let calls = 0;
+  const handler = makeHandler(async (input) => {
+    calls += 1;
+    return { workerId: input.workerId, claimedCount: 0, attemptedCount: 0, dispatchErrorCount: 0, jobs: [] };
+  });
+
+  for (const contentType of ["application/jsonp", "application/json-evil", "text/json", "text/plain"]) {
+    const response = await handler(authorized({}, { "content-type": contentType }));
+    assert.equal(response.status, 415, contentType);
+  }
+  assert.equal(calls, 0);
+
+  const valid = await handler(authorized({}, { "content-type": "Application/JSON; charset=utf-8" }));
+  assert.equal(valid.status, 200);
+  assert.equal(calls, 1);
+});
