@@ -28,7 +28,7 @@ function createClaimedJob(overrides = {}) {
     maxAttempts: 3,
     leaseOwner: "worker-test",
     leaseToken: randomUUID(),
-    leaseExpiresAt: "2026-12-01T00:00:00.000Z",
+    leaseExpiresAt: "2099-12-01T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -172,7 +172,7 @@ test("rejects claimed jobs with invalid identity, lease, ownership, or attempt m
     maxAttempts: 3,
     leaseOwner: "worker-test",
     leaseToken: randomUUID(),
-    leaseExpiresAt: "2026-12-01T00:00:00.000Z",
+    leaseExpiresAt: "2099-12-01T00:00:00.000Z",
   };
   const invalidJobs = [
     { ...valid, id: "not-a-uuid" },
@@ -185,6 +185,7 @@ test("rejects claimed jobs with invalid identity, lease, ownership, or attempt m
     { ...valid, leaseOwner: "another-worker" },
     { ...valid, leaseToken: "not-a-uuid" },
     { ...valid, leaseExpiresAt: "not-a-date" },
+    { ...valid, leaseExpiresAt: "2000-01-01T00:00:00.000Z" },
   ];
 
   for (const job of invalidJobs) {
