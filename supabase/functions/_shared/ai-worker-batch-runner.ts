@@ -75,6 +75,18 @@ export async function runAIWorkerBatch(
     throw new Error("AI worker claim returned an invalid batch");
   }
 
+  const seenJobIds = new Set<string>();
+  for (const job of claimed) {
+    if (!job || typeof job.id !== "string" || job.id.trim().length === 0) {
+      throw new Error("AI worker claim returned an invalid batch");
+    }
+    const normalizedJobId = job.id.toLowerCase();
+    if (seenJobIds.has(normalizedJobId)) {
+      throw new Error("AI worker claim returned an invalid batch");
+    }
+    seenJobIds.add(normalizedJobId);
+  }
+
   const jobs: AIWorkerBatchJobResult[] = [];
   let dispatchErrorCount = 0;
 

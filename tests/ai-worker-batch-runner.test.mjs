@@ -109,3 +109,27 @@ test("an empty claim is a successful no-work batch", async () => {
     dispatchErrorCount: 0, jobs: [],
   });
 });
+
+
+test("rejects duplicate claimed job IDs before dispatching any job", async () => {
+  for (const ids of [
+    ["job-duplicate", "job-duplicate"],
+    ["job-duplicate", "JOB-DUPLICATE"],
+  ]) {
+    let dispatchCalls = 0;
+    await assert.rejects(runner.runAIWorkerBatch({
+      claim: async () => ids.map((id) => ({ id })),
+      dispatch: async () => { dispatchCalls += 1; return {}; },
+    }, { workerId: "worker-test" }), /invalid batch/);
+    assert.equal(dispatchCalls, 0);
+  }
+});
+
+test("rejects malformed claimed entries before dispatch", async () => {
+  let dispatchCalls = 0;
+  await assert.rejects(runner.runAIWorkerBatch({
+    claim: async () => [{ id: "job-valid" }, null],
+    dispatch: async () => { dispatchCalls += 1; return {}; },
+  }, { workerId: "worker-test" }), /invalid batch/);
+  assert.equal(dispatchCalls, 0);
+});
