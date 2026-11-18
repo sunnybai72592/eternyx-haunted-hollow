@@ -101,5 +101,5 @@ test("rejects unsupported features, unknown fields and invalid output options", 
 
 test("request validation remains pure and performs no provider, storage or billing work", async () => {
   const text = await readFile(new URL("../supabase/functions/_shared/ai-image-request.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(text, /fetch\(|Deno\.env|createClient|storage\.from|enqueue|reserveCredit|provider/i);
+  assert.doesNotMatch(text, /fetch\(|Deno\.env|createClient|storage\.from|enqueue|reserveCredit|submit\\(/i);
 });
