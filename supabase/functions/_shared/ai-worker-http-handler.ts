@@ -76,7 +76,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 }
 
 async function readBoundedBody(request: Request): Promise<{ text: string; byteLength: number }> {
-  if (!request.body) return "";
+  if (!request.body) return { text: "", byteLength: 0 };
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -167,7 +167,9 @@ export function createAIWorkerHttpHandler(
 
     let options: Pick<RunAIWorkerBatchInput, "limit" | "leaseSeconds"> = {};
     if (request.body) {
-      if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+      const contentType = request.headers.get("content-type") ?? "";
+      const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+      if (mediaType !== "application/json") {
         return json({ error: "JSON content type required" }, 415);
       }
       let raw: string;
