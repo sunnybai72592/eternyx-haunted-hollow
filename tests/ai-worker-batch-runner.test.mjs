@@ -64,6 +64,31 @@ test("claims a bounded batch and dispatches jobs sequentially", async () => {
   assert.equal(result.dispatchErrorCount, 0);
 });
 
+test("skips a later job if its lease expires while an earlier job is dispatched", async () => {
+  const first = createClaimedJob();
+  const second = createClaimedJob();
+  let secondDispatchCalls = 0;
+  const result = await runner.runAIWorkerBatch({
+    claim: async () => [first, second],
+    dispatch: async (job) => {
+      if (job.id === first.id) {
+        second.leaseExpiresAt = "2000-01-01T00:00:00.000Z";
+      } else {
+        secondDispatchCalls += 1;
+      }
+      return { outcome: "stopped", jobId: job.id, reason: "test" };
+    },
+  }, { workerId: "worker-test" });
+
+  assert.equal(secondDispatchCalls, 0);
+  assert.equal(result.claimedCount, 2);
+  assert.equal(result.attemptedCount, 2);
+  assert.equal(result.dispatchErrorCount, 1);
+  assert.deepEqual(result.jobs.map((item) => item.outcome), [
+    "dispatched", "dispatch_error",
+  ]);
+});
+
 test("isolates a dispatch exception and continues with later claimed jobs", async () => {
   const attempted = [];
   const result = await runner.runAIWorkerBatch({
