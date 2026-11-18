@@ -20,6 +20,35 @@ export interface AIWorkerHttpHandlerDependencies {
   processBatch: AIWorkerBatchProcessor;
 }
 
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function validBatchResult(
+  result: AIWorkerBatchRunResult,
+  expectedWorkerId: string,
+): boolean {
+  if (!result || result.workerId !== expectedWorkerId ||
+      !Number.isInteger(result.claimedCount) || result.claimedCount < 0 ||
+      !Number.isInteger(result.attemptedCount) || result.attemptedCount < 0 ||
+      !Number.isInteger(result.dispatchErrorCount) || result.dispatchErrorCount < 0 ||
+      !Array.isArray(result.jobs) ||
+      result.claimedCount !== result.jobs.length ||
+      result.attemptedCount !== result.jobs.length ||
+      result.dispatchErrorCount > result.attemptedCount) {
+    return false;
+  }
+
+  let dispatchErrors = 0;
+  for (const job of result.jobs) {
+    if (!job || typeof job.jobId !== "string" || !UUID.test(job.jobId) ||
+        (job.outcome !== "dispatched" && job.outcome !== "dispatch_error")) {
+      return false;
+    }
+    if (job.outcome === "dispatch_error") dispatchErrors += 1;
+  }
+  return dispatchErrors === result.dispatchErrorCount;
+}
+
 function json(body: Record<string, unknown>, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -152,6 +181,9 @@ export function createAIWorkerHttpHandler(
         workerId: dependencies.workerId,
         ...options,
       });
+      if (!validBatchResult(result, dependencies.workerId)) {
+        return json({ error: "AI worker batch is temporarily unavailable" }, 503);
+      }
       return json({
         success: true,
         workerId: result.workerId,

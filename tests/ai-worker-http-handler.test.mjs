@@ -12,12 +12,13 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const module = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 const secret = "a".repeat(48);
+const validJobId = ["123e4567", "e89b", "42d3", "a456", "426614174001"].join("-");
 const makeHandler = (processBatch = async (input) => ({
   workerId: input.workerId,
   claimedCount: 1,
   attemptedCount: 1,
   dispatchErrorCount: 0,
-  jobs: [{ jobId: "private-job-id", outcome: "dispatched", result: { providerTaskId: "private-task" } }],
+  jobs: [{ jobId: validJobId, outcome: "dispatched", result: { providerTaskId: "private-task" } }],
 })) => module.createAIWorkerHttpHandler({
   secret, workerId: "worker-east-1", processBatch,
 });
@@ -71,7 +72,7 @@ test("sanitizes processor results and never returns nested provider metadata", a
   const response = await makeHandler()(authorized({}));
   const payload = await response.json();
   assert.equal(response.status, 200);
-  assert.deepEqual(payload.jobs, [{ jobId: "private-job-id", outcome: "dispatched" }]);
+  assert.deepEqual(payload.jobs, [{ jobId: validJobId, outcome: "dispatched" }]);
   assert.equal(JSON.stringify(payload).includes("private-task"), false);
 });
 
@@ -86,4 +87,32 @@ test("requires complete secure dependencies at construction", () => {
   assert.throws(() => module.createAIWorkerHttpHandler({
     secret: "short", workerId: "worker", processBatch: async () => ({}),
   }), /dependencies are incomplete/);
+});
+
+test("rejects malformed batch results without exposing partial data", async () => {
+  const invalidResults = [
+    { workerId: "attacker-worker", claimedCount: 0, attemptedCount: 0, dispatchErrorCount: 0, jobs: [] },
+    { workerId: "worker-east-1", claimedCount: 1, attemptedCount: 0, dispatchErrorCount: 0, jobs: [] },
+    { workerId: "worker-east-1", claimedCount: 1, attemptedCount: 1, dispatchErrorCount: 0, jobs: [{ jobId: "not-a-uuid", outcome: "dispatched" }] },
+    { workerId: "worker-east-1", claimedCount: 1, attemptedCount: 1, dispatchErrorCount: 0, jobs: [{ jobId: validJobId, outcome: "secret-detail" }] },
+    { workerId: "worker-east-1", claimedCount: 1, attemptedCount: 1, dispatchErrorCount: 0, jobs: [{ jobId: validJobId, outcome: "dispatch_error" }] },
+  ];
+  for (const result of invalidResults) {
+    const response = await makeHandler(async () => result)(authorized({}));
+    assert.equal(response.status, 503);
+    const payload = await response.json();
+    assert.equal(JSON.stringify(payload).includes("secret-detail"), false);
+    assert.equal(JSON.stringify(payload).includes("not-a-uuid"), false);
+  }
+});
+
+test("requires dispatch error count to match per-job outcomes", async () => {
+  const response = await makeHandler(async () => ({
+    workerId: "worker-east-1",
+    claimedCount: 1,
+    attemptedCount: 1,
+    dispatchErrorCount: 0,
+    jobs: [{ jobId: validJobId, outcome: "dispatch_error" }],
+  }))(authorized({}));
+  assert.equal(response.status, 503);
 });
