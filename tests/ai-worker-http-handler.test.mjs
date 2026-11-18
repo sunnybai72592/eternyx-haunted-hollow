@@ -116,3 +116,36 @@ test("requires dispatch error count to match per-job outcomes", async () => {
   }))(authorized({}));
   assert.equal(response.status, 503);
 });
+
+
+test("rejects malformed or mismatched Content-Length before processing", async () => {
+  let calls = 0;
+  const handler = makeHandler(async (input) => {
+    calls += 1;
+    return { workerId: input.workerId, claimedCount: 0, attemptedCount: 0, dispatchErrorCount: 0, jobs: [] };
+  });
+  const body = { limit: 2 };
+  const byteLength = Buffer.byteLength(JSON.stringify(body));
+  const cases = [
+    ["not-a-number", body],
+    [String(byteLength - 1), body],
+    [String(byteLength + 1), body],
+    ["1", undefined],
+  ];
+  for (const [contentLength, requestBody] of cases) {
+    const response = await handler(authorized(requestBody, { "content-length": contentLength }));
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls, 0);
+});
+
+test("rejects declared Content-Length values above the body limit", async () => {
+  let calls = 0;
+  const handler = makeHandler(async () => {
+    calls += 1;
+    throw new Error("processor must not run");
+  });
+  const response = await handler(authorized({}, { "content-length": "1025" }));
+  assert.equal(response.status, 413);
+  assert.equal(calls, 0);
+});
