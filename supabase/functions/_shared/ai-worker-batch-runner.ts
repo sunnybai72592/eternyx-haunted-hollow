@@ -40,6 +40,38 @@ export interface AIWorkerBatchRunResult {
   jobs: AIWorkerBatchJobResult[];
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const JOB_STATUSES = new Set(["reserved", "submitted", "processing", "cancel_requested"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validClaimedJob(job: unknown, workerId: string): job is AIClaimedJob {
+  if (!isRecord(job) ||
+      typeof job.id !== "string" || !UUID.test(job.id) ||
+      typeof job.userId !== "string" || !UUID.test(job.userId) ||
+      typeof job.featureKey !== "string" ||
+      !/^[a-z0-9][a-z0-9._-]{0,99}$/.test(job.featureKey) ||
+      typeof job.idempotencyKey !== "string" ||
+      job.idempotencyKey.length < 1 || job.idempotencyKey.length > 200 ||
+      typeof job.status !== "string" || !JOB_STATUSES.has(job.status) ||
+      !isRecord(job.inputPayload) ||
+      !(job.providerId === null || typeof job.providerId === "string") ||
+      !(job.modelId === null || typeof job.modelId === "string") ||
+      !(job.providerTaskId === null || typeof job.providerTaskId === "string") ||
+      !Number.isInteger(job.attemptCount) || (job.attemptCount as number) < 1 ||
+      !Number.isInteger(job.maxAttempts) || (job.maxAttempts as number) < 1 ||
+      (job.attemptCount as number) > (job.maxAttempts as number) ||
+      job.leaseOwner !== workerId ||
+      typeof job.leaseToken !== "string" || !UUID.test(job.leaseToken) ||
+      typeof job.leaseExpiresAt !== "string" ||
+      !Number.isFinite(Date.parse(job.leaseExpiresAt))) {
+    return false;
+  }
+  return true;
+}
+
 function validInput(input: RunAIWorkerBatchInput): boolean {
   const leaseSeconds = input.leaseSeconds ?? 60;
   const limit = input.limit ?? 5;
@@ -77,7 +109,7 @@ export async function runAIWorkerBatch(
 
   const seenJobIds = new Set<string>();
   for (const job of claimed) {
-    if (!job || typeof job.id !== "string" || job.id.trim().length === 0) {
+    if (!validClaimedJob(job, input.workerId)) {
       throw new Error("AI worker claim returned an invalid batch");
     }
     const normalizedJobId = job.id.toLowerCase();
