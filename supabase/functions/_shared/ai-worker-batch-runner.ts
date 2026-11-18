@@ -124,6 +124,13 @@ export async function runAIWorkerBatch(
   let dispatchErrorCount = 0;
 
   for (const job of claimed) {
+    // Earlier jobs may take long enough for a later job's lease to expire.
+    // Recheck immediately before dispatch so stale claims are never handed off.
+    if (Date.parse(job.leaseExpiresAt) <= Date.now()) {
+      dispatchErrorCount += 1;
+      jobs.push({ jobId: job.id, outcome: "dispatch_error" });
+      continue;
+    }
     try {
       const result = await dependencies.dispatch(job);
       jobs.push({ jobId: job.id, outcome: "dispatched", result });
