@@ -141,9 +141,15 @@ export async function claimAIJobs(
   }
 
   const jobs: AIClaimedJob[] = [];
+  const seenJobIds = new Set<string>();
   for (const item of data) {
     const job = parseClaimedJob(item, input.workerId);
     if (!job) throw new AIJobClaimError("CLAIM_SERVICE_INVALID_RESPONSE");
+    const normalizedJobId = job.id.toLowerCase();
+    if (seenJobIds.has(normalizedJobId)) {
+      throw new AIJobClaimError("CLAIM_SERVICE_INVALID_RESPONSE");
+    }
+    seenJobIds.add(normalizedJobId);
     jobs.push(job);
   }
   return jobs;
