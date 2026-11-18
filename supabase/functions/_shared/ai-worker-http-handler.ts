@@ -71,7 +71,7 @@ function constantTimeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
-async function readBoundedBody(request: Request): Promise<string> {
+async function readBoundedBody(request: Request): Promise<{ text: string; byteLength: number }> {
   if (!request.body) return "";
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -96,7 +96,10 @@ async function readBoundedBody(request: Request): Promise<string> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  return {
+    text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+    byteLength: total,
+  };
 }
 
 function parseBatchOptions(value: unknown): Pick<RunAIWorkerBatchInput, "limit" | "leaseSeconds"> | null {
@@ -146,9 +149,16 @@ export function createAIWorkerHttpHandler(
       return json({ error: "Authentication required" }, 401);
     }
 
-    const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (!Number.isFinite(declaredLength) || declaredLength < 0 || declaredLength > 1024) {
-      return json({ error: "Request body is too large" }, 413);
+    const contentLengthHeader = request.headers.get("content-length");
+    let declaredLength: number | null = null;
+    if (contentLengthHeader !== null) {
+      if (!/^\d+$/.test(contentLengthHeader)) {
+        return json({ error: "Invalid Content-Length header" }, 400);
+      }
+      declaredLength = Number(contentLengthHeader);
+      if (!Number.isSafeInteger(declaredLength) || declaredLength > 1024) {
+        return json({ error: "Request body is too large" }, 413);
+      }
     }
 
     let options: Pick<RunAIWorkerBatchInput, "limit" | "leaseSeconds"> = {};
@@ -158,7 +168,11 @@ export function createAIWorkerHttpHandler(
       }
       let raw: string;
       try {
-        raw = await readBoundedBody(request);
+        const body = await readBoundedBody(request);
+        if (declaredLength !== null && declaredLength !== body.byteLength) {
+          return json({ error: "Content-Length does not match request body" }, 400);
+        }
+        raw = body.text;
       } catch (error) {
         if (error instanceof Error && error.message === "body_too_large") {
           return json({ error: "Request body is too large" }, 413);
@@ -174,6 +188,8 @@ export function createAIWorkerHttpHandler(
       const validated = parseBatchOptions(parsed);
       if (!validated) return json({ error: "Invalid batch options" }, 400);
       options = validated;
+    } else if (declaredLength !== null && declaredLength !== 0) {
+      return json({ error: "Content-Length does not match request body" }, 400);
     }
 
     try {
