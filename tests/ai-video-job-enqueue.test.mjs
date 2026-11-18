@@ -16,9 +16,8 @@ test("image-to-video requires a ready asset owned by the authenticated user", ()
   assert.match(source, /from\("ai_generation_input_assets"\)/);
   assert.match(source, /\.eq\("id", generationRequest\.imageAssetId\)/);
   assert.match(source, /\.eq\("user_id", user\.id\)/);
-  assert.match(source, /asset\.status !== "ready"/);
-  assert.match(source, /verified_content_type/);
-  assert.match(source, /verified_size/);
+  assert.match(source, /validateVerifiedAIImageAsset\(asset, user\.id, generationRequest\.imageAssetId\)/);
+  assert.match(source, /\.eq\("bucket_id", "ai-generation-inputs"\)/);
 });
 
 test("enqueue uses the central atomic job and credit reservation RPC", () => {

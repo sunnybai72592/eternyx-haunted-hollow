@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { validateVerifiedAIImageAsset, VerifiedAIImageAssetError } from "../_shared/ai-verified-image-asset.ts";
 import {
   AIVideoRequestValidationError,
   validateAIVideoGenerationRequest,
@@ -78,17 +79,23 @@ serve(async (req) => {
   if (generationRequest.featureKey === "ai.video.image_to_video") {
     const { data: asset, error: assetError } = await supabase
       .from("ai_generation_input_assets")
-      .select("id, status, verified_content_type, verified_size")
+      .select("id, user_id, bucket_id, status, verified_content_type, verified_size")
       .eq("id", generationRequest.imageAssetId)
       .eq("user_id", user.id)
+      .eq("bucket_id", "ai-generation-inputs")
       .maybeSingle();
 
     if (assetError) {
       console.error("AI Video input asset lookup failed", { code: assetError.code ?? null });
       return reply({ error: "The uploaded image could not be verified" }, 503);
     }
-    if (!asset || asset.status !== "ready" ||
-        !asset.verified_content_type || !asset.verified_size) {
+    try {
+      validateVerifiedAIImageAsset(asset, user.id, generationRequest.imageAssetId);
+    } catch (error) {
+      if (!(error instanceof VerifiedAIImageAssetError)) {
+        console.error("AI Video input asset validation failed unexpectedly");
+        return reply({ error: "The uploaded image could not be verified" }, 503);
+      }
       return reply({ error: "A verified image uploaded by this account is required" }, 422);
     }
   }
