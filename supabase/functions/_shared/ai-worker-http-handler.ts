@@ -42,11 +42,12 @@ function validBatchResult(
   const seenJobIds = new Set<string>();
   for (const job of result.jobs) {
     if (!job || typeof job.jobId !== "string" || !UUID.test(job.jobId) ||
-        (job.outcome !== "dispatched" && job.outcome !== "dispatch_error") ||
-        seenJobIds.has(job.jobId)) {
+        (job.outcome !== "dispatched" && job.outcome !== "dispatch_error")) {
       return false;
     }
-    seenJobIds.add(job.jobId);
+    const normalizedJobId = job.jobId.toLowerCase();
+    if (seenJobIds.has(normalizedJobId)) return false;
+    seenJobIds.add(normalizedJobId);
     if (job.outcome === "dispatch_error") dispatchErrors += 1;
   }
   return dispatchErrors === result.dispatchErrorCount;
