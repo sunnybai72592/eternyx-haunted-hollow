@@ -152,7 +152,7 @@ export function createAIWorkerHttpHandler(
     const contentLengthHeader = request.headers.get("content-length");
     let declaredLength: number | null = null;
     if (contentLengthHeader !== null) {
-      if (!/^\\d+$/.test(contentLengthHeader)) {
+      if (!/^\d+$/.test(contentLengthHeader)) {
         return json({ error: "Invalid Content-Length header" }, 400);
       }
       declaredLength = Number(contentLengthHeader);
