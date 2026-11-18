@@ -13,10 +13,30 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const runner = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
+function createClaimedJob(overrides = {}) {
+  return {
+    id: randomUUID(),
+    userId: randomUUID(),
+    featureKey: "video.generate",
+    idempotencyKey: "request-key",
+    status: "reserved",
+    inputPayload: {},
+    providerId: null,
+    modelId: null,
+    providerTaskId: null,
+    attemptCount: 1,
+    maxAttempts: 3,
+    leaseOwner: "worker-test",
+    leaseToken: randomUUID(),
+    leaseExpiresAt: "2026-12-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 const jobs = [
-  { id: "job-one" },
-  { id: "job-two" },
-  { id: "job-three" },
+  createClaimedJob(),
+  createClaimedJob(),
+  createClaimedJob(),
 ];
 
 test("claims a bounded batch and dispatches jobs sequentially", async () => {
@@ -113,13 +133,15 @@ test("an empty claim is a successful no-work batch", async () => {
 
 
 test("rejects duplicate claimed job IDs before dispatching any job", async () => {
-  for (const ids of [
-    ["job-duplicate", "job-duplicate"],
-    ["job-duplicate", "JOB-DUPLICATE"],
+  const duplicate = createClaimedJob();
+  const caseVariant = { ...duplicate, id: duplicate.id.toUpperCase() };
+  for (const claimed of [
+    [duplicate, duplicate],
+    [duplicate, caseVariant],
   ]) {
     let dispatchCalls = 0;
     await assert.rejects(runner.runAIWorkerBatch({
-      claim: async () => ids.map((id) => ({ id })),
+      claim: async () => claimed,
       dispatch: async () => { dispatchCalls += 1; return {}; },
     }, { workerId: "worker-test" }), /invalid batch/);
     assert.equal(dispatchCalls, 0);
@@ -129,7 +151,7 @@ test("rejects duplicate claimed job IDs before dispatching any job", async () =>
 test("rejects malformed claimed entries before dispatch", async () => {
   let dispatchCalls = 0;
   await assert.rejects(runner.runAIWorkerBatch({
-    claim: async () => [{ id: "job-valid" }, null],
+    claim: async () => [createClaimedJob(), null],
     dispatch: async () => { dispatchCalls += 1; return {}; },
   }, { workerId: "worker-test" }), /invalid batch/);
   assert.equal(dispatchCalls, 0);
