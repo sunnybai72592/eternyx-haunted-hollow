@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
@@ -12,10 +13,30 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const runner = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
+function createClaimedJob(overrides = {}) {
+  return {
+    id: randomUUID(),
+    userId: randomUUID(),
+    featureKey: "video.generate",
+    idempotencyKey: "request-key",
+    status: "reserved",
+    inputPayload: {},
+    providerId: null,
+    modelId: null,
+    providerTaskId: null,
+    attemptCount: 1,
+    maxAttempts: 3,
+    leaseOwner: "worker-test",
+    leaseToken: randomUUID(),
+    leaseExpiresAt: "2026-12-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 const jobs = [
-  { id: "job-one" },
-  { id: "job-two" },
-  { id: "job-three" },
+  createClaimedJob(),
+  createClaimedJob(),
+  createClaimedJob(),
 ];
 
 test("claims a bounded batch and dispatches jobs sequentially", async () => {
@@ -34,9 +55,9 @@ test("claims a bounded batch and dispatches jobs sequentially", async () => {
     workerId: "worker-test", leaseSeconds: 120, limit: 3,
   }]);
   assert.deepEqual(calls.slice(1), [
-    ["dispatch-start", "job-one"], ["dispatch-end", "job-one"],
-    ["dispatch-start", "job-two"], ["dispatch-end", "job-two"],
-    ["dispatch-start", "job-three"], ["dispatch-end", "job-three"],
+    ["dispatch-start", jobs[0].id], ["dispatch-end", jobs[0].id],
+    ["dispatch-start", jobs[1].id], ["dispatch-end", jobs[1].id],
+    ["dispatch-start", jobs[2].id], ["dispatch-end", jobs[2].id],
   ]);
   assert.equal(result.claimedCount, 3);
   assert.equal(result.attemptedCount, 3);
@@ -49,12 +70,12 @@ test("isolates a dispatch exception and continues with later claimed jobs", asyn
     claim: async () => jobs,
     dispatch: async (job) => {
       attempted.push(job.id);
-      if (job.id === "job-two") throw new Error("sensitive provider detail");
+      if (job.id === jobs[1].id) throw new Error("sensitive provider detail");
       return { outcome: "stopped", jobId: job.id, reason: "test" };
     },
   }, { workerId: "worker-test" });
 
-  assert.deepEqual(attempted, ["job-one", "job-two", "job-three"]);
+  assert.deepEqual(attempted, [jobs[0].id, jobs[1].id, jobs[2].id]);
   assert.deepEqual(result.jobs.map((item) => item.outcome), [
     "dispatched", "dispatch_error", "dispatched",
   ]);
@@ -112,13 +133,15 @@ test("an empty claim is a successful no-work batch", async () => {
 
 
 test("rejects duplicate claimed job IDs before dispatching any job", async () => {
-  for (const ids of [
-    ["job-duplicate", "job-duplicate"],
-    ["job-duplicate", "JOB-DUPLICATE"],
+  const duplicate = createClaimedJob();
+  const caseVariant = { ...duplicate, id: duplicate.id.toUpperCase() };
+  for (const claimed of [
+    [duplicate, duplicate],
+    [duplicate, caseVariant],
   ]) {
     let dispatchCalls = 0;
     await assert.rejects(runner.runAIWorkerBatch({
-      claim: async () => ids.map((id) => ({ id })),
+      claim: async () => claimed,
       dispatch: async () => { dispatchCalls += 1; return {}; },
     }, { workerId: "worker-test" }), /invalid batch/);
     assert.equal(dispatchCalls, 0);
@@ -128,8 +151,48 @@ test("rejects duplicate claimed job IDs before dispatching any job", async () =>
 test("rejects malformed claimed entries before dispatch", async () => {
   let dispatchCalls = 0;
   await assert.rejects(runner.runAIWorkerBatch({
-    claim: async () => [{ id: "job-valid" }, null],
+    claim: async () => [createClaimedJob(), null],
     dispatch: async () => { dispatchCalls += 1; return {}; },
   }, { workerId: "worker-test" }), /invalid batch/);
   assert.equal(dispatchCalls, 0);
+});
+
+test("rejects claimed jobs with invalid identity, lease, ownership, or attempt metadata", async () => {
+  const valid = {
+    id: randomUUID(),
+    userId: randomUUID(),
+    featureKey: "video.generate",
+    idempotencyKey: "request-key",
+    status: "reserved",
+    inputPayload: {},
+    providerId: null,
+    modelId: null,
+    providerTaskId: null,
+    attemptCount: 1,
+    maxAttempts: 3,
+    leaseOwner: "worker-test",
+    leaseToken: randomUUID(),
+    leaseExpiresAt: "2026-12-01T00:00:00.000Z",
+  };
+  const invalidJobs = [
+    { ...valid, id: "not-a-uuid" },
+    { ...valid, userId: "not-a-uuid" },
+    { ...valid, featureKey: "../unsafe" },
+    { ...valid, status: "completed" },
+    { ...valid, inputPayload: [] },
+    { ...valid, attemptCount: 4 },
+    { ...valid, maxAttempts: 0 },
+    { ...valid, leaseOwner: "another-worker" },
+    { ...valid, leaseToken: "not-a-uuid" },
+    { ...valid, leaseExpiresAt: "not-a-date" },
+  ];
+
+  for (const job of invalidJobs) {
+    let dispatchCalls = 0;
+    await assert.rejects(runner.runAIWorkerBatch({
+      claim: async () => [job],
+      dispatch: async () => { dispatchCalls += 1; return {}; },
+    }, { workerId: "worker-test" }), /invalid batch/);
+    assert.equal(dispatchCalls, 0);
+  }
 });
