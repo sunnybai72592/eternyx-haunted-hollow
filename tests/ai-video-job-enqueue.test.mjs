@@ -9,6 +9,7 @@ test("enqueue authenticates the caller and validates a strict request envelope",
   assert.match(source, /authenticateUser\(req\)/);
   assert.match(source, /\["request", "idempotencyKey"\]/);
   assert.match(source, /validateAIVideoGenerationRequest\(body\.request\)/);
+  assert.match(source, /validateAIImageRequest\(body\.request\)/);
   assert.doesNotMatch(source, /body\.(userId|user_id|providerId|provider_id)/);
 });
 
