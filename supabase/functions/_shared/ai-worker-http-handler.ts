@@ -39,11 +39,14 @@ function validBatchResult(
   }
 
   let dispatchErrors = 0;
+  const seenJobIds = new Set<string>();
   for (const job of result.jobs) {
     if (!job || typeof job.jobId !== "string" || !UUID.test(job.jobId) ||
-        (job.outcome !== "dispatched" && job.outcome !== "dispatch_error")) {
+        (job.outcome !== "dispatched" && job.outcome !== "dispatch_error") ||
+        seenJobIds.has(job.jobId)) {
       return false;
     }
+    seenJobIds.add(job.jobId);
     if (job.outcome === "dispatch_error") dispatchErrors += 1;
   }
   return dispatchErrors === result.dispatchErrorCount;
