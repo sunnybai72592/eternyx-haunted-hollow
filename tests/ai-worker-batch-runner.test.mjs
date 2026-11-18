@@ -133,3 +133,43 @@ test("rejects malformed claimed entries before dispatch", async () => {
   }, { workerId: "worker-test" }), /invalid batch/);
   assert.equal(dispatchCalls, 0);
 });
+
+test("rejects claimed jobs with invalid identity, lease, ownership, or attempt metadata", async () => {
+  const valid = {
+    id: "123e4567-e89b-42d3-a456-426614174001",
+    userId: "123e4567-e89b-42d3-a456-426614174002",
+    featureKey: "video.generate",
+    idempotencyKey: "request-key",
+    status: "reserved",
+    inputPayload: {},
+    providerId: null,
+    modelId: null,
+    providerTaskId: null,
+    attemptCount: 1,
+    maxAttempts: 3,
+    leaseOwner: "worker-test",
+    leaseToken: "123e4567-e89b-42d3-a456-426614174003",
+    leaseExpiresAt: "2026-12-01T00:00:00.000Z",
+  };
+  const invalidJobs = [
+    { ...valid, id: "not-a-uuid" },
+    { ...valid, userId: "not-a-uuid" },
+    { ...valid, featureKey: "../unsafe" },
+    { ...valid, status: "completed" },
+    { ...valid, inputPayload: [] },
+    { ...valid, attemptCount: 4 },
+    { ...valid, maxAttempts: 0 },
+    { ...valid, leaseOwner: "another-worker" },
+    { ...valid, leaseToken: "not-a-uuid" },
+    { ...valid, leaseExpiresAt: "not-a-date" },
+  ];
+
+  for (const job of invalidJobs) {
+    let dispatchCalls = 0;
+    await assert.rejects(runner.runAIWorkerBatch({
+      claim: async () => [job],
+      dispatch: async () => { dispatchCalls += 1; return {}; },
+    }, { workerId: "worker-test" }), /invalid batch/);
+    assert.equal(dispatchCalls, 0);
+  }
+});
