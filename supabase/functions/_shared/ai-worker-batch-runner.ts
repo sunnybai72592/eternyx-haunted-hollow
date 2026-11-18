@@ -66,7 +66,8 @@ function validClaimedJob(job: unknown, workerId: string): job is AIClaimedJob {
       job.leaseOwner !== workerId ||
       typeof job.leaseToken !== "string" || !UUID.test(job.leaseToken) ||
       typeof job.leaseExpiresAt !== "string" ||
-      !Number.isFinite(Date.parse(job.leaseExpiresAt))) {
+      !Number.isFinite(Date.parse(job.leaseExpiresAt)) ||
+      Date.parse(job.leaseExpiresAt) <= Date.now()) {
     return false;
   }
   return true;
