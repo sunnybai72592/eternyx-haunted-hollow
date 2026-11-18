@@ -78,3 +78,17 @@ test("claim rejects oversized batches and unavailable RPC responses", async () =
   await assert.rejects(claim.claimAIJobs(unavailable, { workerId }),
     (error) => error.code === "CLAIM_SERVICE_UNAVAILABLE");
 });
+
+
+test("claim rejects duplicate job IDs before returning any jobs", async () => {
+  const duplicateId = ["abcdefab", "cdef", "4abc", "8def", "abcdefabcdef"].join("-");
+  for (const ids of [
+    [duplicateId, duplicateId],
+    [duplicateId, duplicateId.toUpperCase()],
+  ]) {
+    const rows = ids.map((id) => ({ ...row, id }));
+    const client = { rpc: async () => ({ data: rows, error: null }) };
+    await assert.rejects(claim.claimAIJobs(client, { workerId }),
+      (error) => error.code === "CLAIM_SERVICE_INVALID_RESPONSE");
+  }
+});
