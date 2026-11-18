@@ -166,3 +166,20 @@ test("rejects duplicate job IDs in a processor batch result", async () => {
   const payload = await response.json();
   assert.deepEqual(payload, { error: "AI worker batch is temporarily unavailable" });
 });
+
+
+test("rejects duplicate job IDs regardless of UUID letter casing", async () => {
+  const response = await makeHandler(async () => ({
+    workerId: "worker-east-1",
+    claimedCount: 2,
+    attemptedCount: 2,
+    dispatchErrorCount: 0,
+    jobs: [
+      { jobId: validJobId, outcome: "dispatched" },
+      { jobId: validJobId.toUpperCase(), outcome: "dispatched" },
+    ],
+  }))(authorized({}));
+  assert.equal(response.status, 503);
+  const payload = await response.json();
+  assert.deepEqual(payload, { error: "AI worker batch is temporarily unavailable" });
+});
