@@ -1,10 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { AIImageRequestValidationError, validateAIImageRequest } from "../_shared/ai-image-request.ts";
 import { validateVerifiedAIImageAsset, VerifiedAIImageAssetError } from "../_shared/ai-verified-image-asset.ts";
 import {
   AIVideoRequestValidationError,
   validateAIVideoGenerationRequest,
+  type AIVideoGenerationRequest,
 } from "../_shared/ai-video-request.ts";
+import type { AIImageRequest } from "../_shared/ai-image-request.ts";
 import {
   AIGenerationSafetyGateError,
   requireAIGenerationSafetyApproval,
@@ -29,7 +32,7 @@ function mapEnqueueError(message: string): { status: number; error: string } {
     return { status: 402, error: "There are not enough available credits for this generation" };
   }
   if (message.includes("Feature is not enabled")) {
-    return { status: 403, error: "This AI Video feature is not currently available" };
+    return { status: 403, error: "This AI generation feature is not currently available" };
   }
   if (message.includes("idempotency key conflicts")) {
     return { status: 409, error: "This request key was already used for a different feature" };
@@ -66,34 +69,46 @@ serve(async (req) => {
     return reply({ error: "A valid idempotency key and generation request are required" }, 400);
   }
 
-  let generationRequest;
+  let generationRequest: AIVideoGenerationRequest | AIImageRequest;
   try {
-    generationRequest = validateAIVideoGenerationRequest(body.request);
-  } catch (error) {
-    if (error instanceof AIVideoRequestValidationError) {
-      return reply({ error: "The AI Video request is invalid", code: error.code }, 400);
+    if (isRecord(body.request) && typeof body.request.featureKey === "string" &&
+        body.request.featureKey.startsWith("ai.image.")) {
+      generationRequest = validateAIImageRequest(body.request);
+    } else {
+      generationRequest = validateAIVideoGenerationRequest(body.request);
     }
-    return reply({ error: "The AI Video request could not be validated" }, 400);
+  } catch (error) {
+    if (error instanceof AIImageRequestValidationError || error instanceof AIVideoRequestValidationError) {
+      return reply({ error: "The AI generation request is invalid", code: error.code }, 400);
+    }
+    return reply({ error: "The AI generation request could not be validated" }, 400);
   }
 
-  if (generationRequest.featureKey === "ai.video.image_to_video") {
+  const inputAssetId =
+    generationRequest.featureKey === "ai.video.image_to_video" ||
+    generationRequest.featureKey === "ai.image.edit" ||
+    generationRequest.featureKey === "ai.image.upscale"
+      ? generationRequest.imageAssetId
+      : null;
+
+  if (inputAssetId) {
     const { data: asset, error: assetError } = await supabase
       .from("ai_generation_input_assets")
       .select("id, user_id, bucket_id, status, verified_content_type, verified_size")
-      .eq("id", generationRequest.imageAssetId)
+      .eq("id", inputAssetId)
       .eq("user_id", user.id)
       .eq("bucket_id", "ai-generation-inputs")
       .maybeSingle();
 
     if (assetError) {
-      console.error("AI Video input asset lookup failed", { code: assetError.code ?? null });
+      console.error("AI generation input asset lookup failed", { code: assetError.code ?? null });
       return reply({ error: "The uploaded image could not be verified" }, 503);
     }
     try {
-      validateVerifiedAIImageAsset(asset, user.id, generationRequest.imageAssetId);
+      validateVerifiedAIImageAsset(asset, user.id, inputAssetId);
     } catch (error) {
       if (!(error instanceof VerifiedAIImageAssetError)) {
-        console.error("AI Video input asset validation failed unexpectedly");
+        console.error("AI generation input asset validation failed unexpectedly");
         return reply({ error: "The uploaded image could not be verified" }, 503);
       }
       return reply({ error: "A verified image uploaded by this account is required" }, 422);
@@ -134,7 +149,7 @@ serve(async (req) => {
     });
 
     if (error) {
-      console.error("AI Video job enqueue failed", { code: error.code ?? null });
+      console.error("AI generation job enqueue failed", { code: error.code ?? null });
       const mapped = mapEnqueueError(error.message ?? "");
       return reply({ error: mapped.error }, mapped.status);
     }
@@ -144,7 +159,7 @@ serve(async (req) => {
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.job_id) ||
         typeof data.status !== "string" ||
         typeof data.already_exists !== "boolean") {
-      console.error("AI Video job enqueue returned an invalid result");
+      console.error("AI generation job enqueue returned an invalid result");
       return reply({ error: "AI generation is temporarily unavailable" }, 503);
     }
 
