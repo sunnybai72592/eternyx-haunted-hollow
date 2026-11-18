@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
@@ -136,8 +137,8 @@ test("rejects malformed claimed entries before dispatch", async () => {
 
 test("rejects claimed jobs with invalid identity, lease, ownership, or attempt metadata", async () => {
   const valid = {
-    id: "123e4567-e89b-42d3-a456-426614174001",
-    userId: "123e4567-e89b-42d3-a456-426614174002",
+    id: randomUUID(),
+    userId: randomUUID(),
     featureKey: "video.generate",
     idempotencyKey: "request-key",
     status: "reserved",
@@ -148,7 +149,7 @@ test("rejects claimed jobs with invalid identity, lease, ownership, or attempt m
     attemptCount: 1,
     maxAttempts: 3,
     leaseOwner: "worker-test",
-    leaseToken: "123e4567-e89b-42d3-a456-426614174003",
+    leaseToken: randomUUID(),
     leaseExpiresAt: "2026-12-01T00:00:00.000Z",
   };
   const invalidJobs = [
