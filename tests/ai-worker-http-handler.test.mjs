@@ -149,3 +149,20 @@ test("rejects declared Content-Length values above the body limit", async () => 
   assert.equal(response.status, 413);
   assert.equal(calls, 0);
 });
+
+
+test("rejects duplicate job IDs in a processor batch result", async () => {
+  const response = await makeHandler(async () => ({
+    workerId: "worker-east-1",
+    claimedCount: 2,
+    attemptedCount: 2,
+    dispatchErrorCount: 0,
+    jobs: [
+      { jobId: validJobId, outcome: "dispatched" },
+      { jobId: validJobId, outcome: "dispatched" },
+    ],
+  }))(authorized({}));
+  assert.equal(response.status, 503);
+  const payload = await response.json();
+  assert.deepEqual(payload, { error: "AI worker batch is temporarily unavailable" });
+});
