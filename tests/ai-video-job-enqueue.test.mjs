@@ -15,9 +15,9 @@ test("enqueue authenticates the caller and validates a strict request envelope",
 
 test("image-to-video requires a ready asset owned by the authenticated user", () => {
   assert.match(source, /from\("ai_generation_input_assets"\)/);
-  assert.match(source, /\.eq\("id", generationRequest\.imageAssetId\)/);
+  assert.match(source, /\.eq\("id", inputAssetId\)/);
   assert.match(source, /\.eq\("user_id", user\.id\)/);
-  assert.match(source, /validateVerifiedAIImageAsset\(asset, user\.id, generationRequest\.imageAssetId\)/);
+  assert.match(source, /validateVerifiedAIImageAsset\(asset, user\.id, inputAssetId\)/);
   assert.match(source, /\.eq\("bucket_id", "ai-generation-inputs"\)/);
 });
 
