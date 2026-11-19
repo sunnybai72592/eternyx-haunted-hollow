@@ -8,6 +8,12 @@ export interface AIImageRequestOptions {
   readonly outputFormat?: AIImageRequestOutputFormat;
 }
 
+export interface AIImageGenerationRequestDraft extends AIImageRequestOptions {
+  readonly featureKey: "ai.image.generate";
+  readonly prompt: string;
+  readonly negativePrompt?: string;
+}
+
 export interface AIImageEditRequestDraft extends AIImageRequestOptions {
   readonly featureKey: "ai.image.edit";
   readonly prompt: string;
@@ -75,6 +81,32 @@ export function buildAIImageUpscaleRequest(
   return {
     featureKey: "ai.image.upscale",
     imageAssetId: asset.assetId,
+    ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
+    ...(options.outputFormat === undefined ? {} : { outputFormat: options.outputFormat }),
+  };
+}
+
+
+/**
+ * Builds a text-to-image request draft locally. It does not enqueue, reserve
+ * credits, perform moderation, or contact an AI provider.
+ */
+export function buildAIImageGenerationRequest(
+  prompt: string,
+  options: AIImageRequestOptions & { readonly negativePrompt?: string } = {},
+): AIImageGenerationRequestDraft {
+  if (typeof prompt !== "string" || prompt.trim().length === 0 || prompt.length > 4000) {
+    throw new AIImageRequestDraftError("invalid_prompt");
+  }
+  if (options.negativePrompt !== undefined &&
+      (typeof options.negativePrompt !== "string" || options.negativePrompt.length > 2000)) {
+    throw new AIImageRequestDraftError("invalid_prompt");
+  }
+
+  return {
+    featureKey: "ai.image.generate",
+    prompt: prompt.trim(),
+    ...(options.negativePrompt === undefined ? {} : { negativePrompt: options.negativePrompt.trim() }),
     ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
     ...(options.outputFormat === undefined ? {} : { outputFormat: options.outputFormat }),
   };

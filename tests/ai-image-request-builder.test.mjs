@@ -29,3 +29,11 @@ test("request preparation is local and never enqueues, reserves credits, or cont
   assert.match(builder, /local request preparation only/);
   assert.doesNotMatch(builder, /ai-generation-job-enqueue|supabase\.functions\.invoke|fetch\(/);
 });
+
+test("text-to-image drafts match the server generation contract without an uploaded asset", () => {
+  assert.match(builder, /featureKey: "ai\.image\.generate"/);
+  assert.match(builder, /buildAIImageGenerationRequest/);
+  assert.match(serverContract, /featureKey: "ai\.image\.generate"/);
+  assert.match(builder, /prompt: prompt\.trim\(\)/);
+  assert.doesNotMatch(builder, /providerUrl|imageUrl|storagePath/);
+});
