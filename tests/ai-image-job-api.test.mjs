@@ -48,3 +48,19 @@ test("AI Image Studio remains disconnected from enqueue until explicit activatio
   assert.doesNotMatch(studio, /enqueueAIImageJob|ai-generation-job-enqueue/);
   assert.match(studio, /Generation remains unavailable/);
 });
+
+test("AI Image Studio invalidates stale drafts and validation errors when inputs change", () => {
+  assert.ok(studio.includes("const invalidateDraft = () =>"));
+  assert.ok(studio.includes("setRequestDraft(null);"));
+  assert.ok(studio.includes("setDraftError(null);"));
+  for (const fragment of [
+    'setOperation("generate"); invalidateDraft();',
+    'setOperation("edit"); invalidateDraft();',
+    'setOperation("upscale"); invalidateDraft();',
+    'setPrompt(e.target.value); invalidateDraft();',
+    'setNegativePrompt(e.target.value); invalidateDraft();',
+    'setAspectRatio(e.target.value as AIImageRequestAspectRatio); invalidateDraft();',
+    'setOutputFormat(e.target.value as AIImageRequestOutputFormat); invalidateDraft();',
+  ]) assert.ok(studio.includes(fragment), "Missing draft invalidation for " + fragment);
+  assert.match(studio, /setImageFile\(e\.target\.files\?\.\[0\] \?\? null\);\s*setUploadedAsset\(null\);\s*setUploadError\(null\);\s*invalidateDraft\(\);/);
+});
