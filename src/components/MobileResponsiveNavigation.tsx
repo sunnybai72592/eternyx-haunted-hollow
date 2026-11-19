@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowUpRight, BookOpen, ChevronDown, Menu,
@@ -13,6 +13,8 @@ interface NavigationProps {
 }
 
 export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) => {
+  const mobileTrigger = useRef<HTMLButtonElement>(null);
+  const platformTrigger = useRef<HTMLButtonElement>(null);
   const location = useLocation();
   const { isAuthenticated } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -27,6 +29,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
     if (!mobileOpen && !ecosystemOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        (mobileOpen ? mobileTrigger : platformTrigger).current?.focus();
         setMobileOpen(false);
         setEcosystemOpen(false);
       }
@@ -36,9 +39,21 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
   }, [mobileOpen, ecosystemOpen]);
 
   useEffect(() => {
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
   }, [mobileOpen]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnResize = () => {
+      setMobileOpen(false);
+      setEcosystemOpen(false);
+    };
+    desktop.addEventListener("change", closeOnResize);
+    return () => desktop.removeEventListener("change", closeOnResize);
+  }, []);
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname === path || location.pathname.startsWith(path + "/");
@@ -50,6 +65,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
 
   return (
     <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 ${className}`}>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:text-slate-950">Skip to main content</a>
       <nav aria-label="Main navigation" className="relative mx-auto max-w-7xl rounded-2xl border border-white/[0.10] bg-[#080d19]/85 shadow-[0_16px_60px_rgba(0,0,0,.34)] backdrop-blur-2xl">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4 sm:px-5">
           <Link to="/" onClick={closeMenus} aria-label="ETERNYX home" className="group inline-flex min-w-0 items-center gap-2.5">
@@ -61,7 +77,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
 
           <div className="hidden items-center gap-1 lg:flex">
             <div className="relative" onMouseEnter={() => setEcosystemOpen(true)} onMouseLeave={() => setEcosystemOpen(false)}>
-              <button type="button" aria-haspopup="true" aria-expanded={ecosystemOpen} onClick={() => setEcosystemOpen((open) => !open)} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setEcosystemOpen(true); } }} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${ecosystemOpen || ecosystemPillars.some((pillar) => isActive(pillar.href)) ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>
+              <button ref={platformTrigger} type="button" aria-expanded={ecosystemOpen} onClick={() => setEcosystemOpen((open) => !open)} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setEcosystemOpen(true); } }} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${ecosystemOpen || ecosystemPillars.some((pillar) => isActive(pillar.href)) ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>
                 Platform <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${ecosystemOpen ? "rotate-180" : ""}`} />
               </button>
               {ecosystemOpen && (
@@ -108,7 +124,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
             )}
           </div>
 
-          <button type="button" onClick={() => setMobileOpen((open) => !open)} aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={mobileOpen} aria-controls="eternyx-mobile-menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-200 transition hover:border-cyan-200/30 hover:bg-white/[0.08] lg:hidden">
+          <button ref={mobileTrigger} type="button" onClick={() => setMobileOpen((open) => !open)} aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={mobileOpen} aria-controls="eternyx-mobile-menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-200 transition hover:border-cyan-200/30 hover:bg-white/[0.08] lg:hidden">
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
