@@ -68,3 +68,45 @@ checkout gate. Leave both flags unset for a public preview.
 November 23 is the target review; November 25 is the final go/no-go.
 Live billing is **not deployed or enabled** by this PR. The test-only gate is a
 prerequisite to a controlled sandbox verification, not a complete Stripe launch.
+
+## Supabase environment validation — November 19, 2026
+
+A direct audit of the **Eternyx** Supabase project (`wcncuarekaofmfurbtbh`)
+showed that GitHub main did not automatically deploy billing changes.
+A previous deployed checkout was missing authentication hardening, used untrusted
+Origin redirects, and did not include the test-only launch gate.
+
+### Implemented, tested, and deployed state
+
+- The updated `create-checkout` Edge Function **v47** was deployed using
+  the version-controlled, test-only gated implementation. It is still
+  disabled unless the server has `ETERNYX_STRIPE_CHECKOUT_MODE=test`.
+- The pending `stripe_webhook_lifecycle_foundation` SQL was applied to
+  the linked Supabase database: server-managed `billing_subscriptions`,
+  `stripe_webhook_events`, and idempotent webhook claim/finish/fail RPCs.
+- SQL privilege checks verified that `anon` and `authenticated` roles
+  cannot SELECT the subscription projection or EXECUTE the webhook claim RPC.
+- The customer portal and webhook now receive the same **test-only key
+  and server-side flag guards** as checkout in the reviewed code.
+- The connected Stripe **test account** has no Product, Price, webhook
+  destination, or billing portal configuration. Those are not invented by
+  this patch.
+
+### Not yet a completed Stripe Checkout production integration
+
+The owner must configure an isolated test key, a signed test-mode webhook
+secret, test-specific return URL, portal configuration, Stripe product/pricing
+and country-specific tax treatment in the Stripe/Supabase dashboards.
+The PR does not guess any key, price, tax registration, or merchant domicile.
+A connected Stripe test account does not automatically provide credentials
+to deployed Supabase functions.
+
+For an actual end-to-end validation, verify: a signed-in test customer can
+start a sandbox Checkout Session; it completes with a Stripe test card; the
+verified webhook updates `billing_subscriptions` exactly once; the signed-in
+client reads the correct tier; customer portal cancels and changes payment
+methods in the test account; renewals, refunds, failures and retries reconcile
+correctly. A successful build alone is insufficient.
+
+Live payments and paid entitlements must remain disabled pending explicit
+owner approval, tax registration verification, and full deployment testing.
