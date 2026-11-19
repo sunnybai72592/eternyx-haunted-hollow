@@ -42,18 +42,29 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: records, error: lookupError } = await admin
+    const { data: stripeRecords, error: stripeError } = await admin
       .from("billing_subscriptions")
       .select("stripe_subscription_id, status, plan_id, current_period_end, cancel_at_period_end, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(101);
+    const { data: polarRecords, error: polarError } = await admin
+      .from("polar_billing_subscriptions")
+      .select("polar_subscription_id, status, plan_id, current_period_end, cancel_at_period_end, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(101);
+    // Both private provider projections must be healthy. Never silently
+    // downgrade to a partial payment view, and never assume a free plan.
+    const lookupError = stripeError || polarError;
+    const records = [...(stripeRecords ?? []), ...(polarRecords ?? [])]
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
     if (lookupError) {
       console.error("[CHECK-SUBSCRIPTION] Authoritative projection lookup failed");
       return jsonResponse({ error: "Subscription status is not available for verification" }, 503);
     }
-    if (!records || records.length > 100) {
+    if (!stripeRecords || !polarRecords || stripeRecords.length > 100 || polarRecords.length > 100 || records.length > 200) {
       return jsonResponse({ error: "Subscription records require reconciliation" }, 503);
     }
 
