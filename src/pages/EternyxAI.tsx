@@ -185,11 +185,12 @@ const EternixAI: React.FC = () => {
     const userMessage = inputValue;
     setInputValue('');
     setIsLoading(true);
+    const pendingMessageId = crypto.randomUUID();
 
     try {
       // Add user message to UI
       const userMsg: Message = {
-        id: Date.now().toString(),
+        id: pendingMessageId,
         role: 'user',
         content: userMessage,
         timestamp: new Date(),
@@ -207,8 +208,13 @@ const EternixAI: React.FC = () => {
         },
       });
 
-      if (chatError) throw new Error(chatError.message);
-      if (!data) throw new Error('No response from Eternyx AI');
+      if (chatError) {
+        const status = chatError.context?.status;
+        if (status === 402) throw new Error('Your account has insufficient chat credits.');
+        if (status === 401) throw new Error('Please sign in again to continue chatting.');
+        throw new Error(chatError.message);
+      }
+      if (typeof data?.response !== 'string' || !data.response.trim() || !data.sessionId) throw new Error('No response from Eternyx AI');
 
       // Update session ID if new
       if (!currentSessionId) {
@@ -227,6 +233,8 @@ const EternixAI: React.FC = () => {
       // Reload sessions to show updated list
       loadSessions(userId);
     } catch (error) {
+      setInputValue(userMessage);
+      setMessages((current) => current.filter((item) => item.id !== pendingMessageId));
       toast.error(`Error: ${(error as Error).message}`);
     } finally {
       setIsLoading(false);
@@ -241,7 +249,9 @@ const EternixAI: React.FC = () => {
 
   const handleDeleteDocument = async (docId: string) => {
     try {
-      await supabase.from('ai_documents').delete().eq('id', docId);
+      const { error } = await supabase.from('ai_documents').delete().eq('id', docId);
+      if (error) throw error;
+      if (selectedDocument === docId) setSelectedDocument(null);
       loadDocuments(userId!);
       toast.success('Document deleted');
     } catch (error) {
@@ -300,6 +310,7 @@ const EternixAI: React.FC = () => {
                         className="w-full justify-start text-left h-auto py-2 px-3"
                         onClick={() => {
                           setCurrentSessionId(session.id);
+                          setSelectedDocument(session.document_id ?? null);
                           loadSessionMessages(session.id);
                         }}
                       >
@@ -444,6 +455,8 @@ const EternixAI: React.FC = () => {
                 {/* Input */}
                 <div className="flex gap-2">
                   <Textarea
+                    maxLength={4000}
+                    aria-label="Message to Eternyx AI"
                     placeholder="Ask Eternyx AI anything..."
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -457,6 +470,7 @@ const EternixAI: React.FC = () => {
                     className="min-h-12 max-h-24 resize-none"
                   />
                   <Button
+                    aria-label="Send message"
                     onClick={handleSendMessage}
                     disabled={isLoading || !inputValue.trim()}
                     className="bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black font-semibold"

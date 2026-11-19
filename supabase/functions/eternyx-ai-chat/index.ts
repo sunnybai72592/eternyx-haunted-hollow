@@ -127,10 +127,10 @@ serve(async (req) => {
         .eq("session_id", sessionId)
         .eq("user_id", user.id)
         .in("role", ["user", "assistant"])
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(10);
       if (error) throw new Error("Unable to load conversation history");
-      chatHistory = (data ?? []).filter((item: any) =>
+      chatHistory = (data ?? []).reverse().filter((item: any) =>
         (item.role === "user" || item.role === "assistant") &&
         typeof item.content === "string"
       );
