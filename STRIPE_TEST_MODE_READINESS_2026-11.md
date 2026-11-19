@@ -12,9 +12,10 @@ Checkout Session has been completed.
 - The test-mode catalog returned **0 products** and **0 prices**.
 - No Stripe Product or Price was created: tax treatment and final product/pricing
   decisions have not yet been confirmed.
-- The repo currently has illustrative server-only USD monthly amounts: premium
-  2999 cents and elite 9999 cents. These are **test fixtures**, not approved live
-  pricing, and are not published by the new plan cards.
+- Previously the backend used illustrative inline monthly amounts, but the
+  SaaS catalog hardening PR removes them. Test checkout now requires approved,
+  active recurring Stripe Price IDs with matching product/plan metadata.
+  No paid amount is assumed or published before a price is configured.
 
 ## Two independent test-only guards
 
@@ -38,9 +39,10 @@ checkout gate. Leave both flags unset for a public preview.
 - Use a dedicated isolated Stripe sandbox or existing Stripe test-mode account.
 - Add test credentials to the server secrets vault; never commit a Stripe
   secret/restricted key, a webhook signing secret, or the Supabase service key.
-- Confirm Stripe test product/price catalog and tax policy before creating Prices.
-  The current inline Checkout prices in code are not automatically reconciled to
-  catalog Prices; migrate to verified price IDs only after the tier economics are approved.
+- Confirm Stripe test products/prices and tax policy before creating Prices.
+  Checkout now requires real catalog Price IDs through `STRIPE_PREMIUM_MONTHLY_PRICE_ID`
+  and `STRIPE_ELITE_MONTHLY_PRICE_ID`, verified against active monthly Price/Product
+  records. Without both settings, corresponding plans fail closed.
 - Set `ETERNYX_STRIPE_CHECKOUT_MODE=test` **only** in a nonproduction environment
   with a test Stripe key and configured `APP_BASE_URL`.
 - Enable `VITE_ENABLE_STRIPE_TEST_CHECKOUT=true` only in that same test frontend.
@@ -150,3 +152,11 @@ owner approval, tax registration verification, and full deployment testing.
    customer portal → renewal/failed payment/cancel/refund.
 5. Keep live charging disabled until this test matrix is complete, plus
    live Stripe identity/verification and legal/tax review.
+
+## SaaS business-identity prerequisite
+
+Before live merchant payouts, refer to `SAAS_STRIPE_SAUDI_BUSINESS_SETUP_2026-11.md`.
+The connected sandbox is a **US test account**, not a verified Saudi or US merchant.
+Stripe's published global availability does not currently list Saudi Arabia
+as a supported Stripe account country. Production country and tax fields must
+match a real eligible registered entity; never use fabricated address data.
