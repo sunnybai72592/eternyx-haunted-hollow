@@ -200,6 +200,39 @@ export type Database = {
           },
         ]
       }
+      billing_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          current_period_end: string | null
+          plan_id: string | null
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          plan_id?: string | null
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          plan_id?: string | null
+          status?: string
+          stripe_customer_id?: string
+          stripe_subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       blog_posts: {
         Row: {
           author_id: string | null
@@ -924,6 +957,75 @@ export type Database = {
           },
         ]
       }
+      polar_billing_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          current_period_end: string | null
+          plan_id: string | null
+          polar_customer_id: string
+          polar_subscription_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          plan_id?: string | null
+          polar_customer_id: string
+          polar_subscription_id: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          plan_id?: string | null
+          polar_customer_id?: string
+          polar_subscription_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      polar_webhook_events: {
+        Row: {
+          attempts: number
+          created_at: string
+          event_id: string
+          event_type: string
+          last_error: string | null
+          processed_at: string | null
+          processing_started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          event_id: string
+          event_type: string
+          last_error?: string | null
+          processed_at?: string | null
+          processing_started_at?: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          event_id?: string
+          event_type?: string
+          last_error?: string | null
+          processed_at?: string | null
+          processing_started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pricing_plans: {
         Row: {
           created_at: string
@@ -1407,6 +1509,42 @@ export type Database = {
           pricing_tiers?: Json | null
           short_description?: string
           slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stripe_webhook_events: {
+        Row: {
+          attempts: number
+          created_at: string
+          event_id: string
+          event_type: string
+          last_error: string | null
+          processed_at: string | null
+          processing_started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          event_id: string
+          event_type: string
+          last_error?: string | null
+          processed_at?: string | null
+          processing_started_at?: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          event_id?: string
+          event_type?: string
+          last_error?: string | null
+          processed_at?: string | null
+          processing_started_at?: string
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -2132,6 +2270,30 @@ export type Database = {
       calculate_risk_score: { Args: { scan_id: string }; Returns: number }
       check_and_auto_submit_test: {
         Args: { p_attempt_id: string }
+        Returns: undefined
+      }
+      claim_polar_webhook_event: {
+        Args: { p_event_id: string; p_event_type: string }
+        Returns: string
+      }
+      claim_stripe_webhook_event: {
+        Args: { p_event_id: string; p_event_type: string }
+        Returns: string
+      }
+      complete_polar_webhook_event: {
+        Args: { p_event_id: string }
+        Returns: undefined
+      }
+      complete_stripe_webhook_event: {
+        Args: { p_event_id: string }
+        Returns: undefined
+      }
+      fail_polar_webhook_event: {
+        Args: { p_error: string; p_event_id: string }
+        Returns: undefined
+      }
+      fail_stripe_webhook_event: {
+        Args: { p_error: string; p_event_id: string }
         Returns: undefined
       }
       get_current_user_role: { Args: never; Returns: string }
