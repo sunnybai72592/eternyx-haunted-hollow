@@ -57,8 +57,10 @@ serve(async (req) => {
     // Both private provider projections must be healthy. Never silently
     // downgrade to a partial payment view, and never assume a free plan.
     const lookupError = stripeError || polarError;
-    const records = [...(stripeRecords ?? []), ...(polarRecords ?? [])]
-      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    const records = [
+      ...(stripeRecords ?? []).map((record) => ({ ...record, subscription_provider: "stripe" as const })),
+      ...(polarRecords ?? []).map((record) => ({ ...record, subscription_provider: "polar" as const })),
+    ].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
     if (lookupError) {
       console.error("[CHECK-SUBSCRIPTION] Authoritative projection lookup failed");
@@ -83,6 +85,7 @@ serve(async (req) => {
         subscription_tier: null,
         subscription_end: latest?.current_period_end ?? null,
         subscription_status: latest?.status ?? "none",
+        subscription_provider: latest?.subscription_provider ?? null,
         cancel_at_period_end: latest?.cancel_at_period_end ?? false,
       }, 200);
     }
@@ -96,6 +99,7 @@ serve(async (req) => {
       subscription_tier: tier,
       subscription_end: current.current_period_end,
       subscription_status: current.status,
+      subscription_provider: current.subscription_provider,
       cancel_at_period_end: current.cancel_at_period_end,
     }, 200);
   } catch (error) {
