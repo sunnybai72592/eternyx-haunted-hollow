@@ -343,7 +343,7 @@ const AIImageStudio = () => {
             {notice && <Alert role="status" aria-live="polite"><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
             {job && (
               <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
-                <div className="flex justify-between gap-2"><b>Job status</b><Badge variant="outline">{job.status.replaceAll("_", " ")}</Badge></div>
+                <div className="flex justify-between gap-2"><b>Job status</b><Badge variant="outline">{job.status.replace(/_/g, " ")}</Badge></div>
                 <p className="text-sm text-slate-300">Feature: {job.featureKey}</p>
                 <p className="text-sm text-slate-400">Attempts: {job.attemptCount} / {job.maxAttempts}</p>
                 <p className="text-sm text-slate-400">Updated: {new Date(job.updatedAt).toLocaleString()}</p>

@@ -33,7 +33,7 @@ function toBase64(value: Uint8Array): string {
   for (const byte of value) encoded += String.fromCharCode(byte);
   return btoa(encoded);
 }
-function fromBase64(value: unknown, minLength: number, maxLength: number): Uint8Array {
+function fromBase64(value: unknown, minLength: number, maxLength: number): Uint8Array<ArrayBuffer> {
   if (typeof value !== "string" || !value || value.length > Math.ceil(maxLength / 3) * 4 + 4 ||
       !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
     throw new LocalEncryptionError("invalid_envelope");
@@ -44,7 +44,7 @@ function fromBase64(value: unknown, minLength: number, maxLength: number): Uint8
   if (bytes.length < minLength || bytes.length > maxLength) throw new LocalEncryptionError("invalid_envelope");
   return Uint8Array.from(bytes, char => char.charCodeAt(0));
 }
-async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   const provider = browserCrypto();
   const material = await provider.subtle.importKey(
     "raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"],

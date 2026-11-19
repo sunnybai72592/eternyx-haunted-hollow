@@ -225,7 +225,7 @@ const AIAgentsStudio = () => {
                 <div key={step.id} className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <strong className="break-words text-sm text-white">{i + 1}. {step.title}</strong>
-                    <Badge variant="outline">{step.kind.replaceAll("_", " ")}</Badge>
+                    <Badge variant="outline">{step.kind.replace(/_/g, " ")}</Badge>
                   </div>
                   {step.details && <p className="whitespace-pre-wrap break-words text-xs text-slate-400">{step.details}</p>}
                   <p className="text-xs text-amber-200">

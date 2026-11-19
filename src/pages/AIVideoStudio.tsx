@@ -244,7 +244,7 @@ const AIVideoStudio = () => {
                 <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold text-white">Job status</span>
-                    <Badge variant="outline" className={statusTone[job.status] ?? "border-slate-600 text-slate-300"}>{job.status.replaceAll("_", " ")}</Badge>
+                    <Badge variant="outline" className={statusTone[job.status] ?? "border-slate-600 text-slate-300"}>{job.status.replace(/_/g, " ")}</Badge>
                   </div>
                   <dl className="grid gap-3 text-sm sm:grid-cols-2">
                     <div><dt className="text-slate-500">Feature</dt><dd className="mt-1 break-all text-slate-200">{job.featureKey}</dd></div>
