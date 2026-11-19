@@ -152,9 +152,9 @@ const AIImageStudio = () => {
       } catch {
         // Retry on the next poll.
       }
-      if (active) timer = window.setTimeout(poll, 15000);
+      if (active) timer = window.setTimeout(poll,15000);
     };
-    timer = window.setTimeout(poll, 15000);
+    timer = window.setTimeout(poll,15000);
     return () => {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
