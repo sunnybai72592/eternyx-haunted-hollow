@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Image, LoaderCircle, RefreshCw, ShieldCheck, Upload, XCircle, FileCheck2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,8 @@ const features = getFeaturesForStudio("image");
 
 const AIImageStudio = () => {
   const [jobId, setJobId] = useState("");
+  // Invalidate responses from older lookups, cancellations, and background polls.
+  const jobRequestVersion = useRef(0);
   const [job, setJob] = useState<AIJobStatusResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -59,24 +61,31 @@ const AIImageStudio = () => {
     : "The request could not be completed.";
 
   const lookup = async () => {
+    const version = ++jobRequestVersion.current;
+    const requestedId = jobId.trim();
     setLoading(true);
     setJob(null);
     setError(null);
     setNotice(null);
     try {
-      const value = await getAIJobStatus(jobId.trim());
+      const value = await getAIJobStatus(requestedId);
+      if (version !== jobRequestVersion.current) return;
+      if (value.id.toLowerCase() !== requestedId.toLowerCase()) {
+        setError("The server returned a different job than requested.");
+        return;
+      }
       if (!value.featureKey.startsWith("ai.image.")) {
-        setJob(null);
         setError("That job does not belong to AI Image Studio.");
         return;
       }
       setJob(value);
       setJobId(value.id);
     } catch (e) {
+      if (version !== jobRequestVersion.current) return;
       setJob(null);
       setError(describe(e));
     } finally {
-      setLoading(false);
+      if (version === jobRequestVersion.current) setLoading(false);
     }
   };
 
@@ -124,11 +133,14 @@ const AIImageStudio = () => {
 
   const cancel = async () => {
     if (!job) return;
+    const version = ++jobRequestVersion.current;
+    const targetId = job.id;
     setCancelling(true);
     setError(null);
     setNotice(null);
     try {
-      const result = await requestAIJobCancellation(job.id);
+      const result = await requestAIJobCancellation(targetId);
+      if (version !== jobRequestVersion.current) return;
       setNotice(result.provider_reconciliation_required
         ? "Cancellation recorded; provider reconciliation is still required."
         : result.cancellation_requested
@@ -137,38 +149,43 @@ const AIImageStudio = () => {
             ? "This job is already terminal."
             : "Cancellation request accepted.");
       try {
-        const latest = await getAIJobStatus(job.id);
-        if (latest.featureKey.startsWith("ai.image.")) setJob(latest);
+        const latest = await getAIJobStatus(targetId);
+        if (version === jobRequestVersion.current && latest.id === targetId &&
+            latest.featureKey.startsWith("ai.image.")) setJob(latest);
       } catch {
         // Keep the acknowledged cancellation notice visible.
       }
     } catch (e) {
-      setError(describe(e));
+      if (version === jobRequestVersion.current) setError(describe(e));
     } finally {
-      setCancelling(false);
+      if (version === jobRequestVersion.current) setCancelling(false);
     }
   };
 
   useEffect(() => {
-    if (!job || !job.featureKey.startsWith("ai.image.") || isTerminalAIJobStatus(job.status)) return;
+    if (!job || loading || cancelling || !job.featureKey.startsWith("ai.image.") ||
+        isTerminalAIJobStatus(job.status)) return;
     if (job.status==="reconciliation_required") return;
+    const version = jobRequestVersion.current;
+    const currentJobId = job.id;
     let active = true;
     let timer: number | undefined;
     const poll = async () => {
       try {
-        const latest = await getAIJobStatus(job.id);
-        if (active && latest.featureKey.startsWith("ai.image.")) setJob(latest);
+        const latest = await getAIJobStatus(currentJobId);
+        if (active && version === jobRequestVersion.current && latest.id === currentJobId &&
+            latest.featureKey.startsWith("ai.image.")) setJob(latest);
       } catch {
         // Retry on the next poll.
       }
-      if (active) timer = window.setTimeout(poll,15000);
+      if (active && version === jobRequestVersion.current) timer = window.setTimeout(poll,15000);
     };
     timer = window.setTimeout(poll,15000);
     return () => {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [job?.id, job?.status, job?.featureKey]);
+  }, [job?.id, job?.status, job?.featureKey, loading, cancelling]);
 
   const canCancel = !!job && !isTerminalAIJobStatus(job.status) && job.status !== "cancel_requested" && job.status !== "reconciliation_required";
 
@@ -222,7 +239,7 @@ const AIImageStudio = () => {
               className="border-slate-700 bg-slate-950 text-white file:text-slate-200"
             />
             <p className="text-xs text-slate-500">JPEG, PNG or WebP · maximum 10 MiB. Upload requires the secure Supabase functions to be deployed.</p>
-            <Button onClick={upload} disabled={!imageFile || uploading}>
+            <Button onClick={upload} disabled={!imageFile || uploading || !!uploadedAsset}>
               {uploading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               {uploading ? "Uploading and verifying…" : "Upload and verify image"}
             </Button>
@@ -282,7 +299,7 @@ const AIImageStudio = () => {
               <FileCheck2 className="mr-2 h-4 w-4" />Prepare request draft
             </Button>
             {operation !== "generate" && !uploadedAsset && <p className="text-xs text-slate-500">Upload and verify an image first to unlock local edit or upscale draft preparation.</p>}
-            {draftError && <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{draftError}</AlertDescription></Alert>}
+            {draftError && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{draftError}</AlertDescription></Alert>}
             {requestDraft && (
               <div className="space-y-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-4" aria-live="polite">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -309,6 +326,7 @@ const AIImageStudio = () => {
                 id="ai-image-job-id"
                 value={jobId}
                 onChange={e => {
+                  jobRequestVersion.current += 1;
                   setJobId(e.target.value);
                   setJob(null);
                   setError(null);
@@ -321,7 +339,7 @@ const AIImageStudio = () => {
               />
               <Button onClick={lookup} disabled={loading || cancelling || !jobId.trim()}>{loading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Check status</Button>
             </div>
-            {error && <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
+            {error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
             {notice && <Alert role="status" aria-live="polite"><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
             {job && (
               <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
