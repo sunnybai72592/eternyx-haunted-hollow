@@ -89,7 +89,11 @@ async function syncSubscription(
 serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
-  // Subscription projection is test-only until a separately audited live launch.\n  if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {\n    return jsonResponse({ error: "Stripe webhook is not enabled" }, 503);\n  }\n  const signature = req.headers.get("Stripe-Signature");
+  // Subscription projection is test-only until a separately audited live launch.
+  if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {
+    return jsonResponse({ error: "Stripe webhook is not enabled" }, 503);
+  }
+  const signature = req.headers.get("Stripe-Signature");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
