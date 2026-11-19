@@ -1,27 +1,23 @@
-import { useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { Link } from "react-router-dom";
 
-const NotFound = () => {
-  const location = useLocation();
-
-  useEffect(() => {
-    console.error(
-      "404 Error: User attempted to access non-existent route:",
-      location.pathname
-    );
-  }, [location.pathname]);
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">404</h1>
-        <p className="text-xl text-gray-600 mb-4">Oops! Page not found</p>
-        <a href="/" className="text-blue-500 hover:text-blue-700 underline">
-          Return to Home
-        </a>
-      </div>
-    </div>
-  );
-};
+const NotFound = () => (
+  <section
+    aria-labelledby="not-found-title"
+    className="mx-auto flex min-h-[55vh] max-w-xl flex-col items-center justify-center gap-5 px-6 py-16 text-center"
+  >
+    <h1 id="not-found-title" className="text-3xl font-semibold text-foreground sm:text-4xl">
+      Page not found
+    </h1>
+    <p className="text-muted-foreground">
+      This link may be outdated. Return to the Eternyx homepage to find what you need.
+    </p>
+    <Link
+      to="/"
+      className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      Return to Eternyx home
+    </Link>
+  </section>
+);
 
 export default NotFound;
