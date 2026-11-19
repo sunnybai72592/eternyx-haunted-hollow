@@ -60,6 +60,7 @@ const AIImageStudio = () => {
 
   const lookup = async () => {
     setLoading(true);
+    setJob(null);
     setError(null);
     setNotice(null);
     try {
@@ -84,8 +85,7 @@ const AIImageStudio = () => {
     setUploading(true);
     setUploadError(null);
     setUploadedAsset(null);
-    setRequestDraft(null);
-    setDraftError(null);
+    invalidateDraft();
     try {
       const result = await uploadAIImageAsset(imageFile);
       setUploadedAsset(result);
@@ -212,6 +212,7 @@ const AIImageStudio = () => {
             <Input
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              disabled={uploading}
               onChange={e => {
                 setImageFile(e.target.files?.[0] ?? null);
                 setUploadedAsset(null);
@@ -225,9 +226,9 @@ const AIImageStudio = () => {
               {uploading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               {uploading ? "Uploading and verifying…" : "Upload and verify image"}
             </Button>
-            {uploadError && <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{uploadError}</AlertDescription></Alert>}
+            {uploadError && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{uploadError}</AlertDescription></Alert>}
             {uploadedAsset && (
-              <Alert>
+              <Alert role="status" aria-live="polite">
                 <ShieldCheck className="h-4 w-4" />
                 <AlertDescription>Image verified and stored privately. Asset ID: <span className="break-all font-mono">{uploadedAsset.assetId}</span>.</AlertDescription>
               </Alert>
@@ -304,11 +305,24 @@ const AIImageStudio = () => {
           <CardContent className="space-y-4">
             <label htmlFor="ai-image-job-id" className="text-sm">AI Image job ID</label>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Input id="ai-image-job-id" value={jobId} onChange={e => setJobId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoComplete="off" className="border-slate-700 bg-slate-950 text-white" />
-              <Button onClick={lookup} disabled={loading || !jobId.trim()}>{loading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Check status</Button>
+              <Input
+                id="ai-image-job-id"
+                value={jobId}
+                onChange={e => {
+                  setJobId(e.target.value);
+                  setJob(null);
+                  setError(null);
+                  setNotice(null);
+                }}
+                disabled={loading || cancelling}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                autoComplete="off"
+                className="border-slate-700 bg-slate-950 text-white"
+              />
+              <Button onClick={lookup} disabled={loading || cancelling || !jobId.trim()}>{loading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Check status</Button>
             </div>
             {error && <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-            {notice && <Alert><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+            {notice && <Alert role="status" aria-live="polite"><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
             {job && (
               <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
                 <div className="flex justify-between gap-2"><b>Job status</b><Badge variant="outline">{job.status.replaceAll("_", " ")}</Badge></div>
