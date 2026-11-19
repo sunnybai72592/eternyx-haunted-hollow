@@ -30,4 +30,5 @@ test("preparing a draft never submits, enqueues, reserves credits, or calls a pr
   assert.match(page, /No job was created and no credits were reserved/);
   assert.doesNotMatch(page, /ai-generation-job-enqueue|supabase\.functions\.invoke|fetch\(/);
   assert.match(page, /Generation remains unavailable/);
+  assert.match(page, /requestDraft\.featureKey !== "ai\.image\.generate".*Verified asset/s);
 });
