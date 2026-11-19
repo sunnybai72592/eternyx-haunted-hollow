@@ -20,6 +20,12 @@ export class AIImageUploadError extends Error {
   }
 }
 
+function isSafeStoragePath(path: string): boolean {
+  return path.length > 0 && path.length <= 1024 && !path.startsWith("/") &&
+    !path.includes("\\") && !path.includes("?") && !path.includes("#") &&
+    path.split("/").every(segment => segment !== "" && segment !== "." && segment !== "..");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -37,30 +43,50 @@ export async function uploadAIImageAsset(file: File): Promise<VerifiedAIImageUpl
     throw new AIImageUploadError("invalid_file");
   }
 
-  const { data: signed, error: signedError } = await supabase.functions.invoke(
-    "ai-generation-input-upload-url",
-    { body: { contentType: file.type, fileSize: file.size } },
-  );
+  let signed: unknown;
+  let signedError: unknown;
+  try {
+    const response = await supabase.functions.invoke("ai-generation-input-upload-url", {
+      body: { contentType: file.type, fileSize: file.size },
+    });
+    signed = response.data;
+    signedError = response.error;
+  } catch {
+    throw new AIImageUploadError("upload_unavailable");
+  }
   if (signedError || !isRecord(signed) || signed.success !== true ||
       typeof signed.assetId !== "string" || !UUID_PATTERN.test(signed.assetId) ||
-      typeof signed.path !== "string" || !signed.path ||
-      typeof signed.token !== "string" || !signed.token ||
+      typeof signed.path !== "string" || !isSafeStoragePath(signed.path) ||
+      typeof signed.token !== "string" || signed.token.length < 1 || signed.token.length > 4096 ||
       signed.contentType !== file.type) {
     throw new AIImageUploadError("upload_unavailable");
   }
 
-  const { error: storageError } = await supabase.storage
-    .from("ai-generation-inputs")
-    .uploadToSignedUrl(signed.path, signed.token, file, {
-      contentType: file.type,
-      upsert: false,
-    });
+  let storageError: unknown;
+  try {
+    const response = await supabase.storage
+      .from("ai-generation-inputs")
+      .uploadToSignedUrl(signed.path, signed.token, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+    storageError = response.error;
+  } catch {
+    throw new AIImageUploadError("upload_failed");
+  }
   if (storageError) throw new AIImageUploadError("upload_failed");
 
-  const { data: verified, error: verifyError } = await supabase.functions.invoke(
-    "ai-generation-input-verify",
-    { body: { assetId: signed.assetId } },
-  );
+  let verified: unknown;
+  let verifyError: unknown;
+  try {
+    const response = await supabase.functions.invoke("ai-generation-input-verify", {
+      body: { assetId: signed.assetId },
+    });
+    verified = response.data;
+    verifyError = response.error;
+  } catch {
+    throw new AIImageUploadError("verification_failed");
+  }
   if (verifyError || !isRecord(verified) || verified.success !== true ||
       !isRecord(verified.asset) || verified.asset.id !== signed.assetId ||
       verified.asset.status !== "ready" || verified.asset.contentType !== file.type ||
