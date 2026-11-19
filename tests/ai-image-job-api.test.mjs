@@ -87,3 +87,37 @@ test("AI Image Studio announces status and upload errors accessibly", () => {
 test("AI Image upload start clears the prior asset and stale request draft", () => {
   assert.match(studio, /setUploading\(true\);[\s\S]*setUploadedAsset\(null\);[\s\S]*invalidateDraft\(\);/);
 });
+
+test("AI Image Studio rejects stale explicit job lookup responses and mismatched IDs", () => {
+  assert.match(studio, /const version = \\+\\+jobRequestVersion\\.current/);
+  assert.match(studio, /value\\.id\\.toLowerCase\\(\\) !== requestedId\\.toLowerCase\\(\\)/);
+  assert.match(studio, /if \\(version !== jobRequestVersion\\.current\\) return;/);
+  assert.match(studio, /if \\(version === jobRequestVersion\\.current\\) setLoading\\(false\\)/);
+});
+
+test("AI Image Studio invalidates stale lookup and poll responses when job input changes", () => {
+  assert.match(studio, /jobRequestVersion\\.current \\+= 1;\\s*setJobId\\(e\\.target\\.value\\)/);
+  assert.match(studio, /if \\(active && version === jobRequestVersion\\.current && latest\\.id === currentJobId/);
+});
+
+test("AI Image Studio fences cancellation updates and validates the refreshed job identity", () => {
+  assert.match(studio, /const targetId = job\\.id/);
+  assert.match(studio, /requestAIJobCancellation\\(targetId\\)/);
+  assert.match(studio, /latest\\.id === targetId/);
+  assert.match(studio, /if \\(version === jobRequestVersion\\.current\\) setCancelling\\(false\\)/);
+});
+
+test("AI Image Studio stops polling during manual lookup and cancellation", () => {
+  assert.match(studio, /if \\(!job \\|\\| loading \\|\\| cancelling/);
+  assert.match(studio, /job\\?\\.featureKey, loading, cancelling/);
+  assert.match(studio, /if \\(active && version === jobRequestVersion\\.current\\) timer = window\\.setTimeout\\(poll,15000\\)/);
+});
+
+test("AI Image Studio prevents a second upload of an already verified selected file", () => {
+  assert.match(studio, /disabled=\\{!imageFile \\|\\| uploading \\|\\| !!uploadedAsset\\}/);
+});
+
+test("AI Image Studio announces draft and job errors to assistive technology", () => {
+  assert.match(studio, /draftError && <Alert role="alert" variant="destructive"/);
+  assert.match(studio, /error && <Alert role="alert" variant="destructive"/);
+});
