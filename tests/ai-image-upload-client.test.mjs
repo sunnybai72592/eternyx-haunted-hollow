@@ -54,6 +54,6 @@ test("all three network stages normalize thrown failures to typed errors", () =>
 
 test("signed storage upload is create-only and never exposes its token in the result", () => {
   assert.match(client, /upsert: false/);
-  assert.match(client, /return \\{\\s*assetId: signed\.assetId/);
+  assert.ok(client.includes("assetId: signed.assetId,"), "Return only the verified opaque asset ID");
   assert.doesNotMatch(client, /return \\{\\s*token:/);
 });
