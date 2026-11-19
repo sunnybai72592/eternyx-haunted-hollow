@@ -81,7 +81,7 @@ test("subscription lookup fails closed for ambiguous or excessive subscription r
   const source = await read("supabase/functions/check-subscription/index.ts");
   assert.match(source, /stripeRecords\.length > 100 \|\| polarRecords\.length > 100/);
   assert.match(source, /Multiple active subscriptions require reconciliation/);
-  assert.match(source, /subscription_tier: tier/);
+  assert.match(source, /subscription_tier: polarSandbox \? null : tier/);
   assert.match(source, /current\.plan_id === "premium" \|\| current\.plan_id === "elite"/);
 });
 
