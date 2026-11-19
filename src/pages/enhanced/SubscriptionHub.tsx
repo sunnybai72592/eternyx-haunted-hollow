@@ -7,6 +7,7 @@ import { SubscriptionManager } from '@/components/SubscriptionManager';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
+import { selectSandboxBillingProvider, sandboxCheckoutEndpoint } from '@/lib/billing/sandbox-provider';
 import { Activity, CreditCard, Crown, RefreshCw, Shield } from 'lucide-react';
 
 interface CreditSnapshot {
@@ -19,6 +20,8 @@ type SnapshotState = 'idle' | 'loading' | 'ready' | 'error';
 
 // Presentation flag only; the Edge Function independently enforces test-only access.
 const testCheckoutEnabled = import.meta.env.VITE_ENABLE_STRIPE_TEST_CHECKOUT === 'true';
+const polarSandboxEnabled = import.meta.env.VITE_ENABLE_POLAR_SANDBOX_CHECKOUT === 'true';
+const sandboxProvider = selectSandboxBillingProvider(testCheckoutEnabled, polarSandboxEnabled);
 
 export default function SubscriptionHub() {
   const { user } = useAuthStore();
@@ -74,8 +77,8 @@ export default function SubscriptionHub() {
   }, [activeTab, user]);
 
   const handleSubscribe = async (planId: string) => {
-    if (!testCheckoutEnabled) {
-      toast.error('Checkout is disabled until test-mode setup is explicitly enabled.');
+    if (!sandboxProvider) {
+      toast.error('Checkout is unavailable; enable exactly one verified sandbox payment provider.');
       return;
     }
     if (!user) {
@@ -89,7 +92,7 @@ export default function SubscriptionHub() {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error('Your session has expired. Please sign in again.');
 
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
+      const { data, error } = await supabase.functions.invoke(sandboxCheckoutEndpoint(sandboxProvider), {
         body: { planId },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -143,7 +146,7 @@ export default function SubscriptionHub() {
           </TabsList>
 
           <TabsContent value="plans">
-            <SubscriptionTiers onSubscribe={handleSubscribe} isLoading={isLoading} testCheckoutEnabled={testCheckoutEnabled} />
+            <SubscriptionTiers onSubscribe={handleSubscribe} isLoading={isLoading} testCheckoutEnabled={sandboxProvider !== null} />
           </TabsContent>
 
           <TabsContent value="current">
