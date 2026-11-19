@@ -27,7 +27,7 @@ const plannedStudios = [
   },
   {
     name: "AI Writing Studio",
-    description: "Drafting, rewriting, summarization, and structured content workflows across supported writing tasks.",
+    description: "Local drafting, rewriting, summarization and translation request preparation; AI execution remains disabled.",
     icon: PenLine,
   },
   {
@@ -185,11 +185,18 @@ const AIArsenal = () => {
                       <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-300">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <Badge variant="outline" className="border-slate-600 text-slate-300">Planned · not available</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{studio.name === "AI Writing Studio" ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
                     </div>
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>
                   </CardHeader>
+                  {studio.name === "AI Writing Studio" && (
+                    <CardContent>
+                      <Button asChild variant="outline" className="w-full justify-between border-cyan-400/30 bg-transparent text-cyan-100 hover:bg-cyan-400/10">
+                        <Link to="/ai-arsenal/writing">Review AI Writing Studio <ArrowRight className="h-4 w-4" /></Link>
+                      </Button>
+                    </CardContent>
+                  )}
                 </Card>
               );
             })}
