@@ -24,14 +24,18 @@ test("checkout bounds and validates its JSON request body", async () => {
   assert.doesNotMatch(source, /await req\.json\(\)/);
 });
 
-test("checkout accepts only server-defined paid plans and prices", async () => {
+test("checkout accepts only server-defined paid plans and validated recurring Stripe Price IDs", async () => {
   const source = await read("supabase/functions/create-checkout/index.ts");
   assert.match(source, /const plans = \{/);
   assert.match(source, /premium: \{ name:/);
   assert.match(source, /elite: \{ name:/);
   assert.match(source, /hasOwnProperty\.call\(plans, planId\)/);
-  assert.match(source, /unit_amount: selectedPlan\.amount/);
-  assert.doesNotMatch(source, /price_premium_monthly|price_elite_monthly/);
+  assert.match(source, /Deno\.env\.get\(selectedPlan\.priceEnv\)/);
+  assert.match(source, /stripe\.prices\.retrieve\(configuredPriceId/);
+  assert.match(source, /price\.lookup_key !== selectedPlan\.lookupKey/);
+  assert.match(source, /product\.metadata\?\.eternyx_plan_id !== planId/);
+  assert.match(source, /line_items: \[\{ price: configuredPriceId, quantity: 1 \}\]/);
+  assert.doesNotMatch(source, /price_data:|unit_amount: selectedPlan\.amount|price_premium_monthly|price_elite_monthly/);
 });
 
 test("checkout binds Stripe customer and subscription metadata to the authenticated user", async () => {
