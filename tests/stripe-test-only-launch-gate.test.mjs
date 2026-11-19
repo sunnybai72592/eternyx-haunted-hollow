@@ -48,9 +48,9 @@ test("checkout accepts only vetted Stripe test Price IDs rather than inline amou
 
 test("client checkout feature flag is default-off and never replaces server enforcement", () => {
   assert.match(hub, /import\.meta\.env\.VITE_ENABLE_STRIPE_TEST_CHECKOUT === 'true'/);
-  assert.match(hub, /if \(!testCheckoutEnabled\)/);
-  assert.match(hub, /testCheckoutEnabled=\{testCheckoutEnabled\}/);
-  assert.match(hub, /create-checkout/);
+  assert.match(hub, /if \(!sandboxProvider\)/);
+  assert.match(hub, /testCheckoutEnabled=\{sandboxProvider !== null\}/);
+  assert.match(hub, /sandboxCheckoutEndpoint\(sandboxProvider\)/);
   assert.match(hub, /noopener,noreferrer/);
 });
 

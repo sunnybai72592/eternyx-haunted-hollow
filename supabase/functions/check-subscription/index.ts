@@ -42,18 +42,31 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: records, error: lookupError } = await admin
+    const { data: stripeRecords, error: stripeError } = await admin
       .from("billing_subscriptions")
       .select("stripe_subscription_id, status, plan_id, current_period_end, cancel_at_period_end, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(101);
+    const { data: polarRecords, error: polarError } = await admin
+      .from("polar_billing_subscriptions")
+      .select("polar_subscription_id, status, plan_id, current_period_end, cancel_at_period_end, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(101);
+    // Both private provider projections must be healthy. Never silently
+    // downgrade to a partial payment view, and never assume a free plan.
+    const lookupError = stripeError || polarError;
+    const records = [
+      ...(stripeRecords ?? []).map((record) => ({ ...record, subscription_provider: "stripe" as const })),
+      ...(polarRecords ?? []).map((record) => ({ ...record, subscription_provider: "polar" as const })),
+    ].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
     if (lookupError) {
       console.error("[CHECK-SUBSCRIPTION] Authoritative projection lookup failed");
       return jsonResponse({ error: "Subscription status is not available for verification" }, 503);
     }
-    if (!records || records.length > 100) {
+    if (!stripeRecords || !polarRecords || stripeRecords.length > 100 || polarRecords.length > 100 || records.length > 200) {
       return jsonResponse({ error: "Subscription records require reconciliation" }, 503);
     }
 
@@ -72,6 +85,7 @@ serve(async (req) => {
         subscription_tier: null,
         subscription_end: latest?.current_period_end ?? null,
         subscription_status: latest?.status ?? "none",
+        subscription_provider: latest?.subscription_provider ?? null,
         cancel_at_period_end: latest?.cancel_at_period_end ?? false,
       }, 200);
     }
@@ -79,12 +93,19 @@ serve(async (req) => {
     const tier = current.plan_id === "premium" || current.plan_id === "elite"
       ? current.plan_id
       : null;
+    // Polar billing here is SANDBOX ONLY: never promote a test subscription
+    // to production entitlement. Keep its verified state visible for QA.
+    const polarSandbox = current.subscription_provider === "polar";
 
     return jsonResponse({
-      subscribed: true,
-      subscription_tier: tier,
+      subscribed: !polarSandbox,
+      subscription_tier: polarSandbox ? null : tier,
       subscription_end: current.current_period_end,
       subscription_status: current.status,
+      subscription_provider: current.subscription_provider,
+      sandbox_subscription: polarSandbox ? {
+        provider: "polar", plan_id: tier, status: current.status,
+      } : null,
       cancel_at_period_end: current.cancel_at_period_end,
     }, 200);
   } catch (error) {

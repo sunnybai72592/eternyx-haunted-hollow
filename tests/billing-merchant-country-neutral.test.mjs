@@ -60,25 +60,25 @@ test("the current subscription manager uses the shared no-price catalog", () => 
 test("both current and catalog screens are disabled by default without an approved sandbox flag", () => {
   for (const page of [manager, hub]) {
     assert.match(page, /import\.meta\.env\.VITE_ENABLE_STRIPE_TEST_CHECKOUT === 'true'/);
-    assert.match(page, /if \(!testCheckoutEnabled\)/);
+    assert.match(page, /if \(!sandboxProvider\)/);
   }
-  assert.match(manager, /disabled=\{isLoading \|\| !testCheckoutEnabled\}/);
+  assert.match(manager, /disabled=\{isLoading \|\| !sandboxProvider\}/);
   assert.match(tiers, /testCheckoutEnabled = false/);
   assert.match(tiers, /Checkout unavailable/);
 });
 
 test("current-plan purchase handler rejects disabled checkout before user lookup", () => {
   const handler = manager.indexOf("const handleSubscribe = async");
-  const gate = manager.indexOf("if (!testCheckoutEnabled)", handler);
+  const gate = manager.indexOf("if (!sandboxProvider)", handler);
   const auth = manager.indexOf("if (!user)", handler);
-  const invoke = manager.indexOf("supabase.functions.invoke('create-checkout'", handler);
+  const invoke = manager.indexOf("supabase.functions.invoke(sandboxCheckoutEndpoint(sandboxProvider)", handler);
   assert.ok(handler >= 0 && gate > handler && gate < auth && auth < invoke);
 });
 
 test("customer portal management handler also refuses disabled test billing", () => {
   const handler = manager.indexOf("const handleManageSubscription = async");
-  const gate = manager.indexOf("if (!testCheckoutEnabled)", handler);
-  const invoke = manager.indexOf("supabase.functions.invoke('customer-portal'", handler);
+  const gate = manager.indexOf("if (!sandboxProvider || !verifiedProvider", handler);
+  const invoke = manager.indexOf("supabase.functions.invoke(sandboxPortalEndpoint(sandboxProvider)", handler);
   assert.ok(handler >= 0 && gate > handler && gate < invoke);
   assert.match(manager, /The test billing portal is disabled/);
 });
