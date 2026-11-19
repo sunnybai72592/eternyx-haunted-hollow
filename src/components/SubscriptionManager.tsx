@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
+import { selectSandboxBillingProvider, sandboxCheckoutEndpoint, sandboxPortalEndpoint } from '@/lib/billing/sandbox-provider';
 import { MERCHANT_ONBOARDING_NOTE, PUBLIC_SAAS_PLANS } from '@/lib/billing/public-saas-plans';
 import {
   Crown,
@@ -21,6 +22,7 @@ interface SubscriptionData {
   subscription_tier?: string | null;
   subscription_end?: string | null;
   subscription_status?: string;
+  subscription_provider?: 'stripe' | 'polar' | null;
   cancel_at_period_end?: boolean;
 }
 
@@ -28,6 +30,8 @@ type LookupState = 'loading' | 'ready' | 'error';
 
 // UI only. Checkout and portal have separate server-side test-mode gates.
 const testCheckoutEnabled = import.meta.env.VITE_ENABLE_STRIPE_TEST_CHECKOUT === 'true';
+const polarSandboxEnabled = import.meta.env.VITE_ENABLE_POLAR_SANDBOX_CHECKOUT === 'true';
+const sandboxProvider = selectSandboxBillingProvider(testCheckoutEnabled, polarSandboxEnabled);
 
 export function SubscriptionManager() {
   const { user } = useAuthStore();
@@ -68,8 +72,8 @@ export function SubscriptionManager() {
   };
 
   const handleSubscribe = async (planId: string) => {
-    if (!testCheckoutEnabled) {
-      toast.error('Sandbox checkout is disabled until an eligible merchant setup is verified.');
+    if (!sandboxProvider) {
+      toast.error('Sandbox checkout is disabled or payment providers conflict.');
       return;
     }
     if (!user) {
@@ -83,7 +87,7 @@ export function SubscriptionManager() {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error('Your session has expired. Please sign in again.');
 
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
+      const { data, error } = await supabase.functions.invoke(sandboxCheckoutEndpoint(sandboxProvider), {
         body: { planId },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -103,8 +107,9 @@ export function SubscriptionManager() {
   };
 
   const handleManageSubscription = async () => {
-    if (!testCheckoutEnabled) {
-      toast.error('The test billing portal is disabled. No payment settings were changed.');
+    const verifiedProvider = subscriptionData?.subscription_provider;
+    if (!sandboxProvider || !verifiedProvider || verifiedProvider !== sandboxProvider) {
+      toast.error('The test billing portal is disabled or this account belongs to another processor.');
       return;
     }
     if (!user) return;
@@ -115,7 +120,7 @@ export function SubscriptionManager() {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error('Your session has expired. Please sign in again.');
 
-      const { data, error } = await supabase.functions.invoke('customer-portal', {
+      const { data, error } = await supabase.functions.invoke(sandboxPortalEndpoint(sandboxProvider), {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -213,7 +218,7 @@ export function SubscriptionManager() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh Status
           </Button>
-          <Button onClick={handleManageSubscription} disabled={isLoading || !testCheckoutEnabled}>
+          <Button onClick={handleManageSubscription} disabled={isLoading || !sandboxProvider || subscriptionData.subscription_provider !== sandboxProvider}>
             <CreditCard className="h-4 w-4 mr-2" />
             Manage Billing
             <ExternalLink className="h-4 w-4 ml-2" />
@@ -227,7 +232,7 @@ export function SubscriptionManager() {
 
   return (
     <div className="space-y-6">
-      {!testCheckoutEnabled && (
+      {!sandboxProvider && (
         <p role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-muted-foreground">
           {MERCHANT_ONBOARDING_NOTE} The Stripe sandbox does not establish a live merchant account.
         </p>
@@ -258,18 +263,18 @@ export function SubscriptionManager() {
 
         <div className="flex flex-wrap gap-3">
           {isSubscribed ? (
-            <Button onClick={handleManageSubscription} disabled={isLoading || !testCheckoutEnabled} className="bg-primary hover:bg-primary/90">
+            <Button onClick={handleManageSubscription} disabled={isLoading || !sandboxProvider || subscriptionData.subscription_provider !== sandboxProvider} className="bg-primary hover:bg-primary/90">
               <CreditCard className="h-4 w-4 mr-2" />
               Manage Subscription
               <ExternalLink className="h-4 w-4 ml-2" />
             </Button>
           ) : (
             <>
-              <Button onClick={() => handleSubscribe('premium')} disabled={isLoading || !testCheckoutEnabled} className="bg-purple-500 hover:bg-purple-600">
+              <Button onClick={() => handleSubscribe('premium')} disabled={isLoading || !sandboxProvider} className="bg-purple-500 hover:bg-purple-600">
                 <Shield className="h-4 w-4 mr-2" />
                 Upgrade to Premium
               </Button>
-              <Button onClick={() => handleSubscribe('elite')} disabled={isLoading || !testCheckoutEnabled} className="bg-orange-500 hover:bg-orange-600">
+              <Button onClick={() => handleSubscribe('elite')} disabled={isLoading || !sandboxProvider} className="bg-orange-500 hover:bg-orange-600">
                 <Crown className="h-4 w-4 mr-2" />
                 Upgrade to Elite
               </Button>
