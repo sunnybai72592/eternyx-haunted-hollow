@@ -56,7 +56,7 @@ verification, or the acceptance of ETERNYX cybersecurity tooling.
 
 - Additive Polar subscription/inbox migration applied successfully.
 - Supabase edge functions deployed: polar-checkout v1, polar-customer-portal v1, polar-webhook v1.
-- Provider-aware check-subscription deployed (with latest sandbox display-only change pending redeployment).
+- Provider-aware check-subscription v41 deployed with the sandbox display-only guard: Polar test subscriptions cannot grant paid entitlements.
 - Verified anon and authenticated users have NO SELECT privilege on Polar subscription/inbox tables and NO access to privileged webhook claim RPC.
 - All Polar handlers still require ETERNYX_POLAR_CHECKOUT_MODE=sandbox, with sandbox account secrets absent/not confirmed. No real-money charges, checkout sessions, merchant approval or live payout capability has been established.
 - Checked the sandbox status path: even a real Polar sandbox subscription is only returned as sandbox_subscription for quality assurance. It does not set a production paid entitlement.
