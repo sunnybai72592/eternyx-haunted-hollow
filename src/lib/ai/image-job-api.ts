@@ -57,6 +57,7 @@ function mapEnqueueError(error: { context?: unknown }): AIImageEnqueueError {
     case 409:
       return new AIImageEnqueueError("conflict", "This idempotency key was already used for a different request.");
     case 400:
+    case 413:
     case 422:
       return new AIImageEnqueueError("invalid_request", "The image request could not be accepted.");
     default:
@@ -80,10 +81,16 @@ export async function enqueueAIImageJob(
     throw new AIImageEnqueueError("invalid_idempotency_key", "A valid idempotency key is required.");
   }
 
-  const { data, error } = await supabase.functions.invoke("ai-generation-job-enqueue", {
-    body: { request, idempotencyKey },
-  });
+  let result: Awaited<ReturnType<typeof supabase.functions.invoke>>;
+  try {
+    result = await supabase.functions.invoke("ai-generation-job-enqueue", {
+      body: { request, idempotencyKey },
+    });
+  } catch {
+    throw new AIImageEnqueueError("unavailable", "AI image generation is temporarily unavailable.");
+  }
 
+  const { data, error } = result;
   if (error) throw mapEnqueueError(error);
   if (
     !isRecord(data) || data.success !== true || !isRecord(data.job) ||

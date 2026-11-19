@@ -27,11 +27,21 @@ test("AI Image enqueue validates the minimal server receipt before returning it"
 });
 
 test("AI Image enqueue maps authentication, credit, feature, conflict and unavailable errors", () => {
-  for (const status of ["401", "402", "403", "409"]) {
-    assert.match(client, new RegExp(`case ${status}:`));
+  for (const status of [401, 402, 403, 409]) {
+    assert.match(client, new RegExp("case " + status + ":"));
   }
-  assert.match(client, /default:/);
+  assert.match(client, /default:[\s\S]*AI image generation is temporarily unavailable/);
   assert.match(client, /AIImageEnqueueError\("unavailable"/);
+});
+
+test("AI Image enqueue classifies oversized requests as invalid input", () => {
+  assert.match(client, /case 400:[\s\S]*case 413:[\s\S]*case 422:/);
+});
+
+test("AI Image enqueue converts thrown transport failures into a safe typed unavailable error", () => {
+  assert.match(client, /try \{[\s\S]*supabase\.functions\.invoke/);
+  assert.match(client, /catch \{[\s\S]*AIImageEnqueueError\("unavailable"/);
+  assert.doesNotMatch(client, /catch \(error\)[\s\S]*throw error/);
 });
 
 test("AI Image Studio remains disconnected from enqueue until explicit activation approval", () => {
