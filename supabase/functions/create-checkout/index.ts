@@ -84,6 +84,29 @@ serve(async (req) => {
       return jsonResponse({ error: "Authentication required" }, 401);
     }
 
+    const polarEnabled = Deno.env.get("ETERNYX_CHECKOUT_PROVIDER") === "polar";
+    const accessToken = polarEnabled ? Deno.env.get("POLAR_ACCESS_TOKEN") ?? "" : "";
+    const productId = polarEnabled ? Deno.env.get("POLAR_PREMIUM_MONTHLY_PRODUCT_ID") ?? "" : "";
+    const testStripeKey = polarEnabled ? "" : Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+
+    if (polarEnabled) {
+      if (
+        Deno.env.get("POLAR_ENVIRONMENT") !== "sandbox" ||
+        !accessToken ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId)
+      ) {
+        return jsonResponse({ error: "Polar sandbox checkout is not configured" }, 503);
+      }
+    } else {
+      // Checkout uses test credentials until live billing is enabled separately.
+      if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {
+        return jsonResponse({ error: "Subscription checkout is not enabled" }, 503);
+      }
+      if (!testStripeKey || !/^(sk_test_|rk_test_)/.test(testStripeKey)) {
+        return jsonResponse({ error: "Test checkout requires Stripe test credentials" }, 503);
+      }
+    }
+
     const declaredLength = Number(req.headers.get("content-length") ?? 0);
     if (Number.isFinite(declaredLength) && declaredLength > REQUEST_BODY_LIMIT_BYTES) {
       return jsonResponse({ error: "Request body is too large" }, 413);
@@ -120,17 +143,7 @@ serve(async (req) => {
       throw new Error("APP_BASE_URL must be a trusted HTTPS URL");
     }
 
-    if (Deno.env.get("ETERNYX_CHECKOUT_PROVIDER") === "polar") {
-      const accessToken = Deno.env.get("POLAR_ACCESS_TOKEN");
-      const productId = Deno.env.get("POLAR_PREMIUM_MONTHLY_PRODUCT_ID");
-      if (
-        Deno.env.get("POLAR_ENVIRONMENT") !== "sandbox" ||
-        !accessToken ||
-        !productId ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId)
-      ) {
-        return jsonResponse({ error: "Polar sandbox checkout is not configured" }, 503);
-      }
+    if (polarEnabled) {
       if (planId !== "premium") {
         return jsonResponse({ error: "This plan is unavailable in Polar sandbox" }, 503);
       }
@@ -157,16 +170,6 @@ serve(async (req) => {
         console.error("Polar sandbox checkout failed");
         return jsonResponse({ error: "Unable to create checkout session" }, 502);
       }
-    }
-
-    // Billing launch gate: fail closed unless the owner explicitly enables
-    // TEST mode on the server. Production keys are always refused by this build.
-    if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {
-      return jsonResponse({ error: "Subscription checkout is not enabled" }, 503);
-    }
-    const testStripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!testStripeKey || !/^(sk_test_|rk_test_)/.test(testStripeKey)) {
-      return jsonResponse({ error: "Test checkout requires Stripe test credentials" }, 503);
     }
 
     const selectedPlan = plans[planId as keyof typeof plans];
