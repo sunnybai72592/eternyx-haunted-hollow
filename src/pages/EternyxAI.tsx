@@ -120,21 +120,26 @@ const EternixAI: React.FC = () => {
 
     // Determine file type
     const isPDF = file.type === 'application/pdf';
-    const isImage = file.type.startsWith('image/');
+    const isImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
 
     if (!isPDF && !isImage) {
-      toast.error('Please upload a PDF or image file');
+      toast.error('Choose a PDF, JPEG, PNG, or WebP file.');
+      return;
+    }
+
+    if (!file.size || file.size > 20 * 1024 * 1024) {
+      toast.error('Choose a nonempty file up to 20 MiB.');
       return;
     }
 
     setUploadingFile(true);
     try {
       // Upload file to Supabase Storage
-      const fileName = `${Date.now()}-${file.name}`;
+      const fileName = `${userId}/${crypto.randomUUID()}`;
       const { data: uploadData, error: uploadError } = await supabase
         .storage
         .from('documents')
-        .upload(fileName, file);
+        .upload(fileName, file, { contentType: file.type });
 
       if (uploadError) throw uploadError;
 
@@ -156,7 +161,12 @@ const EternixAI: React.FC = () => {
         .select()
         .single();
 
-      if (docError) throw docError;
+      if (docError) {
+        if (docError.code && /^[0-9A-Z]{5}$/.test(docError.code)) {
+          await supabase.storage.from('documents').remove([uploadData.path]);
+        }
+        throw docError;
+      }
 
       // Trigger processing (Edge Function)
       const { error: processError } = await supabase.functions.invoke('process-document', {
@@ -171,10 +181,10 @@ const EternixAI: React.FC = () => {
       if (processError) throw new Error(processError.message);
 
       toast.success(`${fileType === 'pdf' ? 'PDF' : 'Image'} uploaded and processing started!`);
-      loadDocuments(userId);
     } catch (error) {
       toast.error(`Upload failed: ${(error as Error).message}`);
     } finally {
+      void loadDocuments(userId);
       setUploadingFile(false);
     }
   };
@@ -328,7 +338,7 @@ const EternixAI: React.FC = () => {
                   <div className="relative">
                     <Input
                       type="file"
-                      accept=".pdf,image/jpeg,image/png,image/webp,image/gif"
+                      accept=".pdf,image/jpeg,image/png,image/webp"
                       onChange={handleFileUpload}
                       disabled={uploadingFile}
                       className="hidden"
