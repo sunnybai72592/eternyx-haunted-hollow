@@ -43,6 +43,11 @@ const AIImageStudio = () => {
   const [requestDraft, setRequestDraft] = useState<AIImageGenerationRequestDraft | AIImageEditRequestDraft | AIImageUpscaleRequestDraft | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
 
+  const invalidateDraft = () => {
+    setRequestDraft(null);
+    setDraftError(null);
+  };
+
   const describe = (e: unknown) => e instanceof AIJobApiError
     ? ({
         invalid_job_id: "Enter a valid job ID (UUID).",
@@ -211,8 +216,7 @@ const AIImageStudio = () => {
                 setImageFile(e.target.files?.[0] ?? null);
                 setUploadedAsset(null);
                 setUploadError(null);
-                setRequestDraft(null);
-                setDraftError(null);
+                invalidateDraft();
               }}
               className="border-slate-700 bg-slate-950 text-white file:text-slate-200"
             />
@@ -238,21 +242,21 @@ const AIImageStudio = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2" role="group" aria-label="Image operation">
-              <Button type="button" variant={operation === "generate" ? "default" : "outline"} onClick={() => { setOperation("generate"); setRequestDraft(null); setDraftError(null); }}>Generate image</Button>
-              <Button type="button" variant={operation === "edit" ? "default" : "outline"} onClick={() => { setOperation("edit"); setRequestDraft(null); setDraftError(null); }}>Edit image</Button>
-              <Button type="button" variant={operation === "upscale" ? "default" : "outline"} onClick={() => { setOperation("upscale"); setRequestDraft(null); setDraftError(null); }}>Upscale image</Button>
+              <Button type="button" variant={operation === "generate" ? "default" : "outline"} onClick={() => { setOperation("generate"); invalidateDraft(); }}>Generate image</Button>
+              <Button type="button" variant={operation === "edit" ? "default" : "outline"} onClick={() => { setOperation("edit"); invalidateDraft(); }}>Edit image</Button>
+              <Button type="button" variant={operation === "upscale" ? "default" : "outline"} onClick={() => { setOperation("upscale"); invalidateDraft(); }}>Upscale image</Button>
             </div>
 
             {operation !== "upscale" && (
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm text-slate-300">
                   <span>{operation === "generate" ? "Image prompt" : "Editing instructions"} <span className="text-slate-500">(required · max 4,000 characters)</span></span>
-                  <textarea value={prompt} onChange={e => { setPrompt(e.target.value); setRequestDraft(null); }} maxLength={4000} rows={4} placeholder={operation === "generate" ? "Describe the image you want to create…" : "Describe the changes you want…"} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <textarea value={prompt} onChange={e => { setPrompt(e.target.value); invalidateDraft(); }} maxLength={4000} rows={4} placeholder={operation === "generate" ? "Describe the image you want to create…" : "Describe the changes you want…"} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                   <span className="text-xs text-slate-500">{prompt.length}/4000</span>
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
                   <span>Negative prompt <span className="text-slate-500">(optional · max 2,000 characters)</span></span>
-                  <textarea value={negativePrompt} onChange={e => { setNegativePrompt(e.target.value); setRequestDraft(null); }} maxLength={2000} rows={4} placeholder="Describe what to avoid…" className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <textarea value={negativePrompt} onChange={e => { setNegativePrompt(e.target.value); invalidateDraft(); }} maxLength={2000} rows={4} placeholder="Describe what to avoid…" className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                   <span className="text-xs text-slate-500">{negativePrompt.length}/2000</span>
                 </label>
               </div>
@@ -261,13 +265,13 @@ const AIImageStudio = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-2 text-sm text-slate-300">
                 <span>Aspect ratio</span>
-                <select value={aspectRatio} onChange={e => { setAspectRatio(e.target.value as AIImageRequestAspectRatio); setRequestDraft(null); }} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
+                <select value={aspectRatio} onChange={e => { setAspectRatio(e.target.value as AIImageRequestAspectRatio); invalidateDraft(); }} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                   {(["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"] as const).map(value => <option key={value} value={value}>{value}</option>)}
                 </select>
               </label>
               <label className="space-y-2 text-sm text-slate-300">
                 <span>Output format</span>
-                <select value={outputFormat} onChange={e => { setOutputFormat(e.target.value as AIImageRequestOutputFormat); setRequestDraft(null); }} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
+                <select value={outputFormat} onChange={e => { setOutputFormat(e.target.value as AIImageRequestOutputFormat); invalidateDraft(); }} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                   {(["png", "jpeg", "webp"] as const).map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}
                 </select>
               </label>
