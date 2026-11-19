@@ -23,6 +23,7 @@ interface SubscriptionData {
   subscription_end?: string | null;
   subscription_status?: string;
   subscription_provider?: 'stripe' | 'polar' | null;
+  sandbox_subscription?: { provider: 'polar'; plan_id: string | null; status: string } | null;
   cancel_at_period_end?: boolean;
 }
 
@@ -234,8 +235,19 @@ export function SubscriptionManager() {
     <div className="space-y-6">
       {!sandboxProvider && (
         <p role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          {MERCHANT_ONBOARDING_NOTE} The Stripe sandbox does not establish a live merchant account.
+          {MERCHANT_ONBOARDING_NOTE} A provider sandbox does not establish a live merchant account.
         </p>
+      )}
+      {subscriptionData.sandbox_subscription && (
+        <div role="status" className="space-y-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm">
+          <p>Polar sandbox subscription: {subscriptionData.sandbox_subscription.status} · plan: {subscriptionData.sandbox_subscription.plan_id ?? 'unverified'}.
+            This TEST subscription does not unlock real paid tools.</p>
+          {sandboxProvider === 'polar' && (
+            <Button variant="outline" onClick={handleManageSubscription} disabled={isLoading}>
+              Open Polar test customer portal
+            </Button>
+          )}
+        </div>
       )}
       <Card className={`p-6 border ${planDetails.color} neon-border`}>
         <div className="flex items-center justify-between mb-4">
