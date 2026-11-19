@@ -31,3 +31,29 @@ test("AI Image Studio exposes upload status without enabling generation", () => 
   assert.match(page, /Generation remains unavailable/);
   assert.match(page, /does not submit prompts or make paid provider calls/);
 });
+
+
+test("signed upload path is restricted to safe relative storage keys", () => {
+  assert.match(client, /function isSafeStoragePath/);
+  assert.match(client, /path\.startsWith\("\/"\)/);
+  assert.match(client, /path\.includes\("\\\\"\)/);
+  assert.match(client, /segment !== "\.\."/);
+  assert.match(client, /isSafeStoragePath\(signed\.path\)/);
+});
+
+test("signed upload tokens must be nonempty and bounded", () => {
+  assert.match(client, /signed\.token\.length < 1/);
+  assert.match(client, /signed\.token\.length > 4096/);
+});
+
+test("all three network stages normalize thrown failures to typed errors", () => {
+  for (const code of ["upload_unavailable", "upload_failed", "verification_failed"]) {
+    assert.match(client, new RegExp('catch \\{\\s*throw new AIImageUploadError\\("' + code + '"\\)'));
+  }
+});
+
+test("signed storage upload is create-only and never exposes its token in the result", () => {
+  assert.match(client, /upsert: false/);
+  assert.match(client, /return \\{\\s*assetId: signed\.assetId/);
+  assert.doesNotMatch(client, /return \\{\\s*token:/);
+});
