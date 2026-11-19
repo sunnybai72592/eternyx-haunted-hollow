@@ -79,7 +79,7 @@ test("subscription lookup authenticates and reads only the server-managed projec
 
 test("subscription lookup fails closed for ambiguous or excessive subscription records", async () => {
   const source = await read("supabase/functions/check-subscription/index.ts");
-  assert.match(source, /records\.length > 100/);
+  assert.match(source, /stripeRecords\.length > 100 \|\| polarRecords\.length > 100/);
   assert.match(source, /Multiple active subscriptions require reconciliation/);
   assert.match(source, /subscription_tier: tier/);
   assert.match(source, /current\.plan_id === "premium" \|\| current\.plan_id === "elite"/);
@@ -102,7 +102,7 @@ test("subscription hub does not present fabricated subscription, usage, or payme
   assert.doesNotMatch(source, /usageMetrics|setCurrentSubscription|setUsageMetrics/);
   assert.match(source, /Usage reporting is not available yet/);
   assert.match(source, /Billing history and saved payment-method details are not connected yet/);
-  assert.match(source, /create-checkout/);
+  assert.match(source, /sandboxCheckoutEndpoint\(sandboxProvider\)/);
   assert.match(source, /noopener,noreferrer/);
 });
 
