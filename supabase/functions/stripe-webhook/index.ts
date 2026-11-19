@@ -136,7 +136,7 @@ serve(async (req) => {
     if (claim !== "claimed") throw new Error("Unexpected webhook event claim state");
 
     try {
-      if (event.type === "checkout.session.completed") {
+      if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
         const session = event.data.object as Stripe.Checkout.Session;
         const subscriptionId = stripeObjectId(session.subscription);
         if (session.mode === "subscription" && subscriptionId) {
@@ -145,6 +145,20 @@ serve(async (req) => {
           if (!sessionUserId || subscription.metadata?.user_id !== sessionUserId) {
             throw new Error("Checkout session and subscription ownership metadata mismatch");
           }
+          await syncSubscription(stripe, admin, subscription);
+        }
+      } else if (
+        event.type === "invoice.paid" ||
+        event.type === "invoice.payment_failed" ||
+        event.type === "invoice.payment_action_required"
+      ) {
+        // Invoice events are authoritative payment lifecycle signals.
+        // Retrieve the current subscription rather than interpreting untrusted
+        // client state or granting access from an invoice event alone.
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = stripeObjectId(invoice.subscription);
+        if (subscriptionId) {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
           await syncSubscription(stripe, admin, subscription);
         }
       } else if (
