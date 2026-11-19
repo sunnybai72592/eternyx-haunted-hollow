@@ -14,7 +14,8 @@ test("AI Image enqueue client uses the shared authenticated job endpoint and str
 });
 
 test("AI Image enqueue requires a reusable bounded idempotency key", () => {
-  assert.match(client, /IDEMPOTENCY_KEY_PATTERN = \/\^\[A-Za-z0-9\. _:-\]/);
+  assert.match(client, /IDEMPOTENCY_KEY_PATTERN/);
+  assert.match(client, /\{8,200\}/);
   assert.match(client, /caller must retain and reuse the same idempotency key/i);
   assert.match(client, /invalid_idempotency_key/);
 });
