@@ -89,35 +89,44 @@ test("AI Image upload start clears the prior asset and stale request draft", () 
 });
 
 test("AI Image Studio rejects stale explicit job lookup responses and mismatched IDs", () => {
-  assert.match(studio, /const version = \\+\\+jobRequestVersion\\.current/);
-  assert.match(studio, /value\\.id\\.toLowerCase\\(\\) !== requestedId\\.toLowerCase\\(\\)/);
-  assert.match(studio, /if \\(version !== jobRequestVersion\\.current\\) return;/);
-  assert.match(studio, /if \\(version === jobRequestVersion\\.current\\) setLoading\\(false\\)/);
+  for (const fragment of [
+    "const version = ++jobRequestVersion.current",
+    "value.id.toLowerCase() !== requestedId.toLowerCase()",
+    "if (version !== jobRequestVersion.current) return;",
+    "if (version === jobRequestVersion.current) setLoading(false)",
+  ]) assert.ok(studio.includes(fragment), "Missing lookup boundary: " + fragment);
 });
 
 test("AI Image Studio invalidates stale lookup and poll responses when job input changes", () => {
-  assert.match(studio, /jobRequestVersion\\.current \\+= 1;\\s*setJobId\\(e\\.target\\.value\\)/);
-  assert.match(studio, /if \\(active && version === jobRequestVersion\\.current && latest\\.id === currentJobId/);
+  for (const fragment of [
+    "jobRequestVersion.current += 1;",
+    "setJobId(e.target.value);",
+    "active && version === jobRequestVersion.current && latest.id === currentJobId",
+  ]) assert.ok(studio.includes(fragment), "Missing stale-request boundary: " + fragment);
 });
 
 test("AI Image Studio fences cancellation updates and validates the refreshed job identity", () => {
-  assert.match(studio, /const targetId = job\\.id/);
-  assert.match(studio, /requestAIJobCancellation\\(targetId\\)/);
-  assert.match(studio, /latest\\.id === targetId/);
-  assert.match(studio, /if \\(version === jobRequestVersion\\.current\\) setCancelling\\(false\\)/);
+  for (const fragment of [
+    "const targetId = job.id",
+    "requestAIJobCancellation(targetId)",
+    "latest.id === targetId",
+    "if (version === jobRequestVersion.current) setCancelling(false)",
+  ]) assert.ok(studio.includes(fragment), "Missing cancellation boundary: " + fragment);
 });
 
-test("AI Image Studio stops polling during manual lookup and cancellation", () => {
-  assert.match(studio, /if \\(!job \\|\\| loading \\|\\| cancelling/);
-  assert.match(studio, /job\\?\\.featureKey, loading, cancelling/);
-  assert.match(studio, /if \\(active && version === jobRequestVersion\\.current\\) timer = window\\.setTimeout\\(poll,15000\\)/);
+test("AI Image Studio pauses polling during manual lookup and cancellation", () => {
+  for (const fragment of [
+    "if (!job || loading || cancelling",
+    "job?.featureKey, loading, cancelling",
+    "active && version === jobRequestVersion.current) timer = window.setTimeout(poll,15000)",
+  ]) assert.ok(studio.includes(fragment), "Missing poll boundary: " + fragment);
 });
 
 test("AI Image Studio prevents a second upload of an already verified selected file", () => {
-  assert.match(studio, /disabled=\\{!imageFile \\|\\| uploading \\|\\| !!uploadedAsset\\}/);
+  assert.ok(studio.includes("disabled={!imageFile || uploading || !!uploadedAsset}"));
 });
 
 test("AI Image Studio announces draft and job errors to assistive technology", () => {
-  assert.match(studio, /draftError && <Alert role="alert" variant="destructive"/);
-  assert.match(studio, /error && <Alert role="alert" variant="destructive"/);
+  assert.ok(studio.includes('draftError && <Alert role="alert" variant="destructive"'));
+  assert.ok(studio.includes('error && <Alert role="alert" variant="destructive"'));
 });
