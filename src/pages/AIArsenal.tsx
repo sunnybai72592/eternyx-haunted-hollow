@@ -47,7 +47,7 @@ const plannedStudios = [
   },
   {
     name: "AI Research Studio",
-    description: "Research workflows for gathering, comparing, and organizing evidence with transparent source handling.",
+    description: "Manual source links, evidence notes, competing viewpoints and copyable research briefs. No live search or AI calls.",
     icon: Search,
   },
   {
@@ -185,15 +185,17 @@ const AIArsenal = () => {
                       <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-300">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Audio Studio", "AI Coding Studio", "AI Document Intelligence"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Audio Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
                     </div>
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>
                   </CardHeader>
-                  {["AI Writing Studio", "AI Audio Studio", "AI Coding Studio", "AI Document Intelligence"].includes(studio.name) && (
+                  {["AI Writing Studio", "AI Audio Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio"].includes(studio.name) && (
                     <CardContent>
                       <Button asChild variant="outline" className="w-full justify-between border-cyan-400/30 bg-transparent text-cyan-100 hover:bg-cyan-400/10">
-                        {studio.name === "AI Document Intelligence" ? (
+                        {studio.name === "AI Research Studio" ? (
+                          <Link to="/ai-arsenal/research">Review AI Research Studio <ArrowRight className="h-4 w-4" /></Link>
+                        ) : studio.name === "AI Document Intelligence" ? (
                           <Link to="/ai-arsenal/documents">Review AI Document Intelligence <ArrowRight className="h-4 w-4" /></Link>
                         ) : studio.name === "AI Coding Studio" ? (
                           <Link to="/ai-arsenal/coding">Review AI Coding Studio <ArrowRight className="h-4 w-4" /></Link>
