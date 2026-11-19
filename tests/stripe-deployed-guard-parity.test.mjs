@@ -55,3 +55,13 @@ test("database migration denies browser reads and privileged webhook mutations",
   assert.match(migration,/REVOKE ALL ON TABLE public\.stripe_webhook_events FROM PUBLIC, anon, authenticated/);
   assert.match(migration,/REVOKE ALL ON FUNCTION public\.claim_stripe_webhook_event\(TEXT, TEXT\) FROM PUBLIC, anon, authenticated/);
 });
+
+test("signed async checkout and invoice lifecycle events reconcile current subscription", () => {
+  assert.match(webhook, /checkout\.session\.async_payment_succeeded/);
+  assert.match(webhook, /invoice\.paid/);
+  assert.match(webhook, /invoice\.payment_failed/);
+  assert.match(webhook, /invoice\.payment_action_required/);
+  assert.match(webhook, /stripeObjectId\(invoice\.subscription\)/);
+  assert.match(webhook, /stripe\.subscriptions\.retrieve\(subscriptionId\)/);
+  assert.match(webhook, /await syncSubscription\(stripe, admin, subscription\)/);
+});
