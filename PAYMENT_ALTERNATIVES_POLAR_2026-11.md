@@ -47,6 +47,11 @@ Database migration:
 supabase/migrations/20261119221500_polar_mor_subscription_foundation.sql
 creates private polar_billing_subscriptions, polar_webhook_events and privileged idempotency RPCs.
 
+**Merchant approval is a separate, mandatory gate.** A founder's
+nationality or residence appearing on a payout-country list does not
+guarantee underwriting approval, business authorization, identity
+verification, or the acceptance of ETERNYX cybersecurity tooling.
+
 ## Owner action: sandbox onboarding
 
 1. Create your own Polar sandbox organization at https://sandbox.polar.sh. Confirm you may legally operate from Saudi Arabia while holding a Pakistani passport and Iqama. Seek Polar's explicit approval for ETERNYX cybersecurity and developer tools.
