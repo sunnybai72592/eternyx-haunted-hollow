@@ -51,3 +51,21 @@ This is a **targeted source-level audit**, not an exhaustive review, a real-brow
 **November 23 is the target; November 25 is the go/no-go deadline.** Neither date is permission to bypass security, activate costs, or describe unfinished features as ready. Do not activate billing, providers, server migrations, external writes or deployments on the basis of this audit alone. Obtain explicit owner approval for such actions.
 
 A verified preview of real local tools is a meaningful deliverable. It is not equivalent to fully operational 100+ production-certified tools.
+
+## Additional public trust findings — second source-level batch
+
+The next audit pass examined user-facing legacy pages rather than only internal tooling.
+
+| Priority | Affected route | Source-verified issue | Proposed resolution |
+| --- | --- | --- | --- |
+| P0 | /hacked | Simulated root access and active detection, invented premium status and promotional discount | Preserve cyberpunk presentation but remove false breach/premium claims and link to real pillar routes |
+| P0 | /premium | Sample dollar prices and inactive plan buttons implied purchasable subscription benefits | Replace with explicitly inactive premium roadmap; do not open checkout or promise prices |
+| P0 | /elite-development-team | Invented employee names/portraits/profiles and a fake “message sent” alert with no backend submission | Remove fake personnel and route users to the real /contact form with backend success/error handling |
+| P1 | /services and /services/:serviceId | Old sales articles imply an operational consulting business and offer nonfunctional consultation CTA | Redirect legacy public entry points to the capability directory at /services-hub |
+| P1 | src/pages/Services.tsx | Duplicate unrouted marketing component contained outdated security claims and speculative price tags | Replace with safe internal catalog alias to /services-hub |
+
+These changes retain public legacy paths but do not entitle customers to any service or grant access. No checkout was enabled by this patch. The separate /subscriptions flow and all backend checkout/Stripe configuration still require an explicit pre-launch authorization and technical review.
+
+**Remaining P0 prelaunch task:** Verify billing cannot charge real money before explicit approval, including the independently callable server checkout endpoint and feature flags. Frontend UI labels alone are not a financial safety boundary.
+
+Further audits must cover any other reachable legacy pages, the service contact flow in a deployed environment, authenticated usage journeys, and release routing smoke tests. November 23 remains the target and November 25 the final go/no-go review.

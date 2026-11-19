@@ -27,7 +27,8 @@ test("security service listings do not advertise unsupported 24/7 monitoring", a
   }
 
   assert.ok(servicesHub.includes("Platform Security Monitoring"));
-  assert.ok(services.includes("Verified authorization event capture"));
+  assert.ok(services.includes('<Navigate to="/services-hub" replace />'));
+  assert.ok(servicesHub.includes("Platform Security Monitoring"));
   assert.ok(cybersecurityHub.includes("No invented scan results, fictional incidents, or unsupported security guarantees"));
 });
 
