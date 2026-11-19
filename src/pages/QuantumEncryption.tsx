@@ -1,270 +1,159 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, ClipboardCopy, LockKeyhole, ShieldCheck, XCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TerminalWindow } from "@/components/TerminalWindow";
-import { TypingText } from "@/components/TypingText";
-import { 
-  Diamond, 
-  ArrowLeft,
-  Lock,
-  Unlock,
-  Key,
-  Brain,
-  Zap,
-  Shield,
-  Clock
-} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  LocalEncryptionError, MAX_LOCAL_PLAINTEXT_LENGTH,
+  decryptLocalText, encryptLocalText,
+} from "@/lib/security/localTextEncryption";
 
+/**
+ * Historical /quantum-encryption route retained for existing links.
+ * No post-quantum cryptography is implemented or advertised as active.
+ */
 const QuantumEncryption = () => {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("encrypt");
-  const [plainText, setPlainText] = useState("");
-  const [encryptedText, setEncryptedText] = useState("");
-  const [decryptedText, setDecryptedText] = useState("");
-  const [algorithm, setAlgorithm] = useState("kyber");
+  const [plaintext, setPlaintext] = useState("");
+  const [password, setPassword] = useState("");
+  const [envelope, setEnvelope] = useState("");
+  const [decrypted, setDecrypted] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const handleEncrypt = async () => {
-    // In a real application, this would be an API call to a backend service
-    // that performs the encryption using a cryptographic library.
-    // For this demo, we will simulate the encryption.
-    const simulatedEncryptedText = `[ENCRYPTED_WITH_${algorithm.toUpperCase()}]_${btoa(plainText)}`;
-    setEncryptedText(simulatedEncryptedText);
+  const describe = (failure: unknown): string => {
+    if (!(failure instanceof LocalEncryptionError)) return "The browser encryption operation failed.";
+    return ({
+      unsupported: "Your browser does not support Web Crypto. Use an updated browser over HTTPS.",
+      invalid_password: "Use a nonblank password between 12 and 256 characters.",
+      invalid_text: "Enter between 1 and 20,000 plaintext characters.",
+      invalid_envelope: "Invalid or unsupported encrypted envelope.",
+      authentication_failed: "Decryption failed. The password may be incorrect, or the encrypted data was modified.",
+    }[failure.code]);
   };
 
-  const handleDecrypt = async () => {
-    // In a real application, this would be an API call to a backend service
-    // that performs the decryption using a cryptographic library.
-    // For this demo, we will simulate the decryption.
-    if (encryptedText.startsWith(`[ENCRYPTED_WITH_${algorithm.toUpperCase()}]_`)) {
-      const base64Text = encryptedText.replace(`[ENCRYPTED_WITH_${algorithm.toUpperCase()}]_`, "");
-      try {
-        const simulatedDecryptedText = atob(base64Text);
-        setDecryptedText(simulatedDecryptedText);
-      } catch (e) {
-        setDecryptedText("Error: Invalid encrypted text.");
-      }
-    } else {
-      setDecryptedText("Error: Encrypted text does not match the selected algorithm.");
+  const encrypt = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setEnvelope("");
+    setDecrypted("");
+    try {
+      const output = await encryptLocalText(plaintext, password);
+      setEnvelope(output);
+      setNotice("Encrypted locally with AES-256-GCM. Save the envelope and password separately.");
+    } catch (failure) {
+      setError(describe(failure));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const quantumAttackSimulation = [
-    "[QUANTUM_SIM] Initializing quantum attack on AES-256...",
-    "[QUANTUM_SIM] Applying Shor's algorithm...",
-    "[QUANTUM_SIM] Factoring large numbers...",
-    "[QUANTUM_SIM] Estimated time to break: 10^12 years (classical) -> 8 hours (quantum)",
-    "[QUANTUM_SIM] Attack successful. Key compromised.",
-    "",
-    "[QUANTUM_SIM] Initializing quantum attack on CRYSTALS-Kyber...",
-    "[QUANTUM_SIM] Applying quantum algorithms...",
-    "[QUANTUM_SIM] Lattice-based cryptography resistant to quantum attacks.",
-    "[QUANTUM_SIM] Attack failed. Key remains secure."
-  ];
+  const decrypt = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setDecrypted("");
+    try {
+      const output = await decryptLocalText(envelope, password);
+      setDecrypted(output);
+      setNotice("Authenticated decryption completed locally.");
+    } catch (failure) {
+      setError(describe(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async (value: string) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice("Copied to clipboard. Clipboard history may retain sensitive information.");
+      setError(null);
+    } catch {
+      setError("Clipboard permission was denied. Select the text and copy it manually.");
+      setNotice(null);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="border-b border-purple-500/20 bg-card/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/")}
-            className="text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Main
-          </Button>
-          <div className="flex items-center space-x-2">
-            <Diamond className="h-6 w-6 text-purple-500" />
-            <h1 className="text-xl font-bold text-purple-400">Quantum-Ready Encryption</h1>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero Section */}
-      <section className="py-20 px-4 text-center bg-gradient-to-b from-purple-950/20 to-background">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-center mb-6">
-            <div className="p-4 rounded-full bg-purple-500/10 border border-purple-500/20">
-              <Diamond className="h-16 w-16 text-purple-500" />
+    <div className="min-h-screen bg-[#070b14] text-white">
+      <div className="mx-auto max-w-5xl space-y-6 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+        <Button asChild variant="ghost" className="text-slate-300">
+          <Link to="/cybersecurity"><ArrowLeft className="mr-2 h-4 w-4" />Cybersecurity Hub</Link>
+        </Button>
+        <section className="rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-950/50 via-slate-950 to-cyan-950/20 p-7 sm:p-10">
+          <div className="flex items-center gap-3 text-violet-200"><LockKeyhole className="h-7 w-7" />BROWSER CRYPTOGRAPHY</div>
+          <h1 className="mt-4 text-3xl font-bold sm:text-5xl">AES-256-GCM text workbench</h1>
+          <p className="mt-4 text-slate-300">Encrypt or decrypt a short text envelope using Web Crypto on your device.</p>
+          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Classical encryption · not post-quantum</Badge>
+        </section>
+        <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
+          <ShieldCheck className="h-4 w-4" />
+          <AlertDescription>
+            This legacy route previously demonstrated fake quantum encryption using Base64. That simulation has been removed.
+            This workbench now uses real AES-256-GCM encryption with PBKDF2-SHA-256 key derivation (210,000 iterations), a random 16-byte salt
+            and 12-byte nonce. It is classical encryption, not post-quantum cryptography, a vault, a password manager, or a certified product.
+            No plaintext or password is sent to ETERNYX by this tool. Do not rely on it for critical secrets without independent security review.
+          </AlertDescription>
+        </Alert>
+        <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
+          <CardHeader>
+            <CardTitle className="text-white">Local text encryption</CardTitle>
+            <CardDescription className="text-slate-400">No server requests, accounts, logs, or browser storage are used by this tool. Passwords are not recoverable.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label htmlFor="crypto-password" className="block space-y-2 text-sm text-slate-300">
+              <span>Password · required, 12–256 characters</span>
+              <input id="crypto-password" type="password" autoComplete="off" value={password} maxLength={256}
+                onChange={e => { setPassword(e.target.value); setDecrypted(""); setError(null); }}
+                className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
+            </label>
+            <label htmlFor="crypto-plaintext" className="block space-y-2 text-sm text-slate-300">
+              <span>Plaintext · maximum 20,000 characters</span>
+              <textarea id="crypto-plaintext" value={plaintext} maxLength={MAX_LOCAL_PLAINTEXT_LENGTH}
+                onChange={e => { setPlaintext(e.target.value); setNotice(null); }}
+                rows={5} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
+            </label>
+            <Button type="button" disabled={busy || !plaintext || password.length < 12} onClick={encrypt}>
+              <LockKeyhole className="mr-2 h-4 w-4" />{busy ? "Processing locally…" : "Encrypt locally"}
+            </Button>
+            <label htmlFor="crypto-envelope" className="block space-y-2 text-sm text-slate-300">
+              <span>Encrypted JSON envelope · copy or paste for decryption</span>
+              <textarea id="crypto-envelope" value={envelope}
+                onChange={e => { setEnvelope(e.target.value); setDecrypted(""); setNotice(null); }}
+                rows={6} spellCheck={false}
+                className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-white" />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" disabled={busy || !envelope || password.length < 12} onClick={decrypt}>
+                Decrypt and authenticate locally
+              </Button>
+              <Button type="button" variant="outline" disabled={!envelope} onClick={() => copy(envelope)}>
+                <ClipboardCopy className="mr-2 h-4 w-4" />Copy envelope
+              </Button>
             </div>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 text-purple-400 glitch" data-text="QUANTUM-READY">
-            QUANTUM-READY
-          </h1>
-          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-purple-300">
-            ENCRYPTION
-          </h2>
-          <div className="text-xl mb-8 h-8">
-            <TypingText 
-              text="Future-proof your data with quantum-resistant encryption algorithms"
-              speed={80}
-              className="text-purple-200"
-            />
-          </div>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            As quantum computing emerges, classical encryption methods are becoming vulnerable. 
-            Our quantum-ready solutions ensure your data remains secure for decades to come.
-          </p>
-        </div>
-      </section>
-
-      {/* Encryption Interface */}
-      <section className="py-16 px-4 max-w-7xl mx-auto">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-card/50">
-            <TabsTrigger value="encrypt" className="data-[state=active]:bg-purple-600">
-              <Lock className="mr-2 h-4 w-4" />
-              Encrypt/Decrypt
-            </TabsTrigger>
-            <TabsTrigger value="algorithms" className="data-[state=active]:bg-purple-600">
-              <Brain className="mr-2 h-4 w-4" />
-              Algorithms
-            </TabsTrigger>
-            <TabsTrigger value="simulation" className="data-[state=active]:bg-purple-600">
-              <Zap className="mr-2 h-4 w-4" />
-              Quantum Attack Simulation
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="encrypt" className="mt-6">
-            <div className="grid lg:grid-cols-2 gap-8">
-              <Card className="bg-card/50 border-purple-500/20">
-                <CardHeader>
-                  <CardTitle className="text-purple-400 flex items-center">
-                    <Key className="mr-2 h-5 w-5" />
-                    Encryption Tool
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Algorithm:</label>
-                      <select
-                        value={algorithm}
-                        onChange={(e) => setAlgorithm(e.target.value)}
-                        className="w-full p-3 bg-background border border-purple-500/20 rounded-md text-foreground"
-                      >
-                        <option value="kyber">CRYSTALS-Kyber (Post-Quantum)</option>
-                        <option value="dilithium">CRYSTALS-Dilithium (Post-Quantum)</option>
-                        <option value="aes">AES-256 (Classical)</option>
-                        <option value="rsa">RSA-2048 (Classical)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Plain Text:</label>
-                      <Textarea
-                        value={plainText}
-                        onChange={(e) => setPlainText(e.target.value)}
-                        placeholder="Enter your message here..."
-                        className="bg-background border-purple-500/20 min-h-32"
-                      />
-                    </div>
-                    <Button onClick={handleEncrypt} className="w-full bg-purple-600 hover:bg-purple-700">
-                      <Lock className="mr-2 h-4 w-4" />
-                      Encrypt
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card/50 border-purple-500/20">
-                <CardHeader>
-                  <CardTitle className="text-purple-400 flex items-center">
-                    <Unlock className="mr-2 h-5 w-5" />
-                    Decryption Tool
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Encrypted Text:</label>
-                      <Textarea
-                        value={encryptedText}
-                        onChange={(e) => setEncryptedText(e.target.value)}
-                        placeholder="Enter your encrypted message here..."
-                        className="bg-background border-purple-500/20 min-h-32"
-                      />
-                    </div>
-                    <Button onClick={handleDecrypt} className="w-full bg-purple-600 hover:bg-purple-700">
-                      <Unlock className="mr-2 h-4 w-4" />
-                      Decrypt
-                    </Button>
-                    {decryptedText && (
-                      <div className="mt-4 p-4 bg-background/50 rounded-md border border-purple-500/20">
-                        <h4 className="font-semibold text-purple-300 mb-2">Decrypted Text:</h4>
-                        <p className="text-sm text-muted-foreground break-all">{decryptedText}</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="algorithms" className="mt-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card className="bg-card/50 border-purple-500/20">
-                <CardHeader>
-                  <CardTitle className="text-purple-400 flex items-center">
-                    <Shield className="mr-2 h-5 w-5" />
-                    Post-Quantum Cryptography (PQC)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    PQC algorithms are designed to be secure against attacks from both classical and quantum computers. 
-                    They are based on mathematical problems that are believed to be difficult for even quantum computers to solve.
-                  </p>
-                  <ul className="list-disc list-inside space-y-2 text-sm">
-                    <li>**CRYSTALS-Kyber:** A key-encapsulation mechanism (KEM) based on lattice-based cryptography.</li>
-                    <li>**CRYSTALS-Dilithium:** A digital signature algorithm also based on lattice-based cryptography.</li>
-                    <li>**SPHINCS+:** A stateless hash-based signature scheme.</li>
-                    <li>**Falcon:** A lattice-based digital signature algorithm.</li>
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card/50 border-purple-500/20">
-                <CardHeader>
-                  <CardTitle className="text-purple-400 flex items-center">
-                    <Clock className="mr-2 h-5 w-5" />
-                    Classical Cryptography
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Classical algorithms like AES and RSA are still secure against today's computers, but they are vulnerable 
-                    to attacks from future quantum computers.
-                  </p>
-                  <ul className="list-disc list-inside space-y-2 text-sm">
-                    <li>**AES (Advanced Encryption Standard):** A symmetric-key algorithm used for encrypting data.</li>
-                    <li>**RSA (Rivest-Shamir-Adleman):** An asymmetric-key algorithm used for secure data transmission.</li>
-                    <li>**ECC (Elliptic-Curve Cryptography):** An asymmetric-key algorithm that provides similar security to RSA with smaller key sizes.</li>
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="simulation" className="mt-6">
-            <TerminalWindow title="quantum-attack-simulation.log">
-              <div className="space-y-1 text-sm max-h-96 overflow-y-auto">
-                {quantumAttackSimulation.map((line, index) => (
-                  <div key={index} className="text-purple-400">{line}</div>
-                ))}
+            {decrypted && (
+              <div className="space-y-2">
+                <label htmlFor="crypto-decrypted" className="block text-sm text-slate-300">Decrypted plaintext</label>
+                <textarea id="crypto-decrypted" readOnly value={decrypted} rows={5}
+                  className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
+                <Button type="button" variant="outline" onClick={() => copy(decrypted)}>
+                  <ClipboardCopy className="mr-2 h-4 w-4" />Copy plaintext
+                </Button>
               </div>
-            </TerminalWindow>
-          </TabsContent>
-        </Tabs>
-      </section>
+            )}
+            {error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
+            {notice && <Alert role="status" aria-live="polite"><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
-
 export default QuantumEncryption;
-
