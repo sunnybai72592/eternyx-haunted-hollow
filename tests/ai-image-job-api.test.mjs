@@ -66,17 +66,17 @@ test("AI Image Studio invalidates stale drafts and validation errors when inputs
 });
 
 test("AI Image Studio clears stale job details when the lookup target changes", () => {
-  assert.match(studio, /setJobId\\(e\\.target\\.value\\);[\\s\\S]*setJob\\(null\\);[\\s\\S]*setError\\(null\\);[\\s\\S]*setNotice\\(null\\);/);
-  assert.match(studio, /const lookup = async \\(\\) => \\{[\\s\\S]*setLoading\\(true\\);[\\s\\S]*setJob\\(null\\);/);
+  assert.match(studio, /setJobId\(e\.target\.value\);[\s\S]*setJob\(null\);[\s\S]*setError\(null\);[\s\S]*setNotice\(null\);/);
+  assert.match(studio, /const lookup = async \(\) => \{[\s\S]*setLoading\(true\);[\s\S]*setJob\(null\);/);
 });
 
 test("AI Image Studio prevents file changes while an upload is in progress", () => {
-  assert.match(studio, /type="file"[\\s\\S]*disabled=\\{uploading\\}/);
+  assert.match(studio, /type="file"[\s\S]*disabled=\{uploading\}/);
 });
 
 test("AI Image Studio locks job lookup input during lookup and cancellation", () => {
-  assert.match(studio, /disabled=\\{loading \\|\\| cancelling\\}/);
-  assert.match(studio, /disabled=\\{loading \\|\\| cancelling \\|\\| !jobId\\.trim\\(\\)\\}/);
+  assert.match(studio, /disabled=\{loading \|\| cancelling\}/);
+  assert.match(studio, /disabled=\{loading \|\| cancelling \|\| !jobId\.trim\(\)\}/);
 });
 
 test("AI Image Studio announces status and upload errors accessibly", () => {
@@ -85,5 +85,5 @@ test("AI Image Studio announces status and upload errors accessibly", () => {
 });
 
 test("AI Image upload start clears the prior asset and stale request draft", () => {
-  assert.match(studio, /setUploading\\(true\\);[\\s\\S]*setUploadedAsset\\(null\\);[\\s\\S]*invalidateDraft\\(\\);/);
+  assert.match(studio, /setUploading\(true\);[\s\S]*setUploadedAsset\(null\);[\s\S]*invalidateDraft\(\);/);
 });
