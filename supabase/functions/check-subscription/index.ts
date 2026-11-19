@@ -93,13 +93,19 @@ serve(async (req) => {
     const tier = current.plan_id === "premium" || current.plan_id === "elite"
       ? current.plan_id
       : null;
+    // Polar billing here is SANDBOX ONLY: never promote a test subscription
+    // to production entitlement. Keep its verified state visible for QA.
+    const polarSandbox = current.subscription_provider === "polar";
 
     return jsonResponse({
-      subscribed: true,
-      subscription_tier: tier,
+      subscribed: !polarSandbox,
+      subscription_tier: polarSandbox ? null : tier,
       subscription_end: current.current_period_end,
       subscription_status: current.status,
       subscription_provider: current.subscription_provider,
+      sandbox_subscription: polarSandbox ? {
+        provider: "polar", plan_id: tier, status: current.status,
+      } : null,
       cancel_at_period_end: current.cancel_at_period_end,
     }, 200);
   } catch (error) {
