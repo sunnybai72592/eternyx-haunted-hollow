@@ -165,6 +165,11 @@ const AIArsenal = () => {
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>
                   </CardHeader>
+                  <CardContent>
+                    <Button asChild variant="outline" className="w-full justify-between border-cyan-400/30 bg-transparent text-cyan-100 hover:bg-cyan-400/10">
+                      <Link to="/ai-arsenal/image">Review AI Image Studio <ArrowRight className="h-4 w-4" /></Link>
+                    </Button>
+                  </CardContent>
                 </Card>
               );
             })}
