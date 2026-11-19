@@ -27,9 +27,10 @@ test("AI Image enqueue validates the minimal server receipt before returning it"
 });
 
 test("AI Image enqueue maps authentication, credit, feature, conflict and unavailable errors", () => {
-  for (const status of ["401", "402", "403", "409", "503"]) {
+  for (const status of ["401", "402", "403", "409"]) {
     assert.match(client, new RegExp(`case ${status}:`));
   }
+  assert.match(client, /default:\\s*return new AIImageEnqueueError\\("unavailable"/);
 });
 
 test("AI Image Studio remains disconnected from enqueue until explicit activation approval", () => {
