@@ -62,5 +62,5 @@ test("AI Image Studio invalidates stale drafts and validation errors when inputs
     'setAspectRatio(e.target.value as AIImageRequestAspectRatio); invalidateDraft();',
     'setOutputFormat(e.target.value as AIImageRequestOutputFormat); invalidateDraft();',
   ]) assert.ok(studio.includes(fragment), "Missing draft invalidation for " + fragment);
-  assert.ok(studio.includes("setImageFile(e.target.files?.[0] ?? null);"));
+  assert.ok(studio.includes("setImageFile(e.target.files?.[0] ?? null);\\n                setUploadedAsset(null);\\n                setUploadError(null);\\n                invalidateDraft();"));
 });
