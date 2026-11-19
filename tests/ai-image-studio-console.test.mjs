@@ -17,8 +17,8 @@ test("AI Image Studio is authenticated and uses shared job lifecycle controls", 
 test("AI Image Studio polling stops for terminal and reconciliation-required jobs", () => {
  assert.match(page, /isTerminalAIJobStatus\(job\.status\)/);
  assert.match(page, /job\.status==="reconciliation_required"/);
- assert.match(page, /setTimeout\(refresh, 15_000\)/);
- assert.match(page, /clearTimeout\(timeoutId\)/);
+ assert.match(page, /setTimeout\(poll,15000\)/);
+ assert.match(page, /clearTimeout\(timer\)/);
 });
 test("AI Image Studio does not activate provider calls", () => {
  assert.match(page, /does not submit prompts or make paid provider calls/);
