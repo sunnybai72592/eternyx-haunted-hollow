@@ -23,7 +23,7 @@ test("AI Image enqueue requires a reusable bounded idempotency key", () => {
 test("AI Image enqueue validates the minimal server receipt before returning it", () => {
   assert.match(client, /UUID_PATTERN\.test\(data\.job\.id\)/);
   assert.match(client, /isJobStatus\(data\.job\.status\)/);
-  assert.match(client, /typeof data\.job\.alreadyExists === "boolean"/);
+  assert.match(client, /typeof data\.job\.alreadyExists !== "boolean"/);
 });
 
 test("AI Image enqueue maps authentication, credit, feature, conflict and unavailable errors", () => {
