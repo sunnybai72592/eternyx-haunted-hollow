@@ -75,7 +75,7 @@ test("rejects malformed requested user and asset references", () => {
 
 test("AI generation enqueue scopes image lookup to owner and private bucket before job creation", async () => {
   const endpoint = await readFile(new URL("../supabase/functions/ai-generation-job-enqueue/index.ts", import.meta.url), "utf8");
-  assert.match(endpoint, /validateVerifiedAIImageAsset\(asset, user\.id, generationRequest\.imageAssetId\)/);
+  assert.match(endpoint, /validateVerifiedAIImageAsset\(asset, user\.id, inputAssetId\)/);
   assert.match(endpoint, /\.eq\("user_id", user\.id\)/);
   assert.match(endpoint, /\.eq\("bucket_id", "ai-generation-inputs"\)/);
   assert.ok(endpoint.indexOf("validateVerifiedAIImageAsset(asset") < endpoint.indexOf("enqueue_ai_generation_job_with_credits"));
