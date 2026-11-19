@@ -84,6 +84,16 @@ serve(async (req) => {
       return jsonResponse({ error: "Authentication required" }, 401);
     }
 
+    // Billing launch gate: fail closed unless the owner explicitly enables
+    // TEST mode on the server. Production keys are always refused by this build.
+    if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {
+      return jsonResponse({ error: "Subscription checkout is not enabled" }, 503);
+    }
+    const testStripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!testStripeKey || !/^(sk_test_|rk_test_)/.test(testStripeKey)) {
+      return jsonResponse({ error: "Test checkout requires Stripe test credentials" }, 503);
+    }
+
     const declaredLength = Number(req.headers.get("content-length") ?? 0);
     if (Number.isFinite(declaredLength) && declaredLength > REQUEST_BODY_LIMIT_BYTES) {
       return jsonResponse({ error: "Request body is too large" }, 413);
@@ -109,8 +119,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Invalid subscription plan" }, 400);
     }
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("Stripe is not configured");
+    const stripeKey = testStripeKey; // Already validated as test-only above.
 
     // Never use an untrusted Origin header as a payment redirect destination.
     const configuredBaseUrl = Deno.env.get("APP_BASE_URL") || DEFAULT_APP_BASE_URL;

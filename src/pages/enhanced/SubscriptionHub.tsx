@@ -17,6 +17,9 @@ interface CreditSnapshot {
 
 type SnapshotState = 'idle' | 'loading' | 'ready' | 'error';
 
+// Presentation flag only; the Edge Function independently enforces test-only access.
+const testCheckoutEnabled = import.meta.env.VITE_ENABLE_STRIPE_TEST_CHECKOUT === 'true';
+
 export default function SubscriptionHub() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('plans');
@@ -71,6 +74,10 @@ export default function SubscriptionHub() {
   }, [activeTab, user]);
 
   const handleSubscribe = async (planId: string) => {
+    if (!testCheckoutEnabled) {
+      toast.error('Checkout is disabled until test-mode setup is explicitly enabled.');
+      return;
+    }
     if (!user) {
       toast.error('Please log in to choose a subscription');
       return;
@@ -136,7 +143,7 @@ export default function SubscriptionHub() {
           </TabsList>
 
           <TabsContent value="plans">
-            <SubscriptionTiers onSubscribe={handleSubscribe} isLoading={isLoading} />
+            <SubscriptionTiers onSubscribe={handleSubscribe} isLoading={isLoading} testCheckoutEnabled={testCheckoutEnabled} />
           </TabsContent>
 
           <TabsContent value="current">
