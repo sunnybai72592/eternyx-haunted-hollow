@@ -31,6 +31,7 @@ const AIAudioStudio = lazy(() => import("./pages/AIAudioStudio"));
 const AICodingStudio = lazy(() => import("./pages/AICodingStudio"));
 const AIDocumentIntelligence = lazy(() => import("./pages/AIDocumentIntelligence"));
 const AIResearchStudio = lazy(() => import("./pages/AIResearchStudio"));
+const AIAgentsStudio = lazy(() => import("./pages/AIAgentsStudio"));
 const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
 const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
@@ -233,6 +234,7 @@ const AppContent = () => {
                         <Route path="/ai-arsenal/coding" element={<RequireAuth><AICodingStudio /></RequireAuth>} />
                         <Route path="/ai-arsenal/documents" element={<RequireAuth><AIDocumentIntelligence /></RequireAuth>} />
                         <Route path="/ai-arsenal/research" element={<RequireAuth><AIResearchStudio /></RequireAuth>} />
+                        <Route path="/ai-arsenal/agents" element={<RequireAuth><AIAgentsStudio /></RequireAuth>} />
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<EcosystemPillarPage pillarId="integrations" />} />
                         <Route path="/automation" element={<EcosystemPillarPage pillarId="automation" />} />
