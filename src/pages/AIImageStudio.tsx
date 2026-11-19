@@ -11,7 +11,9 @@ import { AIImageUploadError, uploadAIImageAsset, type VerifiedAIImageUpload } fr
 import {
   AIImageRequestDraftError,
   buildAIImageEditRequest,
+  buildAIImageGenerationRequest,
   buildAIImageUpscaleRequest,
+  type AIImageGenerationRequestDraft,
   type AIImageEditRequestDraft,
   type AIImageUpscaleRequestDraft,
   type AIImageRequestAspectRatio,
@@ -33,12 +35,12 @@ const AIImageStudio = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadedAsset, setUploadedAsset] = useState<VerifiedAIImageUpload | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [operation, setOperation] = useState<"edit" | "upscale">("edit");
+  const [operation, setOperation] = useState<"generate" | "edit" | "upscale">("generate");
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState<AIImageRequestAspectRatio>("1:1");
   const [outputFormat, setOutputFormat] = useState<AIImageRequestOutputFormat>("png");
-  const [requestDraft, setRequestDraft] = useState<AIImageEditRequestDraft | AIImageUpscaleRequestDraft | null>(null);
+  const [requestDraft, setRequestDraft] = useState<AIImageGenerationRequestDraft | AIImageEditRequestDraft | AIImageUpscaleRequestDraft | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
 
   const describe = (e: unknown) => e instanceof AIJobApiError
@@ -97,13 +99,15 @@ const AIImageStudio = () => {
   };
 
   const prepareDraft = () => {
-    if (!uploadedAsset) return;
+    if (operation !== "generate" && !uploadedAsset) return;
     setDraftError(null);
     try {
       const options = { aspectRatio, outputFormat };
-      const draft = operation === "edit"
-        ? buildAIImageEditRequest(uploadedAsset, prompt, { ...options, negativePrompt })
-        : buildAIImageUpscaleRequest(uploadedAsset, options);
+      const draft = operation === "generate"
+        ? buildAIImageGenerationRequest(prompt, { ...options, negativePrompt })
+        : operation === "edit"
+          ? buildAIImageEditRequest(uploadedAsset!, prompt, { ...options, negativePrompt })
+          : buildAIImageUpscaleRequest(uploadedAsset!, options);
       setRequestDraft(draft);
     } catch (e) {
       setRequestDraft(null);
@@ -234,15 +238,16 @@ const AIImageStudio = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2" role="group" aria-label="Image operation">
+              <Button type="button" variant={operation === "generate" ? "default" : "outline"} onClick={() => { setOperation("generate"); setRequestDraft(null); setDraftError(null); }}>Generate image</Button>
               <Button type="button" variant={operation === "edit" ? "default" : "outline"} onClick={() => { setOperation("edit"); setRequestDraft(null); setDraftError(null); }}>Edit image</Button>
               <Button type="button" variant={operation === "upscale" ? "default" : "outline"} onClick={() => { setOperation("upscale"); setRequestDraft(null); setDraftError(null); }}>Upscale image</Button>
             </div>
 
-            {operation === "edit" && (
+            {operation !== "upscale" && (
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span>Editing instructions <span className="text-slate-500">(required · max 4,000 characters)</span></span>
-                  <textarea value={prompt} onChange={e => { setPrompt(e.target.value); setRequestDraft(null); }} maxLength={4000} rows={4} placeholder="Describe the changes you want…" className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <span>{operation === "generate" ? "Image prompt" : "Editing instructions"} <span className="text-slate-500">(required · max 4,000 characters)</span></span>
+                  <textarea value={prompt} onChange={e => { setPrompt(e.target.value); setRequestDraft(null); }} maxLength={4000} rows={4} placeholder={operation === "generate" ? "Describe the image you want to create…" : "Describe the changes you want…"} className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                   <span className="text-xs text-slate-500">{prompt.length}/4000</span>
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
@@ -268,10 +273,10 @@ const AIImageStudio = () => {
               </label>
             </div>
 
-            <Button onClick={prepareDraft} disabled={!uploadedAsset || (operation === "edit" && !prompt.trim())}>
+            <Button onClick={prepareDraft} disabled={(operation !== "generate" && !uploadedAsset) || (operation !== "upscale" && !prompt.trim())}>
               <FileCheck2 className="mr-2 h-4 w-4" />Prepare request draft
             </Button>
-            {!uploadedAsset && <p className="text-xs text-slate-500">Upload and verify an image first to unlock local draft preparation.</p>}
+            {operation !== "generate" && !uploadedAsset && <p className="text-xs text-slate-500">Upload and verify an image first to unlock local edit or upscale draft preparation.</p>}
             {draftError && <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{draftError}</AlertDescription></Alert>}
             {requestDraft && (
               <div className="space-y-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-4" aria-live="polite">
@@ -279,10 +284,10 @@ const AIImageStudio = () => {
                   <b className="text-white">Request draft prepared</b>
                   <Badge variant="outline">Local only · not submitted</Badge>
                 </div>
-                <p className="text-sm text-slate-300">Operation: {requestDraft.featureKey === "ai.image.edit" ? "Image editing" : "Image upscaling"}</p>
+                <p className="text-sm text-slate-300">Operation: {requestDraft.featureKey === "ai.image.generate" ? "Text-to-image generation" : requestDraft.featureKey === "ai.image.edit" ? "Image editing" : "Image upscaling"}</p>
                 <p className="break-all text-xs text-slate-400">Verified asset: {requestDraft.imageAssetId}</p>
-                {requestDraft.featureKey === "ai.image.edit" && <p className="whitespace-pre-wrap text-sm text-slate-300">Instructions: {requestDraft.prompt}</p>}
-                {requestDraft.featureKey === "ai.image.edit" && requestDraft.negativePrompt && <p className="whitespace-pre-wrap text-sm text-slate-400">Avoid: {requestDraft.negativePrompt}</p>}
+                {requestDraft.featureKey !== "ai.image.upscale" && <p className="whitespace-pre-wrap text-sm text-slate-300">{requestDraft.featureKey === "ai.image.generate" ? "Prompt:" : "Instructions:"} {requestDraft.prompt}</p>}
+                {requestDraft.featureKey !== "ai.image.upscale" && requestDraft.negativePrompt && <p className="whitespace-pre-wrap text-sm text-slate-400">Avoid: {requestDraft.negativePrompt}</p>}
                 <p className="text-sm text-slate-400">Aspect ratio: {requestDraft.aspectRatio} · Format: {requestDraft.outputFormat}</p>
                 <p className="text-xs text-amber-200">This is a preview only. No job was created and no credits were reserved.</p>
               </div>
