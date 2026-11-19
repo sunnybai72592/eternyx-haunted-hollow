@@ -48,6 +48,8 @@ const EternixAI: React.FC = () => {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
+  const historyVersion = useRef(0);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The global auth store is the single source of truth for session restoration.
@@ -96,12 +98,18 @@ const EternixAI: React.FC = () => {
   };
 
   const loadSessionMessages = async (sessionId: string) => {
+    const version = ++historyVersion.current;
+    setLoadingHistory(true);
+    setMessages([]);
     const { data, error } = await supabase
       .from('chat_history')
       .select('*')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true });
 
+    if (version !== historyVersion.current) return;
+    setLoadingHistory(false);
+    if (error) toast.error('Unable to load conversation history.');
     if (!error && data) {
       setMessages(
         data.map((msg: any) => ({
@@ -180,7 +188,7 @@ const EternixAI: React.FC = () => {
 
       if (processError) throw new Error(processError.message);
 
-      toast.success(`${fileType === 'pdf' ? 'PDF' : 'Image'} uploaded and processing started!`);
+      toast.success(`${fileType === 'pdf' ? 'PDF' : 'Image'} is ready to use in chat.`);
     } catch (error) {
       toast.error(`Upload failed: ${(error as Error).message}`);
     } finally {
@@ -190,7 +198,7 @@ const EternixAI: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || !userId || isLoading) return;
+    if (!inputValue.trim() || !userId || isLoading || loadingHistory) return;
 
     const userMessage = inputValue;
     setInputValue('');
@@ -252,6 +260,8 @@ const EternixAI: React.FC = () => {
   };
 
   const handleNewConversation = () => {
+    historyVersion.current++;
+    setLoadingHistory(false);
     setMessages([]);
     setCurrentSessionId(null);
     setSelectedDocument(null);
@@ -304,6 +314,7 @@ const EternixAI: React.FC = () => {
               {/* Sessions Tab */}
               <TabsContent value="sessions" className="space-y-4">
                 <Button
+                  disabled={isLoading}
                   onClick={handleNewConversation}
                   className="w-full bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black font-semibold gap-2"
                 >
@@ -316,6 +327,7 @@ const EternixAI: React.FC = () => {
                     {sessions.map((session) => (
                       <Button
                         key={session.id}
+                        disabled={isLoading}
                         variant={currentSessionId === session.id ? 'default' : 'ghost'}
                         className="w-full justify-start text-left h-auto py-2 px-3"
                         onClick={() => {
@@ -382,6 +394,8 @@ const EternixAI: React.FC = () => {
                               <Button
                                 size="sm"
                                 variant="ghost"
+                                aria-label={`Delete ${doc.file_name}`}
+                                disabled={isLoading}
                                 onClick={() => handleDeleteDocument(doc.id)}
                                 className="text-red-500 hover:text-red-600"
                               >
@@ -393,7 +407,13 @@ const EternixAI: React.FC = () => {
                                 size="sm"
                                 variant="outline"
                                 className="w-full mt-2 text-xs border-cyber-cyan/50 text-cyber-cyan hover:bg-cyber-cyan/10"
-                                onClick={() => setSelectedDocument(doc.id)}
+                                disabled={isLoading}
+                                onClick={() => {
+                                  if (selectedDocument !== doc.id) {
+                                    handleNewConversation();
+                                    setSelectedDocument(doc.id);
+                                  }
+                                }}
                               >
                                 Use in Chat
                               </Button>
@@ -416,7 +436,7 @@ const EternixAI: React.FC = () => {
                 {selectedDocument && (
                   <CardDescription className="flex items-center gap-2 mt-2">
                     <FileText className="w-4 h-4 text-cyber-cyan" />
-                    Using document context
+                    Using {documents.find(doc => doc.id === selectedDocument)?.file_name ?? 'selected document'}
                   </CardDescription>
                 )}
               </CardHeader>
@@ -482,7 +502,7 @@ const EternixAI: React.FC = () => {
                   <Button
                     aria-label="Send message"
                     onClick={handleSendMessage}
-                    disabled={isLoading || !inputValue.trim()}
+                    disabled={isLoading || loadingHistory || !inputValue.trim()}
                     className="bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black font-semibold"
                   >
                     <Send className="w-4 h-4" />
