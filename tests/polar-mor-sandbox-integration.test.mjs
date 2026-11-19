@@ -136,6 +136,14 @@ test("frontend chooses exactly one sandbox checkout provider",()=>{
   assert.match(manager,/sandboxPortalEndpoint\(sandboxProvider\)/);
   assert.match(manager,/verifiedProvider !== sandboxProvider/);
 });
+test("Polar sandbox subscriptions cannot grant production paid entitlements",()=>{
+  assert.match(sub,/const polarSandbox = current\.subscription_provider === "polar"/);
+  assert.match(sub,/subscribed: !polarSandbox/);
+  assert.match(sub,/subscription_tier: polarSandbox \? null : tier/);
+  assert.match(sub,/sandbox_subscription: polarSandbox \? \{/);
+  assert.match(manager,/This TEST subscription does not unlock real paid tools/);
+  assert.match(manager,/Open Polar test customer portal/);
+});
 test("all new TS and TSX files parse without errors",()=>{
   const files=[
     ["provider",selector,ts.ScriptKind.TS],
