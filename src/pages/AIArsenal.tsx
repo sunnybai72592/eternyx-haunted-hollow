@@ -193,7 +193,11 @@ const AIArsenal = () => {
                   {["AI Writing Studio", "AI Audio Studio"].includes(studio.name) && (
                     <CardContent>
                       <Button asChild variant="outline" className="w-full justify-between border-cyan-400/30 bg-transparent text-cyan-100 hover:bg-cyan-400/10">
-                        <Link to={studio.name === "AI Audio Studio" ? "/ai-arsenal/audio" : "/ai-arsenal/writing"}>Review {studio.name} <ArrowRight className="h-4 w-4" /></Link>
+                        {studio.name === "AI Audio Studio" ? (
+                          <Link to="/ai-arsenal/audio">Review AI Audio Studio <ArrowRight className="h-4 w-4" /></Link>
+                        ) : (
+                          <Link to="/ai-arsenal/writing">Review AI Writing Studio <ArrowRight className="h-4 w-4" /></Link>
+                        )}
                       </Button>
                     </CardContent>
                   )}
