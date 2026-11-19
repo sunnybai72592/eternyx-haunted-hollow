@@ -12,8 +12,8 @@ const corsHeaders = {
 };
 
 const plans = {
-  premium: { name: "Shadow Operative", amount: 2999 },
-  elite: { name: "Cyber Overlord", amount: 9999 },
+  premium: { name: "Shadow Operative", priceEnv: "STRIPE_PREMIUM_MONTHLY_PRICE_ID", lookupKey: "eternyx_premium_monthly" },
+  elite: { name: "Cyber Overlord", priceEnv: "STRIPE_ELITE_MONTHLY_PRICE_ID", lookupKey: "eternyx_elite_monthly" },
 } as const;
 
 async function readLimitedRequestText(req: Request, limit: number): Promise<string> {
@@ -119,6 +119,14 @@ serve(async (req) => {
       return jsonResponse({ error: "Invalid subscription plan" }, 400);
     }
 
+    const selectedPlan = plans[planId as keyof typeof plans];
+    // The Stripe test-mode catalog is the sole source of recurring amounts.
+    // Never invent amounts or accept a client-supplied price ID.
+    const configuredPriceId = Deno.env.get(selectedPlan.priceEnv);
+    if (!configuredPriceId || !/^price_[a-zA-Z0-9]+$/.test(configuredPriceId)) {
+      return jsonResponse({ error: "Subscription pricing is not configured" }, 503);
+    }
+
     const stripeKey = testStripeKey; // Already validated as test-only above.
 
     // Never use an untrusted Origin header as a payment redirect destination.
@@ -133,6 +141,19 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const price = await stripe.prices.retrieve(configuredPriceId, { expand: ["product"] });
+    const product = price.product;
+    if (
+      !price.active || price.type !== "recurring" ||
+      price.recurring?.interval !== "month" || price.recurring?.interval_count !== 1 ||
+      price.unit_amount === null || price.unit_amount <= 0 ||
+      price.currency !== "usd" ||
+      price.lookup_key !== selectedPlan.lookupKey ||
+      typeof product === "string" || "deleted" in product || !product.active ||
+      product.metadata?.eternyx_plan_id !== planId
+    ) {
+      return jsonResponse({ error: "Configured subscription price failed validation" }, 503);
+    }
     const existingCustomers = await stripe.customers.list({ email: user.email, limit: 100 });
     const existingCustomer = existingCustomers.data.find(
       (customer) => customer.metadata?.user_id === user.id,
@@ -142,21 +163,9 @@ serve(async (req) => {
       metadata: { user_id: user.id },
     });
 
-    const selectedPlan = plans[planId as keyof typeof plans];
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: selectedPlan.name,
-            description: selectedPlan.name + " subscription plan",
-          },
-          unit_amount: selectedPlan.amount,
-          recurring: { interval: "month" },
-        },
-        quantity: 1,
-      }],
+      line_items: [{ price: configuredPriceId, quantity: 1 }],
       mode: "subscription",
       success_url: appUrl.origin + "/subscription?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: appUrl.origin + "/subscription?cancelled=true",
