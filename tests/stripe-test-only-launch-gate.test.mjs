@@ -33,13 +33,17 @@ test("gates appear after verified user authentication and before parsing custome
   assert.match(checkout, /!user\?\.id \|\| !user\.email/);
 });
 
-test("checkout retains strict server-side plan IDs and amounts (still unapproved for live)", () => {
+test("checkout accepts only vetted Stripe test Price IDs rather than inline amounts", () => {
   assert.match(checkout, /const plans = \{/);
   assert.match(checkout, /premium: \{ name:/);
   assert.match(checkout, /elite: \{ name:/);
   assert.match(checkout, /hasOwnProperty\.call\(plans, planId\)/);
-  assert.match(checkout, /unit_amount: selectedPlan\.amount/);
-  assert.doesNotMatch(checkout, /body\.price|unit_amount: body|body\.amount/);
+  assert.match(checkout, /Deno\.env\.get\(selectedPlan\.priceEnv\)/);
+  assert.match(checkout, /stripe\.prices\.retrieve\(configuredPriceId/);
+  assert.match(checkout, /price\.unit_amount === null \|\| price\.unit_amount <= 0/);
+  assert.match(checkout, /price\.recurring\?\.interval !== "month"/);
+  assert.match(checkout, /line_items: \[\{ price: configuredPriceId, quantity: 1 \}\]/);
+  assert.doesNotMatch(checkout, /body\.price|unit_amount: body|body\.amount|price_data:/);
 });
 
 test("client checkout feature flag is default-off and never replaces server enforcement", () => {
