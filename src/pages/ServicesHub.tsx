@@ -1,241 +1,156 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TypingText } from '@/components/TypingText';
-import { MobileViewport } from '@/components/MobileViewport';
+import { Link } from "react-router-dom";
 import {
-  Shield, Code, Lightbulb, AlertTriangle, Gem, Eye, Wifi, Database, Cloud, Zap, Brain, Rocket, Cpu, Globe, Smartphone, Server
-} from 'lucide-react';
+  Activity, ArrowLeft, ArrowRight, Bot, Braces, Cloud, Code2, Database,
+  FileCheck2, GitBranch, LockKeyhole, Search, Shield, Workflow,
+  type LucideIcon,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface ServiceCardProps {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  link: string;
-  color: string;
+type CapabilityStatus = "Local workbench" | "Backend-dependent" | "Planned";
+interface Destination {
+  readonly title: string;
+  readonly description: string;
+  readonly href: string;
+  readonly icon: LucideIcon;
+  readonly status: CapabilityStatus;
 }
+const sections: readonly { readonly title: string; readonly items: readonly Destination[] }[] = [
+  {
+    title: "Cybersecurity & defensive assessment",
+    items: [
+      {
+        title: "Assessment & Remediation",
+        description: "Organize authorized security findings, evidence, ownership and remediation follow-up.",
+        href: "/cybersecurity/assessment-remediation", icon: FileCheck2, status: "Local workbench",
+      },
+      {
+        title: "Zero-day Response Readiness",
+        description: "Run a local preparedness checklist; no active zero-day detector or live threat feed.",
+        href: "/zero-day-protection", icon: Shield, status: "Local workbench",
+      },
+      {
+        title: "AES-GCM Text Encryption",
+        description: "Encrypt text in the browser with classical AES-GCM. Not quantum-resistant encryption.",
+        href: "/quantum-encryption", icon: LockKeyhole, status: "Local workbench",
+      },
+      {
+        title: "AI Security Assistant",
+        description: "Existing authenticated, entitlement-gated assistant when its backend is configured. No AI malware scanner.",
+        href: "/ai-powered-security", icon: Bot, status: "Backend-dependent",
+      },
+      {
+        title: "Platform Security Monitoring",
+        description: "Review available verified platform telemetry; unavailable feeds must stay unavailable.",
+        href: "/threat-monitoring", icon: Activity, status: "Backend-dependent",
+      },
+      {
+        title: "CVE Research",
+        description: "Look up public vulnerability records; keyword matches do not confirm a target vulnerability.",
+        href: "/vulnerability-scanner", icon: Search, status: "Backend-dependent",
+      },
+    ],
+  },
+  {
+    title: "Developer Studio",
+    items: [
+      {
+        title: "Developer Utilities",
+        description: "Browser-based JSON, Base64, URL encoding, UUID and JWT inspection utilities.",
+        href: "/developer-studio", icon: Code2, status: "Local workbench",
+      },
+      {
+        title: "API Engineering",
+        description: "Inspect and prepare API specifications and requests without inventing server responses.",
+        href: "/developer-studio/api-workbench", icon: Braces, status: "Local workbench",
+      },
+      {
+        title: "DevOps Launchpad",
+        description: "Prepare deployment and operational workflows using local analysis tools.",
+        href: "/developer-studio/devops", icon: Workflow, status: "Local workbench",
+      },
+      {
+        title: "Observability Intelligence",
+        description: "Analyze supplied logs and observability configuration locally.",
+        href: "/developer-studio/observability", icon: Activity, status: "Local workbench",
+      },
+      {
+        title: "GitHub Integration Hub",
+        description: "Inspect GitHub integration readiness; connected actions require authorized access.",
+        href: "/developer-studio/github-hub", icon: GitBranch, status: "Backend-dependent",
+      },
+    ],
+  },
+  {
+    title: "AI, cloud & innovation",
+    items: [
+      {
+        title: "AI Arsenal",
+        description: "Open the eight studios and check local capabilities against provider activation status.",
+        href: "/ai-arsenal", icon: Bot, status: "Local workbench",
+      },
+      {
+        title: "Document Intelligence",
+        description: "Inspect, search and prepare local text document drafts; AI extraction remains disabled.",
+        href: "/ai-arsenal/documents", icon: Database, status: "Local workbench",
+      },
+      {
+        title: "Cloud & Integrations",
+        description: "View the integration roadmap; this does not connect accounts or deploy cloud resources.",
+        href: "/integrations", icon: Cloud, status: "Planned",
+      },
+      {
+        title: "Automation & Innovation",
+        description: "Review the automation roadmap; no autonomous jobs or connected writes are active here.",
+        href: "/automation", icon: Workflow, status: "Planned",
+      },
+    ],
+  },
+];
 
-const ServiceCard: React.FC<ServiceCardProps> = ({ title, description, icon, link, color }) => {
-  const navigate = useNavigate();
-  return (
-    <Card 
-      className={`bg-card/50 border border-gray-700 hover:border-${color}-500 transition-colors duration-300 cursor-pointer`}
-      onClick={() => navigate(link)}
-    >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-2xl font-bold text-foreground">
-          {title}
-        </CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground">
-          {description}
+const ServicesHub = () => (
+  <div className="min-h-screen bg-[#070b14] text-white">
+    <div className="mx-auto max-w-7xl space-y-10 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+      <Button asChild variant="ghost" className="text-slate-300">
+        <Link to="/explore"><ArrowLeft className="mr-2 h-4 w-4" />Explore ETERNYX</Link>
+      </Button>
+      <section className="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-950/40 via-slate-950 to-violet-950/30 p-7 sm:p-10">
+        <h1 className="text-3xl font-bold sm:text-5xl">ETERNYX capability directory</h1>
+        <p className="mt-4 max-w-3xl text-slate-300">
+          Find real workbenches and planned capabilities in one place. This directory does not claim active paid services,
+          real-time scanning, deployed AI models or verified consulting capacity.
         </p>
-      </CardContent>
-    </Card>
-  );
-};
-
-const ServicesHub: React.FC = () => {
-  const navigate = useNavigate();
-
-  const cybersecurityServices = [
-    {
-      title: "Assessment & Remediation",
-      description: "Organize security findings, supporting evidence, ownership, severity, and remediation validation.",
-      icon: <Shield className="h-8 w-8 text-green-500" />,
-      link: "/cybersecurity/assessment-remediation",
-      color: "green",
-    },
-    {
-      title: "Zero-Day Protection",
-      description: "Stay ahead of unknown threats with our proprietary detection systems and real-time threat intelligence feeds.",
-      icon: <AlertTriangle className="h-8 w-8 text-yellow-500" />,
-      link: "/zero-day-protection",
-      color: "yellow",
-    },
-    {
-      title: "Quantum-Ready Encryption",
-      description: "Future-proof your data with quantum-resistant encryption algorithms and next-generation security protocols.",
-      icon: <Gem className="h-8 w-8 text-purple-500" />,
-      link: "/quantum-encryption",
-      color: "purple",
-    },
-    {
-      title: "AI-Powered Security",
-      description: "Machine learning algorithms that adapt to new threats in real-time, providing predictive security measures.",
-      icon: <Eye className="h-8 w-8 text-blue-500" />,
-      link: "/ai-powered-security",
-      color: "blue",
-    },
-    {
-      title: "Elite Development Team",
-      description: "Access to our top-tier developers for mission-critical applications that require the highest security standards.",
-      icon: <Code className="h-8 w-8 text-cyan-500" />,
-      link: "/elite-development-team",
-      color: "cyan",
-    },
-    {
-      title: "Platform Security Monitoring",
-      description: "Review ETERNYX platform security telemetry from selected verified backend authorization checks.",
-      icon: <Wifi className="h-8 w-8 text-red-500" />,
-      link: "/threat-monitoring",
-      color: "red",
-    },
-  ];
-
-  const webDevelopmentServices = [
-    {
-      title: "Frontend Development",
-      description: "Modern React, Vue, and Angular applications with responsive design and optimal performance.",
-      icon: <Globe className="h-6 w-6 text-blue-400" />,
-      link: "/frontend-development",
-      color: "blue",
-    },
-    {
-      title: "Backend Development",
-      description: "Scalable APIs and microservices using Node.js, Python, and cloud-native architectures.",
-      icon: <Database className="h-6 w-6 text-green-400" />,
-      link: "/backend-development",
-      color: "green",
-    },
-    {
-      title: "Mobile Development",
-      description: "Cross-platform mobile apps using React Native and Flutter for iOS and Android.",
-      icon: <Smartphone className="h-6 w-6 text-purple-400" />,
-      link: "/mobile-development",
-      color: "purple",
-    },
-    {
-      title: "Cloud Solutions",
-      description: "AWS, Azure, and GCP deployment with containerization and serverless architectures.",
-      icon: <Cloud className="h-6 w-6 text-cyan-400" />,
-      link: "/cloud-solutions",
-      color: "cyan",
-    },
-    {
-      title: "Performance Optimization",
-      description: "Speed optimization, SEO enhancement, and performance monitoring for web applications.",
-      icon: <Zap className="h-6 w-6 text-yellow-400" />,
-      link: "/performance-optimization",
-      color: "yellow",
-    },
-    {
-      title: "Custom Solutions",
-      description: "Tailored development solutions for unique business requirements and complex challenges.",
-      icon: <Code className="h-6 w-6 text-red-400" />,
-      link: "/custom-solutions",
-      color: "red",
-    },
-  ];
-
-  const digitalInnovationServices = [
-    {
-      title: "Artificial Intelligence",
-      description: "Advanced AI solutions including machine learning, natural language processing, and computer vision.",
-      icon: <Brain className="h-6 w-6 text-yellow-400" />,
-      link: "https://openai.com", // External link example
-      color: "yellow",
-    },
-    {
-      title: "IoT Solutions",
-      description: "Internet of Things implementations for smart homes, cities, and industrial automation.",
-      icon: <Cpu className="h-6 w-6 text-purple-400" />,
-      link: "https://www.ibm.com/internet-of-things",
-      color: "purple",
-    },
-    {
-      title: "AR/VR Development",
-      description: "Immersive augmented and virtual reality experiences for training, entertainment, and business.",
-      icon: <Eye className="h-6 w-6 text-blue-400" />,
-      link: "https://www.oculus.com",
-      color: "blue",
-    },
-    {
-      title: "Blockchain Technology",
-      description: "Decentralized applications, smart contracts, and cryptocurrency solutions for modern businesses.",
-      icon: <Rocket className="h-6 w-6 text-green-400" />,
-      link: "https://ethereum.org",
-      color: "green",
-    },
-    {
-      title: "Edge Computing",
-      description: "Low-latency computing solutions bringing processing power closer to data sources.",
-      icon: <Zap className="h-6 w-6 text-red-400" />,
-      link: "https://aws.amazon.com/edge/",
-      color: "red",
-    },
-    {
-      title: "Innovation Consulting",
-      description: "Strategic guidance for digital transformation and emerging technology adoption.",
-      icon: <Lightbulb className="h-6 w-6 text-cyan-400" />,
-      link: "mailto:consulting@eternyx.com?subject=Innovation Consulting Inquiry",
-      color: "cyan",
-    },
-  ];
-
-  return (
-    <div className="min-h-screen bg-background text-foreground preserve-cyberpunk android-scroll">
-      <MobileViewport />
-      
-      <main className="pt-20 sm:pt-24">
-        {/* Hero Section */}
-        <section className="py-12 sm:py-16 md:py-20 px-4 text-center bg-gradient-to-b from-gray-950/20 to-background pt-20 sm:pt-24">
-          <div className="max-w-4xl mx-auto responsive-container">
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 text-foreground glitch" data-text="ETERNYX SERVICES">
-              ETERNYX SERVICES
-            </h1>
-            <h2 className="text-3xl md:text-4xl font-bold mb-6 text-muted-foreground">
-              YOUR DIGITAL FRONTIER
-            </h2>
-            <div className="text-xl mb-8 h-8">
-              <TypingText 
-                text="Unleashing the power of advanced technology for unparalleled security and innovation."
-                speed={80}
-                className="text-muted-foreground"
-              />
-            </div>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              From impenetrable cybersecurity to groundbreaking digital innovation, Eternyx provides the tools and expertise to dominate the digital era.
-            </p>
+        <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Preview · status varies by tool</Badge>
+      </section>
+      {sections.map(section => (
+        <section key={section.title} className="space-y-4">
+          <h2 className="text-2xl font-semibold text-white">{section.title}</h2>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {section.items.map(item => {
+              const Icon = item.icon;
+              return (
+                <Card key={item.href} className="flex flex-col border-slate-800 bg-slate-900/70 text-slate-100">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-3">
+                      <Icon className="h-6 w-6 text-cyan-300" aria-hidden="true" />
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{item.status}</Badge>
+                    </div>
+                    <CardTitle className="pt-2 text-lg text-white">{item.title}</CardTitle>
+                    <CardDescription className="text-slate-400">{item.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="mt-auto">
+                    <Button asChild variant="outline" className="w-full justify-between border-cyan-400/30 text-cyan-200 hover:bg-cyan-400/10">
+                      <Link to={item.href}>Open details <ArrowRight className="h-4 w-4" /></Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </section>
-
-        {/* Cybersecurity Services */}
-        <section className="py-16 px-4 max-w-7xl mx-auto">
-          <h3 className="text-4xl font-bold text-cyber-cyan neon-text mb-8 text-center">Cybersecurity Arsenal</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {cybersecurityServices.map((card, index) => (
-              <ServiceCard key={index} {...card} />
-            ))}
-          </div>
-        </section>
-
-        {/* Web Development Services */}
-        <section className="py-16 px-4 max-w-7xl mx-auto">
-          <h3 className="text-4xl font-bold text-cyber-blue neon-text mb-8 text-center">Full Stack Development</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {webDevelopmentServices.map((card, index) => (
-              <ServiceCard key={index} {...card} />
-            ))}
-          </div>
-        </section>
-
-        {/* Digital Innovation Services */}
-        <section className="py-16 px-4 max-w-7xl mx-auto">
-          <h3 className="text-4xl font-bold text-cyber-yellow neon-text mb-8 text-center">Digital Innovation Lab</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {digitalInnovationServices.map((card, index) => (
-              <ServiceCard key={index} {...card} />
-            ))}
-          </div>
-        </section>
-      </main>
+      ))}
     </div>
-  );
-};
-
+  </div>
+);
 export default ServicesHub;
-

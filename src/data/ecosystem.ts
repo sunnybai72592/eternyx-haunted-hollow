@@ -43,7 +43,7 @@ export const ecosystemPillars: EcosystemPillar[] = [
     description: "Practical utilities and workspaces for building, testing, debugging, and improving software.",
     purpose: "Give developers one organized place for everyday engineering workflows, from code quality to API work.",
     href: "/developer-studio",
-    status: "Planned",
+    status: "Existing foundation",
     icon: Code2,
     accent: "violet",
     domains: ["Code utilities", "API workbench", "Web development", "Testing and debugging", "Data formatting", "Performance"],
