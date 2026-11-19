@@ -141,7 +141,8 @@ const AIImageStudio = () => {
   };
 
   useEffect(() => {
-    if (!job || !job.featureKey.startsWith("ai.image.") || isTerminalAIJobStatus(job.status) || job.status === "reconciliation_required") return;
+    if (!job || !job.featureKey.startsWith("ai.image.") || isTerminalAIJobStatus(job.status)) return;
+    if (job.status==="reconciliation_required") return;
     let active = true;
     let timer: number | undefined;
     const poll = async () => {
@@ -181,7 +182,7 @@ const AIImageStudio = () => {
 
         <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
           <ShieldCheck className="h-4 w-4" />
-          <AlertDescription>Generation remains unavailable while provider selection, credentials, safety policy, backend deployment and cost approval are pending. This page does not submit prompts, enqueue jobs, reserve credits or make paid provider calls.</AlertDescription>
+          <AlertDescription>Generation remains unavailable while provider selection, credentials, safety policy, backend deployment and cost approval are pending. This page does not submit prompts or make paid provider calls; it also does not enqueue jobs or reserve credits.</AlertDescription>
         </Alert>
 
         <section className="grid gap-4 md:grid-cols-3">
