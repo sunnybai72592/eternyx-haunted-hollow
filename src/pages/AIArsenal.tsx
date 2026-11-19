@@ -32,7 +32,7 @@ const plannedStudios = [
   },
   {
     name: "AI Audio Studio",
-    description: "Future speech, transcription, and audio-generation workflows with clear job status and output controls.",
+    description: "Private audio inspection and browser speech preview; AI transcription and provider generation remain disabled.",
     icon: AudioLines,
   },
   {
@@ -185,15 +185,19 @@ const AIArsenal = () => {
                       <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-300">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <Badge variant="outline" className="border-slate-600 text-slate-300">{studio.name === "AI Writing Studio" ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Audio Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
                     </div>
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>
                   </CardHeader>
-                  {studio.name === "AI Writing Studio" && (
+                  {["AI Writing Studio", "AI Audio Studio"].includes(studio.name) && (
                     <CardContent>
                       <Button asChild variant="outline" className="w-full justify-between border-cyan-400/30 bg-transparent text-cyan-100 hover:bg-cyan-400/10">
-                        <Link to="/ai-arsenal/writing">Review AI Writing Studio <ArrowRight className="h-4 w-4" /></Link>
+                        {studio.name === "AI Audio Studio" ? (
+                          <Link to="/ai-arsenal/audio">Review AI Audio Studio <ArrowRight className="h-4 w-4" /></Link>
+                        ) : (
+                          <Link to="/ai-arsenal/writing">Review AI Writing Studio <ArrowRight className="h-4 w-4" /></Link>
+                        )}
                       </Button>
                     </CardContent>
                   )}
