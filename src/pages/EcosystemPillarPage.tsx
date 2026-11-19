@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ecosystemPillars } from "@/data/ecosystem";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,34 @@ function LineWorkflow() {
   const [source, setSource] = useState("");
   const [deduplicate, setDeduplicate] = useState(true);
   const [sort, setSort] = useState(false);
-  const trimmed = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const resultField = useRef<HTMLTextAreaElement>(null);
+  const [copyStatus, setCopyStatus] = useState("");
+  const trimmed = source.split(/\r\n|[\r\n]/).map(line => line.trim()).filter(Boolean);
   const lines = deduplicate ? Array.from(new Set(trimmed)) : trimmed;
   if (sort) lines.sort((a, b) => a.localeCompare(b));
-  return <section className="space-y-3">
+  const result = lines.join("\n");
+
+  async function copyResult() {
+    try {
+      await navigator.clipboard.writeText(result);
+      setCopyStatus("Copied.");
+    } catch {
+      resultField.current?.focus();
+      resultField.current?.select();
+      setCopyStatus("Result selected. Use your device’s Copy command.");
+    }
+  }
+
+  function downloadResult() {
+    const url = URL.createObjectURL(new Blob([result], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "eternyx-clean-list.txt";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  return <section className="space-y-3" onChange={() => setCopyStatus("")}>
     <h2 className="text-xl font-semibold">Clean a list</h2>
     <label htmlFor="workflow-input">Input lines</label>
     <Textarea id="workflow-input" value={source} onChange={e => setSource(e.target.value)} />
@@ -50,7 +74,12 @@ function LineWorkflow() {
       <label><input type="checkbox" checked={sort} onChange={e => setSort(e.target.checked)} /> Sort alphabetically</label>
     </div>
     <label htmlFor="workflow-output">Result ({lines.length} lines)</label>
-    <Textarea id="workflow-output" readOnly value={lines.join("\n")} />
+    <Textarea id="workflow-output" ref={resultField} readOnly value={result} />
+    <div className="flex flex-wrap gap-3">
+      <Button disabled={!result} onClick={copyResult}>Copy result</Button>
+      <Button variant="outline" disabled={!result} onClick={downloadResult}>Download .txt</Button>
+    </div>
+    <p role="status" className="text-sm text-muted-foreground">{copyStatus}</p>
   </section>;
 }
 
