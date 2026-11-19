@@ -89,13 +89,13 @@ async function syncSubscription(
 serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
-  const signature = req.headers.get("Stripe-Signature");
+  // Subscription projection is test-only until a separately audited live launch.\n  if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {\n    return jsonResponse({ error: "Stripe webhook is not enabled" }, 503);\n  }\n  const signature = req.headers.get("Stripe-Signature");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  if (!signature || !webhookSecret || !stripeKey || !supabaseUrl || !serviceRoleKey) {
+  if (!signature || !webhookSecret || !stripeKey || !/^(sk_test_|rk_test_)/.test(stripeKey) || !supabaseUrl || !serviceRoleKey) {
     return jsonResponse({ error: "Webhook endpoint is not configured" }, 503);
   }
 
@@ -136,7 +136,7 @@ serve(async (req) => {
     if (claim !== "claimed") throw new Error("Unexpected webhook event claim state");
 
     try {
-      if (event.type === "checkout.session.completed") {
+      if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
         const session = event.data.object as Stripe.Checkout.Session;
         const subscriptionId = stripeObjectId(session.subscription);
         if (session.mode === "subscription" && subscriptionId) {
@@ -145,6 +145,20 @@ serve(async (req) => {
           if (!sessionUserId || subscription.metadata?.user_id !== sessionUserId) {
             throw new Error("Checkout session and subscription ownership metadata mismatch");
           }
+          await syncSubscription(stripe, admin, subscription);
+        }
+      } else if (
+        event.type === "invoice.paid" ||
+        event.type === "invoice.payment_failed" ||
+        event.type === "invoice.payment_action_required"
+      ) {
+        // Invoice events are authoritative payment lifecycle signals.
+        // Retrieve the current subscription rather than interpreting untrusted
+        // client state or granting access from an invoice event alone.
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = stripeObjectId(invoice.subscription);
+        if (subscriptionId) {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
           await syncSubscription(stripe, admin, subscription);
         }
       } else if (

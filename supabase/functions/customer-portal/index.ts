@@ -41,8 +41,8 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!supabaseUrl || !supabaseAnonKey || !stripeKey) {
+    // Test-mode launch gate also covers self-service billing configuration.\n    if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {\n      return jsonResponse({ error: "Billing portal is not enabled" }, 503);\n    }\n    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!supabaseUrl || !supabaseAnonKey || !stripeKey || !/^(sk_test_|rk_test_)/.test(stripeKey)) {
       return jsonResponse({ error: "Billing service is unavailable" }, 503);
     }
 
