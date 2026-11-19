@@ -233,8 +233,8 @@ const AIImageStudio = () => {
 
         <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
           <CardHeader>
-            <CardTitle className="text-white">Edit & upscale request workspace</CardTitle>
-            <CardDescription className="text-slate-400">Build and review a provider-neutral request draft from a verified private image. Preparing a draft is local only; it does not submit or charge anything.</CardDescription>
+            <CardTitle className="text-white">Image request workspace</CardTitle>
+            <CardDescription className="text-slate-400">Build and review provider-neutral generation, editing, and upscaling request drafts. Editing and upscaling require a verified private image; all draft preparation is local only.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2" role="group" aria-label="Image operation">
@@ -285,7 +285,7 @@ const AIImageStudio = () => {
                   <Badge variant="outline">Local only · not submitted</Badge>
                 </div>
                 <p className="text-sm text-slate-300">Operation: {requestDraft.featureKey === "ai.image.generate" ? "Text-to-image generation" : requestDraft.featureKey === "ai.image.edit" ? "Image editing" : "Image upscaling"}</p>
-                <p className="break-all text-xs text-slate-400">Verified asset: {requestDraft.imageAssetId}</p>
+                {requestDraft.featureKey !== "ai.image.generate" && <p className="break-all text-xs text-slate-400">Verified asset: {requestDraft.imageAssetId}</p>}
                 {requestDraft.featureKey !== "ai.image.upscale" && <p className="whitespace-pre-wrap text-sm text-slate-300">{requestDraft.featureKey === "ai.image.generate" ? "Prompt:" : "Instructions:"} {requestDraft.prompt}</p>}
                 {requestDraft.featureKey !== "ai.image.upscale" && requestDraft.negativePrompt && <p className="whitespace-pre-wrap text-sm text-slate-400">Avoid: {requestDraft.negativePrompt}</p>}
                 <p className="text-sm text-slate-400">Aspect ratio: {requestDraft.aspectRatio} · Format: {requestDraft.outputFormat}</p>
