@@ -52,6 +52,17 @@ nationality or residence appearing on a payout-country list does not
 guarantee underwriting approval, business authorization, identity
 verification, or the acceptance of ETERNYX cybersecurity tooling.
 
+## Verified target Supabase deployment (November 19)
+
+- Additive Polar subscription/inbox migration applied successfully.
+- Supabase edge functions deployed: polar-checkout v1, polar-customer-portal v1, polar-webhook v1.
+- Provider-aware check-subscription deployed (with latest sandbox display-only change pending redeployment).
+- Verified anon and authenticated users have NO SELECT privilege on Polar subscription/inbox tables and NO access to privileged webhook claim RPC.
+- All Polar handlers still require ETERNYX_POLAR_CHECKOUT_MODE=sandbox, with sandbox account secrets absent/not confirmed. No real-money charges, checkout sessions, merchant approval or live payout capability has been established.
+- Checked the sandbox status path: even a real Polar sandbox subscription is only returned as sandbox_subscription for quality assurance. It does not set a production paid entitlement.
+
+These deployments do NOT constitute a successful signed webhook delivery or checkout-to-subscription test; that requires a legitimate Polar sandbox organization and owner-provisioned secrets.
+
 ## Owner action: sandbox onboarding
 
 1. Create your own Polar sandbox organization at https://sandbox.polar.sh. Confirm you may legally operate from Saudi Arabia while holding a Pakistani passport and Iqama. Seek Polar's explicit approval for ETERNYX cybersecurity and developer tools.
