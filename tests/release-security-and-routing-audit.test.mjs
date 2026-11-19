@@ -93,10 +93,10 @@ test("Service Hub no longer markets unsupported security protection, vendor inte
   assert.doesNotMatch(services, /impenetrable cybersecurity|proprietary detection systems|top-tier developers|real-time threat intelligence feeds|ensure your data remains secure for decades/);
 });
 
-test("Developer Studio is accurately labeled as an existing foundation while future pillars remain planned", () => {
+test("Developer Studio and the three workspace routes have existing foundations", () => {
   assert.match(ecosystem, /id: "developer-studio"[\s\S]*?status: "Existing foundation"/);
   for (const id of ["workspace", "integrations", "automation"]) {
-    assert.match(ecosystem, new RegExp('id: "' + id + '"[\\s\\S]*?status: "Planned"'));
+    assert.match(ecosystem, new RegExp('id: "' + id + '"[^}]*status: "Existing foundation"'));
   }
 });
 
