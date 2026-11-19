@@ -110,3 +110,43 @@ correctly. A successful build alone is insufficient.
 
 Live payments and paid entitlements must remain disabled pending explicit
 owner approval, tax registration verification, and full deployment testing.
+
+## November 19 direct provider configuration update
+
+- Supabase `create-checkout` version 47 deployed, guarded and confirmed active.
+- `customer-portal` version 39 and `check-subscription` version 38 deployed.
+- Signed `stripe-webhook` version 2 deployed with invoice.paid,
+  invoice.payment_failed, invoice.payment_action_required, async checkout,
+  and customer.subscription lifecycle reconciliation.
+- Stripe test-mode Customer Portal configuration created:
+  `bpc_1Udc24IRb2Syqa2ZsuLAVYvU` (default test configuration).
+  Invoice history, payment-method management and cancellation at period end
+  are enabled in the **test environment only**.
+- Stripe **test webhook endpoint created**:
+  `we_1Udc5AIRb2Syqa2ZCYBRF8wT`, pointing to
+  `https://wcncuarekaofmfurbtbh.supabase.co/functions/v1/stripe-webhook`.
+  Subscribes to signed invoice, subscription and checkout lifecycle events.
+  **Endpoint is deliberately disabled** until the corresponding signing
+  secret is saved in Supabase Edge Function secrets and delivery verified.
+- The connected test account still has zero products and zero prices.
+- Stripe Tax configuration status is `pending`: missing the registered
+  business head-office address, default tax code and tax behavior.
+- There is no secret management connector in this session to securely place
+  `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in deployed Supabase.
+  The owner must configure these in the Supabase Dashboard and confirm
+  merchant domicile and tax policy before sandbox checkout can be exercised.
+
+### Still required to claim end-to-end functionality
+
+1. Add Stripe test restricted credentials and matching webhook signing
+   secret to the target Supabase secrets store; do not paste keys in chat.
+2. Confirm merchant country/head-office address, whether VAT/GST/sales tax
+   applies, tax-inclusive/exclusive behavior, and final plan amounts.
+3. Enable `ETERNYX_STRIPE_CHECKOUT_MODE=test` in an isolated test
+   environment, enable the matching frontend test flag, then enable the
+   test webhook endpoint.
+4. Use test cards and Stripe test events to verify checkout → signed
+   webhook → database subscription state → entitlement/credit update →
+   customer portal → renewal/failed payment/cancel/refund.
+5. Keep live charging disabled until this test matrix is complete, plus
+   live Stripe identity/verification and legal/tax review.
