@@ -88,7 +88,7 @@ test("Services Hub destination links are keyboard-accessible and registered in t
 
 test("Service Hub no longer markets unsupported security protection, vendor integrations, or staff capacity", () => {
   assert.match(services, /Assessment & Remediation/);
-  assert.match(services, /No active zero-day detector or live threat feed/);
+  assert.match(services, /no active zero-day detector or live threat feed/);
   assert.match(services, /Backend-dependent/);
   assert.doesNotMatch(services, /impenetrable cybersecurity|proprietary detection systems|top-tier developers|real-time threat intelligence feeds|ensure your data remains secure for decades/);
 });
