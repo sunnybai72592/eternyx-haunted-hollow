@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
+import { MERCHANT_ONBOARDING_NOTE, PUBLIC_SAAS_PLANS } from '@/lib/billing/public-saas-plans';
 import {
   Crown,
   Shield,
@@ -24,6 +25,9 @@ interface SubscriptionData {
 }
 
 type LookupState = 'loading' | 'ready' | 'error';
+
+// UI only. Checkout and portal have separate server-side test-mode gates.
+const testCheckoutEnabled = import.meta.env.VITE_ENABLE_STRIPE_TEST_CHECKOUT === 'true';
 
 export function SubscriptionManager() {
   const { user } = useAuthStore();
@@ -64,6 +68,10 @@ export function SubscriptionManager() {
   };
 
   const handleSubscribe = async (planId: string) => {
+    if (!testCheckoutEnabled) {
+      toast.error('Sandbox checkout is disabled until an eligible merchant setup is verified.');
+      return;
+    }
     if (!user) {
       toast.error('Please log in to subscribe');
       return;
@@ -95,6 +103,10 @@ export function SubscriptionManager() {
   };
 
   const handleManageSubscription = async () => {
+    if (!testCheckoutEnabled) {
+      toast.error('The test billing portal is disabled. No payment settings were changed.');
+      return;
+    }
     if (!user) return;
 
     setIsLoading(true);
@@ -129,22 +141,22 @@ export function SubscriptionManager() {
     switch (tier) {
       case 'premium':
         return {
-          name: 'Shadow Operative',
-          price: '$29.99',
+          name: PUBLIC_SAAS_PLANS.premium.name,
+          price: PUBLIC_SAAS_PLANS.premium.priceNote,
           icon: <Shield className="h-6 w-6 text-purple-400" />,
           color: 'border-purple-400/50 bg-purple-500/10',
         };
       case 'elite':
         return {
-          name: 'Cyber Overlord',
-          price: '$99.99',
+          name: PUBLIC_SAAS_PLANS.elite.name,
+          price: PUBLIC_SAAS_PLANS.elite.priceNote,
           icon: <Crown className="h-6 w-6 text-orange-400" />,
           color: 'border-orange-400/50 bg-orange-500/10',
         };
       default:
         return {
-          name: 'Ghost Access',
-          price: 'Free',
+          name: PUBLIC_SAAS_PLANS.free.name,
+          price: PUBLIC_SAAS_PLANS.free.priceNote,
           icon: <Star className="h-6 w-6 text-blue-400" />,
           color: 'border-blue-400/50 bg-blue-500/10',
         };
@@ -201,7 +213,7 @@ export function SubscriptionManager() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh Status
           </Button>
-          <Button onClick={handleManageSubscription} disabled={isLoading}>
+          <Button onClick={handleManageSubscription} disabled={isLoading || !testCheckoutEnabled}>
             <CreditCard className="h-4 w-4 mr-2" />
             Manage Billing
             <ExternalLink className="h-4 w-4 ml-2" />
@@ -215,13 +227,18 @@ export function SubscriptionManager() {
 
   return (
     <div className="space-y-6">
+      {!testCheckoutEnabled && (
+        <p role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-muted-foreground">
+          {MERCHANT_ONBOARDING_NOTE} The Stripe sandbox does not establish a live merchant account.
+        </p>
+      )}
       <Card className={`p-6 border ${planDetails.color} neon-border`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             {planDetails.icon}
             <div>
               <h3 className="text-xl font-bold text-primary">{planDetails.name}</h3>
-              <p className="text-muted-foreground">{planDetails.price}/month</p>
+              <p className="text-muted-foreground">{planDetails.price}</p>
             </div>
           </div>
           <Badge
@@ -241,18 +258,18 @@ export function SubscriptionManager() {
 
         <div className="flex flex-wrap gap-3">
           {isSubscribed ? (
-            <Button onClick={handleManageSubscription} disabled={isLoading} className="bg-primary hover:bg-primary/90">
+            <Button onClick={handleManageSubscription} disabled={isLoading || !testCheckoutEnabled} className="bg-primary hover:bg-primary/90">
               <CreditCard className="h-4 w-4 mr-2" />
               Manage Subscription
               <ExternalLink className="h-4 w-4 ml-2" />
             </Button>
           ) : (
             <>
-              <Button onClick={() => handleSubscribe('premium')} disabled={isLoading} className="bg-purple-500 hover:bg-purple-600">
+              <Button onClick={() => handleSubscribe('premium')} disabled={isLoading || !testCheckoutEnabled} className="bg-purple-500 hover:bg-purple-600">
                 <Shield className="h-4 w-4 mr-2" />
                 Upgrade to Premium
               </Button>
-              <Button onClick={() => handleSubscribe('elite')} disabled={isLoading} className="bg-orange-500 hover:bg-orange-600">
+              <Button onClick={() => handleSubscribe('elite')} disabled={isLoading || !testCheckoutEnabled} className="bg-orange-500 hover:bg-orange-600">
                 <Crown className="h-4 w-4 mr-2" />
                 Upgrade to Elite
               </Button>

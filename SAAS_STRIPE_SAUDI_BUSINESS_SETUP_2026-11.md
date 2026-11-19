@@ -2,8 +2,13 @@
 
 **Current situation — November 19, 2026**
 
-ETERNYX is an online software-as-a-service (SaaS) platform. Customers may
-purchase **digital services**, not physical inventory: subscriptions to
+ETERNYX is an online software-as-a-service (SaaS) platform. The founder
+identifies **Pakistan as their home country** and currently resides in
+**Saudi Arabia**. ETERNYX does not yet have a registered merchant entity
+or a verified business address; neither country is automatically the
+registered business location.
+
+Customers may purchase **digital services**, not physical inventory: subscriptions to
 use hosted tools, optional tier-based access, and later usage credits.
 A Stripe "Product" is an API/catalog representation of a service, not
 a warehouse item. Each paid tier is a different Stripe Product with a
@@ -112,9 +117,9 @@ inventing prices or products.**
 
 ## Outstanding owner/legal decisions
 
-- [ ] Confirm the founder's nationality/residency classification and whether
-      a Saudi investor/entrepreneur license or a different entity jurisdiction
-      is suitable.
+- [ ] Confirm whether a Pakistan-registered single-member company or a
+      Saudi-registered foreign-investor/entrepreneur entity is legally suitable,
+      including implications of operating from Saudi Arabia on an Iqama.
 - [ ] Confirm the legitimate registered business address, legal entity,
       merchant country, bank and identity requirements.
 - [ ] Approve plan names, actual included tools/credits, monthly fees,
@@ -128,3 +133,67 @@ inventing prices or products.**
 Release without payments as a public preview if the November 23 target
 arrives before legal identity and end-to-end payment verification. This
 note is practical software/compliance guidance, not individual legal advice.
+
+## Pakistan option — overseas Pakistani SaaS founder
+
+An overseas Pakistani can **investigate**, rather than assume eligibility
+for, a Pakistani single-member company through the Securities and Exchange
+Commission of Pakistan (SECP), using eZfile/eServices. A business registered
+in Pakistan still needs a lawful registered address, correct tax registration,
+bank/payment-processor onboarding, and any required compliance with Saudi
+residency and employment conditions when the owner actually operates it from
+Saudi territory.
+
+Official Pakistan registration resources:
+- SECP company registration and single-member company:
+  https://www.secp.gov.pk/start-your-company/
+- SECP eZfile company incorporation:
+  https://www.secp.gov.pk/company-formation/registration-of-company/
+- SECP overseas signatory/NICOP process:
+  https://www.secp.gov.pk/document/2024-12-05-secp-promoters-guide-english-final/
+
+For a **registered Pakistani merchant**, Safepay advertises hosted online
+payments and recurring SaaS subscriptions:
+- https://getsafepay.pk/subscriptions
+- https://safepay.com.pk/pricing
+- https://safepay.com.pk/legal/content/services-agreement
+
+Merchant onboarding, international recurring acceptance, bank settlement,
+fees, tax treatment and card-network permissions must be confirmed with
+the provider. Listing Safepay here is not an integration, a merchant account,
+or a guarantee of approval. Do not add it as a live payment method in UI
+until its API, webhook validation, authorization and refund paths are built
+and tested.
+
+For a **registered Saudi merchant**, another candidate is Moyasar, whose
+published onboarding requirements include a qualifying Saudi commercial
+registration or freelance license and Saudi business bank account:
+- https://www.moyasar.com/en/resources/faqs/
+
+Because the owner is non-Saudi, first check foreign-investor
+registration eligibility with MISA, not an assumption that a Saudi
+freelance permit is available. Review sponsor/employment/Iqama conditions
+with a qualified local professional.
+
+**Stripe account country is not founder nationality.** The connected US
+account is test-only with no charge/payout access and does not qualify
+ETERNYX to accept real-money subscriptions. Stripe does not currently list
+Pakistan or Saudi Arabia as supported countries for direct merchant account
+onboarding: https://stripe.com/global
+
+### Roadmap decision (not legally registered yet)
+
+- Keep free/local ETERNYX workspaces available with accurate capability labels.
+- Keep actual checkout/portal/webhook functions test-gated; no real payments.
+- Use a **provider-neutral tier model** (`free`, `premium`, `elite`),
+  with public prices unknown until a merchant/provider/price is verified.
+- Once registration is confirmed, choose a payment processor that supports
+  the **actual company's registration country**, then implement its signed
+  webhook, recurring state, subscription revocation, refunds and reconciliation.
+- Do not collect customer payments before legal and financial onboarding.
+- Do not publish passport, Iqama, personal address, signing keys or tax IDs
+  in a public repository or test data.
+
+This document does not establish Pakistan, Saudi Arabia or the USA as the
+legal or tax jurisdiction of ETERNYX; only the founder's home and current
+residence have been provided.
