@@ -1,3 +1,4 @@
+import { PresenceProvider } from "@/components/home/VisitorPresence";
 import { Toaster } from "@/components/ui/toaster";
 import AuthPage from './pages/AuthPage';
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -310,7 +311,7 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <AppContent />
+      <PresenceProvider><AppContent /></PresenceProvider>
     </BrowserRouter>
   </QueryClientProvider>
 );

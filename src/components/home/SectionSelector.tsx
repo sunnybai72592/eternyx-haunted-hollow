@@ -1,4 +1,5 @@
 import React from "react";
+import { VisitorPresence } from "@/components/home/VisitorPresence";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight, ArrowUpRight, CheckCircle2, Compass,
@@ -141,6 +142,8 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             })}
           </div>
         </section>
+
+        <VisitorPresence />
 
         <section className="mt-12 overflow-hidden rounded-2xl border border-cyan-200/15 bg-gradient-to-r from-cyan-200/[0.08] via-blue-300/[0.04] to-violet-300/[0.08] p-6 sm:p-9">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
