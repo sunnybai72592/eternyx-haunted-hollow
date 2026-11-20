@@ -7,8 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+import tools from "@/data/toolRegistry.json";
+
 const Explore = () => {
   const [query, setQuery] = useState("");
+
+  const term = query.trim().toLowerCase();
+  const matchingTools = tools.filter(tool =>
+    [tool.name, tool.description, tool.execution, tool.access, ecosystemPillars.find(pillar => pillar.id === tool.pillar)?.title]
+      .join(" ").toLowerCase().includes(term)
+  );
 
   const filteredPillars = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -42,7 +50,7 @@ const Explore = () => {
               Discover a connected ecosystem for cybersecurity, development, AI, digital work, integrations, and automation.
             </p>
             <div className="mt-8 max-w-xl">
-              <label htmlFor="ecosystem-search" className="sr-only">Search ecosystem pillars and domains</label>
+              <label htmlFor="ecosystem-search" className="sr-only">Search pillars, domains, and tools</label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <Input
@@ -99,7 +107,7 @@ const Explore = () => {
               </Card>
             );
           })}
-          {filteredPillars.length === 0 && (
+          {filteredPillars.length === 0 && matchingTools.length === 0 && (
             <div className="col-span-full rounded-2xl border border-dashed border-slate-700 p-10 text-center">
               <Search className="mx-auto h-8 w-8 text-slate-500" />
               <p className="mt-3 font-medium text-white">No matching areas found</p>
@@ -108,11 +116,22 @@ const Explore = () => {
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
-          <p className="text-sm leading-6 text-slate-400">
-            ETERNYX is being built in stages. A pillar marked Planned describes the platform direction, not a claim that its tools or integrations are already operational. Each capability will be clearly labeled as available, preview, or coming soon as it is implemented.
-          </p>
-        </section>
+        {matchingTools.length > 0 && (
+          <section aria-labelledby="indexed-tools">
+            <h2 id="indexed-tools" className="text-2xl font-bold">Indexed tools</h2>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+              {matchingTools.map(tool => (
+                <li key={tool.name}>
+                  <Link to={tool.route} className="block h-full rounded-xl border border-slate-700 bg-slate-900 p-4 hover:border-cyan-400 focus-visible:ring-2">
+                    <span className="font-semibold text-cyan-300">{tool.name}</span>
+                    <p className="mt-1 text-sm text-slate-300">{tool.description}</p>
+                    <p className="mt-2 text-xs text-slate-400">{tool.execution} · {tool.access} · {tool.verification}</p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   );
