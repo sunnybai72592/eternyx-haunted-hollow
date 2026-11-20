@@ -7,7 +7,7 @@ on:
         description: "Approved ETERNYX host. Select known Lovable preview or candidate public domain."
         type: choice
         required: true
-        default: lovable-preview
+        default: candidate public domain
         options:
           - lovable-preview
           - public-domain-candidate
