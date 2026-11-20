@@ -19,6 +19,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+from gpu_canary_process import bounded_subprocess, CanaryExecutionError
 
 MAX_REQUEST = 12000
 MAX_OUTPUT = 16384
@@ -52,7 +53,7 @@ def validate_payload(payload):
         raise ValueError("image asset resolver not configured")
     if "imageAssetId" in payload:
         raise ValueError("unexpected image")
-    if payload.get("version", 1) != 1:
+    if type(payload.get("version", 1)) is not int or payload.get("version", 1) != 1:
         raise ValueError("unsupported version")
     return payload
 
@@ -153,11 +154,18 @@ def execute_job(command, payload, timeout_seconds):
     """
     if not command or not Path(command).is_file() or not os.access(command, os.X_OK):
         raise RuntimeError("model executable unavailable")
-    result = subprocess.run([command], input=json.dumps(payload), text=True,
-                            capture_output=True, timeout=timeout_seconds, check=True)
-    if len(result.stdout.encode()) > MAX_OUTPUT:
-        raise RuntimeError("oversized inference result")
-    manifest = json.loads(result.stdout)
+    if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or not 1 <= timeout_seconds <= 3600:
+        raise RuntimeError("invalid inference runtime limit")
+    # Same bounded process-group execution as the approved staging canary:
+    # kill descendants on deadline/oversized output and never buffer stderr.
+    # This is a Linux/POSIX-only worker by design.
+    try:
+        stdout = bounded_subprocess(
+            [command], stdin=json.dumps(payload), timeout_seconds=timeout_seconds,
+            max_stdout=MAX_OUTPUT)
+    except CanaryExecutionError as exc:
+        raise RuntimeError("inference process failed or exceeded its limits") from exc
+    manifest = json.loads(stdout)
     if not isinstance(manifest, dict) or set(manifest) != {"outputReference"}:
         raise RuntimeError("invalid inference manifest")
     return manifest["outputReference"]
