@@ -127,7 +127,7 @@ test("synthetic fixtures are cleaned using owner test sessions before sign-out",
   assert.match(runner,/cleanupFailed = true/);
   assert.match(runner,/c\.auth\.signOut\(\)/);
   assert.ok(runner.indexOf("for (const fixture of fixtures.reverse())") < runner.indexOf("c.auth.signOut()"));
-  assert.doesNotMatch(runner,/service_role|createUser\(/);
+  assert.doesNotMatch(runner,/auth\.admin\.|createUser\(/);
 });
 
 test("GitHub workflow is manual, environment protected, and has explicit staging write authorization",()=>{
@@ -144,8 +144,8 @@ test("GitHub workflow is manual, environment protected, and has explicit staging
 });
 
 test("logs and uploaded artifact contain only case names, booleans and no account data",()=>{
-  assert.match(runner,/"production_tested": false/);
-  assert.match(runner,/"production_certified": false/);
+  assert.match(runner,/production_tested: false/);
+  assert.match(runner,/production_certified: false/);
   assert.match(runner,/results\.push\(\{ case: caseId, result: passed \? "passed" : "failed" \}\)/);
   assert.doesNotMatch(runner,/console\.log\(config\)|console\.log\(users\)|JSON\.stringify\(config\)|"email":|"password":|"access_token":/);
   assert.match(check,/without printing secrets|STAGING RLS CONFIG REJECTED/);
