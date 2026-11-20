@@ -6,6 +6,7 @@ does not rent GPUs, download weights, install packages or trigger a canary.
 import json
 import os
 import signal
+import selectors
 import subprocess
 import time
 from pathlib import Path
@@ -14,40 +15,86 @@ class CanaryExecutionError(RuntimeError):
     pass
 
 def bounded_subprocess(command, *, stdin=None, timeout_seconds=60, env=None, max_stdout=16384):
-    """Terminate the entire child process group on timeout (POSIX/Linux only).
+    """Capture bounded stdout and forcibly stop a whole POSIX process group.
 
-    A subprocess.run timeout usually kills the direct child but leaves any
-    grandchildren behind; leftover inference workers may continue using GPU.
-    This implementation starts a new session and kills its process group.
+    The previous communicate() implementation accumulated stdout and stderr
+    without limits. A compromised inference helper could exhaust RAM before
+    reaching the post-execution size check.
     """
     if os.name != "posix":
         raise CanaryExecutionError("POSIX worker required")
     if type(timeout_seconds) not in (int, float) or not 1 <= timeout_seconds <= 3600:
         raise CanaryExecutionError("invalid command timeout")
+    if type(max_stdout) is not int or not 1 <= max_stdout <= 65536:
+        raise CanaryExecutionError("invalid output limit")
     if not isinstance(command, (list, tuple)) or not command or any(
         not isinstance(arg, str) or not arg for arg in command
     ):
         raise CanaryExecutionError("invalid command")
+    if stdin is not None and (not isinstance(stdin, str) or len(stdin.encode()) > 12000):
+        raise CanaryExecutionError("invalid bounded input")
+    deadline = time.monotonic() + timeout_seconds
     process = subprocess.Popen(
         command, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         env=env, start_new_session=True, close_fds=True,
     )
     try:
-        stdout, stderr = process.communicate(input=stdin, timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+        if stdin is not None:
+            # Generation requests are capped to 12KB; promptly deliver and close.
+            try:
+                process.stdin.write(stdin.encode("utf-8"))
+                process.stdin.close()
+            except BrokenPipeError:
+                raise CanaryExecutionError("command rejected input") from None
+        parts = []
+        received = 0
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise CanaryExecutionError("command exceeded bounded runtime")
+                if not selector.select(timeout=remaining):
+                    raise CanaryExecutionError("command exceeded bounded runtime")
+                for key, _mask in selector.select(timeout=0):
+                    chunk = os.read(key.fd, min(65536, max_stdout - received + 1))
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    else:
+                        received += len(chunk)
+                        if received > max_stdout:
+                            raise CanaryExecutionError("command response exceeds limit")
+                        parts.append(chunk)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise CanaryExecutionError("command exceeded bounded runtime")
+        try:
+            process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            raise CanaryExecutionError("command exceeded bounded runtime") from None
+        if process.returncode != 0:
+            raise CanaryExecutionError("command failed")
+        try:
+            return b"".join(parts).decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            raise CanaryExecutionError("command response invalid UTF-8") from None
+    except BaseException:
+        # Abort descendants even if the parent already exited.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        process.communicate()
-        raise CanaryExecutionError("command exceeded bounded runtime") from None
-    if process.returncode != 0:
-        raise CanaryExecutionError("command failed")
-    if len(stdout.encode("utf-8")) > max_stdout:
-        raise CanaryExecutionError("command response exceeds limit")
-    # Do not include stderr in error messages: it may contain prompts or paths.
-    return stdout
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    finally:
+        if process.stdout:
+            process.stdout.close()
+        if process.stdin:
+            process.stdin.close()
 
 def inspect_mp4_decode(path, *, timeout_seconds=45, runner=bounded_subprocess):
     """Read full video stream with ffmpeg and count decoded frames.
