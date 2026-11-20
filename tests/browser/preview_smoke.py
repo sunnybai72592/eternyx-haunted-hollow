@@ -54,6 +54,23 @@ def automation(page, narrow):
     assert json.loads(Path(pending.value.path()).read_text()) == ["ALPHA", "bravo"]
 
 
+    page.get_by_text("Save to Digital Workspace", exact=True).click()
+    title = page.get_by_label("Saved list title")
+    expect(title).to_have_attribute("placeholder", "ALPHA")
+    title.fill("Site rounds")
+    save = page.get_by_role("button", name="Save cleaned list")
+    save.click()
+    expect(save).to_be_disabled()
+    page.get_by_role("link", name="View saved copies").click()
+    page.reload()
+    expect(page.locator("#device-note")).to_have_value("Field observations\nNorth station readings.")
+    page.locator("#note-search").fill("site rounds")
+    match = page.get_by_role("listitem").filter(has_text="Site rounds")
+    expect(match).to_have_count(1)
+    match.get_by_role("button").first.click()
+    expect(page.locator("#device-note")).to_have_value("ALPHA\nbravo")
+
+
 def explore_and_inspect(page):
     page.goto(ORIGIN + "/explore")
     search = page.locator("#ecosystem-search")
