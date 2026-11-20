@@ -29,6 +29,9 @@ export interface DocumentSearchMatch {
   readonly line: number;
   readonly column: number;
   readonly excerpt: string;
+  readonly excerptOffset: number;
+  readonly sourceOffset: number;
+  readonly length: number;
 }
 export interface DocumentSearchResults {
   readonly query: string;
@@ -117,26 +120,29 @@ export function findDocumentMatches(text: string, query: string, caseSensitive =
   if (typeof query !== "string" || !query.trim() || query.length > 100) {
     throw new LocalDocumentError("invalid_search");
   }
-  const needle = caseSensitive ? query.trim() : query.trim().toLowerCase();
+  const literal = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(literal, caseSensitive ? "gu" : "giu");
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const matches: DocumentSearchMatch[] = [];
   let total = 0;
+  let lineStart = 0;
   lines.forEach((line, i) => {
-    const haystack = caseSensitive ? line : line.toLowerCase();
-    let offset = 0;
-    while (offset <= haystack.length - needle.length) {
-      const found = haystack.indexOf(needle, offset);
-      if (found < 0) break;
-      total += 1;
-      if (matches.length < MAX_DOCUMENT_SEARCH_RESULTS) {
-        matches.push({
-          line: i + 1,
-          column: found + 1,
-          excerpt: line.slice(Math.max(0, found - 60), Math.min(line.length, found + needle.length + 60)),
-        });
-      }
-      offset = found + needle.length;
+    for (const hit of line.matchAll(pattern)) {
+      total++;
+      if (matches.length === MAX_DOCUMENT_SEARCH_RESULTS) continue;
+      const found = hit.index!;
+      const excerptStart = Math.max(0, found - 60);
+      matches.push({
+        line: i + 1,
+        column: found + 1,
+        sourceOffset: lineStart + found,
+        excerptOffset: found - excerptStart,
+        length: hit[0].length,
+        excerpt: line.slice(excerptStart, found + hit[0].length + 60),
+      });
     }
+    // Textarea selection offsets use LF even when the file has CRLF line endings.
+    lineStart += line.length + 1;
   });
   return { query: query.trim(), total, matches, truncated: total > matches.length };
 }
