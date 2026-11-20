@@ -38,6 +38,7 @@ const AIDocumentIntelligence = () => {
   const [draft, setDraft] = useState<LocalDocumentDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const sourceField = useRef<HTMLTextAreaElement>(null);
   const fileReadVersion = useRef(0);
 
   const invalidate = () => {
@@ -62,14 +63,13 @@ const AIDocumentIntelligence = () => {
 
   const chooseFile = async (file: File | null) => {
     const version = ++fileReadVersion.current;
-    setSource("");
-    setFileName(null);
-    invalidate();
     setLoading(!!file);
     if (!file) return;
+    setError(null);
     try {
       const loaded = await readLocalDocument(file);
       if (version !== fileReadVersion.current) return;
+      invalidate();
       setKind(loaded.kind);
       setSource(loaded.text);
       setFileName(loaded.name);
@@ -114,6 +114,21 @@ const AIDocumentIntelligence = () => {
       setSearchResults(findDocumentMatches(source, searchTerm, caseSensitive));
     } catch (e) { setError(explainError(e)); }
   };
+  const downloadMatches = () => {
+    if (!searchResults) return;
+    const report = {
+      fileName, kind, caseSensitive, query: searchResults.query,
+      total: searchResults.total, truncated: searchResults.truncated,
+      matches: searchResults.matches.map(({ line, column, excerpt }) => ({ line, column, excerpt })),
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "eternyx-document-matches.json";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const prepare = () => {
     setError(null);
     setDraft(null);
@@ -194,7 +209,7 @@ const AIDocumentIntelligence = () => {
             </label>
             <label htmlFor="document-source" className="block space-y-2 text-sm text-slate-300">
               <span>Document text</span>
-              <textarea id="document-source" value={source} maxLength={MAX_DOCUMENT_CHARACTERS} rows={10}
+              <textarea ref={sourceField} id="document-source" value={source} maxLength={MAX_DOCUMENT_CHARACTERS} rows={10}
                 onChange={e => setEditedSource(e.target.value)}
                 placeholder="Paste plain text, Markdown, CSV or JSON here. Nothing is sent to a server…"
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -255,7 +270,9 @@ const AIDocumentIntelligence = () => {
           <CardContent className="space-y-4">
             <label htmlFor="document-search" className="block space-y-2 text-sm text-slate-300">
               <span>Find text · maximum 100 characters</span>
-              <input id="document-search" value={searchTerm} maxLength={100} onChange={e => { setSearchTerm(e.target.value); setSearchResults(null); setError(null); }}
+              <input onKeyDown={event => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing && source.trim() && searchTerm.trim() && !loading) search();
+              }} id="document-search" value={searchTerm} maxLength={100} onChange={e => { setSearchTerm(e.target.value); setSearchResults(null); setError(null); }}
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" placeholder="Enter a keyword or phrase…" />
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -267,13 +284,18 @@ const AIDocumentIntelligence = () => {
             </Button>
             {searchResults && (
               <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-4">
-                <p className="text-sm text-slate-300">{searchResults.total} text matches for "{searchResults.query}"</p>
+                <p role="status" className="text-sm text-slate-300">{searchResults.total} text matches for "{searchResults.query}"</p>
                 {searchResults.truncated && <p className="text-xs text-amber-200">Displaying only the first 50 matches.</p>}
+                <Button type="button" variant="outline" onClick={downloadMatches}>Download matches (.json)</Button>
                 <ul className="max-h-72 space-y-2 overflow-auto text-sm text-slate-300">
                   {searchResults.matches.map((match, i) => (
                     <li key={i} className="border-b border-slate-800 pb-2">
-                      <span className="text-xs text-cyan-200">Line {match.line}, column {match.column}</span>
-                      <p className="whitespace-pre-wrap break-words">{match.excerpt}</p>
+                      <button type="button" className="min-h-11 rounded px-1 text-xs text-cyan-200 underline underline-offset-4 focus-visible:ring-2"
+                        onClick={() => {
+                          sourceField.current?.focus();
+                          sourceField.current?.setSelectionRange(match.sourceOffset, match.sourceOffset + match.length);
+                        }}>Go to line {match.line}, column {match.column}</button>
+                      <p className="whitespace-pre-wrap break-words">{match.excerpt.slice(0, match.excerptOffset)}<mark className="rounded-sm bg-amber-200 px-0.5 text-slate-950">{match.excerpt.slice(match.excerptOffset, match.excerptOffset + match.length)}</mark>{match.excerpt.slice(match.excerptOffset + match.length)}</p>
                     </li>
                   ))}
                 </ul>

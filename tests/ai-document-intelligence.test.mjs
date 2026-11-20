@@ -139,3 +139,14 @@ test("browser-only workflow never uploads documents or calls AI providers", () =
   assert.match(page, /navigator\.clipboard\.writeText\(text\)/);
   assert.match(page, /role="alert"/);
 });
+
+test("matches map back to source and preview across Unicode and mixed newlines", () => {
+  const text = "İ🙂 [A+B]\r\nnext [a+b]\rlast";
+  const result = local.findDocumentMatches(text, "[a+b]");
+  assert.deepEqual(result.matches.map(m => [m.line, m.column]), [[1, 5], [2, 6]]);
+  for (const m of result.matches) {
+    const selected = text.replace(/\r\n?/g, "\n").slice(m.sourceOffset, m.sourceOffset + m.length);
+    assert.equal(selected.toLowerCase(), "[a+b]");
+    assert.equal(m.excerpt.slice(m.excerptOffset, m.excerptOffset + m.length), selected);
+  }
+});

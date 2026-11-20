@@ -76,5 +76,18 @@
     "test": "tests/clean-lines.test.mjs",
     "owner": null,
     "verification": "Deployed check pending"
+  },
+  {
+    "name": "Document text search",
+    "pillar": "ai-arsenal",
+    "route": "/ai-arsenal/documents",
+    "execution": "Browser",
+    "description": "Search local text files, jump to matching passages and export excerpts with line numbers.",
+    "access": "Signed-in account",
+    "provider": "No provider",
+    "source": "src/pages/AIDocumentIntelligence.tsx",
+    "test": "tests/ai-document-intelligence.test.mjs",
+    "owner": null,
+    "verification": "Deployed check pending"
   }
 ]
