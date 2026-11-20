@@ -159,6 +159,81 @@ test("all 32 tools remain unverified until a real deployed build and provider ch
   assert.match(docs, /read-only/);
 });
 
+test("safe diagnostic categories explain hosted-page failures without storing navigation URLs", () => {
+  const report = validReport();
+  report.page_observations = [{
+    case: "registry-landing", viewport: "390x844", reason: "missing-expected-ui",
+    on_approved_host: true, path: "/explore", http_status: 200, root_present: true,
+    heading_class: "other",
+  }];
+  report.blocked_samples = [{
+    reason: "write-blocked", method: "POST", path: "/api/[redacted]", resource_type: "fetch",
+  }];
+  report.blocked_write_attempts = 1;
+  const result = evaluateRemoteAcceptance(report);
+  assert.equal(result.pageObservations[0].http_status, 200);
+  assert.equal(result.pageObservations[0].heading_class, "other");
+  assert.equal(result.blockedSamples[0].path, "/api/[redacted]");
+  assert.equal(result.allBrowserJourneysPassed, false);
+  assert.equal(result.productionVerified, false);
+});
+
+test("raw URL, query string, bearer token and unbounded diagnostic payloads are rejected", () => {
+  const make = () => {
+    const report = validReport();
+    report.page_observations = [{
+      case: "registry-landing", viewport: "390x844", reason: "unexpected-redirect",
+      on_approved_host: false, path: "[different-host]", http_status: null,
+      root_present: false, heading_class: "none",
+    }];
+    report.blocked_samples = [{
+      reason: "write-blocked", method: "POST", path: "/api/[redacted]", resource_type: "fetch",
+    }];
+    return report;
+  };
+  for (const path of [
+    "https://evil.example?token=sensitive", "/api?token=secret",
+    "/api/users/123abc", "/a\ncookie", "../../auth", "/too-long-diagnostic-route-capturing-identifiers",
+  ]) {
+    const p = make();
+    p.blocked_samples[0].path = path;
+    assert.throws(() => evaluateRemoteAcceptance(p), /unsafe blocked-request sample/, path);
+  }
+  const malicious = make();
+  malicious.page_observations[0].heading_class = "Signed in as customer@example.com";
+  assert.throws(() => evaluateRemoteAcceptance(malicious), /unsafe page observation/);
+  const huge = make();
+  huge.blocked_samples = Array.from({length: 17}, () => huge.blocked_samples[0]);
+  assert.throws(() => evaluateRemoteAcceptance(huge), /too many or invalid diagnostics/);
+});
+
+test("remote browser records first-party status and blocked HTTP write categories with no body or query", () => {
+  assert.match(browser, /def scrub_path\(url\):/);
+  assert.match(browser, /def safe_page_observation\(page, name, viewport, exc\):/);
+  assert.match(browser, /"http_status": navigation\.get\("http_status"\)/);
+  assert.match(browser, /"heading_class": heading/);
+  assert.match(browser, /"root_present": app_root/);
+  assert.match(browser, /block_sample\(request, "write-blocked"\)/);
+  assert.match(browser, /block_sample\(request, "cross-origin"\)/);
+  assert.match(browser, /"page_observations": page_observations/);
+  assert.match(browser, /"blocked_samples": blocked_samples/);
+  assert.match(browser, /if len\(page_observations\) < MAX_OBSERVATIONS:/);
+  assert.doesNotMatch(browser, /request\.post_data|page\.content\(\)|page\.screenshot\(/);
+  assert.doesNotMatch(browser, /"full_url":|"redirect_url":|"query":/);
+});
+
+test("independent hosted journeys continue after one fails and workflow defaults to valid target", () => {
+  assert.match(browser, /def exercise\(page, name, viewport\):/);
+  assert.match(browser, /page_observations\.append\(observation\)/);
+  assert.match(browser, /if blocked\["write_attempt"\] or any\(case\["result"\] == "failed" for case in results\)/);
+  assert.match(workflow, /default: lovable-preview/);
+  assert.doesNotMatch(workflow, /default: Lovable preview/);
+  const doc = read("docs/REMOTE_READONLY_ACCEPTANCE_2026-11.md");
+  assert.match(doc, /44761338587/);
+  assert.match(doc, /missing expected heading/i);
+  assert.match(doc, /blocked HTTP write/i);
+});
+
 test("Python hosted browser runner parses and Node evidence summarizer parses", () => {
   const py = new URL("../tests/browser/remote_readonly_smoke.py", import.meta.url);
   const p = spawnSync("python3", [
