@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { AlertCircle, Send, Upload, Trash2, FileText, Plus, MessageCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
+import { readActiveConversation, rememberConversation } from '@/lib/activeConversation.mjs';
 
 interface Message {
   id: string;
@@ -38,8 +39,21 @@ interface ConversationSession {
 const EternixAI: React.FC = () => {
   const navigate = useNavigate();
   const { user: authUser, isLoading: isAuthLoading } = useAuthStore();
-  const isAuthenticated = !!authUser;
-  const userId = authUser?.id ?? null;
+  useEffect(() => {
+    if (!isAuthLoading && !authUser) navigate('/login?redirect=%2Feternyx-ai', { replace: true });
+  }, [authUser, isAuthLoading, navigate]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner variant="cyber" text="Restoring your ETERNYX session..." />
+      </div>
+    );
+  }
+  return authUser ? <ChatWorkspace key={authUser.id} userId={authUser.id} /> : null;
+};
+
+const ChatWorkspace = ({ userId }: { userId: string }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -52,19 +66,18 @@ const EternixAI: React.FC = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // The global auth store is the single source of truth for session restoration.
-  // This page must not create another auth listener or independently call getSession().
   useEffect(() => {
-    if (isAuthLoading) return;
-
-    if (!authUser) {
-      navigate('/login?redirect=%2Feternyx-ai', { replace: true });
-      return;
-    }
-
-    loadDocuments(authUser.id);
-    loadSessions(authUser.id);
-  }, [authUser?.id, isAuthLoading, navigate]);
+    void loadDocuments(userId);
+    const remembered = readActiveConversation(userId);
+    const version = historyVersion.current;
+    void loadSessions(userId).then(rows => {
+      if (!rows || !remembered || historyVersion.current !== version) return;
+      const saved = rows.find(session => session.id === remembered);
+      if (saved) openConversation(saved);
+      else rememberConversation(userId, null);
+    });
+    return () => { historyVersion.current++; };
+  }, [userId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -94,8 +107,18 @@ const EternixAI: React.FC = () => {
 
     if (!error && data) {
       setSessions(data);
+      return data as ConversationSession[];
     }
+    toast.error('Unable to load saved conversations.');
+    return null;
   };
+
+  function openConversation(session: ConversationSession) {
+    rememberConversation(userId, session.id);
+    setCurrentSessionId(session.id);
+    setSelectedDocument(session.document_id ?? null);
+    void loadSessionMessages(session.id);
+  }
 
   const loadSessionMessages = async (sessionId: string) => {
     const version = ++historyVersion.current;
@@ -105,6 +128,7 @@ const EternixAI: React.FC = () => {
       .from('chat_history')
       .select('*')
       .eq('session_id', sessionId)
+      .eq('user_id', userId)
       .order('created_at', { ascending: true });
 
     if (version !== historyVersion.current) return;
@@ -200,6 +224,7 @@ const EternixAI: React.FC = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !userId || isLoading || loadingHistory) return;
 
+    historyVersion.current++;
     const userMessage = inputValue;
     setInputValue('');
     setIsLoading(true);
@@ -236,6 +261,7 @@ const EternixAI: React.FC = () => {
 
       // Update session ID if new
       if (!currentSessionId) {
+        rememberConversation(userId, data.sessionId);
         setCurrentSessionId(data.sessionId);
       }
 
@@ -260,6 +286,7 @@ const EternixAI: React.FC = () => {
   };
 
   const handleNewConversation = () => {
+    rememberConversation(userId, null);
     historyVersion.current++;
     setLoadingHistory(false);
     setMessages([]);
@@ -279,15 +306,7 @@ const EternixAI: React.FC = () => {
     }
   };
 
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner variant="cyber" text="Restoring your ETERNYX session..." />
-      </div>
-    );
-  }
 
-  if (!isAuthenticated) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 py-8 px-4">
@@ -330,11 +349,7 @@ const EternixAI: React.FC = () => {
                         disabled={isLoading}
                         variant={currentSessionId === session.id ? 'default' : 'ghost'}
                         className="w-full justify-start text-left h-auto py-2 px-3"
-                        onClick={() => {
-                          setCurrentSessionId(session.id);
-                          setSelectedDocument(session.document_id ?? null);
-                          loadSessionMessages(session.id);
-                        }}
+                        onClick={() => openConversation(session)}
                       >
                         <MessageCircle className="w-4 h-4 mr-2 flex-shrink-0" />
                         <span className="truncate text-sm">{session.title}</span>
