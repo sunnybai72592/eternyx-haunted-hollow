@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deleteCopy, matchingCopies, readCopies, saveCopy } from "../src/lib/workspaceNotes.mjs";
+import { deleteCopy, matchingCopies, noteExcerpt, suggestedTitle, readCopies, saveCopy } from "../src/lib/workspaceNotes.mjs";
 
 function storage() {
   const values = new Map();
@@ -38,4 +38,17 @@ test("invalid notes and storage failures never report a saved copy", () => {
   db.setItem = () => { throw new Error("quota"); };
   assert.throws(() => saveCopy(db, "a", "title", "body", 1), /quota/);
   assert.equal(readCopies(db).length, 0);
+});
+
+test("title suggestions respect the first line, the field limit and emoji boundaries", () => {
+  assert.equal(suggestedTitle("  \n  Field visit\r\nDetails"), "Field visit");
+  assert.equal(suggestedTitle("x".repeat(99) + "🙂"), "x".repeat(99));
+  assert.equal(suggestedTitle(" \n "), "");
+});
+
+test("previews include a late body match and mark clipped text", () => {
+  const text = "prior ".repeat(40) + "Inspection complete";
+  assert.match(noteExcerpt(text, "INSPECTION"), /^….*Inspection complete$/u);
+  assert.equal(noteExcerpt("one\n two", ""), "one two");
+  assert.ok(noteExcerpt(text, "").endsWith("…"));
 });

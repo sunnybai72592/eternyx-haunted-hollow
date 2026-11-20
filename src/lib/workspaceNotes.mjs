@@ -32,3 +32,17 @@ export function matchingCopies(notes, search) {
 export function deleteCopy(storage, id) {
   storage.removeItem(prefix + id);
 }
+
+export function suggestedTitle(body) {
+  const line = body.trimStart().split(/\r\n|[\r\n]/, 1)[0].trim();
+  return line.slice(0, 100).replace(/[\uD800-\uDBFF]$/, "").trimEnd();
+}
+
+export function noteExcerpt(body, search) {
+  const text = body.replace(/\s+/gu, " ").trim();
+  const query = search.trim().replace(/\s+/gu, " ");
+  const index = query ? text.toLowerCase().indexOf(query.toLowerCase()) : -1;
+  const start = Math.max(0, index - 28);
+  const end = Math.min(text.length, start + 120);
+  return (start ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+}
