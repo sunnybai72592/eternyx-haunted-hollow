@@ -89,6 +89,7 @@ const AIDocumentIntelligence = () => {
   };
 
   const clear = () => {
+    if ((source || instruction) && !window.confirm("Clear the document, search results and request draft?")) return;
     fileReadVersion.current += 1;
     setLoading(false);
     setKind("txt");
@@ -114,17 +115,34 @@ const AIDocumentIntelligence = () => {
       setSearchResults(findDocumentMatches(source, searchTerm, caseSensitive));
     } catch (e) { setError(explainError(e)); }
   };
-  const downloadMatches = () => {
+  const goToHeading = (line: number) => {
+    const field = sourceField.current;
+    if (!field) return;
+    const lines = field.value.split("\n");
+    const start = lines.slice(0, line - 1).reduce((offset, value) => offset + value.length + 1, 0);
+    field.focus();
+    field.setSelectionRange(start, start + lines[line - 1].length);
+  };
+
+  const downloadMatches = (format: "json" | "txt") => {
     if (!searchResults) return;
     const report = {
       fileName, kind, caseSensitive, query: searchResults.query,
       total: searchResults.total, truncated: searchResults.truncated,
-      matches: searchResults.matches.map(({ line, column, excerpt }) => ({ line, column, excerpt })),
+      matches: searchResults.matches.map(({ line, column, excerpt, excerptOffset, length }) => ({
+        line, column, excerpt, matchedText: excerpt.slice(excerptOffset, excerptOffset + length),
+      })),
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const contents = format === "json" ? JSON.stringify(report, null, 2) : [
+      fileName || "Pasted document",
+      `Search: ${report.query} · ${caseSensitive ? "case-sensitive" : "case-insensitive"}`,
+      `Showing ${report.matches.length} of ${report.total} matches`,
+      ...report.matches.map(m => `Line ${m.line}, column ${m.column} · ${m.matchedText}\n${m.excerpt}`),
+    ].join("\n\n");
+    const url = URL.createObjectURL(new Blob([contents], { type: format === "json" ? "application/json" : "text/plain;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "eternyx-document-matches.json";
+    link.download = "eternyx-document-matches." + format;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -170,18 +188,6 @@ const AIDocumentIntelligence = () => {
             File extension and MIME labels are not verified proof of a document's format.
           </AlertDescription>
         </Alert>
-
-        <section className="grid gap-4 md:grid-cols-2">
-          {features.map(feature => (
-            <Card key={feature.id} className="border-slate-800 bg-slate-900/60 text-slate-100">
-              <CardHeader>
-                <CardTitle className="text-white">{feature.title}</CardTitle>
-                <CardDescription className="text-slate-400">{feature.description}</CardDescription>
-              </CardHeader>
-              <CardContent><Badge variant="outline">Planned · AI disabled</Badge></CardContent>
-            </Card>
-          ))}
-        </section>
 
         <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
           <CardHeader>
@@ -231,7 +237,7 @@ const AIDocumentIntelligence = () => {
                   <div className="space-y-2">
                     <p className="text-sm text-slate-300">Markdown headings (first 100): {inspection.headings.length}{inspection.headingsTruncated ? " · additional headings omitted" : ""}</p>
                     <ul className="max-h-60 space-y-1 overflow-auto text-sm text-slate-400">
-                      {inspection.headings.map((heading, index) => <li key={index}>Level {heading.level} · Line {heading.line}: {heading.text}</li>)}
+                      {inspection.headings.map((heading, index) => <li key={index}><button type="button" onClick={() => goToHeading(heading.line)} className="min-h-11 break-words rounded px-1 text-left text-cyan-200 underline underline-offset-4 focus-visible:ring-2">Line {heading.line} · {heading.text}</button></li>)}
                     </ul>
                   </div>
                 )}
@@ -286,7 +292,8 @@ const AIDocumentIntelligence = () => {
               <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-4">
                 <p role="status" className="text-sm text-slate-300">{searchResults.total} text matches for "{searchResults.query}"</p>
                 {searchResults.truncated && <p className="text-xs text-amber-200">Displaying only the first 50 matches.</p>}
-                <Button type="button" variant="outline" onClick={downloadMatches}>Download matches (.json)</Button>
+                <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => downloadMatches("json")}>Download matches (.json)</Button>
+                  <Button type="button" variant="outline" onClick={() => downloadMatches("txt")}>Download matches (.txt)</Button></div>
                 <ul className="max-h-72 space-y-2 overflow-auto text-sm text-slate-300">
                   {searchResults.matches.map((match, i) => (
                     <li key={i} className="border-b border-slate-800 pb-2">
@@ -335,6 +342,17 @@ const AIDocumentIntelligence = () => {
             )}
           </CardContent>
         </Card>
+        <section className="grid gap-4 md:grid-cols-2">
+          {features.map(feature => (
+            <Card key={feature.id} className="border-slate-800 bg-slate-900/60 text-slate-100">
+              <CardHeader>
+                <CardTitle className="text-white">{feature.title}</CardTitle>
+                <CardDescription className="text-slate-400">{feature.description}</CardDescription>
+              </CardHeader>
+              <CardContent><Badge variant="outline">Planned · AI disabled</Badge></CardContent>
+            </Card>
+          ))}
+        </section>
       </div>
     </div>
   );

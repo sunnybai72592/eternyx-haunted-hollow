@@ -152,6 +152,38 @@ def storyboard(page):
     expect(planner.get_by_label("Seconds per shot")).to_have_value("3")
 
 
+def document_search(page):
+    page.goto(ORIGIN + "/ai-arsenal/documents")
+    source = page.locator("#document-source")
+    content = "# Notes\r\nİ🙂 Reading\r\n## Follow-up\r\nSecond READING"
+    page.locator("#document-local-file").set_input_files({
+        "name": "observations.md", "mimeType": "text/markdown", "buffer": content.encode(),
+    })
+    page.get_by_role("button", name="Inspect document").click()
+    page.get_by_role("button", name="Line 3 · Follow-up").click()
+    selected = "e => e.value.slice(e.selectionStart, e.selectionEnd)"
+    assert source.evaluate(selected) == "## Follow-up"
+    query = page.locator("#document-search")
+    query.fill("reading")
+    query.press("Enter")
+    page.get_by_role("button", name="Go to line 2, column 5").click()
+    assert source.evaluate(selected) == "Reading"
+    with page.expect_download() as pending:
+        page.get_by_role("button", name="Download matches (.json)").click()
+    report = json.loads(Path(pending.value.path()).read_bytes())
+    assert report["fileName"] == "observations.md" and report["total"] == 2
+    assert [m["matchedText"] for m in report["matches"]] == ["Reading", "READING"]
+    with page.expect_download() as pending:
+        page.get_by_role("button", name="Download matches (.txt)").click()
+    assert "Line 4, column 8 · READING" in Path(pending.value.path()).read_text()
+    page.once("dialog", lambda dialog: dialog.dismiss())
+    page.get_by_role("button", name="Clear workspace").click()
+    expect(source).to_have_value(content.replace("\r\n", "\n"))
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.get_by_role("button", name="Clear workspace").click()
+    expect(source).to_have_value("")
+
+
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(channel="chrome")
     for width, height in [(390, 844), (1440, 900)]:
@@ -162,7 +194,8 @@ with sync_playwright() as playwright:
             automation(page, width < 768)
             explore_and_inspect(page)
             storyboard(page)
-            print(f"Passed workspace, automation, Explore, inspector and storyboard journeys at {width} × {height}", flush=True)
+            document_search(page)
+            print(f"Passed workspace, automation, Explore, inspector, storyboard and document journeys at {width} × {height}", flush=True)
         finally:
             context.close()
     browser.close()
