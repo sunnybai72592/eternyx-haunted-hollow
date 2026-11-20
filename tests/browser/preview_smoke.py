@@ -184,6 +184,59 @@ def document_search(page):
     expect(source).to_have_value("")
 
 
+def chat(page):
+    session = "00000000-0000-4000-8000-000000000002"
+    prompt, answer = "Check my field notes", "Fixture reply for the saved conversation."
+    turns = []
+    submitted = []
+    history_attempts = []
+    def send(route):
+        request = route.request.post_data_json
+        submitted.append(request["message"])
+        if len(submitted) == 1:
+            return route.fulfill(status=402, json={"code": "INSUFFICIENT_CREDITS"})
+        assert request["sessionId"] is None and request["message"] == prompt
+        for role, content in [("user", prompt), ("assistant", answer)]:
+            turns.append({"id": str(len(turns)), "role": role, "content": content,
+                          "created_at": "2026-01-01T00:00:00Z"})
+        route.fulfill(json={"sessionId": session, "response": answer})
+
+    def sessions(route):
+        route.fulfill(json=[{"id": session, "title": prompt}] if turns else [])
+
+    def history(route):
+        history_attempts.append(route.request.url)
+        if len(history_attempts) == 1:
+            return route.fulfill(status=503, json={"message": "Temporary failure"})
+        route.fulfill(json=turns)
+
+    page.route("**/functions/v1/eternyx-ai-chat", send)
+    page.route("**/rest/v1/conversation_sessions?**", sessions)
+    page.route("**/rest/v1/chat_history?**", history)
+    page.goto(ORIGIN + "/eternyx-ai")
+    draft = page.get_by_role("textbox", name="Message to Eternyx AI")
+    draft.fill(prompt)
+    draft.press("Enter")
+    expect(page.get_by_text("Your account has insufficient chat credits.", exact=False)).to_be_visible()
+    expect(draft).to_have_value(prompt)
+    page.get_by_role("button", name="Send message").click()
+    expect(page.get_by_text(answer, exact=True)).to_be_visible()
+    page.reload()
+    retry = page.get_by_role("button", name="Retry history")
+    expect(retry).to_be_visible()
+    draft.fill("Follow-up")
+    expect(page.get_by_role("button", name="Send message")).to_be_disabled()
+    retry.click()
+    expect(page.get_by_text(answer, exact=True)).to_be_visible()
+    expect(draft).to_have_value("Follow-up")
+    expect(page.get_by_role("button", name="Send message")).to_be_enabled()
+    page.get_by_role("button", name="New Chat").click()
+    expect(page.get_by_text(answer, exact=True)).to_have_count(0)
+    page.get_by_role("button", name=prompt, exact=True).click()
+    expect(page.get_by_text(answer, exact=True)).to_be_visible()
+    assert submitted == [prompt, prompt]
+
+
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(channel="chrome")
     for width, height in [(390, 844), (1440, 900)]:
@@ -195,7 +248,8 @@ with sync_playwright() as playwright:
             explore_and_inspect(page)
             storyboard(page)
             document_search(page)
-            print(f"Passed workspace, automation, Explore, inspector, storyboard and document journeys at {width} × {height}", flush=True)
+            chat(page)
+            print(f"Passed workspace, automation, Explore, inspector, storyboard document and chat journeys at {width} × {height}", flush=True)
         finally:
             context.close()
     browser.close()
