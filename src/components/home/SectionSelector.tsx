@@ -1,4 +1,5 @@
 import React from "react";
+import HomeTaskFinder from "./HomeTaskFinder";
 import { VisitorPresence } from "@/components/home/VisitorPresence";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -30,23 +31,10 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
       <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-7 sm:px-6 sm:pt-10 lg:px-8">
         <section className="relative grid items-center gap-12 pb-16 pt-5 lg:min-h-[590px] lg:grid-cols-[1.08fr_.92fr] lg:gap-8 lg:pb-20">
           <div className="relative z-10 max-w-3xl">
-            <div className="mb-7 inline-flex items-center gap-2.5 rounded-full border border-cyan-200/20 bg-cyan-200/[0.06] px-3.5 py-2 text-[10px] font-bold uppercase tracking-[.2em] text-cyan-100 sm:text-xs">
-              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-50 motion-reduce:animate-none" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" /></span>
-              A new digital ecosystem
-            </div>
-
-            <div className="mb-5 flex items-center gap-3 text-cyan-200">
-              <Zap className="h-7 w-7 sm:h-8 sm:w-8" />
-              <span className="text-xs font-bold uppercase tracking-[.34em] text-slate-400">Meet your next digital universe</span>
-            </div>
-            <h1 className="max-w-3xl text-[clamp(3.25rem,8vw,6.8rem)] font-black leading-[.91] tracking-[-.075em] text-white">
-              One ecosystem.
-              <span className="mt-2 block bg-gradient-to-r from-cyan-200 via-sky-300 to-violet-300 bg-clip-text pb-2 text-transparent">Endless possibilities.</span>
+            <h1 className="text-[clamp(2.75rem,6vw,5.5rem)] font-black leading-[1.02] tracking-tight">
+              {isAuthenticated ? `Welcome back${profile?.username ? ", " + profile.username : ""}` : "Welcome to Eternyx"}
             </h1>
-            <p className="mt-7 max-w-xl text-sm leading-7 text-slate-300 sm:text-base sm:leading-8">
-              Security, software creation, AI, productivity, cloud connections, and automation — brought together in one evolving digital world. Discover what works today and what we're building next.
-            </p>
-
+            <HomeTaskFinder />
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_rgba(34,211,238,.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
                 Explore the six pillars <ArrowRight className="ml-2 h-4 w-4" />
@@ -60,14 +48,6 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
                   Join ETERNYX <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               )}
-            </div>
-            {isAuthenticated && (
-              <p className="mt-4 text-xs text-slate-500">Welcome back{profile?.username ? `, ${profile.username}` : ""}. Pick up where your journey continues.</p>
-            )}
-
-            <div className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-white/[0.08] pt-6 text-xs text-slate-400">
-              <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-300" /> Built around real capabilities</span>
-              <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-cyan-200" /> Trust and control by design</span>
             </div>
           </div>
 
