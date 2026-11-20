@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { FileText, NotebookPen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteCopy, matchingCopies, readCopies, saveCopy } from "@/lib/workspaceNotes.mjs";
+import { deleteCopy, matchingCopies, noteExcerpt, suggestedTitle, readCopies, saveCopy } from "@/lib/workspaceNotes.mjs";
 
 const draftKey = "eternyx.workspace.device-note";
 type Note = { id: string; title: string; body: string; savedAt: number };
@@ -15,12 +16,13 @@ export default function DeviceNote() {
   const [title, setTitle] = useState("");
   const [search, setSearch] = useState("");
   const [copies, setCopies] = useState<Note[]>([]);
+  const [listUnavailable, setListUnavailable] = useState(false);
   const [status, setStatus] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
 
   function refresh() {
-    try { setCopies(readCopies(localStorage)); }
-    catch { setStatus("Saved notes could not be read. You can still download the text."); }
+    try { setCopies(readCopies(localStorage)); setListUnavailable(false); }
+    catch { setListUnavailable(true); }
   }
 
   useEffect(() => {
@@ -75,14 +77,16 @@ export default function DeviceNote() {
   }
 
   const visible = matchingCopies(copies, search);
-  return <section className="space-y-5">
+  const suggestion = !title.trim() ? suggestedTitle(draft) : "";
+  return <section className="space-y-5 rounded-xl border bg-card p-4 text-card-foreground sm:p-6">
     <div>
-      <h2 className="text-xl font-semibold">Device scratchpad</h2>
+      <h2 className="flex items-center gap-2 text-xl font-semibold"><NotebookPen aria-hidden="true" className="size-5 text-primary" />Device scratchpad</h2>
       <p className="text-sm text-muted-foreground">Drafts and saved copies are shared by people using this browser profile.</p>
     </div>
     <div className="space-y-2">
       <label htmlFor="note-title">Title for saved copies</label>
       <Input id="note-title" maxLength={100} value={title} onChange={e => setTitle(e.target.value)} />
+      {suggestion && <Button type="button" variant="outline" size="sm" className="max-w-full" onClick={() => setTitle(suggestion)}><span className="truncate">Use first line: {suggestion}</span></Button>}
       <label className="block" htmlFor="device-note">Note</label>
       <Textarea id="device-note" rows={8} ref={input} value={draft} onChange={e => { setDraft(e.target.value); setStatus(""); }}
         onKeyDown={e => {
@@ -98,12 +102,18 @@ export default function DeviceNote() {
     <section className="space-y-3 border-t pt-5">
       <h3 className="font-semibold">Saved copies</h3>
       <label className="sr-only" htmlFor="note-search">Search titles and note text</label>
-      <Input id="note-search" type="search" placeholder="Search titles and note text" value={search} onChange={e => setSearch(e.target.value)} />
-      {visible.length ? <ul className="divide-y">{visible.map((note: Note) => <li key={note.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-        <button type="button" onClick={() => open(note)} className="min-w-0 flex-1 break-words text-left font-medium underline underline-offset-4">{note.title}</button>
+      <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" /><Input className="pl-9" id="note-search" type="search" placeholder="Search titles and note text" value={search} onChange={e => setSearch(e.target.value)} /></div>
+      {listUnavailable && <p role="alert">Saved copies could not be refreshed. <button type="button" className="underline" onClick={refresh}>Try again</button></p>}
+      {visible.length ? <ul className="divide-y rounded-lg border px-3">{visible.map((note: Note) => <li key={note.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+        <button type="button" onClick={() => open(note)} className="flex min-w-0 flex-1 items-start gap-2 rounded p-1 text-left hover:bg-muted focus-visible:ring-2">
+          <FileText className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0"><span className="block break-words font-medium">{note.title}</span>
+            <span className="line-clamp-2 break-words text-sm text-muted-foreground">{noteExcerpt(note.body, search)}</span>
+          </span>
+        </button>
         <time className="text-xs text-muted-foreground">{new Date(note.savedAt).toLocaleString()}</time>
         <Button variant="ghost" aria-label={"Delete " + note.title} onClick={() => remove(note)}>Delete</Button>
-      </li>)}</ul> : <p className="text-sm text-muted-foreground">{copies.length ? "No matching copies." : "No saved copies yet."}</p>}
+      </li>)}</ul> : !listUnavailable && <p className="text-sm text-muted-foreground">{copies.length ? "No matching copies." : "No saved copies yet."}</p>}
     </section>
   </section>;
 }
