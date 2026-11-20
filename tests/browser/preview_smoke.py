@@ -420,6 +420,10 @@ def presence(page):
     page.goto(ORIGIN + "/")
     panel = page.get_by_role("region", name="Around Eternyx now")
     expect(panel.get_by_text("Saudi Arabia", exact=True)).to_be_visible()
+    world = panel.get_by_role("img", name="Live visitor map with country estimates and voluntarily shared device pins")
+    expect(world).to_be_visible()
+    expect(world.get_by_text("SA · 5")).to_be_visible()
+    expect(panel.get_by_text("Publish my city and coordinates")).to_have_count(0)
     expect(panel.get_by_text("7 estimated active networks")).to_be_visible()
     expect(panel.get_by_role("checkbox")).to_be_checked()
     with page.expect_response(lambda response: response.url.endswith("/rpc/visitor_presence") and not response.request.post_data_json["contribute"]):
