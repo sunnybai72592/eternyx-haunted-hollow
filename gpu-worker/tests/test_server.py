@@ -91,7 +91,7 @@ class WorkerTests(unittest.TestCase):
         asset = "asset_" + "a" * 32
         output_root = Path(self.temp.name) / "private"
         output_root.mkdir(mode=0o700)
-        media = b"\\x00\\x00\\x00\\x14ftypisom" + b"private-video-test-fixture"
+        media = bytes.fromhex("000000146674797069736f6d") + b"private-video-test-fixture"
         (output_root / (asset + ".mp4")).write_bytes(media)
         job = self.store.submit("job-output-01", PAYLOAD)
         self.store.claim()
@@ -130,7 +130,7 @@ class WorkerTests(unittest.TestCase):
         root = Path(self.temp.name) / "outputs"
         root.mkdir(mode=0o700)
         target = Path(self.temp.name) / "outside.mp4"
-        target.write_bytes(b"\\x00\\x00\\x00\\x14ftypisom"+b"secret")
+        target.write_bytes(bytes.fromhex("000000146674797069736f6d")+b"secret")
         (root / (asset + ".mp4")).symlink_to(target)
         job = self.store.submit("job-output-03", PAYLOAD)
         self.store.claim()
