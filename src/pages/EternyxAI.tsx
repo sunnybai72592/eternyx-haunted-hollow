@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { AlertCircle, Send, Upload, Trash2, FileText, Plus, MessageCircle } from
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { readActiveConversation, rememberConversation } from '@/lib/activeConversation.mjs';
+
+import { readDnsExplanation, clearDnsExplanation } from "@/lib/dnsExplanation";
 
 interface Message {
   id: string;
@@ -55,7 +57,10 @@ const EternixAI: React.FC = () => {
 
 const ChatWorkspace = ({ userId }: { userId: string }) => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
+  const token = useLocation().state?.dnsExplanation;
+  const [initialPrompt] = useState(() => readDnsExplanation(token, userId));
+  const [inputValue, setInputValue] = useState(initialPrompt);
+  useEffect(() => { clearDnsExplanation(token); }, [token]);
   const [isLoading, setIsLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
@@ -76,7 +81,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
 
   useEffect(() => {
     void loadDocuments(userId);
-    const remembered = readActiveConversation(userId);
+    const remembered = initialPrompt ? null : readActiveConversation(userId);
     const version = historyVersion.current;
     void loadSessions(userId).then(rows => {
       if (!rows || !remembered || historyVersion.current !== version) return;
@@ -85,7 +90,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
       else rememberConversation(userId, null);
     });
     return () => { historyVersion.current++; };
-  }, [userId]);
+  }, [userId, initialPrompt]);
 
   // Auto-scroll to bottom
   useEffect(() => {
