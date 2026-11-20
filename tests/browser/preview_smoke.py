@@ -417,22 +417,35 @@ def presence(page):
                             "networkAvailable": True, "gatewayLocated": True})
     path = "**/rest/v1/rpc/visitor_presence"
     page.route(path, data)
-    tracked = []
-    def realtime(socket):
-        def respond(raw):
-            packet = json.loads(raw)
-            array_format = isinstance(packet, list)
-            if array_format:
-                join_ref, ref, topic, event, payload = packet
-            else:
-                join_ref, ref, topic, event, payload = (packet.get(k) for k in ("join_ref", "ref", "topic", "event", "payload"))
-            if event == "presence" and payload.get("event") == "track":
-                tracked.append(payload["payload"])
-            reply = {"status": "ok", "response": {}}
-            socket.send(json.dumps([join_ref, ref, topic, "phx_reply", reply] if array_format else
-                                   dict(join_ref=join_ref, ref=ref, topic=topic, event="phx_reply", payload=reply)))
-        socket.on_message(respond)
-    page.route_web_socket("**/realtime/v1/websocket*", realtime)
+    page.add_init_script("""(() => {
+        window.testPublicPins = [];
+        class PresenceSocket extends EventTarget {
+            static CONNECTING = 0; static OPEN = 1; static CLOSING = 2; static CLOSED = 3;
+            readyState = 0;
+            constructor(url) {
+                super();
+                this.url = url;
+                setTimeout(() => { this.readyState = 1; this.emit('open', new Event('open')); }, 0);
+            }
+            emit(type, event) {
+                this.dispatchEvent(event);
+                this['on' + type]?.(event);
+            }
+            send(raw) {
+                const packet = JSON.parse(raw);
+                const array = Array.isArray(packet);
+                const [join_ref, ref, topic, event, payload] = array ? packet :
+                    [packet.join_ref, packet.ref, packet.topic, packet.event, packet.payload];
+                if (event === 'presence' && payload.event === 'track') window.testPublicPins.push(payload.payload);
+                const reply = {status: 'ok', response: {}};
+                const frame = array ? [join_ref, ref, topic, 'phx_reply', reply] :
+                    {join_ref, ref, topic, event: 'phx_reply', payload: reply};
+                setTimeout(() => this.emit('message', new MessageEvent('message', {data: JSON.stringify(frame)})), 0);
+            }
+            close() { this.readyState = 3; this.emit('close', new CloseEvent('close')); }
+        }
+        window.WebSocket = PresenceSocket;
+    })()""")
     page.context.set_geolocation({"latitude": 12.34567, "longitude": 32.12345, "accuracy": 8})
     page.context.grant_permissions(["geolocation"], origin=ORIGIN)
     page.goto(ORIGIN + "/")
@@ -444,11 +457,11 @@ def presence(page):
     panel.get_by_text("Share my location on the map", exact=True).click()
     share = panel.get_by_role("button", name="Share my location publicly")
     expect(share).to_be_enabled()
-    assert not tracked
+    assert not page.evaluate("window.testPublicPins")
     share.click()
     remove = panel.get_by_role("button", name="Remove my public pin")
     expect(remove).to_be_visible()
-    assert tracked == [{"city": "Shared location", "latitude": 12.34567, "longitude": 32.12345, "accuracy": 8}]
+    assert page.evaluate("window.testPublicPins") == [{"city": "Shared location", "latitude": 12.34567, "longitude": 32.12345, "accuracy": 8}]
     remove.click()
     expect(share).to_be_enabled()
     expect(panel.get_by_text("7 estimated active networks")).to_be_visible()
