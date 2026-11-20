@@ -1,0 +1,63 @@
+name: ETERNYX staging two-account RLS acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      approve_staging_fixture_writes:
+        description: "I approve creating/deleting synthetic records ONLY in the separately configured staging Supabase project"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-staging-rls-owner-approved
+  cancel-in-progress: false
+
+jobs:
+  verify-staging-isolation:
+    name: Verify two-account RLS using staging-only fixtures
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 12
+    env:
+      ETERNYX_RLS_STAGING_APPROVAL: ${{ inputs.approve_staging_fixture_writes && 'I_APPROVE_STAGING_FIXTURE_WRITES' || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+    steps:
+      - name: Checkout staging RLS test only
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Assert explicit owner approval before any database connections
+        run: |
+          if [ "$ETERNYX_RLS_STAGING_APPROVAL" != "I_APPROVE_STAGING_FIXTURE_WRITES" ]; then
+            echo "Staging RLS test rejected: approval required."
+            exit 1
+          fi
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Validate isolated staging configuration without printing secrets
+        run: node scripts/staging/checkStagingRlsEnvironment.mjs
+      - name: Test two-account isolation with synthetic staging records and cleanup
+        timeout-minutes: 7
+        run: node scripts/staging/verifyRlsTwoUsers.mjs
+      - name: Upload sanitized staging RLS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-staging-rls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/staging-rls-isolation.json
+          if-no-files-found: warn
+          retention-days: 7
