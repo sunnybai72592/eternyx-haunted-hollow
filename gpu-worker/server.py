@@ -56,7 +56,10 @@ def validate_payload(payload):
     return payload
 
 class JobStore:
-    def __init__(self, filename):
+    def __init__(self, filename, max_pending=32):
+        if type(max_pending) is not int or not 1 <= max_pending <= 1000:
+            raise ValueError("invalid maximum pending jobs")
+        self.max_pending = max_pending
         self.db = sqlite3.connect(filename, check_same_thread=False, isolation_level=None)
         self.lock = threading.RLock()
         with self.lock:
@@ -79,6 +82,9 @@ class JobStore:
                 if row[1] != digest:
                     raise ValueError("idempotency conflict")
                 return {"taskId": row[0], "state": row[2]}
+            pending = self.db.execute("SELECT count(*) FROM jobs WHERE state IN ('queued', 'processing')").fetchone()[0]
+            if pending >= self.max_pending:
+                raise OverflowError("GPU queue capacity reached")
             task_id = "job_" + uuid.uuid4().hex
             self.db.execute("INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?)",
                             (task_id, key, digest, raw, "queued", None, None, int(time.time())))
@@ -109,6 +115,14 @@ class JobStore:
                 self.db.execute("UPDATE jobs SET state='cancelled' WHERE task_id=? AND state='queued'", (task_id,))
                 return True
             return False
+
+    def recover_interrupted_jobs(self):
+        """Single-process startup: do not silently re-run potentially billed jobs."""
+        with self.lock:
+            return self.db.execute(
+                "UPDATE jobs SET state='failed', failure_code='WORKER_INTERRUPTED' "
+                "WHERE state='processing'"
+            ).rowcount
 
     def claim(self):
         with self.lock:
@@ -197,6 +211,8 @@ def handler_factory(store, secret):
                         raise ValueError("invalid request")
                     outcome = store.submit(data["idempotencyKey"], data["payload"])
                     return self.reply(202 if outcome["state"] in ("queued", "processing") else 200, outcome)
+                except OverflowError:
+                    return self.reply(429, {"error": "queue_full"})
                 except (ValueError, TypeError, json.JSONDecodeError):
                     return self.reply(422, {"error": "invalid_request"})
             m = re.fullmatch(r"/v1/jobs/([A-Za-z0-9._:-]+)/cancel", path.path)
@@ -235,7 +251,9 @@ def main():
     timeout = int(os.environ.get("ETERNYX_GPU_JOB_TIMEOUT_SECONDS", "900"))
     if not 5 <= timeout <= 3600:
         raise SystemExit("job timeout out of bounds")
-    store = JobStore(db_path)
+    max_pending = int(os.environ.get("ETERNYX_GPU_MAX_PENDING_JOBS", "32"))
+    store = JobStore(db_path, max_pending=max_pending)
+    store.recover_interrupted_jobs()
     stop = threading.Event()
     threading.Thread(target=run_worker, args=(store, command, timeout, stop), daemon=True).start()
     # Local/private only. TLS is mandatory at trusted ingress.
