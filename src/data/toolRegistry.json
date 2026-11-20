@@ -69,11 +69,11 @@
     "pillar": "automation",
     "route": "/automation",
     "execution": "Browser",
-    "description": "Trim lines, remove duplicates, sort and download a text file.",
+    "description": "Preview trimmed lines and duplicates, choose an order and export text or JSON.",
     "access": "Public",
     "provider": "No provider",
-    "source": "src/pages/EcosystemPillarPage.tsx",
-    "test": null,
+    "source": "src/components/LineWorkflow.tsx",
+    "test": "tests/clean-lines.test.mjs",
     "owner": null,
     "verification": "Deployed check pending"
   }
