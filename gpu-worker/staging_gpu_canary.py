@@ -133,16 +133,14 @@ def run_once(args):
     env = dict(os.environ)
     env["ETERNYX_WAN21_MODEL_DIR"] = str(Path(args.model_dir).resolve())
     env["ETERNYX_PRIVATE_VIDEO_DIR"] = str(Path(args.private_dir).resolve())
-    # Verify directory permissions and no links using the exact production runner.
-    original = dict(os.environ)
-    try:
-        os.environ.update({"ETERNYX_WAN21_MODEL_DIR": env["ETERNYX_WAN21_MODEL_DIR"],
-                           "ETERNYX_PRIVATE_VIDEO_DIR": env["ETERNYX_PRIVATE_VIDEO_DIR"]})
-        module.validated_storage_path()
-        module.validated_model_path()
-    finally:
-        os.environ.clear()
-        os.environ.update(original)
+    # Inspect local paths without modifying the parent process's global env.
+    # Child receives trusted prevalidated paths via its own env dictionary.
+    model_path = Path(args.model_dir)
+    storage_path = Path(args.private_dir)
+    if model_path.is_symlink() or not model_path.is_dir() or not (model_path / "model_index.json").is_file():
+        raise ValueError("local model not available")
+    if storage_path.is_symlink() or not storage_path.is_dir() or storage_path.stat().st_mode & 0o077:
+        raise ValueError("private media storage not secure")
     gpu = inspect_gpu()
     payload = {"featureKey": "ai.video.text_to_video", "prompt": DEFAULT_PROMPT,
                "durationSeconds": 1, "aspectRatio": "16:9", "version": 1}
