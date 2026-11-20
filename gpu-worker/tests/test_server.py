@@ -1,6 +1,9 @@
 """Offline tests: no GPU, network provider, paid job, or model weights required."""
 import importlib.util
 import json
+import os
+import sys
+import time
 import tempfile
 import threading
 import unittest
@@ -10,6 +13,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 MODULE = Path(__file__).resolve().parents[1] / "server.py"
+sys.path.insert(0, str(MODULE.parent))
 spec = importlib.util.spec_from_file_location("eternyx_gpu_worker", MODULE)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
@@ -41,6 +45,53 @@ class WorkerTests(unittest.TestCase):
             worker.execute_job(None, PAYLOAD, 10)
         self.store.finalize(job["taskId"])
         self.assertEqual(self.store.get(job["taskId"])["failureCode"], "INFERENCE_FAILED")
+
+    def test_real_worker_subprocess_contract_succeeds_without_gpu(self):
+        # A real local executable returns only a JSON asset reference.
+        # It is NOT a video renderer and never produces media.
+        script = Path(self.temp.name) / "valid_runner.py"
+        asset = "asset_" + "e" * 32
+        script.write_text(
+            "#!" + sys.executable + "\n"
+            "import json,sys\n"
+            "data=json.load(sys.stdin)\n"
+            "assert data['featureKey']=='ai.video.text_to_video'\n"
+            "print(json.dumps({'outputReference':'" + asset + "'}))\n"
+        )
+        script.chmod(0o700)
+        self.assertEqual(worker.execute_job(str(script), PAYLOAD, 3), asset)
+
+    def test_real_worker_rejects_unbounded_stdout_before_timeout(self):
+        script = Path(self.temp.name) / "flood_runner.py"
+        script.write_text(
+            "#!" + sys.executable + "\n"
+            "import sys,time\n"
+            "sys.stdout.write('A' * 300000)\n"
+            "sys.stdout.flush()\n"
+            "time.sleep(10)\n"
+        )
+        script.chmod(0o700)
+        started = time.monotonic()
+        with self.assertRaises(RuntimeError):
+            worker.execute_job(str(script), PAYLOAD, 4)
+        self.assertLess(time.monotonic() - started, 4)
+
+    def test_real_worker_kills_stalled_inference_before_next_job(self):
+        script = Path(self.temp.name) / "stalled_runner.py"
+        script.write_text(
+            "#!" + sys.executable + "\n"
+            "import time\n"
+            "time.sleep(15)\n"
+        )
+        script.chmod(0o700)
+        started = time.monotonic()
+        with self.assertRaises(RuntimeError):
+            worker.execute_job(str(script), PAYLOAD, 1)
+        self.assertLess(time.monotonic() - started, 4)
+
+    def test_version_bool_is_not_accepted_by_real_worker(self):
+        with self.assertRaises(ValueError):
+            worker.validate_payload({**PAYLOAD, "version": True})
 
     def test_queued_cancel_and_no_cancel_after_processing(self):
         job = self.store.submit("job-00000003", PAYLOAD)
