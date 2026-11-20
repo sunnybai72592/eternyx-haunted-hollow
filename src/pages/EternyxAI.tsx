@@ -60,7 +60,6 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   const token = useLocation().state?.dnsExplanation;
   const [initialPrompt] = useState(() => readDnsExplanation(token, userId));
   const [inputValue, setInputValue] = useState(initialPrompt);
-  useEffect(() => { clearDnsExplanation(token); }, [token]);
   const [isLoading, setIsLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
@@ -247,6 +246,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
     historyVersion.current++;
     setSendError('');
     const userMessage = inputValue;
+    clearDnsExplanation(token);
     setInputValue('');
     setIsLoading(true);
     const pendingMessageId = crypto.randomUUID();
