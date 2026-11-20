@@ -34,6 +34,68 @@ js_error_categories = []
 script_http_failures = []
 MAX_RUNTIME_DIAGNOSTICS = 16
 
+# Release metadata is PUBLIC, read-only and contains no private values.
+# A self-reported source SHA requires comparison to the GitHub checkout.
+release_evidence = {
+    "status": "unavailable", "build_id": None, "source_sha": None,
+    "html_matches": False, "client_matches": False,
+    "matches_checkout": False,
+}
+
+def inspect_public_release(page):
+    global release_evidence
+    try:
+        observed = page.evaluate("""async () => {
+            const response = await fetch("/release-info.json", {
+                method: "GET", credentials: "omit", cache: "no-store", redirect: "error"
+            });
+            if (!response.ok || !(response.headers.get("content-type") || "").includes("application/json")) {
+                return null;
+            }
+            const stamp = await response.json();
+            return {
+                stamp,
+                html_id: document.querySelector('meta[name="eternyx-build-id"]')?.content ?? null,
+                client_id: document.documentElement.getAttribute("data-eternyx-build-id"),
+            };
+        }""")
+        if not isinstance(observed, dict) or not isinstance(observed.get("stamp"), dict):
+            return
+        stamp = observed["stamp"]
+        ident = stamp.get("build_id")
+        source_sha = stamp.get("source_sha")
+        sha_origin = stamp.get("source_sha_origin")
+        if (stamp.get("schema") != 1 or stamp.get("project") != "eternyx" or
+                stamp.get("production_verified") is not False or
+                not isinstance(ident, str) or not re.fullmatch(r"[a-f0-9]{32}", ident) or
+                sha_origin not in ("git-checkout", "unavailable")):
+            return
+        if source_sha is not None and (
+                not isinstance(source_sha, str) or
+                not re.fullmatch(r"[a-f0-9]{40}", source_sha) or
+                sha_origin != "git-checkout"):
+            return
+        if source_sha is None and sha_origin != "unavailable":
+            return
+        html_matches = observed.get("html_id") == ident
+        client_matches = observed.get("client_id") == ident
+        expected = os.environ.get("GITHUB_SHA", "").lower()
+        matches_checkout = bool(
+            source_sha and re.fullmatch(r"[a-f0-9]{40}", expected) and source_sha == expected
+        )
+        status = "inconsistent"
+        if html_matches and client_matches:
+            status = "source-matched" if matches_checkout else "build-matched"
+        release_evidence = {
+            "status": status, "build_id": ident, "source_sha": source_sha,
+            "html_matches": html_matches, "client_matches": client_matches,
+            "matches_checkout": matches_checkout,
+        }
+    except Exception:
+        # Old/stale deployments without the manifest stay "unavailable".
+        # Do not log exception text or allow the browser GET to leak credentials.
+        return
+
 def capture_page_error(error):
     # Never store or log the raw exception message: it may contain user data.
     message = str(error)
@@ -177,6 +239,7 @@ def registry_landing(page):
     expect(page.get_by_text("32 indexed", exact=False)).to_be_visible()
     expect(page.get_by_text("0 production-verified", exact=False)).to_be_visible()
     expect(page.get_by_label("Filter tools by pillar")).to_be_visible()
+    inspect_public_release(page)
 
 
 def registry_filter(page):
@@ -309,6 +372,7 @@ def write_report():
         "target": target_name,
         "hostname": hostname,
         "git_revision_under_test": "unverified: hosting release SHA not exposed",
+        "release_evidence": release_evidence,
         "source_checkout_sha": os.environ.get("GITHUB_SHA", "unknown"),
         "production_verified": False,
         "payment_or_provider_verified": False,
