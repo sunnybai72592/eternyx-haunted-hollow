@@ -23,7 +23,14 @@ if (!file) {
       ),
       "First-party script/document HTTP failures: " + summary.assetHttpFailures.length,
       "Read-only hosted frontend: " + (summary.allBrowserJourneysPassed ? "passed" : "NOT verified"),
-      "Production build revision: not verified",
+      "Build fingerprint: " + (summary.releaseEvidence.build_id ?? "not available"),
+      "HTML + JavaScript match manifest: " +
+        (summary.releaseEvidence.html_matches && summary.releaseEvidence.client_matches),
+      "Hosted release provenance: " + summary.releaseEvidence.status,
+      "Source commit claimed by build: " + (summary.releaseEvidence.source_sha ?? "not available"),
+      "GitHub checkout SHA matched: " + summary.releaseEvidence.matches_checkout,
+      "Production build revision: " +
+        (summary.deploymentRevisionKnown ? "reported source SHA matched the checkout" : "not verified"),
       "Production certification: NO",
       "Live payments and AI provider operations: NOT tested",
       "",
