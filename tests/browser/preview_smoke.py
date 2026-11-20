@@ -417,13 +417,53 @@ def presence(page):
                             "networkAvailable": True, "gatewayLocated": True})
     path = "**/rest/v1/rpc/visitor_presence"
     page.route(path, data)
+    page.add_init_script("""(() => {
+        window.testPublicPins = [];
+        class PresenceSocket extends EventTarget {
+            static CONNECTING = 0; static OPEN = 1; static CLOSING = 2; static CLOSED = 3;
+            readyState = 0;
+            constructor(url) {
+                super();
+                this.url = url;
+                setTimeout(() => { this.readyState = 1; this.emit('open', new Event('open')); }, 0);
+            }
+            emit(type, event) {
+                this.dispatchEvent(event);
+                this['on' + type]?.(event);
+            }
+            send(raw) {
+                const packet = JSON.parse(raw);
+                const array = Array.isArray(packet);
+                const [join_ref, ref, topic, event, payload] = array ? packet :
+                    [packet.join_ref, packet.ref, packet.topic, packet.event, packet.payload];
+                if (event === 'presence' && payload.event === 'track') window.testPublicPins.push(payload.payload);
+                const reply = {status: 'ok', response: {}};
+                const frame = array ? [join_ref, ref, topic, 'phx_reply', reply] :
+                    {join_ref, ref, topic, event: 'phx_reply', payload: reply};
+                setTimeout(() => this.emit('message', new MessageEvent('message', {data: JSON.stringify(frame)})), 0);
+            }
+            close() { this.readyState = 3; this.emit('close', new CloseEvent('close')); }
+        }
+        window.WebSocket = PresenceSocket;
+    })()""")
+    page.context.set_geolocation({"latitude": 12.34567, "longitude": 32.12345, "accuracy": 8})
+    page.context.grant_permissions(["geolocation"], origin=ORIGIN)
     page.goto(ORIGIN + "/")
     panel = page.get_by_role("region", name="Around Eternyx now")
     expect(panel.get_by_text("Saudi Arabia", exact=True)).to_be_visible()
     world = panel.get_by_role("img", name="Live visitor map with country estimates and voluntarily shared device pins")
     expect(world).to_be_visible()
     expect(world.get_by_text("SA · 5")).to_be_visible()
-    expect(panel.get_by_text("Publish my city and coordinates")).to_have_count(0)
+    panel.get_by_text("Share my location on the map", exact=True).click()
+    share = panel.get_by_role("button", name="Share my location publicly")
+    expect(share).to_be_enabled()
+    assert not page.evaluate("window.testPublicPins")
+    share.click()
+    remove = panel.get_by_role("button", name="Remove my public pin")
+    expect(remove).to_be_visible()
+    assert page.evaluate("window.testPublicPins") == [{"city": "Shared location", "latitude": 12.34567, "longitude": 32.12345, "accuracy": 8}]
+    remove.click()
+    expect(share).to_be_enabled()
     expect(panel.get_by_text("7 estimated active networks")).to_be_visible()
     expect(panel.get_by_role("checkbox")).to_be_checked()
     with page.expect_response(lambda response: response.url.endswith("/rpc/visitor_presence") and not response.request.post_data_json["contribute"]):
