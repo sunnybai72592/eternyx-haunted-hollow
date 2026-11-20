@@ -48,7 +48,7 @@ test("readiness categories correctly distinguish local, backend, preview and ext
   assert.equal(summary.indexed,registry.length);
   assert.equal(summary.productionVerified,0);
   assert.equal(summary.liveQAPending,registry.length);
-  assert.deepEqual(READINESS_VALUES.sort(),statuses.sort());
+  assert.deepEqual([...READINESS_VALUES].sort(),[...statuses].sort());
   assert.equal(Object.values(summary.byReadiness).reduce((a,b)=>a+b,0),registry.length);
   assert.ok(summary.byReadiness["local-foundation"] >= 10);
   assert.ok(summary.byReadiness["backend-dependent"] >= 3);
