@@ -30,6 +30,39 @@ export function evaluateRemoteAcceptance(report) {
   for (const key of ["blocked_external_requests", "blocked_write_attempts"]) {
     if (!Number.isSafeInteger(report[key]) || report[key] < 0) invalid("invalid blocked count");
   }
+  // Optional diagnostics contain ONLY bounded, sanitized classifications;
+  // never accept full redirect URLs, query strings, response bodies or IDs.
+  const allowedReasons = new Set(["unexpected-redirect", "missing-expected-ui", "browser-action-failure"]);
+  const allowedHeadingClasses = new Set(["none", "other", "explore", "sign-in", "not-found", "registry"]);
+  const pathPattern = /^\/(?:[a-zA-Z0-9_-]{1,32}(?:\/\[redacted\])?)?$/;
+  function validateSafePath(value) {
+    return value === "[different-host]" || value === "[external]" ||
+      (typeof value === "string" && pathPattern.test(value));
+  }
+  const pageObservations = report.page_observations ?? [];
+  const blockedSamples = report.blocked_samples ?? [];
+  if (!Array.isArray(pageObservations) || pageObservations.length > 16 ||
+      !Array.isArray(blockedSamples) || blockedSamples.length > 16) {
+    invalid("too many or invalid diagnostics");
+  }
+  for (const item of pageObservations) {
+    if (!item || !REMOTE_CASES.includes(item.case) || !REMOTE_VIEWPORTS.includes(item.viewport) ||
+        !allowedReasons.has(item.reason) || typeof item.on_approved_host !== "boolean" ||
+        !validateSafePath(item.path) || typeof item.root_present !== "boolean" ||
+        !allowedHeadingClasses.has(item.heading_class) ||
+        (item.http_status !== null &&
+         (!Number.isSafeInteger(item.http_status) || item.http_status < 100 || item.http_status > 599))) {
+      invalid("unsafe page observation");
+    }
+  }
+  for (const item of blockedSamples) {
+    if (!item || !["cross-origin", "write-blocked"].includes(item.reason) ||
+        !["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "other"].includes(item.method) ||
+        !validateSafePath(item.path) ||
+        !["document", "stylesheet", "script", "image", "font", "xhr", "fetch", "other"].includes(item.resource_type)) {
+      invalid("unsafe blocked-request sample");
+    }
+  }
   const expected = REMOTE_CASES.length * REMOTE_VIEWPORTS.length;
   if (report.expected_cases !== expected || !Array.isArray(report.cases)) invalid("invalid expected cases");
   const seen = new Set();
@@ -57,6 +90,8 @@ export function evaluateRemoteAcceptance(report) {
     missing,
     blockedExternal: report.blocked_external_requests,
     blockedWrites: report.blocked_write_attempts,
+    pageObservations: Object.freeze(pageObservations.map(item => Object.freeze({ ...item }))),
+    blockedSamples: Object.freeze(blockedSamples.map(item => Object.freeze({ ...item }))),
     allBrowserJourneysPassed,
     productionVerified: false,
     approvedForLivePayments: false,
