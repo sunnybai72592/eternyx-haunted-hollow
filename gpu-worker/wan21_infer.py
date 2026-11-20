@@ -113,6 +113,8 @@ def generate_with_wan(job, snapshot, output):
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU unavailable")
+    if not torch.cuda.is_bf16_supported():
+        raise RuntimeError("CUDA BF16 support unavailable")
     vae = AutoencoderKLWan.from_pretrained(
         str(snapshot), subfolder="vae", torch_dtype=torch.float32,
         local_files_only=True)
@@ -120,11 +122,12 @@ def generate_with_wan(job, snapshot, output):
         str(snapshot), vae=vae, torch_dtype=torch.bfloat16,
         local_files_only=True)
     pipe.enable_model_cpu_offload()
-    frames = pipe(
-        prompt=job["prompt"],
-        negative_prompt=job["negative_prompt"],
-        num_frames=job["num_frames"],
-    ).frames[0]
+    with torch.inference_mode():
+        frames = pipe(
+            prompt=job["prompt"],
+            negative_prompt=job["negative_prompt"],
+            num_frames=job["num_frames"],
+        ).frames[0]
     export_to_video(frames, str(output), fps=FPS)
     check_mp4(output)
 
