@@ -45,11 +45,26 @@ jobs:
           else
             echo "No remote acceptance report was produced; no hosted verification can be claimed." >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Audit signed-out user access to private ETERNYX routes
+        timeout-minutes: 3
+        if: success() || failure()
+        run: |
+          "$RUNNER_TEMP/eternyx-remote-browser/bin/python" tests/browser/anonymous_route_guards.py
+      - name: Summarize anonymous route protection evidence
+        if: always()
+        run: |
+          if test -f test-results/anonymous-route-acceptance.json; then
+            node scripts/summarize-anonymous-routes.mjs test-results/anonymous-route-acceptance.json
+          else
+            echo "No anonymous route audit evidence exists: signed-out route protection unverified." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload read-only remote acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eternyx-remote-readonly-${{ inputs.target }}-${{ github.run_id }}
-          path: test-results/remote-readonly-acceptance.json
+          path: |
+            test-results/remote-readonly-acceptance.json
+            test-results/anonymous-route-acceptance.json
           if-no-files-found: warn
           retention-days: 14
