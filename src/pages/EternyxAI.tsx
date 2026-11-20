@@ -62,6 +62,12 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
+  const [chatFilter, setChatFilter] = useState('');
+  const [listState, setListState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const listVersion = useRef(0);
+  const filterField = useRef<HTMLInputElement>(null);
+  const activeTitle = sessions.find(session => session.id === currentSessionId)?.title || 'Chat';
+  const visibleSessions = sessions.filter(session => (session.title || 'Untitled chat').toLowerCase().includes(chatFilter.trim().toLowerCase()));
   const historyVersion = useRef(0);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyFailed, setHistoryFailed] = useState(false);
@@ -102,17 +108,21 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   };
 
   const loadSessions = async (uid: string) => {
+    const version = ++listVersion.current;
+    setListState('loading');
     const { data, error } = await supabase
       .from('conversation_sessions')
       .select('*')
       .eq('user_id', uid)
       .order('created_at', { ascending: false });
 
+    if (version !== listVersion.current) return null;
     if (!error && data) {
+      setListState('ready');
       setSessions(data);
       return data as ConversationSession[];
     }
-    toast.error('Unable to load saved conversations.');
+    setListState('failed');
     return null;
   };
 
@@ -302,6 +312,18 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
     setSelectedDocument(null);
   };
 
+  function exportMessages() {
+    const transcript = messages.map(message =>
+      (message.role === 'user' ? 'You' : 'Eternyx AI') + '\n' + message.content
+    ).join('\n\n');
+    const url = URL.createObjectURL(new Blob([activeTitle + '\n\n' + transcript + '\n'], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'eternyx-conversation.txt';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   const handleDeleteDocument = async (docId: string) => {
     try {
       const { error } = await supabase.from('ai_documents').delete().eq('id', docId);
@@ -349,18 +371,32 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                   New Chat
                 </Button>
 
+                <div className="space-y-1">
+                  <label htmlFor="chat-filter" className="text-sm font-medium">Find a saved chat</label>
+                  <div className="flex items-center gap-1">
+                    <Input ref={filterField} type="search" id="chat-filter" value={chatFilter} onChange={e => setChatFilter(e.target.value)} placeholder="Search titles" />
+                    {chatFilter && <Button variant="ghost" onClick={() => { setChatFilter(''); filterField.current?.focus(); }}>Clear</Button>}
+                  </div>
+                </div>
+                {listState === 'failed' && <div role="alert" className="text-sm">
+                  Saved chats could not be refreshed. <Button variant="outline" onClick={() => loadSessions(userId)}>Retry list</Button>
+                </div>}
+                <p role="status" className="text-sm text-muted-foreground">{listState === 'loading' ? 'Loading saved chats…' :
+                  listState === 'ready' ? (sessions.length === 0 ? 'No saved chats yet.' : visibleSessions.length === 0 ? 'No matching chats.' :
+                  visibleSessions.length + ' of ' + sessions.length + ' saved chats') : ''}</p>
                 <ScrollArea className="h-48 lg:h-96 rounded-lg border border-border/50 p-4">
                   <div className="space-y-2">
-                    {sessions.map((session) => (
+                    {visibleSessions.map((session) => (
                       <Button
                         key={session.id}
+                        aria-pressed={currentSessionId === session.id}
                         disabled={isLoading}
                         variant={currentSessionId === session.id ? 'default' : 'ghost'}
                         className="w-full justify-start text-left h-auto py-2 px-3"
                         onClick={() => openConversation(session)}
                       >
                         <MessageCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                        <span className="truncate text-sm">{session.title}</span>
+                        <span className="truncate text-sm">{session.title || 'Untitled chat'}</span>
                       </Button>
                     ))}
                   </div>
@@ -455,7 +491,10 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
           <div className="lg:col-span-3">
             <Card className="h-full bg-background/50 backdrop-blur-sm border-border/50 flex flex-col">
               <CardHeader>
-                <CardTitle>Chat</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="min-w-0 break-words">{activeTitle}</CardTitle>
+                  {messages.length > 0 && <Button variant="outline" disabled={isLoading || loadingHistory || historyFailed} onClick={exportMessages}>Download visible messages (.txt)</Button>}
+                </div>
                 {selectedDocument && (
                   <CardDescription className="flex items-center gap-2 mt-2">
                     <FileText className="w-4 h-4 text-cyber-cyan" />
