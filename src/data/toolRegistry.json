@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Threat modeling",
+    "pillar": "cybersecurity",
+    "route": "/cybersecurity/threat-modeling",
+    "execution": "Browser",
+    "description": "Review system boundaries and export a threat model.",
+    "access": "Public",
+    "provider": "No provider",
+    "source": "src/pages/ThreatModelingWorkbench.tsx",
+    "test": "tests/threat-modeling-utils.test.mjs",
+    "owner": null,
+    "verification": "Deployed check pending"
+  },
+  {
+    "name": "SQL review",
+    "pillar": "developer-studio",
+    "route": "/developer-studio/database-sql",
+    "execution": "Browser",
+    "description": "Review SQL text locally and export findings.",
+    "access": "Public",
+    "provider": "No provider",
+    "source": "src/pages/DatabaseSqlIntelligence.tsx",
+    "test": "tests/database-sql-utils.test.mjs",
+    "owner": null,
+    "verification": "Deployed check pending"
+  },
+  {
+    "name": "Eternyx AI chat",
+    "pillar": "ai-arsenal",
+    "route": "/eternyx-ai",
+    "execution": "Backend-dependent",
+    "description": "Send a message in a saved conversation.",
+    "access": "Signed-in account",
+    "provider": "Model usage depends on provider configuration",
+    "source": "src/pages/EternyxAI.tsx",
+    "test": null,
+    "owner": null,
+    "verification": "Deployed check pending"
+  },
+  {
+    "name": "Device scratchpad",
+    "pillar": "workspace",
+    "route": "/workspace",
+    "execution": "Browser",
+    "description": "Save and reopen a note in this browser profile.",
+    "access": "Shared browser storage",
+    "provider": "No provider",
+    "source": "src/pages/EcosystemPillarPage.tsx",
+    "test": null,
+    "owner": null,
+    "verification": "Deployed check pending"
+  },
+  {
+    "name": "GitHub repository hub",
+    "pillar": "integrations",
+    "route": "/developer-studio/github-hub",
+    "execution": "External API",
+    "description": "Inspect public repository activity through the GitHub API.",
+    "access": "Public repository",
+    "provider": "GitHub public API rate limits apply",
+    "source": "src/pages/GitHubIntegrationHub.tsx",
+    "test": "tests/github-hub-utils.test.mjs",
+    "owner": null,
+    "verification": "Deployed check pending"
+  },
+  {
+    "name": "Clean a list",
+    "pillar": "automation",
+    "route": "/automation",
+    "execution": "Browser",
+    "description": "Trim lines, remove duplicates, sort and download a text file.",
+    "access": "Public",
+    "provider": "No provider",
+    "source": "src/pages/EcosystemPillarPage.tsx",
+    "test": null,
+    "owner": null,
+    "verification": "Deployed check pending"
+  }
+]
