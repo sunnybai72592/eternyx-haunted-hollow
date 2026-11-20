@@ -2,7 +2,13 @@
  * Strict configuration gate for intentionally destructive, staging-only RLS tests.
  * This module does not contact Supabase or import secrets into the frontend.
  */
+import { createHash } from "node:crypto";
+
 export const STAGING_RLS_APPROVAL = "I_APPROVE_STAGING_FIXTURE_WRITES";
+// Hash of ETERNYX's existing production Supabase project reference.
+// Defense-in-depth: the manual runner rejects the real production project
+// even if an operator mistypes the declared production-reference variable.
+const KNOWN_PRODUCTION_REF_SHA256 = "280c7e7d8c258d118fa89ed85ada66d387c510bb28d1cc1e076447b4be2e130e";
 const REF = /^[a-z0-9]{20}$/;
 const DEDICATED_ACCOUNT = /^(?:rls-|[a-z0-9._-]+\+rls-)[^@]*@[a-z0-9.-]+\.[a-z]{2,}$/i;
 
@@ -35,7 +41,9 @@ export function validateStagingRlsConfig(env) {
   const productionRef = env.ETERNYX_RLS_PRODUCTION_REF;
   requireSafe(typeof ref === "string" && REF.test(ref) &&
     typeof productionRef === "string" && REF.test(productionRef) &&
-    ref !== productionRef, "valid distinct staging and production refs required");
+    ref !== productionRef &&
+    createHash("sha256").update(ref).digest("hex") !== KNOWN_PRODUCTION_REF_SHA256,
+    "valid distinct staging and production refs required");
   const url = env.ETERNYX_RLS_STAGING_URL;
   requireSafe(url === "https://" + ref + ".supabase.co",
     "only the exact HTTPS staging Supabase host is allowed");
