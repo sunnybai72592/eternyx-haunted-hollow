@@ -493,6 +493,37 @@ def navigation_terminal(page):
     expect(prompt).to_have_count(0)
 
 
+def home_task_finder(page):
+    page.goto(ORIGIN + "/")
+    expect(page.get_by_role("heading", name="Welcome to Eternyx")).to_be_visible()
+    field = page.get_by_label("What would you like to do?")
+    field.fill("Can you check my domain please?")
+    field.press("Enter")
+    expect(page.get_by_role("link", name="Check a domain’s DNS")).to_have_attribute("href", "/cybersecurity/dns")
+    page.get_by_role("button", name="Make a video", exact=True).click()
+    expect(page.get_by_text("Video rendering is currently unavailable.", exact=False)).to_be_visible()
+    expect(page.get_by_role("link", name="Open Video Studio")).to_have_attribute("href", "/ai-arsenal/video")
+    field.fill("zzzqqq")
+    field.press("Enter")
+    expect(page.get_by_role("link", name="Browse tools", exact=True)).to_be_visible()
+    expect(page.locator("#pillars h3")).to_have_count(6)
+    page.get_by_role("button", name="Learn something").click()
+    expect(page).to_have_url(ORIGIN + "/education")
+
+
+def domain_check(page):
+    def dns(route):
+        assert route.request.post_data_json == {"domain": "example.com"}
+        route.fulfill(json={"success": True, "domain": "example.com", "dns_records": 9, "nameservers": 2})
+    page.route("**/functions/v1/dns-analyzer", dns)
+    page.goto(ORIGIN + "/")
+    page.get_by_role("button", name="Check my domain").click()
+    page.get_by_role("link", name="Check a domain’s DNS").click()
+    page.get_by_label("Domain name").fill("example.com")
+    page.get_by_role("button", name="Check DNS").click()
+    expect(page.get_by_text("example.com · 9 DNS records observed · 2 nameservers observed.")).to_be_visible()
+
+
 def exercise(case_id, action, width, height):
     try:
         action()
@@ -511,6 +542,7 @@ try:
                     page = context.new_page()
                     exercise("homepage-presence-mocked", lambda: presence(page), width, height)
                     exercise("navigation-terminal", lambda: navigation_terminal(page), width, height)
+                    exercise("home-task-finder", lambda: home_task_finder(page), width, height)
                     exercise("device-scratchpad", lambda: workspace(page), width, height)
                     exercise("clean-list", lambda: automation(page, width < 768), width, height)
                     exercise("explore-github-mocked", lambda: explore_and_inspect(page), width, height)
@@ -521,9 +553,10 @@ try:
                     exercise("uuid-generation", lambda: developer_uuid(page), width, height)
                     exercise("jwt-inspection", lambda: developer_jwt(page), width, height)
                     exercise("video-storyboard", lambda: storyboard(page), width, height)
+                    exercise("home-domain-check-mocked", lambda: domain_check(page), width, height)
                     exercise("document-search", lambda: document_search(page), width, height)
                     exercise("chat-mocked-backend", lambda: chat(page), width, height)
-                    print(f"Passed 14 preview journeys at {width} × {height}", flush=True)
+                    print(f"Passed 16 preview journeys at {width} × {height}", flush=True)
                 finally:
                     context.close()
         finally:
