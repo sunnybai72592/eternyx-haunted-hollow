@@ -18,7 +18,7 @@ export default function EcosystemPillarPage({ pillarId }: { pillarId: string }) 
     {pillarId === "workspace" && <DeviceNote />}
     {pillarId === "automation" && <LineWorkflow />}
     <nav aria-label={pillar.title + " tools"} className="grid gap-3 sm:grid-cols-2">
-      {links[pillarId]?.map(([label, path]) => <Link key={path} to={path} className="rounded-xl border border-border bg-card p-5 font-medium hover:border-cyan-400 focus-visible:ring-2">{label}</Link>)}
+      {links[pillarId]?.map(([label, path]) => <Link key={path} to={path} state={{ fromPillar: pillarId }} className="rounded-xl border border-border bg-card p-5 font-medium hover:border-cyan-400 focus-visible:ring-2">{label}</Link>)}
     </nav>
   </div>;
 }

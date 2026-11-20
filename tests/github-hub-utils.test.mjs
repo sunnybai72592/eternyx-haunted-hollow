@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { githubApiUrl, parseGitHubRepositoryInput } from "../src/lib/githubHubUtils.mjs";
+import { filterBranches, githubApiUrl, parseGitHubRepositoryInput } from "../src/lib/githubHubUtils.mjs";
 
 test("parses owner/repository input", () => {
   assert.deepEqual(parseGitHubRepositoryInput("octocat/Hello-World"), {
@@ -28,4 +28,15 @@ test("rejects query strings, fragments and malformed repository names", () => {
 test("builds encoded API URLs and rejects traversal resource paths", () => {
   assert.equal(githubApiUrl("octocat", "Hello-World", "branches"), "https://api.github.com/repos/octocat/Hello-World/branches");
   assert.throws(() => githubApiUrl("octocat", "repo", "../issues"), /Invalid/);
+});
+
+test("branch filtering combines name and protection without changing the response order", () => {
+  const branches = [
+    { name: "release/v2", protected: false },
+    { name: "release/v1", protected: true },
+    { name: "main", protected: true },
+  ];
+  assert.deepEqual(filterBranches(branches, " RELEASE/ ", true), [branches[1]]);
+  assert.deepEqual(filterBranches(branches, "", false), branches);
+  assert.deepEqual(filterBranches(branches, "missing", false), []);
 });
