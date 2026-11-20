@@ -171,3 +171,63 @@ export function createSelfHostedVideoWorkerAdapter(config: WorkerConfig): AIGene
     },
   };
 }
+
+/** Trusted-backend-only media downloader used by AI output materialization.
+ * The caller must own/lease-check the job; the GPU server has a service secret,
+ * not user JWTs. A task-specific status check binds outputReference to the job.
+ */
+export function createSelfHostedVideoOutputDownloader(config: WorkerConfig, maxBytes: number) {
+  const { origin, timeoutMs } = readConfig(config);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 12 || maxBytes > 200 * 1024 * 1024)
+    throw new AIGenerationAdapterError("configuration");
+  const fetcher = config.fetchImpl ?? fetch;
+  const adapter = createSelfHostedVideoWorkerAdapter(config);
+  return async (input: {
+    providerId: string; providerTaskId: string; outputReference: string;
+  }): Promise<{ bytes: Uint8Array; contentType: "video/mp4" }> => {
+    if (!input || input.providerId !== adapter.providerId ||
+        !TASK.test(input.providerTaskId) ||
+        !/^asset_[a-zA-Z0-9_-]{8,200}$/.test(input.outputReference))
+      throw new AIGenerationAdapterError("request_rejected", true);
+    const snapshot = await adapter.getStatus(input.providerTaskId);
+    if (snapshot.state !== "succeeded" || snapshot.outputReference !== input.outputReference)
+      throw new AIGenerationAdapterError("invalid_response");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetcher(
+        origin + "/v1/jobs/" + encodeURIComponent(input.providerTaskId) + "/output",
+        { method: "GET", redirect: "error", signal: controller.signal,
+          headers: { Authorization: "Bearer " + config.secret, Accept: "video/mp4" } });
+      if (!response.ok || response.headers.get("Content-Type")?.split(";")[0].trim() !== "video/mp4" ||
+          !response.body) throw new AIGenerationAdapterError("invalid_response");
+      const declared = Number(response.headers.get("Content-Length"));
+      if (!Number.isSafeInteger(declared) || declared < 12 || declared > maxBytes)
+        throw new AIGenerationAdapterError("invalid_response");
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      const reader = response.body.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          received += value.byteLength;
+          if (received > maxBytes || received > declared)
+            throw new AIGenerationAdapterError("invalid_response");
+          chunks.push(value);
+        }
+      } finally { reader.releaseLock(); }
+      if (received !== declared) throw new AIGenerationAdapterError("invalid_response");
+      const bytes = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      if (String.fromCharCode(...bytes.subarray(4, 8)) !== "ftyp")
+        throw new AIGenerationAdapterError("invalid_response");
+      return { bytes, contentType: "video/mp4" };
+    } catch {
+      throw new AIGenerationAdapterError("provider_unavailable");
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
