@@ -85,6 +85,77 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 worker.JobStore(str(Path(self.temp.name) / "invalid.sqlite"), max_pending=value)
 
+    def test_completed_job_output_is_service_authenticated_and_job_bound(self):
+        import os
+        from unittest.mock import patch
+        asset = "asset_" + "a" * 32
+        output_root = Path(self.temp.name) / "private"
+        output_root.mkdir(mode=0o700)
+        media = bytes.fromhex("000000146674797069736f6d") + b"private-video-test-fixture"
+        (output_root / (asset + ".mp4")).write_bytes(media)
+        job = self.store.submit("job-output-01", PAYLOAD)
+        self.store.claim()
+        self.store.finalize(job["taskId"], asset)
+        incomplete = self.store.submit("job-output-02", PAYLOAD)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), worker.handler_factory(self.store, SECRET))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = "http://127.0.0.1:" + str(server.server_address[1])
+        def fetch(task, token):
+            req = urllib.request.Request(
+                base + "/v1/jobs/" + task + "/output",
+                headers={"Authorization": "Bearer " + token})
+            try:
+                with urllib.request.urlopen(req, timeout=2) as response:
+                    return response.status, response.read()
+            except urllib.error.HTTPError as error:
+                return error.code, error.read()
+        try:
+            with patch.dict(os.environ, {"ETERNYX_PRIVATE_VIDEO_DIR": str(output_root)}):
+                self.assertEqual(fetch(job["taskId"], "invalid")[0], 401)
+                self.assertEqual(fetch(incomplete["taskId"], SECRET)[0], 404)
+                code, body = fetch(job["taskId"], SECRET)
+                self.assertEqual(code, 200)
+                self.assertEqual(body, media)
+                self.assertEqual(fetch("nonexistent", SECRET)[0], 404)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_private_output_rejects_symlink_and_world_readable_directory(self):
+        import os
+        from unittest.mock import patch
+        asset = "asset_" + "b" * 32
+        root = Path(self.temp.name) / "outputs"
+        root.mkdir(mode=0o700)
+        target = Path(self.temp.name) / "outside.mp4"
+        target.write_bytes(bytes.fromhex("000000146674797069736f6d")+b"secret")
+        (root / (asset + ".mp4")).symlink_to(target)
+        job = self.store.submit("job-output-03", PAYLOAD)
+        self.store.claim()
+        self.store.finalize(job["taskId"], asset)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), worker.handler_factory(self.store, SECRET))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        url = "http://127.0.0.1:" + str(server.server_address[1]) + "/v1/jobs/" + job["taskId"] + "/output"
+        try:
+            with patch.dict(os.environ, {"ETERNYX_PRIVATE_VIDEO_DIR": str(root)}):
+                req = urllib.request.Request(url, headers={"Authorization": "Bearer " + SECRET})
+                with self.assertRaises(urllib.error.HTTPError) as err:
+                    urllib.request.urlopen(req, timeout=2)
+                self.assertEqual(err.exception.code, 404)
+                (root / (asset + ".mp4")).unlink()
+                (root / (asset + ".mp4")).write_bytes(target.read_bytes())
+                root.chmod(0o755)
+                with self.assertRaises(urllib.error.HTTPError) as err:
+                    urllib.request.urlopen(req, timeout=2)
+                self.assertEqual(err.exception.code, 404)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_http_auth_submit_status_and_cancel(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), worker.handler_factory(self.store, SECRET))
         thread = threading.Thread(target=server.serve_forever, daemon=True)

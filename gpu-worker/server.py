@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import sqlite3
 import subprocess
 import threading
@@ -226,10 +227,56 @@ def handler_factory(store, secret):
                 return self.reply(200, {"accepted": True})
             return self.reply(404, {"error": "not_found"})
 
+        def send_private_output(self, task_id):
+            # Only the trusted backend has the server secret. That backend must
+            # independently authorize each user/job BEFORE requesting this file.
+            result = store.get(task_id)
+            if not result or result["state"] != "succeeded":
+                return self.reply(404, {"error": "not_found"})
+            asset = result.get("outputReference", "")
+            if not re.fullmatch(r"asset_[A-Za-z0-9_-]{8,200}", asset):
+                return self.reply(404, {"error": "not_found"})
+            root = os.environ.get("ETERNYX_PRIVATE_VIDEO_DIR", "")
+            if not root or not os.path.isabs(root):
+                return self.reply(503, {"error": "output_unavailable"})
+            try:
+                folder = Path(root)
+                if folder.is_symlink() or not folder.is_dir() or folder.stat().st_mode & 0o077:
+                    raise ValueError("invalid private storage")
+                dirfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    fd = os.open(asset + ".mp4", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dirfd)
+                finally:
+                    os.close(dirfd)
+                with os.fdopen(fd, "rb") as stream:
+                    info = os.fstat(stream.fileno())
+                    if not stat.S_ISREG(info.st_mode) or not 12 <= info.st_size <= 200 * 1024 * 1024:
+                        raise ValueError("invalid output media")
+                    if stream.read(8)[4:8] != b"ftyp":
+                        raise ValueError("invalid MP4 header")
+                    stream.seek(0)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.send_header("Content-Disposition", "attachment")
+                    self.send_header("Content-Length", str(info.st_size))
+                    self.end_headers()
+                    while True:
+                        chunk = stream.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+            except (OSError, ValueError):
+                return self.reply(404, {"error": "not_found"})
+
         def do_GET(self):
             if not self.authorized():
                 return
             path = urlsplit(self.path)
+            output = re.fullmatch(r"/v1/jobs/([A-Za-z0-9._:-]+)/output", path.path)
+            if output and not path.query and not path.fragment:
+                return self.send_private_output(output[1])
             m = re.fullmatch(r"/v1/jobs/([A-Za-z0-9._:-]+)", path.path)
             if not m or path.query:
                 return self.reply(404, {"error": "not_found"})
