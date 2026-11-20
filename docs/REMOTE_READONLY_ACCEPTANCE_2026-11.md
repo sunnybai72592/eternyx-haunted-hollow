@@ -87,6 +87,67 @@ root, whether a redirect occurred, its HTTP status, and what request
 category was blocked. Only then determine if the site requires republishing
 or the browser harness needs an additional safe read-only allowance.
 
+## Hosted startup and Lovable analytics classification (November 20)
+
+**Run [44764727886](https://github.com/sunnybai72592/eternyx-haunted-hollow/actions/runs/44764727886)**
+used `public-domain-candidate` with the improved PR #257 diagnostics.
+The browser attempted all 16 UI journeys at 390×844 and 1440×900. **0
+passed**, all 16 failed, and the report recorded **45 blocked first-party
+POSTs**. The first `/explore` navigation returned HTTP 200 and contained
+a `#root` DOM element, but no recognized headings. These facts do not prove
+that the latest source bundle was served or that individual tools themselves
+are broken. The reported requests used a redacted `/__l5e/[redacted]`
+path, so their specific function was **not established by that report**.
+
+Public descriptions of other Lovable-hosted sites indicate
+`/__l5e/trackevents` and `/__l5e/events` are typically hosting analytics
+endpoints, not application billing endpoints. These descriptions are context,
+not proof of ETERNYX's particular request:
+- https://www.homees.co/privacy-policy
+- https://futurepips.com/privacy
+
+The updated runner classifies POST to **exactly**
+`/__l5e/trackevents` or `/__l5e/events` on the approved host as
+**blocked known telemetry**. It **still aborts** them: no analytics is sent.
+Any other POST (including `/__l5e/unknown`) stays a blocked unsafe write,
+continues to fail acceptance, and is recorded as a redacted category.
+The test never sends credentials, POST bodies or browser changes to
+third-party endpoints simply to get a green result.
+
+### Distinguishing app failures from test restrictions
+
+The next acceptance run also records bounded, fixed-category diagnostics:
+
+- Whether `#root` merely exists or actually has rendered child elements.
+- Anonymized JavaScript exception categories such as
+  `missing-supabase-config`, `module-load-error`,
+  `javascript-type-error` or `other-js-error`.
+- First-party JavaScript/document asset HTTP failures (status code and
+  resource type only, no URL).
+- The count of known blocked Lovable telemetry POSTs separately from
+  attempted other HTTP writes.
+- Per-case pass/fail and sanitized page classification, retaining all
+  sixteen attempted cases.
+
+**Not confirmed:** that any of those JavaScript errors occurred. The
+repo's Supabase browser client *can* throw on missing frontend
+configuration, but only the next actual hosted browser run can classify
+that possibility. Likewise, `#root` presence is not proof React hydrated.
+
+If `missing-supabase-config` appears, check Lovable's build-time public
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configuration
+inside the appropriate hosting project. Never disclose or commit service
+role keys. If `module-load-error` or script 404 appears, check the
+published deployment's assets and re-publish status. If the root remains
+empty without a script error, inspect the site's boot/render lifecycle
+before calling any tools broken.
+
+After merging the diagnostics PR, manually re-run
+**Hosted ETERNYX read-only acceptance → public-domain-candidate** and
+review the updated GitHub Actions summary and JSON evidence.
+Remote acceptance remains **unverified** until those outcomes succeed,
+the served deployment version is established, and the owner signs off.
+
 ## Run and interpret
 
 1. Merge PR #256.
