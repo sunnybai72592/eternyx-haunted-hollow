@@ -78,6 +78,17 @@ class WanInferenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             wan.validated_storage_path()
 
+    def test_symlink_roots_and_boolean_version_fail_closed(self):
+        self.assertRaises(ValueError, wan.parse_job, json.dumps({**BASE, "version": True}))
+        model_link = self.root / "model-link"
+        model_link.symlink_to(self.model, target_is_directory=True)
+        with patch.dict(os.environ, {"ETERNYX_WAN21_MODEL_DIR": str(model_link)}):
+            self.assertRaises(ValueError, wan.validated_model_path)
+        storage_link = self.root / "private-link"
+        storage_link.symlink_to(self.media, target_is_directory=True)
+        with patch.dict(os.environ, {"ETERNYX_PRIVATE_VIDEO_DIR": str(storage_link)}):
+            self.assertRaises(ValueError, wan.validated_storage_path)
+
     def test_absent_local_model_cannot_trigger_implicit_download(self):
         (self.model / "model_index.json").unlink()
         with self.assertRaises(ValueError):
