@@ -1,0 +1,55 @@
+name: Hosted ETERNYX read-only acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Approved ETERNYX host. Select known Lovable preview or candidate public domain."
+        type: choice
+        required: true
+        default: lovable-preview
+        options:
+          - lovable-preview
+          - public-domain-candidate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-remote-readonly-${{ inputs.target }}
+  cancel-in-progress: true
+
+jobs:
+  remote-browser:
+    name: Read-only public browser audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ETERNYX_REMOTE_TARGET: ${{ inputs.target }}
+    steps:
+      - name: Checkout read-only test runner
+        uses: actions/checkout@v4
+      - name: Install isolated Python Playwright
+        run: |
+          python3 -m venv "$RUNNER_TEMP/eternyx-remote-browser"
+          "$RUNNER_TEMP/eternyx-remote-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
+      - name: Run hosted ETERNYX browser acceptance without mocks or credentials
+        timeout-minutes: 6
+        run: |
+          "$RUNNER_TEMP/eternyx-remote-browser/bin/python" tests/browser/remote_readonly_smoke.py
+      - name: Classify hosted evidence without production certification
+        if: always()
+        run: |
+          if test -f test-results/remote-readonly-acceptance.json; then
+            node scripts/summarize-remote-acceptance.mjs test-results/remote-readonly-acceptance.json
+          else
+            echo "No remote acceptance report was produced; no hosted verification can be claimed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload read-only remote acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-remote-readonly-${{ inputs.target }}-${{ github.run_id }}
+          path: test-results/remote-readonly-acceptance.json
+          if-no-files-found: warn
+          retention-days: 14
