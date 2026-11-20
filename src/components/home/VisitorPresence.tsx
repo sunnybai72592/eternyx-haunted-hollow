@@ -5,7 +5,7 @@ import { Globe2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
 type Snapshot = { total: number; countries: { code: string; count: number }[]; networkAvailable: boolean };
-const Presence = createContext<{ snapshot?: Snapshot; failed: boolean; included: boolean; locked: boolean; toggle: () => void } | null>(null);
+const Presence = createContext<{ snapshot?: Snapshot; failed: boolean; updatedAt: number; included: boolean; locked: boolean; toggle: () => void } | null>(null);
 const preference = "eternyx.presence.include";
 const names = new Intl.DisplayNames(undefined, { type: "region" });
 
@@ -27,6 +27,7 @@ async function loadPresence(contribute: boolean, signal: AbortSignal): Promise<S
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const home = useLocation().pathname === "/";
+  const restoring = useAuthStore(state => state.isLoading || (!!state.user && !state.profile));
   const analytics = useAuthStore(state => state.profile?.preferences?.analytics);
   const locked = analytics === false || navigator.doNotTrack === "1" ||
     (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
@@ -40,25 +41,25 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
-  const included = allowed && !locked;
+  const included = allowed && !locked && !restoring;
   const query = useQuery({
     queryKey: ["visitor-presence", included],
     queryFn: ({ signal }) => loadPresence(included, signal),
     enabled: included || home, refetchInterval: 30000, refetchIntervalInBackground: false,
-    staleTime: 15000, retry: false,
+    networkMode: "always", staleTime: 0, retry: false,
   });
   function toggle() {
     const next = !allowed;
     setAllowed(next);
     try { localStorage.setItem(preference, next ? "on" : "off"); } catch { /* This tab still honors the choice. */ }
   }
-  return <Presence.Provider value={{ included, locked, toggle, snapshot: query.data, failed: query.isError }}>{children}</Presence.Provider>;
+  return <Presence.Provider value={{ included, locked, toggle, snapshot: query.data, updatedAt: query.dataUpdatedAt, failed: query.isError }}>{children}</Presence.Provider>;
 }
 
 export function VisitorPresence() {
   const presence = useContext(Presence);
   if (!presence) return null;
-  const { snapshot, failed, included, locked, toggle } = presence;
+  const { snapshot, failed, updatedAt, included, locked, toggle } = presence;
   const unavailable = failed || (snapshot?.total === 0 && !snapshot.networkAvailable);
   return <section aria-labelledby="presence-heading" className="mt-12 rounded-2xl border border-white/10 bg-slate-950/70 p-5 text-slate-100 sm:p-8">
     <div className="flex items-center gap-3"><Globe2 aria-hidden="true" className="size-6 text-cyan-300" />
@@ -73,6 +74,7 @@ export function VisitorPresence() {
           </li>)}</ul> : <p className="mt-1 text-sm text-slate-400">{snapshot.total ? "Country information is unavailable for these networks." : "No recent activity recorded."}</p>}
       </>}
     </div>
+    {snapshot && !unavailable && <p className="mt-3 text-xs text-slate-400">Updated <time dateTime={new Date(updatedAt).toISOString()}>{new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time> · Refreshes every 30 seconds</p>}
     <label className="mt-5 flex min-h-11 items-center gap-2 text-sm text-slate-300">
       <input type="checkbox" checked={included} disabled={locked} onChange={toggle} />Include my network in the estimate
     </label>

@@ -421,9 +421,10 @@ def presence(page):
     panel = page.get_by_role("region", name="Around Eternyx now")
     expect(panel.get_by_text("Saudi Arabia", exact=True)).to_be_visible()
     expect(panel.get_by_text("7 estimated active networks")).to_be_visible()
-    with page.expect_response(lambda response: response.url.endswith("/rpc/visitor_presence")):
+    expect(panel.get_by_role("checkbox")).to_be_checked()
+    with page.expect_response(lambda response: response.url.endswith("/rpc/visitor_presence") and not response.request.post_data_json["contribute"]):
         panel.get_by_role("checkbox").uncheck()
-    assert requests[0] == {"contribute": True} and requests[-1] == {"contribute": False}
+    assert {"contribute": True} in requests and requests[-1] == {"contribute": False}
     page.reload()
     expect(panel.get_by_role("checkbox")).not_to_be_checked()
     page.unroute(path, data)
