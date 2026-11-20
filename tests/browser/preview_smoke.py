@@ -533,7 +533,24 @@ def domain_check(page):
     page.get_by_role("link", name="Check a domain’s DNS").click()
     page.get_by_label("Domain name").fill("example.com")
     page.get_by_role("button", name="Check DNS").click()
-    expect(page.get_by_text("example.com · 9 DNS records observed · 2 nameservers observed.")).to_be_visible()
+    summary = "example.com · 9 DNS records observed · 2 nameservers observed."
+    expect(page.get_by_text(summary)).to_be_visible()
+    submitted = []
+    def explain(route):
+        payload = route.request.post_data_json
+        assert payload["sessionId"] is None
+        submitted.append(payload["message"])
+        route.fulfill(json={"sessionId": "00000000-0000-4000-8000-000000000003", "response": "These counts describe the lookup."})
+    page.route("**/functions/v1/eternyx-ai-chat", explain)
+    page.get_by_role("button", name="Explain with Eternyx AI").click()
+    draft = page.get_by_role("textbox", name="Message to Eternyx AI")
+    expect(draft).to_have_value(re.compile(re.escape(summary)))
+    assert not submitted
+    prompt = draft.input_value() + " Explain nameservers first."
+    draft.fill(prompt)
+    page.get_by_role("button", name="Send message").click()
+    expect(page.get_by_text("These counts describe the lookup.", exact=True)).to_be_visible()
+    assert submitted == [prompt]
 
 
 def exercise(case_id, action, width, height):
