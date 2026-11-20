@@ -511,6 +511,19 @@ def home_task_finder(page):
     expect(page).to_have_url(ORIGIN + "/education")
 
 
+def domain_check(page):
+    def dns(route):
+        assert route.request.post_data_json == {"domain": "example.com"}
+        route.fulfill(json={"success": True, "domain": "example.com", "dns_records": 9, "nameservers": 2})
+    page.route("**/functions/v1/dns-analyzer", dns)
+    page.goto(ORIGIN + "/")
+    page.get_by_role("button", name="Check my domain").click()
+    page.get_by_role("link", name="Check a domain’s DNS").click()
+    page.get_by_label("Domain name").fill("example.com")
+    page.get_by_role("button", name="Check DNS").click()
+    expect(page.get_by_text("example.com · 9 DNS records observed · 2 nameservers observed.")).to_be_visible()
+
+
 def exercise(case_id, action, width, height):
     try:
         action()
@@ -540,9 +553,10 @@ try:
                     exercise("uuid-generation", lambda: developer_uuid(page), width, height)
                     exercise("jwt-inspection", lambda: developer_jwt(page), width, height)
                     exercise("video-storyboard", lambda: storyboard(page), width, height)
+                    exercise("home-domain-check-mocked", lambda: domain_check(page), width, height)
                     exercise("document-search", lambda: document_search(page), width, height)
                     exercise("chat-mocked-backend", lambda: chat(page), width, height)
-                    print(f"Passed 15 preview journeys at {width} × {height}", flush=True)
+                    print(f"Passed 16 preview journeys at {width} × {height}", flush=True)
                 finally:
                     context.close()
         finally:
