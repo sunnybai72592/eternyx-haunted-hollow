@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity, ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound, Gauge,
@@ -14,17 +14,20 @@ import { decodeBase64Utf8, decodeJwt as decodeJwtToken, decodeUriComponent, enco
 
 type Feedback = { kind: "success" | "error" | "info"; message: string } | null;
 
-const Output = ({ value, label, onCopy }: { value: string; label: string; onCopy: () => void }) => (
+const Output = ({ value, label, onCopy }: { value: string; label: string; onCopy: () => void }) => {
+  const id = useId();
+  return (
   <div className="space-y-2">
     <div className="flex items-center justify-between gap-3">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Button type="button" variant="outline" size="sm" onClick={onCopy} disabled={!value}>
         <Copy className="mr-2 h-4 w-4" /> Copy
       </Button>
     </div>
-    <Textarea value={value} readOnly spellCheck={false} className="min-h-48 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" />
+    <Textarea id={id} value={value} readOnly spellCheck={false} className="min-h-48 border-slate-700 bg-slate-950/80 font-mono text-sm text-slate-100" />
   </div>
-);
+  );
+};
 
 const FeedbackLine = ({ feedback }: { feedback: Feedback }) => feedback ? (
   <p role="status" aria-live="polite" className={`text-sm ${feedback.kind === "error" ? "text-rose-300" : feedback.kind === "success" ? "text-emerald-300" : "text-slate-400"}`}>

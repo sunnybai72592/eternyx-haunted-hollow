@@ -1,0 +1,96 @@
+{
+  "suite": "ETERNYX local Chrome preview acceptance",
+  "environment": "local Vite preview (not deployed production)",
+  "viewports": [
+    "390x844",
+    "1440x900"
+  ],
+  "productionVerified": false,
+  "cases": [
+    {
+      "id": "device-scratchpad",
+      "tool": "device-scratchpad",
+      "kind": "local-preview",
+      "route": "/workspace",
+      "assertions": "Save, reload, search and export personal browser notes"
+    },
+    {
+      "id": "clean-list",
+      "tool": "clean-list",
+      "kind": "local-preview",
+      "route": "/automation",
+      "assertions": "Dedup, sort, responsive layout, JSON export and note save"
+    },
+    {
+      "id": "explore-github-mocked",
+      "tool": "github-repo-hub",
+      "kind": "mocked-external",
+      "route": "/developer-studio/github-hub",
+      "assertions": "Find linked tool and exercise API failure and public repository filters with mocked GitHub",
+      "entryRoute": "/explore"
+    },
+    {
+      "id": "explore-registry-filters",
+      "tool": null,
+      "kind": "local-preview",
+      "route": "/explore",
+      "assertions": "Pillar/readiness filters, query persistence and no-result messaging"
+    },
+    {
+      "id": "json-format",
+      "tool": "json-format",
+      "kind": "local-preview",
+      "route": "/developer-studio",
+      "assertions": "Parse, pretty-print and reject invalid JSON"
+    },
+    {
+      "id": "utf8-base64",
+      "tool": "utf8-base64",
+      "kind": "local-preview",
+      "route": "/developer-studio",
+      "assertions": "Unicode encode/decode and invalid Base64 handling"
+    },
+    {
+      "id": "uri-encoding",
+      "tool": "uri-encoding",
+      "kind": "local-preview",
+      "route": "/developer-studio",
+      "assertions": "Unicode URI encoding, decoding and malformed input"
+    },
+    {
+      "id": "uuid-generation",
+      "tool": "uuid-generation",
+      "kind": "local-preview",
+      "route": "/developer-studio",
+      "assertions": "UUID v4 format/uniqueness and invalid quantity"
+    },
+    {
+      "id": "jwt-inspection",
+      "tool": "jwt-inspection",
+      "kind": "local-preview",
+      "route": "/developer-studio",
+      "assertions": "JWT decode and signature-not-verified disclosure, reject invalid JWT"
+    },
+    {
+      "id": "video-storyboard",
+      "tool": "video-storyboard",
+      "kind": "auth-fixture",
+      "route": "/ai-arsenal/video",
+      "assertions": "Storyboard authoring, export, invalid import and local authorized auth fixture"
+    },
+    {
+      "id": "document-search",
+      "tool": "document-search",
+      "kind": "auth-fixture",
+      "route": "/ai-arsenal/documents",
+      "assertions": "Local document selection/search/export with test auth"
+    },
+    {
+      "id": "chat-mocked-backend",
+      "tool": "eternyx-ai-chat",
+      "kind": "mocked-backend",
+      "route": "/eternyx-ai",
+      "assertions": "Credit error, retry, conversation state and export using fixture backend"
+    }
+  ]
+}

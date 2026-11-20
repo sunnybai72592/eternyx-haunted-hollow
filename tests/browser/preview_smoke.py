@@ -1,8 +1,10 @@
 """Exercise the built Eternyx app in Chrome against the local Vite preview."""
 import base64
 import json
+import os
+import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 from pathlib import Path
 from playwright.sync_api import expect, sync_playwright
 
@@ -265,19 +267,166 @@ def chat(page):
     assert submitted == [prompt, prompt]
 
 
-with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(channel="chrome")
-    for width, height in [(390, 844), (1440, 900)]:
-        context = browser.new_context(viewport={"width": width, "height": height}, reduced_motion="reduce")
+
+def developer_json(page):
+    page.goto(ORIGIN + "/developer-studio")
+    page.get_by_role("tab", name="JSON").click()
+    source = page.get_by_label("JSON input")
+    output = page.get_by_label("Formatted JSON")
+    source.fill('{"scope":"browser","count":2}')
+    page.get_by_role("button", name="Validate & format").click()
+    assert json.loads(output.input_value()) == {"scope": "browser", "count": 2}
+    assert '\n  "scope"' in output.input_value()
+    source.fill('{"broken":}')
+    page.get_by_role("button", name="Validate & format").click()
+    expect(output).to_have_value("")
+    expect(page.get_by_text("Valid JSON. Output formatted successfully.")).to_have_count(0)
+
+
+def developer_base64(page):
+    page.get_by_role("tab", name="Base64").click()
+    raw = "ETERNYX سلام 🌙"
+    expected = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+    page.get_by_label("Text to encode").fill(raw)
+    page.get_by_role("button", name="Encode text").click()
+    output = page.get_by_label("Result")
+    expect(output).to_have_value(expected)
+    page.get_by_role("button", name="Decode", exact=True).click()
+    page.get_by_label("Base64 to decode").fill(expected)
+    page.get_by_role("button", name="Decode Base64").click()
+    expect(output).to_have_value(raw)
+    page.get_by_label("Base64 to decode").fill("%%%")
+    page.get_by_role("button", name="Decode Base64").click()
+    expect(output).to_have_value("")
+    expect(page.get_by_text("Unable to decode this value.", exact=False)).to_be_visible()
+
+
+def developer_url(page):
+    page.get_by_role("tab", name="URL").click()
+    raw = "A B & سلام"
+    encoded = quote(raw, safe="~()*!.'-")
+    page.get_by_label("Text to encode").fill(raw)
+    page.get_by_role("button", name="Encode value").click()
+    output = page.get_by_label("Result")
+    expect(output).to_have_value(encoded)
+    page.get_by_role("button", name="Decode", exact=True).click()
+    page.get_by_label("Encoded text to decode").fill(encoded)
+    page.get_by_role("button", name="Decode value").click()
+    expect(output).to_have_value(raw)
+    page.get_by_label("Encoded text to decode").fill("%E0%A4%A")
+    page.get_by_role("button", name="Decode value").click()
+    expect(output).to_have_value("")
+    expect(page.get_by_text("Invalid percent-encoded input.", exact=False)).to_be_visible()
+
+
+def developer_uuid(page):
+    page.get_by_role("tab", name="UUID").click()
+    counter = page.get_by_label("Number of UUIDs (1–100)")
+    counter.fill("3")
+    page.get_by_role("button", name="Generate UUIDs").click()
+    output = page.get_by_label("Generated UUIDs")
+    ids = output.input_value().splitlines()
+    assert len(ids) == len(set(ids)) == 3
+    for token in ids:
+        assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", token)
+    counter.fill("101")
+    page.get_by_role("button", name="Generate UUIDs").click()
+    expect(output).to_have_value("")
+    expect(page.get_by_text("Enter a whole number from 1 to 100.")).to_be_visible()
+
+
+def developer_jwt(page):
+    page.get_by_role("tab", name="JWT").click()
+    def encode(payload):
+        return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    token = ".".join([encode({"alg": "HS256", "typ": "JWT"}), encode({"sub": "fixture", "role": "test"}), "c2ln"])
+    editor = page.get_by_label("JWT token")
+    editor.fill(token)
+    page.get_by_role("button", name="Decode token").click()
+    payload = json.loads(page.get_by_label("Decoded header & payload").input_value())
+    assert payload["payload"]["sub"] == "fixture"
+    assert payload["header"]["alg"] == "HS256"
+    expect(page.get_by_text("Decoding is not verification.", exact=False)).to_be_visible()
+    editor.fill("a.b")
+    page.get_by_role("button", name="Decode token").click()
+    expect(page.get_by_label("Decoded header & payload")).to_have_value("")
+    expect(page.get_by_text("three dot-separated segments", exact=False)).to_be_visible()
+
+
+def explore_filters(page):
+    page.goto(ORIGIN + "/explore")
+    expect(page.get_by_role("heading", name="Master tool registry")).to_be_visible()
+    expect(page.get_by_text("0 production-verified", exact=False)).to_be_visible()
+    pillar = page.get_by_label("Filter tools by pillar")
+    readiness = page.get_by_label("Filter tools by readiness")
+    pillar.select_option("developer-studio")
+    readiness.select_option("local-foundation")
+    assert "pillar=developer-studio" in page.url
+    assert "readiness=local-foundation" in page.url
+    cards = page.get_by_role("region", name="Indexed tools").get_by_role("link")
+    assert cards.count() >= 5
+    assert all("Local foundation" in cards.nth(i).inner_text() for i in range(cards.count()))
+    search = page.locator("#ecosystem-search")
+    search.fill("JWT payload inspector")
+    expect(page.get_by_role("region", name="Indexed tools").get_by_role("link")).to_have_count(1)
+    page.reload()
+    expect(search).to_have_value("JWT payload inspector")
+    expect(pillar).to_have_value("developer-studio")
+    expect(readiness).to_have_value("local-foundation")
+    readiness.select_option("preview-only")
+    expect(page.get_by_text("No indexed capabilities match these filters.", exact=False)).to_be_visible()
+    readiness.select_option("local-foundation")
+    page.get_by_role("button", name="Clear", exact=True).click()
+    expect(page.get_by_text("JSON formatter", exact=False).first).to_be_visible()
+
+
+# Every entry records a real local-preview Chrome journey, never a production
+# deployment certification. External API responses in some journeys are mocked.
+results = []
+report_path = Path(__file__).resolve().parents[2] / "test-results" / "browser-preview-acceptance.json"
+
+def exercise(case_id, action, width, height):
+    try:
+        action()
+    except Exception:
+        results.append({"case": case_id, "viewport": f"{width}x{height}", "result": "failed"})
+        raise
+    results.append({"case": case_id, "viewport": f"{width}x{height}", "result": "passed"})
+
+try:
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(channel="chrome")
         try:
-            page = context.new_page()
-            workspace(page)
-            automation(page, width < 768)
-            explore_and_inspect(page)
-            storyboard(page)
-            document_search(page)
-            chat(page)
-            print(f"Passed workspace, automation, Explore, inspector, storyboard document and chat journeys at {width} × {height}", flush=True)
+            for width, height in [(390, 844), (1440, 900)]:
+                context = browser.new_context(viewport={"width": width, "height": height}, reduced_motion="reduce")
+                try:
+                    page = context.new_page()
+                    exercise("device-scratchpad", lambda: workspace(page), width, height)
+                    exercise("clean-list", lambda: automation(page, width < 768), width, height)
+                    exercise("explore-github-mocked", lambda: explore_and_inspect(page), width, height)
+                    exercise("explore-registry-filters", lambda: explore_filters(page), width, height)
+                    exercise("json-format", lambda: developer_json(page), width, height)
+                    exercise("utf8-base64", lambda: developer_base64(page), width, height)
+                    exercise("uri-encoding", lambda: developer_url(page), width, height)
+                    exercise("uuid-generation", lambda: developer_uuid(page), width, height)
+                    exercise("jwt-inspection", lambda: developer_jwt(page), width, height)
+                    exercise("video-storyboard", lambda: storyboard(page), width, height)
+                    exercise("document-search", lambda: document_search(page), width, height)
+                    exercise("chat-mocked-backend", lambda: chat(page), width, height)
+                    print(f"Passed 12 preview journeys at {width} × {height}", flush=True)
+                finally:
+                    context.close()
         finally:
-            context.close()
-    browser.close()
+            browser.close()
+finally:
+    # Write partial evidence on failure, too. Avoid screenshots or sensitive
+    # fixture data; artifacts contain only case IDs, viewport and result.
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps({
+        "environment": "local Vite preview (not production)",
+        "browser": "Chrome",
+        "external_api_note": "GitHub and authenticated AI responses are test fixtures, not live provider checks",
+        "production_verified": False,
+        "commit": os.environ.get("GITHUB_SHA", "local-unknown"),
+        "cases": results,
+    }, indent=2) + "\n", encoding="utf-8")
