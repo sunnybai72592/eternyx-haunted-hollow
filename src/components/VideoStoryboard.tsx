@@ -1,13 +1,39 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Clapperboard, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buildStoryboard, frameFormats, shotDurations, timecode } from "@/lib/ai/storyboard.mjs";
+import { buildStoryboard, readStoryboard, frameFormats, shotDurations, timecode } from "@/lib/ai/storyboard.mjs";
 
 export default function VideoStoryboard() {
   const [text, setText] = useState("");
   const [seconds, setSeconds] = useState(5);
   const [format, setFormat] = useState("16:9");
   const [selection, setSelection] = useState(0);
+  const [pending, setPending] = useState<ReturnType<typeof readStoryboard> | null>(null);
+  const [importError, setImportError] = useState("");
+  const version = useRef(0);
+  async function previewFile(file?: File) {
+    const attempt = ++version.current;
+    setPending(null);
+    setImportError("");
+    if (!file) return;
+    try {
+      if (file.size > 128 * 1024) throw new Error("Choose a storyboard under 128 KiB.");
+      const imported = readStoryboard(await file.text());
+      if (version.current === attempt) setPending(imported);
+    } catch (cause) {
+      if (version.current === attempt) setImportError(cause instanceof Error ? cause.message : "The storyboard could not be read.");
+    }
+  }
+
+  function applyImport() {
+    if (!pending) return;
+    setText(pending.text);
+    setSeconds(pending.seconds);
+    setFormat(pending.format);
+    setSelection(0);
+    setPending(null);
+  }
+
   let board: ReturnType<typeof buildStoryboard> | undefined;
   let error = "";
   try { board = buildStoryboard(text, seconds, format); }
@@ -28,6 +54,19 @@ export default function VideoStoryboard() {
   return <section aria-labelledby="storyboard-title" className="space-y-5 rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6">
     <h2 id="storyboard-title" className="flex items-center gap-2 text-2xl font-semibold"><Clapperboard aria-hidden="true" className="size-5 text-violet-300" />Storyboard planner</h2>
     <p className="text-sm text-slate-300">Write one shot per line to plan a sequence locally. Download your plan before leaving.</p>
+    <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+      <label htmlFor="storyboard-file" className="block text-sm font-medium">Open exported storyboard (.json)</label>
+      <input type="file" id="storyboard-file" accept=".json,application/json" className="block w-full text-sm file:mr-2 file:min-h-11" onChange={event => {
+        void previewFile(event.target.files?.[0]);
+        event.currentTarget.value = "";
+      }} />
+      {importError && <p role="alert" className="text-sm text-amber-200">{importError}</p>}
+      {pending && <div className="space-y-2">
+        <p role="status" className="text-sm">{pending.count} shots · {pending.format} · {timecode(pending.count * pending.seconds)} total</p>
+        <div className="flex flex-wrap gap-2"><Button onClick={applyImport}>{text.trim() ? "Replace current plan" : "Open plan"}</Button>
+          <Button variant="outline" onClick={() => setPending(null)}>Dismiss import</Button></div>
+      </div>}
+    </div>
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="min-w-0 space-y-3">
         <label htmlFor="shot-list">Shot descriptions</label>

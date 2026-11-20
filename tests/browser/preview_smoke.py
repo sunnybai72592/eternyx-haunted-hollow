@@ -1,5 +1,8 @@
 """Exercise the built Eternyx app in Chrome against the local Vite preview."""
+import base64
 import json
+import time
+from urllib.parse import urlsplit
 from pathlib import Path
 from playwright.sync_api import expect, sync_playwright
 
@@ -100,6 +103,55 @@ def explore_and_inspect(page):
     expect(search).to_have_value("GitHub repository hub")
 
 
+def storyboard(page):
+    # Isolate the test account and all external traffic inside this browser page.
+    user = {"id": "00000000-0000-4000-8000-000000000001", "email": "studio@example.invalid",
+            "aud": "authenticated", "role": "authenticated", "app_metadata": {}, "user_metadata": {}}
+    def encoded(data):
+        return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
+    token = ".".join([encoded({"alg": "HS256", "typ": "JWT"}),
+                      encoded({"sub": user["id"], "exp": int(time.time()) + 3600}), "fixture"])
+    def service(route):
+        url = urlsplit(route.request.url)
+        if url.hostname == "127.0.0.1":
+            return route.continue_()
+        if url.path.endswith("/auth/v1/token"):
+            return route.fulfill(json={"user": user, "access_token": token, "refresh_token": "local-fixture",
+                                       "token_type": "bearer", "expires_in": 3600})
+        if url.path.endswith("/auth/v1/user"):
+            return route.fulfill(json=user)
+        if url.path.endswith("/rest/v1/profiles"):
+            return route.fulfill(json={"id": user["id"], "user_id": user["id"], "role": "user"})
+        return route.fulfill(json=[])
+
+    page.route("**/*", service)
+    page.goto(ORIGIN + "/auth?redirect=/ai-arsenal/video")
+    page.get_by_label("Email address", exact=True).fill(user["email"])
+    page.get_by_label("Password", exact=True).fill("local-browser-fixture")
+    page.get_by_role("button", name="Sign in to ETERNYX", exact=True).click()
+    planner = page.get_by_role("region", name="Storyboard planner")
+    editor = planner.get_by_label("Shot descriptions")
+    editor.fill("Dawn\nWorkshop")
+    planner.get_by_label("Seconds per shot").select_option("3")
+    planner.get_by_label("Frame format").select_option("9:16")
+    planner.get_by_role("button", name="0:03–0:06 Workshop").click()
+    with page.expect_download() as pending:
+        planner.get_by_role("button", name="Download shot list (.json)").click()
+    contents = Path(pending.value.path()).read_bytes()
+    assert json.loads(contents)["totalSeconds"] == 6
+    editor.fill("Another draft")
+    file = planner.get_by_label("Open exported storyboard (.json)")
+    file.set_input_files({"name": "broken.json", "mimeType": "application/json", "buffer": b"{"})
+    expect(planner.get_by_role("alert")).to_be_visible()
+    expect(editor).to_have_value("Another draft")
+    file.set_input_files({"name": "shots.json", "mimeType": "application/json", "buffer": contents})
+    expect(editor).to_have_value("Another draft")
+    planner.get_by_role("button", name="Replace current plan").click()
+    expect(editor).to_have_value("Dawn\nWorkshop")
+    expect(planner.get_by_label("Frame format")).to_have_value("9:16")
+    expect(planner.get_by_label("Seconds per shot")).to_have_value("3")
+
+
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(channel="chrome")
     for width, height in [(390, 844), (1440, 900)]:
@@ -109,7 +161,8 @@ with sync_playwright() as playwright:
             workspace(page)
             automation(page, width < 768)
             explore_and_inspect(page)
-            print(f"Passed workspace, automation, Explore and inspector journeys at {width} × {height}", flush=True)
+            storyboard(page)
+            print(f"Passed workspace, automation, Explore, inspector and storyboard journeys at {width} × {height}", flush=True)
         finally:
             context.close()
     browser.close()
