@@ -51,6 +51,8 @@ jobs:
           node --check tests/github-release-utils.test.mjs
       - name: Build application
         run: npm run build
+      - name: Validate release provenance across generated HTML, JS and JSON
+        run: node scripts/assertReleaseArtifact.mjs
       - name: Exercise public tool journeys in desktop and mobile Chrome viewports
         timeout-minutes: 5
         run: |
