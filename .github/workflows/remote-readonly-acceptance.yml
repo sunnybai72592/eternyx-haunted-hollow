@@ -37,6 +37,14 @@ jobs:
         timeout-minutes: 6
         run: |
           "$RUNNER_TEMP/eternyx-remote-browser/bin/python" tests/browser/remote_readonly_smoke.py
+      - name: Classify hosted evidence without production certification
+        if: always()
+        run: |
+          if test -f test-results/remote-readonly-acceptance.json; then
+            node scripts/summarize-remote-acceptance.mjs test-results/remote-readonly-acceptance.json
+          else
+            echo "No remote acceptance report was produced; no hosted verification can be claimed." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload read-only remote acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
