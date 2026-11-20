@@ -16,7 +16,12 @@ if (!file) {
       "Browser journeys: " + summary.passed + "/" + summary.expected + " passed",
       "Failed: " + summary.failed + "; missing: " + summary.missing,
       "Blocked external requests: " + summary.blockedExternal,
-      "Blocked HTTP write attempts: " + summary.blockedWrites,
+      "Blocked HTTP write attempts (non-telemetry): " + summary.blockedWrites,
+      "Known Lovable telemetry POST attempts blocked: " + summary.blockedKnownTelemetry,
+      "JavaScript startup error categories: " + (
+        summary.jsErrorCategories.length ? [...new Set(summary.jsErrorCategories)].join(", ") : "none observed"
+      ),
+      "First-party script/document HTTP failures: " + summary.assetHttpFailures.length,
       "Read-only hosted frontend: " + (summary.allBrowserJourneysPassed ? "passed" : "NOT verified"),
       "Production build revision: not verified",
       "Production certification: NO",
@@ -32,7 +37,11 @@ if (!file) {
         (first.http_status ?? "unknown") + "; heading class: " + first.heading_class);
       lines.push("Approved host: " + first.on_approved_host +
         "; React root present: " + first.root_present +
+        "; React root populated: " + (first.root_has_children ?? "not recorded") +
         "; reason: " + first.reason);
+      lines.push("Latest classified JavaScript error: " +
+        (first.last_js_error_category ?? "not recorded") +
+        "; script error responses: " + (first.script_http_failures ?? "not recorded"));
       lines.push("Page observations captured: " + summary.pageObservations.length);
     }
     if (summary.blockedSamples.length > 0) {
