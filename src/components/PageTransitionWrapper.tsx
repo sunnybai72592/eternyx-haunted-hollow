@@ -11,6 +11,9 @@ export const PageTransitionWrapper: React.FC<PageTransitionWrapperProps> = ({ ch
   const navigationType = useNavigationType();
   const prefersReducedMotion = useReducedMotion();
 
+  const isExplore = location.pathname === "/explore";
+  const scrollSearch = isExplore ? "" : location.search;
+
   useEffect(() => {
     // Start each new route at the top. Hash links remain responsible for
     // their own target scrolling.
@@ -20,7 +23,7 @@ export const PageTransitionWrapper: React.FC<PageTransitionWrapperProps> = ({ ch
       left: 0,
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
-  }, [location.pathname, location.search, location.hash, prefersReducedMotion]);
+  }, [location.pathname, scrollSearch, location.hash, prefersReducedMotion]);
 
   const initialY = navigationType === "POP" ? -8 : 8;
   const exitY = navigationType === "POP" ? 8 : -8;
@@ -28,7 +31,7 @@ export const PageTransitionWrapper: React.FC<PageTransitionWrapperProps> = ({ ch
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        key={location.key}
+        key={isExplore ? location.pathname : location.key}
         initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: initialY, filter: "blur(3px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: exitY, filter: "blur(2px)" }}
