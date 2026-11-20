@@ -417,13 +417,40 @@ def presence(page):
                             "networkAvailable": True, "gatewayLocated": True})
     path = "**/rest/v1/rpc/visitor_presence"
     page.route(path, data)
+    tracked = []
+    def realtime(socket):
+        def respond(raw):
+            packet = json.loads(raw)
+            array_format = isinstance(packet, list)
+            if array_format:
+                join_ref, ref, topic, event, payload = packet
+            else:
+                join_ref, ref, topic, event, payload = (packet.get(k) for k in ("join_ref", "ref", "topic", "event", "payload"))
+            if event == "presence" and payload.get("event") == "track":
+                tracked.append(payload["payload"])
+            reply = {"status": "ok", "response": {}}
+            socket.send(json.dumps([join_ref, ref, topic, "phx_reply", reply] if array_format else
+                                   dict(join_ref=join_ref, ref=ref, topic=topic, event="phx_reply", payload=reply)))
+        socket.on_message(respond)
+    page.route_web_socket("**/realtime/v1/websocket*", realtime)
+    page.context.set_geolocation({"latitude": 12.34567, "longitude": 32.12345, "accuracy": 8})
+    page.context.grant_permissions(["geolocation"], origin=ORIGIN)
     page.goto(ORIGIN + "/")
     panel = page.get_by_role("region", name="Around Eternyx now")
     expect(panel.get_by_text("Saudi Arabia", exact=True)).to_be_visible()
     world = panel.get_by_role("img", name="Live visitor map with country estimates and voluntarily shared device pins")
     expect(world).to_be_visible()
     expect(world.get_by_text("SA · 5")).to_be_visible()
-    expect(panel.get_by_text("Publish my city and coordinates")).to_have_count(0)
+    panel.get_by_text("Share my location on the map", exact=True).click()
+    share = panel.get_by_role("button", name="Share my location publicly")
+    expect(share).to_be_enabled()
+    assert not tracked
+    share.click()
+    remove = panel.get_by_role("button", name="Remove my public pin")
+    expect(remove).to_be_visible()
+    assert tracked == [{"city": "Shared location", "latitude": 12.34567, "longitude": 32.12345, "accuracy": 8}]
+    remove.click()
+    expect(share).to_be_enabled()
     expect(panel.get_by_text("7 estimated active networks")).to_be_visible()
     expect(panel.get_by_role("checkbox")).to_be_checked()
     with page.expect_response(lambda response: response.url.endswith("/rpc/visitor_presence") and not response.request.post_data_json["contribute"]):

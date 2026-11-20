@@ -16,7 +16,6 @@ function validPin(value: Partial<Pin>): value is Pin {
 export function PresenceMap({ countries, locked }: { countries: {code: string; count: number}[]; locked: boolean }) {
   const [pins, setPins] = useState<Pin[]>([]);
   const [city, setCity] = useState("");
-  const [draft, setDraft] = useState<Omit<Pin, "city">>();
   const [sharing, setSharing] = useState(false);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +33,7 @@ export function PresenceMap({ countries, locked }: { countries: {code: string; c
       setReady(status === "SUBSCRIBED");
       if (status !== "SUBSCRIBED") {
         generation.current++;
-        setBusy(false); setPins([]); setSharing(false); setDraft(undefined);
+        setBusy(false); setPins([]); setSharing(false);
       }
     });
     return () => {
@@ -43,33 +42,46 @@ export function PresenceMap({ countries, locked }: { countries: {code: string; c
     };
   }, [locked]);
 
-  function preview() {
-    const attempt = ++generation.current;
-    setDraft(undefined); setMessage("");
+  async function shareLocation() {
+    const room = channel.current;
+    if (!room || locked || !ready || busy) return;
     if (!navigator.geolocation) { setMessage("Location is unavailable in this browser."); return; }
+
+    const attempt = ++generation.current;
     setBusy(true);
-    navigator.geolocation.getCurrentPosition(({coords}) => {
+    setMessage("Waiting for your device location…");
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true, maximumAge: 0, timeout: 15000,
+        })
+      );
       if (attempt !== generation.current) return;
-      setBusy(false);
-      setDraft({latitude: +coords.latitude.toFixed(5), longitude: +coords.longitude.toFixed(5), accuracy: Math.ceil(coords.accuracy)});
-    }, () => {
+      const { latitude, longitude, accuracy } = position.coords;
+      const pin = {
+        city: city.trim() || "Shared location",
+        latitude: +latitude.toFixed(5),
+        longitude: +longitude.toFixed(5),
+        accuracy: Math.ceil(accuracy),
+      };
+      setMessage("Publishing your pin…");
+      const result = await room.track(pin);
       if (attempt !== generation.current) return;
-      setBusy(false); setMessage("Couldn’t read your location. Check browser location permissions and try again.");
-    }, {enableHighAccuracy: true, maximumAge: 0, timeout: 15000});
+      if (result !== "ok") throw new Error("presence");
+      setSharing(true);
+      setMessage("Your location is on the public map.");
+    } catch (error) {
+      if (attempt !== generation.current) return;
+      if (error && typeof error === "object" && "code" in error) {
+        setMessage(error.code === 1 ? "Location access was denied. Your pin was not published." : "Your device location is unavailable. Try again.");
+      } else {
+        setMessage("Couldn’t confirm publication. Close this page to disconnect your pin.");
+      }
+    } finally {
+      if (attempt === generation.current) setBusy(false);
+    }
   }
 
-  async function publish() {
-    const room = channel.current;
-    if (!room || !draft || !city.trim() || locked) return;
-    const attempt = ++generation.current;
-    setBusy(true);
-    try {
-      if (await room.track({...draft, city: city.trim()}) !== "ok") throw new Error();
-      if (attempt === generation.current) { setSharing(true); setDraft(undefined); setMessage(""); }
-    } catch {
-      if (attempt === generation.current) setMessage("Couldn’t confirm publication. Close this page to disconnect your pin.");
-    } finally { if (attempt === generation.current) setBusy(false); }
-  }
   async function stop() {
     const room = channel.current;
     if (!room) return;
@@ -115,10 +127,8 @@ export function PresenceMap({ countries, locked }: { countries: {code: string; c
     {!locked && <details className="mt-4 rounded-lg border border-white/10 p-3 text-sm"><summary className="cursor-pointer">Share my location on the map</summary>
       <p className="my-2 text-slate-300">Anyone on the homepage can see and copy your city and coordinates while your pin is shared. Your IP address stays off the map.</p>
       {sharing ? <button type="button" disabled={busy} onClick={stop} className="min-h-11 text-cyan-200">Remove my public pin</button> : <>
-        <label className="block">City <input value={city} maxLength={48} onChange={e => setCity(e.target.value)} className="rounded bg-slate-900 p-2" /></label>
-        <button type="button" disabled={!ready || busy || !city.trim()} onClick={preview} className="min-h-11 text-cyan-200 disabled:opacity-50">Preview my device location</button>
-        {draft && <div><p>Preview · {city} · {draft.latitude.toFixed(5)}, {draft.longitude.toFixed(5)} · accuracy about {draft.accuracy} m</p>
-          <button type="button" disabled={busy || !ready || !city.trim()} onClick={publish} className="min-h-11 text-fuchsia-200">Publish my city and coordinates</button></div>}
+        <label className="block">City (optional) <input disabled={busy} value={city} maxLength={48} onChange={e => setCity(e.target.value)} className="rounded bg-slate-900 p-2" /></label>
+        <button type="button" disabled={!ready || busy} onClick={shareLocation} className="min-h-11 text-cyan-200 disabled:opacity-50">Share my location publicly</button>
       </>}
       {!ready && <p>Live pin sharing is unavailable.</p>}
       {message && <p role="status">{message}</p>}
