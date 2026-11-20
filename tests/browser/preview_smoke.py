@@ -51,6 +51,55 @@ def automation(page, narrow):
     assert json.loads(Path(pending.value.path()).read_text()) == ["ALPHA", "bravo"]
 
 
+def explore_and_inspect(page):
+    page.goto(ORIGIN + "/explore")
+    search = page.locator("#ecosystem-search")
+    search.fill("zz-no-tool")
+    expect(page.get_by_text("No matching areas found")).to_be_visible()
+    page.get_by_role("button", name="Clear", exact=True).click()
+    expect(search).to_be_focused()
+    search.press_sequentially("GitHub repository hub")
+    expect(search).to_have_value("GitHub repository hub")
+    page.reload()
+    expect(search).to_have_value("GitHub repository hub")
+    page.get_by_role("region", name="Indexed tools").get_by_role("link").click()
+
+    repo = "example/demo"
+    def github_response(route):
+        path = route.request.url.split("?")[0]
+        if path.endswith("/branches"):
+            payload = [{"name": name, "protected": protected, "commit": {"sha": "abcdef0"}}
+                       for name, protected in [("main", True), ("topic", False)]]
+        elif path.endswith("/commits"):
+            payload = []
+        elif path.endswith("/actions/runs"):
+            route.fulfill(status=403, json={"message": "Restricted"})
+            return
+        elif path.endswith("/" + repo):
+            payload = {"full_name": repo, "html_url": "https://github.com/" + repo,
+                       "default_branch": "main", "visibility": "public", "archived": False,
+                       "stargazers_count": 0, "forks_count": 0, "open_issues_count": 0,
+                       "subscribers_count": 0}
+        else:
+            route.fulfill(status=404, json={"message": "Not Found"})
+            return
+        route.fulfill(json=payload)
+
+    page.route("https://api.github.com/repos/**", github_response)
+    repository = page.get_by_label("GitHub repository", exact=True)
+    repository.fill(repo)
+    page.get_by_role("button", name="Inspect repository").click()
+    expect(page.get_by_role("heading", name=repo)).to_be_visible()
+    expect(page.get_by_text("Workflow activity unavailable.", exact=True)).to_be_visible()
+    expect(page.get_by_text("No commits returned.", exact=True)).to_be_visible()
+    page.get_by_label("Protected only").check()
+    expect(page.get_by_text("1 of 2 loaded branches")).to_be_visible()
+    page.get_by_label("Find a branch").fill("topic")
+    expect(page.get_by_text("No branches match these filters.")).to_be_visible()
+    page.get_by_role("link", name="Back to Explore", exact=True).click()
+    expect(search).to_have_value("GitHub repository hub")
+
+
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(channel="chrome")
     for width, height in [(390, 844), (1440, 900)]:
@@ -59,7 +108,8 @@ with sync_playwright() as playwright:
             page = context.new_page()
             workspace(page)
             automation(page, width < 768)
-            print(f"Passed workspace and automation journeys at {width} × {height}", flush=True)
+            explore_and_inspect(page)
+            print(f"Passed workspace, automation, Explore and inspector journeys at {width} × {height}", flush=True)
         finally:
             context.close()
     browser.close()

@@ -47,7 +47,13 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Star; label: string; 
 }
 
 export default function GitHubIntegrationHub() {
-  const fromIntegrations = useLocation().state?.fromPillar === "integrations";
+  const { state } = useLocation();
+  const fromIntegrations = state?.fromPillar === "integrations";
+  const fromExplore = state?.fromExplore === true;
+  const exploreQuery = typeof state?.exploreQuery === "string" ? state.exploreQuery : "";
+  const returnPath = fromExplore
+    ? { pathname: "/explore", search: exploreQuery ? "?" + new URLSearchParams({ q: exploreQuery }) : "" }
+    : fromIntegrations ? "/integrations" : "/developer-studio";
   const active = useRef<AbortController | null>(null);
   const [branchSearch, setBranchSearch] = useState("");
   const [protectedOnly, setProtectedOnly] = useState(false);
@@ -127,7 +133,7 @@ export default function GitHubIntegrationHub() {
 
   const visibleBranches: Branch[] = filterBranches(branches ?? [], branchSearch, protectedOnly);
   return <div className="min-h-screen bg-[#070b14] text-white"><div className="mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
-    <Link to={fromIntegrations ? "/integrations" : "/developer-studio"} className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-cyan-300"><ArrowLeft className="h-4 w-4" /> {fromIntegrations ? "Cloud & Integrations" : "Developer Studio"}</Link>
+    <Link to={returnPath} className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-cyan-300"><ArrowLeft className="h-4 w-4" /> {fromExplore ? "Back to Explore" : fromIntegrations ? "Cloud & Integrations" : "Developer Studio"}</Link>
     <section className="relative overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-950/70 via-slate-950 to-cyan-950/60 p-7 sm:p-10">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">ETERNYX · {fromIntegrations ? "Cloud & Integrations" : "Developer Studio"}</p>
       <h1 className="mt-3 text-4xl font-bold sm:text-5xl">GitHub <span className="text-cyan-300">Integration Hub</span></h1>

@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useMemo, useRef } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Search, Sparkles } from "lucide-react";
 import { ecosystemPillars } from "@/data/ecosystem";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,15 @@ import { Input } from "@/components/ui/input";
 import tools from "@/data/toolRegistry.json";
 
 const Explore = () => {
-  const [query, setQuery] = useState("");
+  const [params, setParams] = useSearchParams();
+  const query = params.get("q") ?? "";
+  const field = useRef<HTMLInputElement>(null);
+  function setQuery(value: string) {
+    const next = new URLSearchParams(params);
+    if (value) next.set("q", value);
+    else next.delete("q");
+    setParams(next, { replace: true, preventScrollReset: true });
+  }
 
   const term = query.trim().toLowerCase();
   const matchingTools = tools.filter(tool =>
@@ -54,12 +62,14 @@ const Explore = () => {
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <Input
+                  ref={field}
                   id="ecosystem-search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search pillars, domains, and capabilities..."
-                  className="h-12 border-slate-700 bg-slate-950/80 pl-12 text-white placeholder:text-slate-500 focus-visible:ring-cyan-400"
+                  className="h-12 border-slate-700 bg-slate-950/80 pl-12 pr-16 text-white placeholder:text-slate-500 focus-visible:ring-cyan-400"
                 />
+                {query && <button type="button" className="absolute inset-y-0 right-2 rounded px-2 text-sm text-cyan-300 focus-visible:ring-2" onClick={() => { setQuery(""); field.current?.focus(); }}>Clear</button>}
               </div>
             </div>
           </div>
@@ -71,14 +81,14 @@ const Explore = () => {
             <h2 className="mt-2 text-2xl font-bold sm:text-3xl">Six connected pillars</h2>
             <p className="mt-2 text-sm text-slate-400">Choose a pillar to see its purpose and planned capability areas.</p>
           </div>
-          <p className="text-sm text-slate-500">{filteredPillars.length} of {ecosystemPillars.length} pillars</p>
+          <p role="status" className="text-sm text-slate-400">{filteredPillars.length} pillars · {matchingTools.length} indexed tools</p>
         </section>
 
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredPillars.map((pillar) => {
             const Icon = pillar.icon;
             return (
-              <Card key={pillar.id} className="group flex h-full flex-col border-slate-800 bg-slate-900/70 text-slate-100 transition-all duration-200 hover:-translate-y-1 hover:border-cyan-400/40 hover:shadow-xl hover:shadow-cyan-950/20">
+              <Card key={pillar.id} className="group flex h-full flex-col border-slate-800 bg-slate-900/70 text-slate-100 motion-safe:transition-all duration-200 motion-safe:hover:-translate-y-1 hover:border-cyan-400/40 hover:shadow-xl hover:shadow-cyan-950/20">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-3">
                     <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-300">
@@ -122,7 +132,7 @@ const Explore = () => {
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
               {matchingTools.map(tool => (
                 <li key={tool.name}>
-                  <Link to={tool.route} className="block h-full rounded-xl border border-slate-700 bg-slate-900 p-4 hover:border-cyan-400 focus-visible:ring-2">
+                  <Link to={tool.route} state={{ fromExplore: true, exploreQuery: query }} className="block h-full rounded-xl border border-slate-700 bg-slate-900 p-4 hover:border-cyan-400 focus-visible:ring-2">
                     <span className="font-semibold text-cyan-300">{tool.name}</span>
                     <p className="mt-1 text-sm text-slate-300">{tool.description}</p>
                     <p className="mt-2 text-xs text-slate-400">{tool.execution} · {tool.access} · {tool.verification}</p>

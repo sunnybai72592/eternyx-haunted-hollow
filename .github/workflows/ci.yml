@@ -51,7 +51,7 @@ jobs:
           node --check tests/github-release-utils.test.mjs
       - name: Build application
         run: npm run build
-      - name: Exercise workspace and automation in desktop and mobile Chrome viewports
+      - name: Exercise public tool journeys in desktop and mobile Chrome viewports
         timeout-minutes: 5
         run: |
           python3 -m venv "$RUNNER_TEMP/eternyx-browser"
