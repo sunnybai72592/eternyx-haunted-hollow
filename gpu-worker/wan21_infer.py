@@ -39,7 +39,7 @@ def parse_job(raw):
     negative = request.get("negativePrompt", "")
     if not isinstance(negative, str) or len(negative) > 2000:
         raise ValueError("invalid negative prompt")
-    if request.get("version", 1) != 1:
+    if type(request.get("version", 1)) is not int or request.get("version", 1) != 1:
         raise ValueError("unsupported request version")
     # Wan requires (num_frames - 1) divisible by 4.
     frame_count = FPS * duration + 1
@@ -50,8 +50,11 @@ def validated_storage_path():
     root = os.environ.get("ETERNYX_PRIVATE_VIDEO_DIR", "")
     if not root or not os.path.isabs(root):
         raise ValueError("absolute private video directory is required")
-    path = Path(root).resolve(strict=True)
-    if not path.is_dir() or path.is_symlink():
+    supplied = Path(root)
+    if supplied.is_symlink():
+        raise ValueError("symlink storage directory not permitted")
+    path = supplied.resolve(strict=True)
+    if not path.is_dir():
         raise ValueError("private video directory is invalid")
     if path.stat().st_mode & 0o077:
         raise ValueError("private video directory must not grant group/other permissions")
@@ -61,7 +64,10 @@ def validated_model_path():
     value = os.environ.get("ETERNYX_WAN21_MODEL_DIR", "")
     if not value or not os.path.isabs(value):
         raise ValueError("absolute local model snapshot directory is required")
-    path = Path(value).resolve(strict=True)
+    supplied = Path(value)
+    if supplied.is_symlink():
+        raise ValueError("model symlink not permitted")
+    path = supplied.resolve(strict=True)
     if not path.is_dir() or not (path / "model_index.json").is_file():
         raise ValueError("Diffusers model snapshot not installed")
     return path
