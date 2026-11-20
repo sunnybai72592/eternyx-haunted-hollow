@@ -84,6 +84,40 @@ export function evaluateRemoteAcceptance(report) {
       invalid("unsafe blocked-request sample");
     }
   }
+  // Optional build attestation is a PUBLIC self-reported build marker,
+  // cross-checked against HTML/JS and the current GitHub checkout.
+  const release = report.release_evidence ?? {
+    status: "unavailable", build_id: null, source_sha: null,
+    html_matches: false, client_matches: false, matches_checkout: false,
+  };
+  const releaseStatuses = new Set(["unavailable", "inconsistent", "build-matched", "source-matched"]);
+  const hex32 = /^[a-f0-9]{32}$/;
+  const hex40 = /^[a-f0-9]{40}$/;
+  if (!release || typeof release !== "object" || Array.isArray(release) ||
+      !releaseStatuses.has(release.status) ||
+      typeof release.html_matches !== "boolean" ||
+      typeof release.client_matches !== "boolean" ||
+      typeof release.matches_checkout !== "boolean" ||
+      (release.build_id !== null && (typeof release.build_id !== "string" || !hex32.test(release.build_id))) ||
+      (release.source_sha !== null && (typeof release.source_sha !== "string" || !hex40.test(release.source_sha)))) {
+    invalid("unsafe release provenance");
+  }
+  const markersMatch = release.html_matches && release.client_matches;
+  if ((release.status === "unavailable" &&
+       (release.build_id !== null || release.source_sha !== null || markersMatch || release.matches_checkout)) ||
+      (release.status !== "unavailable" && release.build_id === null) ||
+      (release.status === "inconsistent" && markersMatch) ||
+      (release.status === "build-matched" && !markersMatch) ||
+      (release.status === "source-matched" &&
+       (!markersMatch || !release.matches_checkout || !release.source_sha)) ||
+      (release.matches_checkout && (
+        release.source_sha === null ||
+        typeof report.source_checkout_sha !== "string" ||
+        !hex40.test(report.source_checkout_sha.toLowerCase()) ||
+        report.source_checkout_sha.toLowerCase() !== release.source_sha
+      ))) {
+    invalid("inconsistent release provenance");
+  }
   const expected = REMOTE_CASES.length * REMOTE_VIEWPORTS.length;
   if (report.expected_cases !== expected || !Array.isArray(report.cases)) invalid("invalid expected cases");
   const seen = new Set();
@@ -119,7 +153,8 @@ export function evaluateRemoteAcceptance(report) {
     allBrowserJourneysPassed,
     productionVerified: false,
     approvedForLivePayments: false,
-    deploymentRevisionKnown: false,
+    deploymentRevisionKnown: release.status === "source-matched",
+    releaseEvidence: Object.freeze({ ...release }),
     nextAction: allBrowserJourneysPassed
       ? "Review the deployed build revision and obtain independent release acceptance."
       : "Investigate failing, missing or unsafe journeys before accepting the hosted frontend.",
