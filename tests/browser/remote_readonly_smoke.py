@@ -27,6 +27,72 @@ CASES = (
 )
 results = []
 blocked = {"cross_origin": 0, "write_attempt": 0}
+blocked_samples = []
+page_observations = []
+navigation = {"http_status": None}
+MAX_OBSERVATIONS = 16
+
+def scrub_path(url):
+    """Keep a useful route category without leaking query data or dynamic IDs."""
+    path = urlsplit(url).path
+    if path in ("/", "/explore", "/developer-studio", "/automation", "/auth", "/login"):
+        return path
+    parts = [part for part in path.split("/") if part]
+    if not parts:
+        return "/"
+    first = re.sub(r"[^a-zA-Z0-9_-]", "", parts[0])[:32]
+    return "/" + first + "/[redacted]"
+
+def block_sample(request, reason):
+    if len(blocked_samples) >= MAX_OBSERVATIONS:
+        return
+    same_host = urlsplit(request.url).hostname == hostname
+    blocked_samples.append({
+        "reason": reason,
+        "method": request.method if request.method in ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE") else "other",
+        "path": scrub_path(request.url) if same_host else "[external]",
+        "resource_type": request.resource_type if request.resource_type in (
+            "document", "stylesheet", "script", "image", "font", "xhr", "fetch", "other",
+        ) else "other",
+    })
+
+def safe_page_observation(page, name, viewport, exc):
+    """Do not persist full URLs, query strings, cookies, DOM, screenshots, or inputs."""
+    current = urlsplit(page.url)
+    same_host = current.scheme == "https" and current.hostname == hostname
+    try:
+        headings = page.get_by_role("heading").all_text_contents(timeout=1500)
+    except Exception:
+        headings = []
+    heading = "other"
+    if not headings:
+        heading = "none"
+    elif any("Explore ETERNYX" in value for value in headings):
+        heading = "explore"
+    elif any("Sign in" in value or "Log in" in value for value in headings):
+        heading = "sign-in"
+    elif any("Not Found" in value or "404" in value for value in headings):
+        heading = "not-found"
+    elif any("Master tool registry" in value for value in headings):
+        heading = "registry"
+    try:
+        app_root = page.locator("#root").count() > 0
+    except Exception:
+        app_root = False
+    reason = "unexpected-redirect" if not same_host else (
+        "missing-expected-ui" if "Locator" in type(exc).__name__ or "AssertionError" in type(exc).__name__
+        else "browser-action-failure"
+    )
+    return {
+        "case": name,
+        "viewport": viewport,
+        "reason": reason,
+        "on_approved_host": same_host,
+        "path": scrub_path(page.url) if same_host else "[different-host]",
+        "http_status": navigation.get("http_status"),
+        "root_present": app_root,
+        "heading_class": heading,
+    }
 target_name = os.environ.get("ETERNYX_REMOTE_TARGET", "")
 if target_name not in TARGETS:
     raise SystemExit("Choose one explicit ETERNYX_REMOTE_TARGET from the allowlist")
@@ -41,15 +107,19 @@ def guarded_request(route):
     address = urlsplit(request.url)
     if address.scheme != "https" or address.hostname != hostname or address.port not in (None, 443):
         blocked["cross_origin"] += 1
+        block_sample(request, "cross-origin")
         return route.abort()
     if request.method not in ("GET", "HEAD"):
         blocked["write_attempt"] += 1
+        block_sample(request, "write-blocked")
         return route.abort()
     return route.continue_()
 
 
 def open_page(page, path):
-    page.goto(origin + path, wait_until="domcontentloaded", timeout=20000)
+    navigation["http_status"] = None
+    response = page.goto(origin + path, wait_until="domcontentloaded", timeout=12000)
+    navigation["http_status"] = response.status if response is not None else None
     address = urlsplit(page.url)
     assert address.scheme == "https" and address.hostname == hostname, "Unexpected hosted redirect"
 
@@ -173,10 +243,16 @@ EXECUTE = {
 def exercise(page, name, viewport):
     try:
         EXECUTE[name](page)
-    except Exception:
+    except Exception as error:
         results.append({"case": name, "viewport": viewport, "result": "failed"})
-        raise
+        observation = safe_page_observation(page, name, viewport, error)
+        if len(page_observations) < MAX_OBSERVATIONS:
+            page_observations.append(observation)
+        # Log only a sanitized route category and error type, not URLs/DOM.
+        print("FAIL", name, viewport, observation["reason"], observation["path"], flush=True)
+        return
     results.append({"case": name, "viewport": viewport, "result": "passed"})
+    print("PASS", name, viewport, flush=True)
 
 
 def write_report():
@@ -193,6 +269,8 @@ def write_report():
         "network_policy": "GET/HEAD to exact allowlisted first-party HTTPS host only",
         "blocked_external_requests": blocked["cross_origin"],
         "blocked_write_attempts": blocked["write_attempt"],
+        "blocked_samples": blocked_samples,
+        "page_observations": page_observations,
         "expected_cases": len(CASES) * len(VIEWPORTS),
         "cases": results,
     }, indent=2) + "\n", encoding="utf-8")
@@ -222,8 +300,7 @@ finally:
     # The only persisted outputs are fixture-free case statuses and dimensions.
     write_report()
 
-if blocked["write_attempt"]:
-    raise SystemExit("Anonymous app attempted an HTTP write; blocked and reported")
 assert len(results) == len(CASES) * len(VIEWPORTS)
-assert all(case["result"] == "passed" for case in results)
+if blocked["write_attempt"] or any(case["result"] == "failed" for case in results):
+    raise SystemExit("Hosted browser acceptance failed; inspect sanitized report diagnostics")
 print("Passed", len(results), "read-only remote browser journeys at", hostname)

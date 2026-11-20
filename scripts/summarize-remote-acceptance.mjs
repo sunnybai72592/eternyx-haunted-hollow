@@ -24,6 +24,26 @@ if (!file) {
       "",
       summary.nextAction,
     ];
+    if (summary.pageObservations.length > 0) {
+      const first = summary.pageObservations[0];
+      lines.push("");
+      lines.push("First failed UI case: " + first.case + " (" + first.viewport + ")");
+      lines.push("Observed page: " + first.path + "; HTTP " +
+        (first.http_status ?? "unknown") + "; heading class: " + first.heading_class);
+      lines.push("Approved host: " + first.on_approved_host +
+        "; React root present: " + first.root_present +
+        "; reason: " + first.reason);
+      lines.push("Page observations captured: " + summary.pageObservations.length);
+    }
+    if (summary.blockedSamples.length > 0) {
+      lines.push("");
+      lines.push("First blocked request (query omitted):");
+      const first = summary.blockedSamples[0];
+      lines.push(first.reason + " — " + first.method + " " + first.path +
+        " (" + first.resource_type + ")");
+      lines.push("Blocked request samples: " + summary.blockedSamples.length +
+        " (bounded; no payloads)");
+    }
     const md = lines.join("\n") + "\n";
     process.stdout.write(md);
     if (process.env.GITHUB_STEP_SUMMARY) {
