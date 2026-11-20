@@ -7,6 +7,7 @@ import json
 import os
 import signal
 import selectors
+import tempfile
 import subprocess
 import time
 from pathlib import Path
@@ -34,19 +35,23 @@ def bounded_subprocess(command, *, stdin=None, timeout_seconds=60, env=None, max
     if stdin is not None and (not isinstance(stdin, str) or len(stdin.encode()) > 12000):
         raise CanaryExecutionError("invalid bounded input")
     deadline = time.monotonic() + timeout_seconds
-    process = subprocess.Popen(
-        command, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        env=env, start_new_session=True, close_fds=True,
-    )
+    # Use a private input file: child processes can output before reading stdin,
+    # and a pipe-based stdin write could otherwise block behind its stdout.
+    input_file = tempfile.TemporaryFile(mode="w+b") if stdin is not None else None
+    if input_file is not None:
+        input_file.write(stdin.encode("utf-8"))
+        input_file.seek(0)
     try:
-        if stdin is not None:
-            # Generation requests are capped to 12KB; promptly deliver and close.
-            try:
-                process.stdin.write(stdin.encode("utf-8"))
-                process.stdin.close()
-            except BrokenPipeError:
-                raise CanaryExecutionError("command rejected input") from None
+        process = subprocess.Popen(
+            command, stdin=input_file if input_file is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            env=env, start_new_session=True, close_fds=True,
+        )
+    except BaseException:
+        if input_file is not None:
+            input_file.close()
+        raise
+    try:
         parts = []
         received = 0
         with selectors.DefaultSelector() as selector:
@@ -55,9 +60,10 @@ def bounded_subprocess(command, *, stdin=None, timeout_seconds=60, env=None, max
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise CanaryExecutionError("command exceeded bounded runtime")
-                if not selector.select(timeout=remaining):
+                events = selector.select(timeout=remaining)
+                if not events:
                     raise CanaryExecutionError("command exceeded bounded runtime")
-                for key, _mask in selector.select(timeout=0):
+                for key, _mask in events:
                     chunk = os.read(key.fd, min(65536, max_stdout - received + 1))
                     if not chunk:
                         selector.unregister(key.fileobj)
@@ -93,8 +99,8 @@ def bounded_subprocess(command, *, stdin=None, timeout_seconds=60, env=None, max
     finally:
         if process.stdout:
             process.stdout.close()
-        if process.stdin:
-            process.stdin.close()
+        if input_file is not None:
+            input_file.close()
 
 def inspect_mp4_decode(path, *, timeout_seconds=45, runner=bounded_subprocess):
     """Read full video stream with ffmpeg and count decoded frames.
