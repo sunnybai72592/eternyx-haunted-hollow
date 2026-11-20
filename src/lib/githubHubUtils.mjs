@@ -38,3 +38,9 @@ export function githubApiUrl(owner, repository, resource = "") {
   return "https://api.github.com/repos/" + encodeURIComponent(parsed.owner) + "/" +
     encodeURIComponent(parsed.repository) + (resourcePath ? "/" + resourcePath.split("/").map(encodeURIComponent).join("/") : "") + (query ? "?" + query : "");
 }
+
+export function filterBranches(branches, query, protectedOnly) {
+  const term = query.trim().toLowerCase();
+  return branches.filter(branch => (!protectedOnly || branch.protected) &&
+    branch.name.toLowerCase().includes(term));
+}
