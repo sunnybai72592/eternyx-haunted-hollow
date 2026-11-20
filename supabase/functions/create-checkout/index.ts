@@ -84,14 +84,27 @@ serve(async (req) => {
       return jsonResponse({ error: "Authentication required" }, 401);
     }
 
-    // Billing launch gate: fail closed unless the owner explicitly enables
-    // TEST mode on the server. Production keys are always refused by this build.
-    if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {
-      return jsonResponse({ error: "Subscription checkout is not enabled" }, 503);
-    }
-    const testStripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!testStripeKey || !/^(sk_test_|rk_test_)/.test(testStripeKey)) {
-      return jsonResponse({ error: "Test checkout requires Stripe test credentials" }, 503);
+    const polarEnabled = Deno.env.get("ETERNYX_CHECKOUT_PROVIDER") === "polar";
+    const accessToken = polarEnabled ? Deno.env.get("POLAR_ACCESS_TOKEN") ?? "" : "";
+    const productId = polarEnabled ? Deno.env.get("POLAR_PREMIUM_MONTHLY_PRODUCT_ID") ?? "" : "";
+    const testStripeKey = polarEnabled ? "" : Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+
+    if (polarEnabled) {
+      if (
+        Deno.env.get("POLAR_ENVIRONMENT") !== "sandbox" ||
+        !accessToken ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId)
+      ) {
+        return jsonResponse({ error: "Polar sandbox checkout is not configured" }, 503);
+      }
+    } else {
+      // Checkout uses test credentials until live billing is enabled separately.
+      if (Deno.env.get("ETERNYX_STRIPE_CHECKOUT_MODE") !== "test") {
+        return jsonResponse({ error: "Subscription checkout is not enabled" }, 503);
+      }
+      if (!testStripeKey || !/^(sk_test_|rk_test_)/.test(testStripeKey)) {
+        return jsonResponse({ error: "Test checkout requires Stripe test credentials" }, 503);
+      }
     }
 
     const declaredLength = Number(req.headers.get("content-length") ?? 0);
@@ -119,16 +132,6 @@ serve(async (req) => {
       return jsonResponse({ error: "Invalid subscription plan" }, 400);
     }
 
-    const selectedPlan = plans[planId as keyof typeof plans];
-    // The Stripe test-mode catalog is the sole source of recurring amounts.
-    // Never invent amounts or accept a client-supplied price ID.
-    const configuredPriceId = Deno.env.get(selectedPlan.priceEnv);
-    if (!configuredPriceId || !/^price_[a-zA-Z0-9]+$/.test(configuredPriceId)) {
-      return jsonResponse({ error: "Subscription pricing is not configured" }, 503);
-    }
-
-    const stripeKey = testStripeKey; // Already validated as test-only above.
-
     // Never use an untrusted Origin header as a payment redirect destination.
     const configuredBaseUrl = Deno.env.get("APP_BASE_URL") || DEFAULT_APP_BASE_URL;
     const appUrl = new URL(configuredBaseUrl);
@@ -139,6 +142,45 @@ serve(async (req) => {
     ) {
       throw new Error("APP_BASE_URL must be a trusted HTTPS URL");
     }
+
+    if (polarEnabled) {
+      if (planId !== "premium") {
+        return jsonResponse({ error: "This plan is unavailable in Polar sandbox" }, 503);
+      }
+
+      try {
+        const { createPolar } = await import("npm:@polar-sh/sdk@1/2026-10");
+        const polar = createPolar({ accessToken, environment: "sandbox" });
+        const subscriptionUrl = appUrl.origin + "/subscription";
+        const session = await polar.checkouts.create({
+          products: [productId],
+          external_customer_id: user.id,
+          customer_email: user.email,
+          success_url: subscriptionUrl,
+          return_url: subscriptionUrl,
+          allow_trial: false,
+        });
+        const checkoutUrl = new URL(session.url);
+        if (checkoutUrl.origin !== "https://sandbox.polar.sh") {
+          throw new Error("Unexpected checkout origin");
+        }
+        return jsonResponse({ url: checkoutUrl.href }, 200);
+      } catch {
+        // Provider errors may contain customer information or credentials.
+        console.error("Polar sandbox checkout failed");
+        return jsonResponse({ error: "Unable to create checkout session" }, 502);
+      }
+    }
+
+    const selectedPlan = plans[planId as keyof typeof plans];
+    // The Stripe test-mode catalog is the sole source of recurring amounts.
+    // Never invent amounts or accept a client-supplied price ID.
+    const configuredPriceId = Deno.env.get(selectedPlan.priceEnv);
+    if (!configuredPriceId || !/^price_[a-zA-Z0-9]+$/.test(configuredPriceId)) {
+      return jsonResponse({ error: "Subscription pricing is not configured" }, 503);
+    }
+
+    const stripeKey = testStripeKey; // Already validated as test-only above.
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
     const price = await stripe.prices.retrieve(configuredPriceId, { expand: ["product"] });
