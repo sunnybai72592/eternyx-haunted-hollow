@@ -1,4 +1,7 @@
 import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { saveCopy, suggestedTitle } from "@/lib/workspaceNotes.mjs";
 import { ListFilter } from "lucide-react";
 import { cleanLines } from "@/lib/cleanLines.mjs";
 import { Button } from "@/components/ui/button";
@@ -9,6 +12,9 @@ export default function LineWorkflow() {
   const [deduplicate, setDeduplicate] = useState(true);
   const [order, setOrder] = useState("input");
   const [ignoreCase, setIgnoreCase] = useState(false);
+  const [title, setTitle] = useState("");
+  const [saved, setSaved] = useState<{ title: string; body: string } | null>(null);
+  const [saveError, setSaveError] = useState("");
   const resultField = useRef<HTMLTextAreaElement>(null);
   const [copyStatus, setCopyStatus] = useState("");
   const { lines, blanks, duplicates, trimmed } = useMemo(
@@ -16,6 +22,18 @@ export default function LineWorkflow() {
     [source, deduplicate, ignoreCase, order]
   );
   const result = lines.join("\n");
+
+  const noteTitle = title.trim() || suggestedTitle(result);
+  const alreadySaved = saved?.title === noteTitle && saved.body === result;
+  function saveResult() {
+    try {
+      saveCopy(localStorage, crypto.randomUUID(), noteTitle, result, Date.now());
+      setSaved({ title: noteTitle, body: result });
+      setSaveError("");
+    } catch {
+      setSaveError("Could not save this list in browser storage. You can still download it.");
+    }
+  }
 
   async function copyResult() {
     try {
@@ -40,7 +58,7 @@ export default function LineWorkflow() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  return <section className="space-y-4 rounded-xl border bg-card p-4 text-card-foreground sm:p-6" onChange={() => setCopyStatus("")}>
+  return <section className="space-y-4 rounded-xl border bg-card p-4 text-card-foreground sm:p-6" onChange={() => { setCopyStatus(""); setSaveError(""); }}>
     <h2 className="flex items-center gap-2 text-xl font-semibold"><ListFilter aria-hidden="true" className="size-5 text-primary" />Clean a list</h2>
     <p className="text-sm text-muted-foreground">Paste one item per line. Blank lines and outer spaces are removed in your browser.</p>
     <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -68,5 +86,16 @@ export default function LineWorkflow() {
       <Button variant="outline" disabled={!result} onClick={() => downloadResult("json")}>Download .json</Button>
     </div>
     <p role="status" className="text-sm text-muted-foreground">{copyStatus}</p>
+    <details className="rounded-lg border p-3">
+      <summary className="cursor-pointer font-medium">Save to Digital Workspace</summary>
+      <div className="mt-3 space-y-2">
+        <p className="text-sm text-muted-foreground">Save a named copy in this browser profile. Anyone using the profile can open it.</p>
+        <label htmlFor="clean-list-title">Saved list title</label>
+        <Input id="clean-list-title" maxLength={100} value={title} placeholder={suggestedTitle(result) || "List title"} onChange={e => setTitle(e.target.value)} />
+        <Button variant="outline" onClick={saveResult} disabled={!result || alreadySaved}>Save cleaned list</Button>
+        {saveError && <p role="alert">{saveError}</p>}
+        {alreadySaved && <p role="status" className="text-sm">Saved as {saved.title}. <Link className="underline" to="/workspace">View saved copies</Link></p>}
+      </div>
+    </details>
   </section>;
 }
