@@ -1,26 +1,35 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { FileText, NotebookPen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteCopy, matchingCopies, noteExcerpt, suggestedTitle, readCopies, saveCopy } from "@/lib/workspaceNotes.mjs";
+import { draftKey, deleteCopy, matchingCopies, noteExcerpt, suggestedTitle, readCopies, saveCopy } from "@/lib/workspaceNotes.mjs";
 
-const draftKey = "eternyx.workspace.device-note";
 type Note = { id: string; title: string; body: string; savedAt: number };
 
 export default function DeviceNote() {
   const navigate = useNavigate();
-  const [draft, setDraft] = useState(() => {
+  const resume = useLocation().state?.resumeNote;
+  const [initialCopy] = useState<Note | undefined>(() => {
+    if (resume?.kind !== "copy" || typeof resume.id !== "string") return;
+    try { return readCopies(localStorage).find((note: Note) => note.id === resume.id); }
+    catch { return; }
+  });
+  const [savedDraft, setSavedDraft] = useState(() => {
     try { return localStorage.getItem(draftKey) ?? ""; } catch { return ""; }
   });
-  const [savedDraft, setSavedDraft] = useState(draft);
-  const [title, setTitle] = useState("");
+  const [draft, setDraft] = useState(initialCopy?.body ?? savedDraft);
+  const [title, setTitle] = useState(initialCopy?.title ?? "");
   const [search, setSearch] = useState("");
   const [copies, setCopies] = useState<Note[]>([]);
   const [listUnavailable, setListUnavailable] = useState(false);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(resume?.kind === "copy" && !initialCopy ? "That saved copy is no longer available." : "");
   const input = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (resume?.kind === "draft" || resume?.kind === "copy") input.current?.focus();
+  }, [resume]);
 
   function refresh() {
     try { setCopies(readCopies(localStorage)); setListUnavailable(false); }
