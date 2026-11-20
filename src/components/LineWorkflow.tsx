@@ -47,11 +47,11 @@ export default function LineWorkflow() {
       <legend className="sr-only">Cleanup options</legend>
       <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={deduplicate} onChange={e => setDeduplicate(e.target.checked)} /> Remove duplicates</label>
       <label className="flex min-h-11 items-center gap-2"><input type="checkbox" disabled={!deduplicate} checked={deduplicate && ignoreCase} onChange={e => setIgnoreCase(e.target.checked)} /> Ignore case for duplicates</label>
-      <label className="flex items-center gap-2">Order
-        <select className="min-h-11 rounded-md border bg-background px-2" value={order} onChange={e => setOrder(e.target.value)}>
+      <div className="flex items-center gap-2"><label htmlFor="workflow-order">Order</label>
+        <select id="workflow-order" className="min-h-11 rounded-md border bg-background px-2" value={order} onChange={e => setOrder(e.target.value)}>
           <option value="input">Original</option><option value="ascending">A to Z</option><option value="descending">Z to A</option>
         </select>
-      </label>
+      </div>
     </fieldset>
     <div className="grid gap-4 md:grid-cols-2">
       <div className="min-w-0 space-y-2"><label htmlFor="workflow-input">Input lines</label>
