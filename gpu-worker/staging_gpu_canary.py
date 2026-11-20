@@ -9,11 +9,13 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from gpu_canary_process import bounded_subprocess, inspect_mp4_decode
 
 APPROVAL = "I_APPROVE_ONE_STAGING_WAN_GPU_TEST"
 MAX_GPU_SECONDS = 1800
@@ -145,20 +147,18 @@ def run_once(args):
     payload = {"featureKey": "ai.video.text_to_video", "prompt": DEFAULT_PROMPT,
                "durationSeconds": 1, "aspectRatio": "16:9", "version": 1}
     started = time.monotonic()
-    result = subprocess.run(
-        [sys.executable, str(inference_path)], input=json.dumps(payload),
-        capture_output=True, text=True, timeout=args.max_seconds, env=env, check=True)
+    stdout = bounded_subprocess(
+        [sys.executable, str(inference_path)], stdin=json.dumps(payload),
+        timeout_seconds=args.max_seconds, env=env, max_stdout=4096)
     elapsed = time.monotonic() - started
-    if len(result.stdout.encode()) > 4096:
-        raise ValueError("invalid model output receipt")
-    receipt = json.loads(result.stdout)
+    receipt = json.loads(stdout)
     if not isinstance(receipt, dict) or set(receipt) != {"outputReference"}:
         raise ValueError("invalid output receipt")
     asset = receipt["outputReference"]
-    if not isinstance(asset, str) or not asset.startswith("asset_") or len(asset) != 38:
+    if not isinstance(asset, str) or not re.fullmatch(r"asset_[0-9a-f]{32}", asset):
         raise ValueError("unexpected output reference")
     output = Path(args.private_dir) / (asset + ".mp4")
-    media_info = validate_mp4_with_ffprobe(output)
+    media_info = inspect_mp4_decode(output, timeout_seconds=min(120, args.max_seconds))
     evidence = {"status": "gpu_inference_success", "modelId": MODEL_ID,
                 "pinnedRevision": model_revision,
                 "gpu": gpu[:128], "durationSecondsRequested": 1,
