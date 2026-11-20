@@ -89,5 +89,18 @@
     "test": "tests/ai-document-intelligence.test.mjs",
     "owner": null,
     "verification": "Deployed check pending"
+  },
+  {
+    "name": "Video storyboard planner",
+    "pillar": "ai-arsenal",
+    "route": "/ai-arsenal/video",
+    "execution": "Browser",
+    "description": "Plan a shot sequence, preview framing and export a timed shot list.",
+    "access": "Signed-in account",
+    "provider": "No provider",
+    "source": "src/components/VideoStoryboard.tsx",
+    "test": "tests/video-storyboard.test.mjs",
+    "owner": null,
+    "verification": "Deployed check pending"
   }
 ]

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import VideoStoryboard from "@/components/VideoStoryboard";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -181,6 +182,8 @@ const AIVideoStudio = () => {
             Generation is intentionally unavailable while provider selection, credentials, backend deployment and cost approval are pending. This page does not submit prompts or make paid provider calls.
           </AlertDescription>
         </Alert>
+
+        <VideoStoryboard />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {videoFeatures.map((feature, index) => {
