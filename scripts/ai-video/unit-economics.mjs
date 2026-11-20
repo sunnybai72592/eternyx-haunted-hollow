@@ -41,6 +41,10 @@ export function quoteVideoUnitEconomics(config) {
     gpuCentsPerAttempt * maxBillableAttempts +
     storageTransferCents + otherVariableCents;
   const netPlanRevenueCents = planPriceCents - paymentFeeCents;
+  // Refuse configurations that would silently lose integer cents in JS.
+  if (![gpuCentsPerAttempt, estimatedWorstCaseCostCents].every(Number.isSafeInteger) ||
+      !Number.isSafeInteger(netPlanRevenueCents * creditsPerVideo))
+    throw new RangeError("Unsafe pricing arithmetic");
   // Allocate the plan's net revenue proportionally to consumed credits.
   // floor => never overstate revenue available for one video.
   const allocatedRevenueCents = Math.floor(
@@ -50,6 +54,8 @@ export function quoteVideoUnitEconomics(config) {
   const passesMargin = estimatedWorstCaseCostCents <= budgetAtTargetMarginCents;
   const maxVideosPerPlan = Math.floor(planCredits / creditsPerVideo);
   const worstCasePlanComputeCents = maxVideosPerPlan * estimatedWorstCaseCostCents;
+  if (!Number.isSafeInteger(worstCasePlanComputeCents))
+    throw new RangeError("Unsafe plan-wide cost arithmetic");
   return Object.freeze({
     gpuCentsPerAttempt,
     estimatedWorstCaseCostCents, allocatedRevenueCents,
