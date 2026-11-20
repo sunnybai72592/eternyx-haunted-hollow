@@ -409,6 +409,31 @@ def explore_filters(page):
 results = []
 report_path = Path(__file__).resolve().parents[2] / "test-results" / "browser-preview-acceptance.json"
 
+def presence(page):
+    requests = []
+    def data(route):
+        requests.append(route.request.post_data_json)
+        route.fulfill(json={"total": 7, "countries": [{"code": "SA", "count": 5}],
+                            "networkAvailable": True, "gatewayLocated": True})
+    path = "**/rest/v1/rpc/visitor_presence"
+    page.route(path, data)
+    page.goto(ORIGIN + "/")
+    panel = page.get_by_role("region", name="Around Eternyx now")
+    expect(panel.get_by_text("Saudi Arabia", exact=True)).to_be_visible()
+    expect(panel.get_by_text("7 estimated active networks")).to_be_visible()
+    expect(panel.get_by_role("checkbox")).to_be_checked()
+    with page.expect_response(lambda response: response.url.endswith("/rpc/visitor_presence") and not response.request.post_data_json["contribute"]):
+        panel.get_by_role("checkbox").uncheck()
+    assert {"contribute": True} in requests and requests[-1] == {"contribute": False}
+    page.reload()
+    expect(panel.get_by_role("checkbox")).not_to_be_checked()
+    page.unroute(path, data)
+    page.route(path, lambda route: route.fulfill(status=503, json={}))
+    page.reload()
+    expect(panel.get_by_text("Live visitor data is temporarily unavailable.")).to_be_visible()
+    expect(panel.get_by_text("Saudi Arabia", exact=True)).to_have_count(0)
+
+
 def exercise(case_id, action, width, height):
     try:
         action()
@@ -425,6 +450,7 @@ try:
                 context = browser.new_context(viewport={"width": width, "height": height}, reduced_motion="reduce")
                 try:
                     page = context.new_page()
+                    exercise("homepage-presence-mocked", lambda: presence(page), width, height)
                     exercise("device-scratchpad", lambda: workspace(page), width, height)
                     exercise("clean-list", lambda: automation(page, width < 768), width, height)
                     exercise("explore-github-mocked", lambda: explore_and_inspect(page), width, height)
@@ -437,7 +463,7 @@ try:
                     exercise("video-storyboard", lambda: storyboard(page), width, height)
                     exercise("document-search", lambda: document_search(page), width, height)
                     exercise("chat-mocked-backend", lambda: chat(page), width, height)
-                    print(f"Passed 12 preview journeys at {width} × {height}", flush=True)
+                    print(f"Passed 13 preview journeys at {width} × {height}", flush=True)
                 finally:
                     context.close()
         finally:
