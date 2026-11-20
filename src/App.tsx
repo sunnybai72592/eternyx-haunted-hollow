@@ -10,6 +10,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { AccessibilityProvider } from "@/components/AccessibilityProvider";
 import NotificationSystem from "@/components/NotificationSystem";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import RouteTerminal from "@/components/RouteTerminal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { MobileResponsiveNavigation } from "@/components/MobileResponsiveNavigation";
 import { PageTransitionWrapper } from "@/components/PageTransitionWrapper";
@@ -186,11 +187,7 @@ const AppContent = () => {
               )}
 
               <main id="main-content" tabIndex={-1} className="flex-1 p-4 pt-36 outline-none transition-[padding] duration-300 sm:pt-32">
-                <Suspense fallback={
-                  <div className="min-h-screen bg-background flex items-center justify-center">
-                    <LoadingSpinner variant="cyber" text="Initializing ETERNYX..." />
-                  </div>
-                }>
+                <Suspense fallback={<RouteTerminal key={location.key} />}>
                     <PageTransitionWrapper>
                       <Routes>
                         <Route path="/" element={<Index />} />

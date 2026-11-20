@@ -478,6 +478,21 @@ def presence(page):
     expect(panel.get_by_text("Saudi Arabia", exact=True)).to_have_count(0)
 
 
+def navigation_terminal(page):
+    held = []
+    pattern = "**/assets/DeveloperStudio-*.js"
+    page.route(pattern, lambda route: held.append(route))
+    page.goto(ORIGIN + "/developer-studio", wait_until="commit")
+    prompt = page.get_by_text("Opening developer studio", exact=False)
+    expect(prompt).to_be_visible()
+    expect(page.get_by_text("Recent page assets", exact=True)).to_be_visible()
+    assert held, "The real route chunk should still be pending"
+    for route in held:
+        route.continue_()
+    page.unroute(pattern)
+    expect(prompt).to_have_count(0)
+
+
 def exercise(case_id, action, width, height):
     try:
         action()
@@ -495,6 +510,7 @@ try:
                 try:
                     page = context.new_page()
                     exercise("homepage-presence-mocked", lambda: presence(page), width, height)
+                    exercise("navigation-terminal", lambda: navigation_terminal(page), width, height)
                     exercise("device-scratchpad", lambda: workspace(page), width, height)
                     exercise("clean-list", lambda: automation(page, width < 768), width, height)
                     exercise("explore-github-mocked", lambda: explore_and_inspect(page), width, height)
@@ -507,7 +523,7 @@ try:
                     exercise("video-storyboard", lambda: storyboard(page), width, height)
                     exercise("document-search", lambda: document_search(page), width, height)
                     exercise("chat-mocked-backend", lambda: chat(page), width, height)
-                    print(f"Passed 13 preview journeys at {width} × {height}", flush=True)
+                    print(f"Passed 14 preview journeys at {width} × {height}", flush=True)
                 finally:
                     context.close()
         finally:
