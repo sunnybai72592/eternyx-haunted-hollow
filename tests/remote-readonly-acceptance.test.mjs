@@ -234,6 +234,86 @@ test("independent hosted journeys continue after one fails and workflow defaults
   assert.match(doc, /blocked HTTP write/i);
 });
 
+test("provider analytics POST is still blocked, but classified separately from attempted app writes", () => {
+  assert.match(browser, /KNOWN_TELEMETRY_PATHS = frozenset\(\("\/__l5e\/trackevents", "\/__l5e\/events"\)\)/);
+  assert.match(browser, /request\.method == "POST" and address\.path in KNOWN_TELEMETRY_PATHS/);
+  assert.match(browser, /blocked\["known_telemetry"\] \+= 1/);
+  assert.match(browser, /block_sample\(request, "telemetry-blocked"\)/);
+  assert.match(browser, /blocked\["write_attempt"\] \+= 1/);
+  assert.match(browser, /route\.abort\(\)/);
+  assert.doesNotMatch(browser, /route\.fulfill\(|route\.continue_\(\)\s*#.*POST/);
+});
+
+test("known blocked analytics do not prove a non-telemetry write or live feature failure", () => {
+  const report = validReport();
+  report.blocked_telemetry_attempts = 45;
+  report.blocked_samples = [{
+    reason: "telemetry-blocked", method: "POST",
+    path: "/__l5e/[redacted]", resource_type: "fetch",
+  }];
+  const verdict = evaluateRemoteAcceptance(report);
+  assert.equal(verdict.blockedKnownTelemetry, 45);
+  assert.equal(verdict.blockedWrites, 0);
+  assert.equal(verdict.allBrowserJourneysPassed, true);
+  assert.equal(verdict.productionVerified, false);
+  report.blocked_write_attempts = 1;
+  assert.equal(evaluateRemoteAcceptance(report).allBrowserJourneysPassed, false);
+});
+
+test("frontend runtime diagnostics whitelist categories and omit sensitive JS error text", () => {
+  assert.match(browser, /def capture_page_error\(error\):/);
+  assert.match(browser, /"Missing Supabase frontend configuration" in message/);
+  assert.match(browser, /"missing-supabase-config"/);
+  assert.match(browser, /"module-load-error"/);
+  assert.match(browser, /"javascript-type-error"/);
+  assert.match(browser, /page\.on\("pageerror", capture_page_error\)/);
+  assert.match(browser, /page\.on\("response", capture_script_response\)/);
+  assert.match(browser, /"javascript_error_categories": js_error_categories/);
+  assert.match(browser, /"asset_http_failures": script_http_failures/);
+  assert.match(browser, /"root_has_children": root_hydrated/);
+  assert.doesNotMatch(browser, /print\(\s*str\(error\)|"javascript_error_message":|"error_stack":/);
+});
+
+test("script failure, React hydration and error categories survive bounded validation", () => {
+  const report = validReport();
+  report.javascript_error_categories = ["missing-supabase-config", "module-load-error"];
+  report.asset_http_failures = [{resource_type: "script", http_status: 404}];
+  report.page_observations = [{
+    case: "registry-landing", viewport: "390x844", reason: "missing-expected-ui",
+    on_approved_host: true, path: "/explore", http_status: 200,
+    root_present: true, root_has_children: false, heading_class: "none",
+    last_js_error_category: "missing-supabase-config", script_http_failures: 1,
+  }];
+  const verdict = evaluateRemoteAcceptance(report);
+  assert.deepEqual(verdict.jsErrorCategories, ["missing-supabase-config", "module-load-error"]);
+  assert.deepEqual(verdict.assetHttpFailures, [{resource_type: "script", http_status: 404}]);
+  assert.equal(verdict.pageObservations[0].root_has_children, false);
+  assert.equal(verdict.productionVerified, false);
+});
+
+test("validator rejects raw exceptions, unsafe script failures and fabricated telemetry counts", () => {
+  const make = () => ({...validReport(), javascript_error_categories: ["other-js-error"]});
+  const raw = make();
+  raw.javascript_error_categories = ["Missing Supabase frontend configuration: secret=xyz"];
+  assert.throws(() => evaluateRemoteAcceptance(raw), /unsafe JS exception diagnostic/);
+  const badAsset = make();
+  badAsset.asset_http_failures = [{resource_type: "script", http_status: 200}];
+  assert.throws(() => evaluateRemoteAcceptance(badAsset), /unsafe asset HTTP diagnostic/);
+  const badTelemetry = make();
+  badTelemetry.blocked_telemetry_attempts = -20;
+  assert.throws(() => evaluateRemoteAcceptance(badTelemetry), /invalid known telemetry count/);
+  const unbounded = make();
+  unbounded.javascript_error_categories = Array(17).fill("other-js-error");
+  assert.throws(() => evaluateRemoteAcceptance(unbounded), /unsafe JS exception diagnostic/);
+  const badPage = make();
+  badPage.page_observations = [{
+    case:"registry-landing", viewport:"390x844", reason:"missing-expected-ui",
+    on_approved_host: true, path:"/explore", http_status:200, root_present:true,
+    root_has_children: "unknown", heading_class:"none",
+  }];
+  assert.throws(() => evaluateRemoteAcceptance(badPage), /unsafe page observation/);
+});
+
 test("Python hosted browser runner parses and Node evidence summarizer parses", () => {
   const py = new URL("../tests/browser/remote_readonly_smoke.py", import.meta.url);
   const p = spawnSync("python3", [

@@ -33,11 +33,27 @@ export function evaluateRemoteAcceptance(report) {
   // Optional diagnostics contain ONLY bounded, sanitized classifications;
   // never accept full redirect URLs, query strings, response bodies or IDs.
   const allowedReasons = new Set(["unexpected-redirect", "missing-expected-ui", "browser-action-failure"]);
+  const allowedJsErrors = new Set(["none", "missing-supabase-config", "module-load-error",
+    "module-resolution-error", "javascript-reference-error", "javascript-type-error", "other-js-error"]);
   const allowedHeadingClasses = new Set(["none", "other", "explore", "sign-in", "not-found", "registry"]);
   const pathPattern = /^\/(?:[a-zA-Z0-9_-]{1,32}(?:\/\[redacted\])?)?$/;
   function validateSafePath(value) {
     return value === "[different-host]" || value === "[external]" ||
       (typeof value === "string" && pathPattern.test(value));
+  }
+  const telemetry = report.blocked_telemetry_attempts ?? 0;
+  if (!Number.isSafeInteger(telemetry) || telemetry < 0) invalid("invalid known telemetry count");
+  const jsCategories = report.javascript_error_categories ?? [];
+  if (!Array.isArray(jsCategories) || jsCategories.length > 16 ||
+      !jsCategories.every(item => allowedJsErrors.has(item) && item !== "none")) {
+    invalid("unsafe JS exception diagnostic");
+  }
+  const assetFailures = report.asset_http_failures ?? [];
+  if (!Array.isArray(assetFailures) || assetFailures.length > 16 ||
+      !assetFailures.every(item => item &&
+        ["script", "document"].includes(item.resource_type) &&
+        Number.isSafeInteger(item.http_status) && item.http_status >= 400 && item.http_status <= 599)) {
+    invalid("unsafe asset HTTP diagnostic");
   }
   const pageObservations = report.page_observations ?? [];
   const blockedSamples = report.blocked_samples ?? [];
@@ -51,12 +67,17 @@ export function evaluateRemoteAcceptance(report) {
         !validateSafePath(item.path) || typeof item.root_present !== "boolean" ||
         !allowedHeadingClasses.has(item.heading_class) ||
         (item.http_status !== null &&
-         (!Number.isSafeInteger(item.http_status) || item.http_status < 100 || item.http_status > 599))) {
+         (!Number.isSafeInteger(item.http_status) || item.http_status < 100 || item.http_status > 599)) ||
+        (item.root_has_children !== undefined && typeof item.root_has_children !== "boolean") ||
+        (item.last_js_error_category !== undefined && !allowedJsErrors.has(item.last_js_error_category)) ||
+        (item.script_http_failures !== undefined &&
+         (!Number.isSafeInteger(item.script_http_failures) || item.script_http_failures < 0 ||
+          item.script_http_failures > 16))) {
       invalid("unsafe page observation");
     }
   }
   for (const item of blockedSamples) {
-    if (!item || !["cross-origin", "write-blocked"].includes(item.reason) ||
+    if (!item || !["cross-origin", "write-blocked", "telemetry-blocked"].includes(item.reason) ||
         !["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "other"].includes(item.method) ||
         !validateSafePath(item.path) ||
         !["document", "stylesheet", "script", "image", "font", "xhr", "fetch", "other"].includes(item.resource_type)) {
@@ -90,6 +111,9 @@ export function evaluateRemoteAcceptance(report) {
     missing,
     blockedExternal: report.blocked_external_requests,
     blockedWrites: report.blocked_write_attempts,
+    blockedKnownTelemetry: telemetry,
+    jsErrorCategories: Object.freeze([...jsCategories]),
+    assetHttpFailures: Object.freeze(assetFailures.map(item => Object.freeze({ ...item }))),
     pageObservations: Object.freeze(pageObservations.map(item => Object.freeze({ ...item }))),
     blockedSamples: Object.freeze(blockedSamples.map(item => Object.freeze({ ...item }))),
     allBrowserJourneysPassed,
