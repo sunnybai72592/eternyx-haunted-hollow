@@ -46,6 +46,7 @@ public.get_current_user_role(), public.handle_new_user(), and public.is_admin().
   the user directory. Two-account testing is still required.
 
 These are legitimate advisory findings, **not proof of an exploit**.
+Manual review must preserve public-policy dependencies and signup behavior.
 Changing RLS, function grants or login configuration without testing
 dependencies would risk damaging working features.
 
