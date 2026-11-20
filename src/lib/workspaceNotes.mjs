@@ -1,3 +1,4 @@
+export const draftKey = "eternyx.workspace.device-note";
 const prefix = "eternyx.workspace.saved-note.";
 
 export function saveCopy(storage, id, title, body, savedAt) {
@@ -45,4 +46,10 @@ export function noteExcerpt(body, search) {
   const start = Math.max(0, index - 28);
   const end = Math.min(text.length, start + 120);
   return (start ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+}
+
+export function resumableNote(storage) {
+  if (storage.getItem(draftKey)?.trim()) return { kind: "draft" };
+  const copy = readCopies(storage)[0];
+  return copy ? { kind: "copy", id: copy.id } : null;
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import ContinueWork from "./ContinueWork";
 import HomeTaskFinder from "./HomeTaskFinder";
 import { VisitorPresence } from "@/components/home/VisitorPresence";
 import { Link, useNavigate } from "react-router-dom";
@@ -34,6 +35,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             <h1 className="text-[clamp(2.75rem,6vw,5.5rem)] font-black leading-[1.02] tracking-tight">
               {isAuthenticated ? `Welcome back${profile?.username ? ", " + profile.username : ""}` : "Welcome to Eternyx"}
             </h1>
+            <ContinueWork />
             <HomeTaskFinder />
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_rgba(34,211,238,.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
