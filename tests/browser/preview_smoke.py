@@ -234,6 +234,17 @@ def chat(page):
     expect(page.get_by_text(answer, exact=True)).to_have_count(0)
     page.get_by_role("button", name=prompt, exact=True).click()
     expect(page.get_by_text(answer, exact=True)).to_be_visible()
+    search = page.get_by_label("Find a saved chat")
+    search.fill("unmatched search")
+    expect(page.get_by_text("No matching chats.", exact=True)).to_be_visible()
+    expect(page.get_by_text(answer, exact=True)).to_be_visible()
+    page.get_by_role("button", name="Clear", exact=True).click()
+    expect(search).to_be_focused()
+    search.fill("FIELD")
+    expect(page.get_by_role("button", name=prompt, exact=True)).to_have_attribute("aria-pressed", "true")
+    with page.expect_download() as pending:
+        page.get_by_role("button", name="Download visible messages (.txt)").click()
+    assert Path(pending.value.path()).read_text() == f"{prompt}\n\nYou\n{prompt}\n\nEternyx AI\n{answer}\n"
     assert submitted == [prompt, prompt]
 
 
