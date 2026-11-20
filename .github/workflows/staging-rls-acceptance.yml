@@ -53,6 +53,9 @@ jobs:
       - name: Test two-account isolation with synthetic staging records and cleanup
         timeout-minutes: 7
         run: node scripts/staging/verifyRlsTwoUsers.mjs
+      - name: Independently validate sanitized staging evidence completeness
+        if: always()
+        run: node scripts/staging/verifyRlsEvidence.mjs
       - name: Upload sanitized staging RLS evidence
         if: always()
         uses: actions/upload-artifact@v4
