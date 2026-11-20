@@ -50,6 +50,43 @@ The report includes the approved host, viewport, each test outcome, blocked outb
 
 Therefore PR #256 keeps all 32 releaseVerified flags false and does not enable subscriptions, scanners or AI providers.
 
+## Verified hosted-run failures — November 20, 2026
+
+The first two Lovable targets were actually checked using the read-only
+GitHub workflow. **Neither passed browser acceptance**:
+
+| Run / selected target | Grounded result | Important limitation |
+| --- | --- | --- |
+| [44759547775](https://github.com/sunnybai72592/eternyx-haunted-hollow/actions/runs/44759547775) · lovable-preview | First navigation unexpectedly redirected away from the allowlisted hostname; 0/16 passed, 15 never attempted | Redirect destination was not captured; no evidence of tool malfunction |
+| [44761338587](https://github.com/sunnybai72592/eternyx-haunted-hollow/actions/runs/44761338587) · public-domain-candidate | First page reached the browser, but **missing expected heading** "Master tool registry"; 0/16 passed, 15 never attempted; 1 **blocked HTTP write** | Existing report does not identify the attempted write endpoint or final served build |
+
+The write request was **blocked** by the runner, not approved. Its presence
+does not prove it was a payment or privileged action; it could represent
+application telemetry or another request. Likewise, a missing heading
+cannot by itself distinguish an older deployed bundle, an authentication
+page, an uninitialized React app, or blocked startup dependencies.
+
+This patch improves only **diagnosis and reliability**, not product deployment:
+- Continue the remaining independent desktop/mobile UI scenarios even when
+  one fails; count individual outcomes rather than treating "not run" as failures.
+- Record a bounded HTTP status for each failed page, whether the final page
+  stayed on the chosen allowed hostname, a redacted path category, whether
+  a React root is present, and a coarse heading category.
+- Record up to 16 blocked-request samples with method, safe path category and
+  resource type—**never full URLs, query parameters, headers, body text,
+  cookies, snapshots, or credentials**.
+- Validate the diagnostic report before writing the GitHub step summary.
+  Unexpected values or attempted writes still fail the audit.
+- Correct the workflow's default selected target to the actual supported
+  option name: lovable-preview.
+
+**Next action after merging:** manually run the exact same
+public-domain-candidate workflow once and inspect its sanitized acceptance
+artifact and failure summary. Check whether the served page has a React
+root, whether a redirect occurred, its HTTP status, and what request
+category was blocked. Only then determine if the site requires republishing
+or the browser harness needs an additional safe read-only allowance.
+
 ## Run and interpret
 
 1. Merge PR #256.
