@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import DeviceNote from "@/components/DeviceNote";
 import { Link } from "react-router-dom";
 import { ecosystemPillars } from "@/data/ecosystem";
 import { Button } from "@/components/ui/button";
@@ -9,29 +10,6 @@ const links: Record<string, [string, string][]> = {
   integrations: [["GitHub repository hub", "/developer-studio/github-hub"], ["API workbench", "/developer-studio/api-workbench"], ["Deployment intelligence", "/developer-studio/deployment-intelligence"]],
   automation: [["GitHub Actions", "/developer-studio/github-actions"], ["Agent studio", "/ai-arsenal/agents"]],
 };
-
-const noteKey = "eternyx.workspace.device-note";
-
-function DeviceNote() {
-  const [note, setNote] = useState(() => {
-    try { return localStorage.getItem(noteKey) ?? ""; } catch { return ""; }
-  });
-  const [status, setStatus] = useState("");
-  function save() {
-    try {
-      if (note) localStorage.setItem(noteKey, note);
-      else localStorage.removeItem(noteKey);
-      setStatus("Saved in this browser.");
-    } catch { setStatus("Browser storage is unavailable. Copy your note before leaving."); }
-  }
-  return <section className="space-y-3">
-    <label htmlFor="device-note" className="text-xl font-semibold">Device scratchpad</label>
-    <p className="text-sm text-muted-foreground">Notes are shared by people using this browser profile.</p>
-    <Textarea id="device-note" rows={6} value={note} onChange={e => { setNote(e.target.value); setStatus("Unsaved changes"); }} />
-    <Button onClick={save}>Save note</Button>
-    <p role="status">{status}</p>
-  </section>;
-}
 
 function LineWorkflow() {
   const [source, setSource] = useState("");
