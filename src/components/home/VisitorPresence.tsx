@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Globe2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
+import { PresenceMap } from "./PresenceMap";
+
 type Snapshot = { total: number; countries: { code: string; count: number }[]; networkAvailable: boolean };
 const Presence = createContext<{ snapshot?: Snapshot; failed: boolean; updatedAt: number; included: boolean; locked: boolean; toggle: () => void } | null>(null);
 const preference = "eternyx.presence.include";
@@ -68,6 +70,7 @@ export function VisitorPresence() {
     <div className="mt-5" role="status">
       {unavailable ? <p>Live visitor data is temporarily unavailable.</p> : !snapshot ? <p>Checking activity…</p> : <>
         <p className="text-lg"><strong className="tabular-nums text-cyan-200">{snapshot.total.toLocaleString()}</strong> estimated active {snapshot.total === 1 ? "network" : "networks"}</p>
+        <PresenceMap key={locked || !included ? "view" : "participate"} countries={snapshot.countries} locked={locked || !included} />
         {snapshot.countries.length > 0 ? <ul aria-label="Most active countries" className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
           {snapshot.countries.map(row => <li key={row.code} className="flex items-baseline justify-between gap-3 border-b border-white/10 py-2">
             <span>{names.of(row.code) ?? row.code}</span><span className="tabular-nums text-slate-300">{row.count.toLocaleString()}</span>
