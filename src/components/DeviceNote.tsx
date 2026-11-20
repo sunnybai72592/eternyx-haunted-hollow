@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FileText, NotebookPen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ const draftKey = "eternyx.workspace.device-note";
 type Note = { id: string; title: string; body: string; savedAt: number };
 
 export default function DeviceNote() {
+  const navigate = useNavigate();
   const [draft, setDraft] = useState(() => {
     try { return localStorage.getItem(draftKey) ?? ""; } catch { return ""; }
   });
@@ -111,6 +113,10 @@ export default function DeviceNote() {
             <span className="line-clamp-2 break-words text-sm text-muted-foreground">{noteExcerpt(note.body, search)}</span>
           </span>
         </button>
+        <Button variant="outline" aria-label={"Clean list from " + note.title} onClick={() => {
+          if (draft !== savedDraft && !window.confirm("Leave your unsaved draft and open the saved copy in Automation?")) return;
+          navigate("/automation", { state: { workspaceCopyId: note.id } });
+        }}>Clean list</Button>
         <time className="text-xs text-muted-foreground">{new Date(note.savedAt).toLocaleString()}</time>
         <Button variant="ghost" aria-label={"Delete " + note.title} onClick={() => remove(note)}>Delete</Button>
       </li>)}</ul> : !listUnavailable && <p className="text-sm text-muted-foreground">{copies.length ? "No matching copies." : "No saved copies yet."}</p>}

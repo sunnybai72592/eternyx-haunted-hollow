@@ -72,6 +72,30 @@ def automation(page, narrow):
     match.get_by_role("button").first.click()
     expect(page.locator("#device-note")).to_have_value("ALPHA\nbravo")
 
+    clean = match.get_by_role("button", name="Clean list from Site rounds", exact=True)
+    page.once("dialog", lambda dialog: dialog.dismiss())
+    clean.click()
+    expect(page.locator("#device-note")).to_have_value("ALPHA\nbravo")
+    page.once("dialog", lambda dialog: dialog.accept())
+    clean.click()
+    expect(source).to_have_value("ALPHA\nbravo")
+    source.fill(" bravo \nALPHA\nbravo\ncharlie")
+    expect(result).to_have_value("bravo\nALPHA\ncharlie")
+    page.get_by_text("Save to Digital Workspace", exact=True).click()
+    expect(title).to_have_value("Site rounds (cleaned)")
+    save.click()
+    page.get_by_role("link", name="View saved copies").click()
+    page.reload()
+    page.locator("#note-search").fill("Site rounds")
+    copies = page.get_by_role("listitem").filter(has_text="Site rounds")
+    expect(copies).to_have_count(2)
+    for name, expected in [("Site rounds", "ALPHA\nbravo"), ("Site rounds (cleaned)", "bravo\nALPHA\ncharlie")]:
+        row = copies.filter(has=page.get_by_role("button", name="Delete " + name, exact=True))
+        if name.endswith("(cleaned)"):
+            page.once("dialog", lambda dialog: dialog.accept())
+        row.get_by_role("button").first.click()
+        expect(page.locator("#device-note")).to_have_value(expected)
+
 
 def explore_and_inspect(page):
     page.goto(ORIGIN + "/explore")

@@ -1,18 +1,24 @@
 import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
-import { saveCopy, suggestedTitle } from "@/lib/workspaceNotes.mjs";
+import { readCopies, saveCopy, suggestedTitle } from "@/lib/workspaceNotes.mjs";
 import { ListFilter } from "lucide-react";
 import { cleanLines } from "@/lib/cleanLines.mjs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function LineWorkflow() {
-  const [source, setSource] = useState("");
+  const copyId = useLocation().state?.workspaceCopyId;
+  const [imported] = useState(() => {
+    if (typeof copyId !== "string") return null;
+    try { return readCopies(localStorage).find(note => note.id === copyId) ?? null; }
+    catch { return null; }
+  });
+  const [source, setSource] = useState<string>(imported?.body ?? "");
   const [deduplicate, setDeduplicate] = useState(true);
   const [order, setOrder] = useState("input");
   const [ignoreCase, setIgnoreCase] = useState(false);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(imported ? suggestedTitle(imported.title.slice(0, 90) + " (cleaned)") : "");
   const [saved, setSaved] = useState<{ title: string; body: string } | null>(null);
   const [saveError, setSaveError] = useState("");
   const resultField = useRef<HTMLTextAreaElement>(null);
@@ -61,6 +67,9 @@ export default function LineWorkflow() {
   return <section className="space-y-4 rounded-xl border bg-card p-4 text-card-foreground sm:p-6" onChange={() => { setCopyStatus(""); setSaveError(""); }}>
     <h2 className="flex items-center gap-2 text-xl font-semibold"><ListFilter aria-hidden="true" className="size-5 text-primary" />Clean a list</h2>
     <p className="text-sm text-muted-foreground">Paste one item per line. Blank lines and outer spaces are removed in your browser.</p>
+    {typeof copyId === "string" && <p role="status" className="break-words text-sm text-muted-foreground">
+      {imported ? "Editing a copy of " + imported.title + "." : "The saved copy could not be opened. Paste a list to continue."}
+    </p>}
     <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2">
       <legend className="sr-only">Cleanup options</legend>
       <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={deduplicate} onChange={e => setDeduplicate(e.target.checked)} /> Remove duplicates</label>
