@@ -156,6 +156,85 @@ class WorkerTests(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
+    def test_process_to_private_http_output_full_offline_lifecycle(self):
+        """A local fixture executable exercises the REAL queue/subprocess/HTTP path.
+        Bytes are an MP4-shaped fixture, NOT model-generated video.
+        """
+        import os
+        import sys
+        import time
+        from unittest.mock import patch
+        media_dir = Path(self.temp.name) / "private"
+        media_dir.mkdir(mode=0o700)
+        fixture = Path(self.temp.name) / "fixture_renderer.py"
+        asset_id = "asset_" + "c" * 32
+        fixture.write_text(
+            "#!" + sys.executable + "\\n"
+            "import json,os,sys\\n"
+            "request=json.load(sys.stdin)\\n"
+            "assert request['featureKey']=='ai.video.text_to_video'\\n"
+            "target=os.path.join(os.environ['ETERNYX_PRIVATE_VIDEO_DIR'],"
+            "'asset_" + "c" * 32 + ".mp4')\\n"
+            "with open(target,'xb') as f: "
+            "f.write(bytes.fromhex('000000146674797069736f6d')+b'offline-fixture')\\n"
+            "print(json.dumps({'outputReference':'asset_" + "c" * 32 + "'}))\\n"
+        )
+        fixture.chmod(0o700)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), worker.handler_factory(self.store, SECRET))
+        http_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        http_thread.start()
+        stop = threading.Event()
+        base = "http://127.0.0.1:" + str(server.server_address[1])
+        try:
+            with patch.dict(os.environ, {"ETERNYX_PRIVATE_VIDEO_DIR": str(media_dir)}):
+                worker_thread = threading.Thread(
+                    target=worker.run_worker, args=(self.store, str(fixture), 8, stop),
+                    daemon=True)
+                request = urllib.request.Request(
+                    base + "/v1/jobs", method="POST",
+                    data=json.dumps({"payload": PAYLOAD, "idempotencyKey": "job-e2e-001"}).encode(),
+                    headers={"Authorization": "Bearer " + SECRET,
+                             "Content-Type": "application/json"})
+                with urllib.request.urlopen(request, timeout=3) as response:
+                    receipt = json.load(response)
+                worker_thread.start()
+                status = None
+                for _ in range(40):
+                    query = urllib.request.Request(
+                        base + "/v1/jobs/" + receipt["taskId"],
+                        headers={"Authorization": "Bearer " + SECRET})
+                    with urllib.request.urlopen(query, timeout=3) as response:
+                        status = json.load(response)
+                    if status["state"] in ("succeeded", "failed"):
+                        break
+                    time.sleep(0.05)
+                self.assertEqual(status["state"], "succeeded", status)
+                self.assertEqual(status["outputReference"], asset_id)
+                download = urllib.request.Request(
+                    base + "/v1/jobs/" + receipt["taskId"] + "/output",
+                    headers={"Authorization": "Bearer " + SECRET})
+                with urllib.request.urlopen(download, timeout=3) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers["Content-Type"], "video/mp4")
+                    self.assertEqual(response.read(),
+                        bytes.fromhex("000000146674797069736f6d") + b"offline-fixture")
+                repeat = urllib.request.Request(
+                    base + "/v1/jobs", method="POST",
+                    data=json.dumps({"payload": PAYLOAD, "idempotencyKey": "job-e2e-001"}).encode(),
+                    headers={"Authorization": "Bearer " + SECRET,
+                             "Content-Type": "application/json"})
+                with urllib.request.urlopen(repeat, timeout=3) as response:
+                    same = json.load(response)
+                self.assertEqual(same["taskId"], receipt["taskId"])
+                self.assertEqual(self.store.claim(), None)
+        finally:
+            stop.set()
+            server.shutdown()
+            server.server_close()
+            http_thread.join(timeout=3)
+            if "worker_thread" in locals() and worker_thread.is_alive():
+                worker_thread.join(timeout=3)
+
     def test_http_auth_submit_status_and_cancel(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), worker.handler_factory(self.store, SECRET))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
