@@ -26,7 +26,43 @@ CASES = (
     "developer-url", "developer-uuid", "developer-jwt", "automation-local",
 )
 results = []
-blocked = {"cross_origin": 0, "write_attempt": 0}
+blocked = {"cross_origin": 0, "write_attempt": 0, "known_telemetry": 0}
+# Public hosting telemetry is never sent, but a known blocked analytics POST
+# should not be confused with an unauthorized app write.
+KNOWN_TELEMETRY_PATHS = frozenset(("/__l5e/trackevents", "/__l5e/events"))
+js_error_categories = []
+script_http_failures = []
+MAX_RUNTIME_DIAGNOSTICS = 16
+
+def capture_page_error(error):
+    # Never store or log the raw exception message: it may contain user data.
+    message = str(error)
+    if "Missing Supabase frontend configuration" in message:
+        category = "missing-supabase-config"
+    elif "Failed to fetch dynamically imported module" in message or "ChunkLoadError" in message:
+        category = "module-load-error"
+    elif "Failed to resolve module specifier" in message:
+        category = "module-resolution-error"
+    elif "is not defined" in message:
+        category = "javascript-reference-error"
+    elif "Cannot read properties" in message or "Cannot set properties" in message:
+        category = "javascript-type-error"
+    else:
+        category = "other-js-error"
+    if len(js_error_categories) < MAX_RUNTIME_DIAGNOSTICS:
+        js_error_categories.append(category)
+
+def capture_script_response(response):
+    # Capture only same-origin script/document HTTP error classes, not paths,
+    # URLs, script bodies, header values or provider responses.
+    address = urlsplit(response.url)
+    if address.hostname != hostname or response.request.method != "GET":
+        return
+    resource = response.request.resource_type
+    if resource not in ("script", "document") or response.status < 400:
+        return
+    if len(script_http_failures) < MAX_RUNTIME_DIAGNOSTICS:
+        script_http_failures.append({"resource_type": resource, "http_status": response.status})
 blocked_samples = []
 page_observations = []
 navigation = {"http_status": None}
@@ -76,9 +112,13 @@ def safe_page_observation(page, name, viewport, exc):
     elif any("Master tool registry" in value for value in headings):
         heading = "registry"
     try:
-        app_root = page.locator("#root").count() > 0
+        root = page.locator("#root")
+        app_root = root.count() > 0
+        # Count only; never inspect or store private rendered content.
+        root_hydrated = app_root and root.evaluate("(node) => node.childElementCount > 0")
     except Exception:
         app_root = False
+        root_hydrated = False
     reason = "unexpected-redirect" if not same_host else (
         "missing-expected-ui" if "Locator" in type(exc).__name__ or "AssertionError" in type(exc).__name__
         else "browser-action-failure"
@@ -91,7 +131,10 @@ def safe_page_observation(page, name, viewport, exc):
         "path": scrub_path(page.url) if same_host else "[different-host]",
         "http_status": navigation.get("http_status"),
         "root_present": app_root,
+        "root_has_children": root_hydrated,
         "heading_class": heading,
+        "last_js_error_category": js_error_categories[-1] if js_error_categories else "none",
+        "script_http_failures": len(script_http_failures),
     }
 target_name = os.environ.get("ETERNYX_REMOTE_TARGET", "")
 if target_name not in TARGETS:
@@ -110,6 +153,10 @@ def guarded_request(route):
         block_sample(request, "cross-origin")
         return route.abort()
     if request.method not in ("GET", "HEAD"):
+        if request.method == "POST" and address.path in KNOWN_TELEMETRY_PATHS:
+            blocked["known_telemetry"] += 1
+            block_sample(request, "telemetry-blocked")
+            return route.abort()
         blocked["write_attempt"] += 1
         block_sample(request, "write-blocked")
         return route.abort()
@@ -269,6 +316,9 @@ def write_report():
         "network_policy": "GET/HEAD to exact allowlisted first-party HTTPS host only",
         "blocked_external_requests": blocked["cross_origin"],
         "blocked_write_attempts": blocked["write_attempt"],
+        "blocked_telemetry_attempts": blocked["known_telemetry"],
+        "javascript_error_categories": js_error_categories,
+        "asset_http_failures": script_http_failures,
         "blocked_samples": blocked_samples,
         "page_observations": page_observations,
         "expected_cases": len(CASES) * len(VIEWPORTS),
@@ -289,6 +339,9 @@ try:
                 )
                 try:
                     page = context.new_page()
+                    page.set_default_timeout(6000)
+                    page.on("pageerror", capture_page_error)
+                    page.on("response", capture_script_response)
                     page.route("**/*", guarded_request)
                     for name in CASES:
                         exercise(page, name, f"{width}x{height}")
@@ -297,7 +350,7 @@ try:
         finally:
             browser.close()
 finally:
-    # The only persisted outputs are fixture-free case statuses and dimensions.
+    # Persist sanitized case statuses and bounded error categories only.
     write_report()
 
 assert len(results) == len(CASES) * len(VIEWPORTS)
