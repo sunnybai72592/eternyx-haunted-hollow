@@ -8,11 +8,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 
 import tools from "@/data/toolRegistry.json";
+import { filterToolRegistry, summarizeToolRegistry, READINESS_LABELS, READINESS_VALUES } from "@/lib/toolRegistryUtils.mjs";
 
 const Explore = () => {
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
+  const pillarFilter = params.get("pillar") ?? "all";
+  const readinessFilter = params.get("readiness") ?? "all";
   const field = useRef<HTMLInputElement>(null);
+  const registrySummary = useMemo(() => summarizeToolRegistry(tools), []);
+  function setFilterParam(key: "pillar" | "readiness", value: string) {
+    const next = new URLSearchParams(params);
+    if (value === "all") next.delete(key);
+    else next.set(key, value);
+    setParams(next, { replace: true, preventScrollReset: true });
+  }
   function setQuery(value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set("q", value);
@@ -20,10 +30,9 @@ const Explore = () => {
     setParams(next, { replace: true, preventScrollReset: true });
   }
 
-  const term = query.trim().toLowerCase();
-  const matchingTools = tools.filter(tool =>
-    [tool.name, tool.description, tool.execution, tool.access, ecosystemPillars.find(pillar => pillar.id === tool.pillar)?.title]
-      .join(" ").toLowerCase().includes(term)
+  const matchingTools = useMemo(
+    () => filterToolRegistry(tools, { q: query, pillar: pillarFilter, readiness: readinessFilter }),
+    [query, pillarFilter, readinessFilter],
   );
 
   const filteredPillars = useMemo(() => {
@@ -75,13 +84,53 @@ const Explore = () => {
           </div>
         </section>
 
+        <section aria-label="Tool catalogue filters" className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Master tool registry</h2>
+              <p className="mt-1 text-sm text-slate-400">A source-audited inventory, not a certificate that tools work in production.</p>
+            </div>
+            <p role="status" className="text-sm text-slate-300">
+              {matchingTools.length} shown / {registrySummary.indexed} indexed · {registrySummary.productionVerified} production-verified
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm text-slate-300">
+              <span className="block">Pillar</span>
+              <select aria-label="Filter tools by pillar" value={pillarFilter} onChange={event => setFilterParam("pillar", event.target.value)}
+                className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-white focus-visible:ring-2 focus-visible:ring-cyan-400">
+                <option value="all">All six pillars</option>
+                {ecosystemPillars.map(pillar => <option value={pillar.id} key={pillar.id}>{pillar.title}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm text-slate-300">
+              <span className="block">Readiness</span>
+              <select aria-label="Filter tools by readiness" value={readinessFilter} onChange={event => setFilterParam("readiness", event.target.value)}
+                className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-white focus-visible:ring-2 focus-visible:ring-cyan-400">
+                <option value="all">All maturity levels</option>
+                {READINESS_VALUES.map(status => (
+                  <option key={status} value={status}>{READINESS_LABELS[status]}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-slate-400" aria-label="Registry readiness distribution">
+            {READINESS_VALUES.map(status => (
+              <span key={status} className="rounded-full border border-slate-700 px-3 py-1">
+                {READINESS_LABELS[status]}: {registrySummary.byReadiness[status]}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-amber-200">A source file and unit test are evidence of a code foundation, not evidence of completed deployed browser testing. No indexed tool is certified production-ready by this registry.</p>
+        </section>
+
         <section className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">The platform map</p>
             <h2 className="mt-2 text-2xl font-bold sm:text-3xl">Six connected pillars</h2>
             <p className="mt-2 text-sm text-slate-400">Choose a pillar to see its purpose and planned capability areas.</p>
           </div>
-          <p role="status" className="text-sm text-slate-400">{filteredPillars.length} pillars · {matchingTools.length} indexed tools</p>
+          <p role="status" className="text-sm text-slate-400">{filteredPillars.length} matching pillars · {matchingTools.length} matching tools</p>
         </section>
 
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -126,16 +175,25 @@ const Explore = () => {
           )}
         </section>
 
+        {(matchingTools.length === 0 && (query.trim() || pillarFilter !== "all" || readinessFilter !== "all")) && (
+          <p role="status" className="rounded-xl border border-dashed border-slate-700 p-6 text-sm text-slate-300">
+            No indexed capabilities match these filters. Clear the search or change the pillar/readiness filters.
+          </p>
+        )}
+
         {matchingTools.length > 0 && (
           <section aria-labelledby="indexed-tools">
-            <h2 id="indexed-tools" className="text-2xl font-bold">Indexed tools</h2>
+            <h2 id="indexed-tools" className="text-2xl font-bold">Indexed tools · {matchingTools.length} matching</h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
               {matchingTools.map(tool => (
                 <li key={tool.name}>
                   <Link to={tool.route} state={{ fromExplore: true, exploreQuery: query }} className="block h-full rounded-xl border border-slate-700 bg-slate-900 p-4 hover:border-cyan-400 focus-visible:ring-2">
                     <span className="font-semibold text-cyan-300">{tool.name}</span>
                     <p className="mt-1 text-sm text-slate-300">{tool.description}</p>
-                    <p className="mt-2 text-xs text-slate-400">{tool.execution} · {tool.access} · {tool.verification}</p>
+                    <p className="mt-2 text-xs text-slate-300">{READINESS_LABELS[tool.readiness] ?? "Status unreviewed"}</p>
+                    <p className="mt-1 text-xs text-slate-400">{tool.execution} · {tool.access}</p>
+                    <p className="mt-1 text-xs text-amber-200">{tool.verification} · No production verification claimed</p>
+                    <p className="mt-1 text-xs text-slate-500">Evidence: {tool.test ?? "Source review only"} · {tool.securityScope}</p>
                   </Link>
                 </li>
               ))}
