@@ -169,15 +169,15 @@ class WorkerTests(unittest.TestCase):
         fixture = Path(self.temp.name) / "fixture_renderer.py"
         asset_id = "asset_" + "c" * 32
         fixture.write_text(
-            "#!" + sys.executable + "\\n"
-            "import json,os,sys\\n"
-            "request=json.load(sys.stdin)\\n"
-            "assert request['featureKey']=='ai.video.text_to_video'\\n"
+            "#!" + sys.executable + "\n"
+            "import json,os,sys\n"
+            "request=json.load(sys.stdin)\n"
+            "assert request['featureKey']=='ai.video.text_to_video'\n"
             "target=os.path.join(os.environ['ETERNYX_PRIVATE_VIDEO_DIR'],"
-            "'asset_" + "c" * 32 + ".mp4')\\n"
+            "'asset_" + "c" * 32 + ".mp4')\n"
             "with open(target,'xb') as f: "
-            "f.write(bytes.fromhex('000000146674797069736f6d')+b'offline-fixture')\\n"
-            "print(json.dumps({'outputReference':'asset_" + "c" * 32 + "'}))\\n"
+            "f.write(bytes.fromhex('000000146674797069736f6d')+b'offline-fixture')\n"
+            "print(json.dumps({'outputReference':'asset_" + "c" * 32 + "'}))\n"
         )
         fixture.chmod(0o700)
         server = ThreadingHTTPServer(("127.0.0.1", 0), worker.handler_factory(self.store, SECRET))
