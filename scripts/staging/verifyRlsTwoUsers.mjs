@@ -17,6 +17,7 @@ const fixtures = [];
 let cleanupClients = [];
 let cleanupFailed = false;
 let configured = false;
+let authenticatedAccounts = 0;
 const checkedTables = [];
 const approved = "isolated staging only: manual fixture writes";
 const marker = randomUUID();
@@ -64,7 +65,11 @@ function writeReport() {
     stage_fixture_cleanup_failed: cleanupFailed,
     tested_tables: checkedTables,
     expected_tables: ISOLATION_SCENARIOS.map(s => s.table),
-    distinct_accounts: configured ? 2 : 0,
+    configured_account_slots: configured ? 2 : 0,
+    authenticated_accounts: authenticatedAccounts,
+    expected_cases: 27,
+    attempted_cases: results.length,
+    passed_cases: results.filter(r => r.result === "passed").length,
     results,
     production_certified: false,
   }, null, 2) + "\n");
@@ -107,6 +112,7 @@ async function main() {
     users.push(data.user.id);
   }
   requireState(users[0] !== users[1]);
+  authenticatedAccounts = 2;
   record("two-distinct-authenticated-staging-users", true);
   for (const [i, c] of [a, b].entries()) {
     await scenario("non-admin-user-" + (i + 1), async () => {
@@ -225,6 +231,6 @@ try {
 if (!configured || cleanupFailed || !checkedTables.every(
   t => ISOLATION_SCENARIOS.some(s => s.table === t)
 ) || checkedTables.length !== ISOLATION_SCENARIOS.length ||
-  results.some(r => r.result !== "passed")) {
+  results.length !== 27 || results.some(r => r.result !== "passed")) {
   process.exitCode = 1;
 }
