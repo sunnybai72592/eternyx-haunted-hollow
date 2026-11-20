@@ -6,7 +6,7 @@
 
 Our public Lovable site passed **34/34** anonymous/mobile/desktop browser journeys in GitHub Actions run [44794176203](https://github.com/sunnybai72592/eternyx-haunted-hollow/actions/runs/44794176203). We also reviewed RLS policies and security advisors read-only. Neither proves server-side ownership isolation after signing in.
 
-This PR adds an **actual two-account, owner-approved staging test**. It cannot run merely because a PR is merged: you must first create a *separate* Supabase staging project, configure a protected GitHub environment, prepare two dedicated testing accounts and explicitly authorize synthetic fixture writes. No production or customer records are read, and no live changes have been run from this PR.
+This PR adds an **actual two-account, owner-approved staging test**. It cannot run merely because a PR is merged: you must first create a separate Supabase staging project, configure a protected GitHub environment, prepare two dedicated testing accounts and explicitly authorize synthetic fixture writes. No production or customer records are read, and no live changes have been run from this PR.
 
 ## What the test really checks
 
