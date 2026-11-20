@@ -25,8 +25,9 @@
       "id": "explore-github-mocked",
       "tool": "github-repo-hub",
       "kind": "mocked-external",
-      "route": "/explore",
-      "assertions": "Find linked tool and exercise API failure and public repository filters with mocked GitHub"
+      "route": "/developer-studio/github-hub",
+      "assertions": "Find linked tool and exercise API failure and public repository filters with mocked GitHub",
+      "entryRoute": "/explore"
     },
     {
       "id": "explore-registry-filters",
