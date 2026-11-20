@@ -64,6 +64,8 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const historyVersion = useRef(0);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyFailed, setHistoryFailed] = useState(false);
+  const [sendError, setSendError] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,8 +83,9 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length && scrollRef.current) {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      scrollRef.current.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
     }
   }, [messages]);
 
@@ -122,6 +125,8 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
 
   const loadSessionMessages = async (sessionId: string) => {
     const version = ++historyVersion.current;
+    setHistoryFailed(false);
+    setSendError('');
     setLoadingHistory(true);
     setMessages([]);
     const { data, error } = await supabase
@@ -133,7 +138,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
 
     if (version !== historyVersion.current) return;
     setLoadingHistory(false);
-    if (error) toast.error('Unable to load conversation history.');
+    if (error) setHistoryFailed(true);
     if (!error && data) {
       setMessages(
         data.map((msg: any) => ({
@@ -222,9 +227,10 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || !userId || isLoading || loadingHistory) return;
+    if (!inputValue.trim() || !userId || isLoading || loadingHistory || historyFailed) return;
 
     historyVersion.current++;
+    setSendError('');
     const userMessage = inputValue;
     setInputValue('');
     setIsLoading(true);
@@ -279,13 +285,15 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
     } catch (error) {
       setInputValue(userMessage);
       setMessages((current) => current.filter((item) => item.id !== pendingMessageId));
-      toast.error(`Error: ${(error as Error).message}`);
+      setSendError((error as Error).message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleNewConversation = () => {
+    setHistoryFailed(false);
+    setSendError('');
     rememberConversation(userId, null);
     historyVersion.current++;
     setLoadingHistory(false);
@@ -341,7 +349,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                   New Chat
                 </Button>
 
-                <ScrollArea className="h-96 rounded-lg border border-border/50 p-4">
+                <ScrollArea className="h-48 lg:h-96 rounded-lg border border-border/50 p-4">
                   <div className="space-y-2">
                     {sessions.map((session) => (
                       <Button
@@ -385,7 +393,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                     </label>
                   </div>
 
-                  <ScrollArea className="h-96 rounded-lg border border-border/50 p-4">
+                  <ScrollArea className="h-48 lg:h-96 rounded-lg border border-border/50 p-4">
                     <div className="space-y-2">
                       {documents.map((doc) => (
                         <Card key={doc.id} className="bg-background/50 border-border/50">
@@ -460,7 +468,12 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                 {/* Messages */}
                 <ScrollArea className="flex-1 mb-4 pr-4">
                   <div className="space-y-4">
-                    {messages.length === 0 && (
+                    {loadingHistory && <p role="status">Loading conversation history…</p>}
+                    {historyFailed && currentSessionId && <div role="alert" className="space-y-2">
+                      <p>Conversation history could not be loaded.</p>
+                      <Button variant="outline" onClick={() => loadSessionMessages(currentSessionId)}>Retry history</Button>
+                    </div>}
+                    {!loadingHistory && !historyFailed && messages.length === 0 && (
                       <div className="text-center py-12 text-muted-foreground">
                         <MessageCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
                         <p>Start a conversation with Eternyx AI</p>
@@ -480,7 +493,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                               : 'bg-muted text-foreground border border-border/50'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                          <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</p>
                         </div>
                       </div>
                     ))}
@@ -497,6 +510,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                   </div>
                 </ScrollArea>
 
+                {sendError && <p role="alert" className="mb-2 text-sm text-destructive">{sendError} Your draft is ready to edit.</p>}
                 {/* Input */}
                 <div className="flex gap-2">
                   <Textarea
@@ -506,7 +520,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
+                      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
                         e.preventDefault();
                         handleSendMessage();
                       }
@@ -517,7 +531,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                   <Button
                     aria-label="Send message"
                     onClick={handleSendMessage}
-                    disabled={isLoading || loadingHistory || !inputValue.trim()}
+                    disabled={isLoading || loadingHistory || historyFailed || !inputValue.trim()}
                     className="bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black font-semibold"
                   >
                     <Send className="w-4 h-4" />
