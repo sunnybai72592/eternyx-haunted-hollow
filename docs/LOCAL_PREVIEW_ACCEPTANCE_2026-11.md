@@ -5,6 +5,7 @@
 This milestone extends the existing Playwright/Chrome CI suite to exercise
 **12 cases × 2 viewport sizes = 24 viewport-specific journeys** against a
 **locally served, freshly built Vite preview**, not the actual production URL.
+**Not production verification:** the locally hosted preview and mocked external services do not prove deployed provider functionality.
 It does not change any tool's `releaseVerified` field to true.
 
 The test runner uses the Chromium **Chrome channel**, 390×844 mobile-size
