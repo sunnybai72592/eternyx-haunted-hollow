@@ -66,7 +66,7 @@ test("report records each actual browser action result and avoids user data",()=
 });
 
 test("CI uploads local preview evidence after running browser tests, including on failure",()=>{
-  const browse=workflow.indexOf("python\\" tests/browser/preview_smoke.py");
+  const browse=workflow.indexOf("tests/browser/preview_smoke.py");
   const upload=workflow.indexOf("Upload local-preview browser acceptance evidence");
   assert.ok(browse>=0&&upload>browse);
   assert.match(workflow,/if: always\(\)/);
