@@ -14,6 +14,7 @@ import {
 const REPORT = "test-results/staging-rls-isolation.json";
 const results = [];
 const fixtures = [];
+let cleanupClients = [];
 let cleanupFailed = false;
 let configured = false;
 const checkedTables = [];
@@ -95,6 +96,7 @@ async function main() {
   const config = validateStagingRlsConfig(process.env);
   configured = true;
   const [a, b] = [client(config), client(config)];
+  cleanupClients = [a, b];
   const anon = client(config);
   const users = [];
   for (const [index, c] of [a, b].entries()) {
@@ -184,8 +186,6 @@ async function main() {
       // Continue to cleanup; do not interpret missing fixtures as test passes.
     }
   }
-  await Promise.all([a.auth.signOut(), b.auth.signOut()]);
-  record("staging-sign-out", true);
 }
 try {
   await main();
@@ -196,10 +196,9 @@ try {
   // remain, the runner fails rather than claiming a clean test.
   // Cleanup cannot use service_role or other privileged credentials.
   try {
-    // Authentication clients are retained by main only when configuration succeeded.
-    // Fixture cleanup implementation below uses the captured closure references.
+    // Use only authenticated test-account clients; never a privileged key.
     for (const fixture of fixtures.reverse()) {
-      const owner = globalThis.__eternyxRlsClients?.[fixture.ownerIndex];
+      const owner = cleanupClients[fixture.ownerIndex];
       if (!owner) { cleanupFailed = true; continue; }
       const deleted = await owner.from(fixture.table).delete()
         .eq("id", fixture.id).select("id");
@@ -207,6 +206,19 @@ try {
     }
   } catch {
     cleanupFailed = true;
+  }
+  if (cleanupClients.length) {
+    const results = await Promise.all(cleanupClients.map(async c => {
+      try {
+        const r = await c.auth.signOut();
+        return !r.error;
+      } catch {
+        return false;
+      }
+    }));
+    const signedOut = results.every(Boolean);
+    if (!signedOut) cleanupFailed = true;
+    record("staging-sign-out", signedOut);
   }
   writeReport();
 }
