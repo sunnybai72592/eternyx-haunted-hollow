@@ -2,6 +2,8 @@ name: Wan adapter CPU smoke
 on:
   pull_request:
     paths:
+      - "gpu-worker/encode_training_window.py"
+      - "gpu-worker/test_window_encoding_cpu.py"
       - "gpu-worker/wan_adapter_step.py"
       - "gpu-worker/prepare_training_frames.py"
       - "gpu-worker/test_training_frames_cpu.py"
@@ -31,3 +33,8 @@ jobs:
         run: |
           if ! command -v ffmpeg >/dev/null; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
           python gpu-worker/test_training_frames_cpu.py
+      - name: Encode video and caption and train one adapter step
+        env:
+          HF_HUB_OFFLINE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python gpu-worker/test_window_encoding_cpu.py
