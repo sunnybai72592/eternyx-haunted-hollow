@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  Check,
   Eye,
   EyeOff,
   Github,
@@ -10,7 +9,6 @@ import {
   Lock,
   Mail,
   MailCheck,
-  ShieldCheck,
   Sparkles,
   User,
   Zap,
@@ -19,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/integrations/supabase/client';
+import { AuthAtmosphere } from '@/components/auth/AuthAtmosphere';
+import '@/styles/lamp-auth.css';
 
 type Mode = 'signin' | 'signup' | 'reset' | 'sent';
 type OAuthProvider = 'google' | 'github';
@@ -186,79 +186,9 @@ export default function AuthPage() {
   const fieldClass = 'h-12 w-full rounded-xl border-border/80 bg-background/70 pl-11 pr-4 text-base text-foreground placeholder:text-muted-foreground/80 shadow-sm transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25 sm:text-sm';
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-background text-foreground">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-48 -right-32 h-[28rem] w-[28rem] rounded-full bg-accent/10 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(var(--background)/0.12),hsl(var(--background)/0.82))]" />
-      </div>
-
-      <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <Link to="/" aria-label="ETERNYX home" className="group inline-flex min-w-0 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/0.12)] transition-transform duration-300 group-hover:scale-105">
-            <ShieldCheck className="h-5 w-5" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-bold tracking-[0.2em] text-foreground">ETERNYX</span>
-            <span className="hidden text-[10px] tracking-[0.16em] text-muted-foreground sm:block">ONE ECOSYSTEM. ENDLESS POSSIBILITIES.</span>
-          </span>
-        </Link>
-        <Link to="/" className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden xs:inline">Back to home</span>
-          <span className="xs:hidden">Home</span>
-        </Link>
-      </header>
-
-      <main className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-8 px-4 pb-10 pt-3 sm:px-6 sm:pb-14 lg:min-h-[calc(100dvh-4.5rem)] lg:grid-cols-[minmax(0,1.05fr)_minmax(400px,0.95fr)] lg:gap-14 lg:px-8 lg:py-12">
-        <aside className="hidden flex-col justify-center gap-9 lg:flex">
-          <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              Your ETERNYX identity
-            </p>
-            <h1 className="mt-6 text-5xl font-bold leading-[1.08] tracking-tight xl:text-6xl">
-              One account.
-              <span className="mt-2 block bg-gradient-to-r from-primary via-cyan-300 to-accent bg-clip-text text-transparent">A universe of possibilities.</span>
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
-              Sign in once and make your way through the ETERNYX ecosystem with one connected identity.
-            </p>
-          </div>
-          <div className="grid max-w-xl gap-4 sm:grid-cols-2">
-            {[
-              'Explore your digital workspaces',
-              'Access tools across the ecosystem',
-              'Manage your profile and preferences',
-              'Keep your ETERNYX journey connected',
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card/40 p-4 backdrop-blur-sm">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Check className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-sm leading-6 text-foreground/85">{item}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs tracking-wide text-muted-foreground/70">ONE IDENTITY · SIX CONNECTED WORLDS</p>
-        </aside>
-
-        <section className="mx-auto w-full max-w-lg">
-          <div className="mb-5 text-center lg:hidden">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Your ETERNYX identity</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              {mode === 'signup' ? 'Join the universe.' : mode === 'reset' ? 'Secure your account.' : 'Welcome back.'}
-            </h1>
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-              One account to explore the ETERNYX ecosystem.
-            </p>
-          </div>
-
-          <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/85 shadow-[0_24px_90px_hsl(var(--background)/0.55)] backdrop-blur-2xl sm:rounded-3xl">
-            <div className="border-b border-border/70 px-5 py-5 sm:px-8 sm:py-6">
-              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
+    <AuthAtmosphere>
+          <div className="auth-form-shell">
+            <div className="auth-form-heading">
               {mode === 'sent' ? (
                 <>
                   <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Check your inbox</h2>
@@ -267,18 +197,18 @@ export default function AuthPage() {
               ) : (
                 <>
                   {mode !== 'reset' && (
-                    <div className="mb-6 grid grid-cols-2 rounded-xl border border-border/70 bg-muted/70 p-1" role="group" aria-label="Authentication mode">
+                    <div className="auth-mode-tabs" role="group" aria-label="Authentication mode">
                       {(['signin', 'signup'] as const).map((item) => (
-                        <button
+                        <Button variant="ghost"
                           key={item}
                           type="button"
                           onClick={() => go(item)}
                           disabled={loading}
                           aria-pressed={mode === item}
-                          className={`min-h-11 rounded-lg px-3 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 ${mode === item ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'}`}
+                          className="auth-mode-tab"
                         >
                           {item === 'signin' ? 'Sign in' : 'Create account'}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   )}
@@ -292,7 +222,7 @@ export default function AuthPage() {
               )}
             </div>
 
-            <div className="px-5 py-5 sm:px-8 sm:py-7">
+            <div className="auth-form-body">
               {mode === 'sent' ? (
                 <div className="space-y-5">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -311,10 +241,10 @@ export default function AuthPage() {
                       Resend confirmation email
                     </Button>
                   )}
-                  <button type="button" onClick={() => go('signin')} disabled={loading} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
+                  <Button variant="ghost" type="button" onClick={() => go('signin')} disabled={loading} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
                     <ArrowLeft className="h-4 w-4" />
                     Back to sign in
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <>
@@ -360,17 +290,17 @@ export default function AuthPage() {
                         <div className="flex items-center justify-between gap-3">
                           <label htmlFor="auth-password" className="text-sm font-medium text-foreground/90">Password</label>
                           {mode === 'signin' && (
-                            <button type="button" onClick={() => go('reset')} disabled={loading} className="min-h-8 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
+                            <Button variant="ghost" type="button" onClick={() => go('reset')} disabled={loading} className="min-h-8 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
                               Forgot password?
-                            </button>
+                            </Button>
                           )}
                         </div>
                         <div className="relative">
                           <Lock aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input id="auth-password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" className={`${fieldClass} pr-12`} disabled={loading} />
-                          <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} disabled={loading} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
+                          <Button variant="ghost" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} disabled={loading} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50">
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
+                          </Button>
                         </div>
                         {mode === 'signup' && password && (
                           <div className="space-y-2 pt-1" aria-live="polite">
@@ -385,27 +315,24 @@ export default function AuthPage() {
                       </div>
                     )}
 
-                    {error && <div role="alert" aria-live="polite" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive">{error}{error.includes('confirm your email') && <button type="button" disabled={loading} onClick={async () => { const sent = await resend(); if (sent) { setInfo('confirm-resent'); setMode('sent'); } }} className="ml-1 font-semibold underline underline-offset-2 disabled:opacity-50">Resend confirmation link</button>}</div>}
+                    {error && <div role="alert" aria-live="polite" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive">{error}{error.includes('confirm your email') && <Button variant="ghost" type="button" disabled={loading} onClick={async () => { const sent = await resend(); if (sent) { setInfo('confirm-resent'); setMode('sent'); } }} className="ml-1 font-semibold underline underline-offset-2 disabled:opacity-50">Resend confirmation link</Button>}</div>}
 
-                    <Button type="submit" disabled={loading} className="group mt-2 h-12 w-full rounded-xl bg-gradient-to-r from-primary to-accent text-sm font-bold text-primary-foreground shadow-lg shadow-primary/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-primary/20 disabled:translate-y-0 disabled:opacity-60">
+                    <Button type="submit" disabled={loading} className="auth-primary-submit group mt-2 h-12 w-full text-sm font-bold transition-all duration-200 hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
                       {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mode === 'signup' ? <Sparkles className="mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4" />}
                       {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in to ETERNYX' : mode === 'signup' ? 'Create your account' : 'Send reset link'}
                     </Button>
                   </form>
 
                   {mode === 'reset' && (
-                    <button type="button" onClick={() => go('signin')} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <Button variant="ghost" type="button" onClick={() => go('signin')} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                       <ArrowLeft className="h-4 w-4" />Back to sign in
-                    </button>
+                    </Button>
                   )}
                   {mode === 'signup' && <p className="mt-5 text-center text-xs leading-5 text-muted-foreground">By creating an account, you agree to use ETERNYX tools only on systems you own or are authorised to test.</p>}
                 </>
               )}
             </div>
-          </section>
-          <p className="mt-5 px-2 text-center text-xs leading-5 text-muted-foreground/70">Your account. Your workspace. Your ETERNYX journey.</p>
-        </section>
-      </main>
-    </div>
+          </div>
+    </AuthAtmosphere>
   );
 }

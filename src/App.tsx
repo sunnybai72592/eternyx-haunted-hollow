@@ -153,7 +153,8 @@ const AppContent = () => {
   }, [profile?.preferences?.theme]);
 
   // Determine if the back button should be shown
-  const showBackButton = location.pathname !== '/';
+  const isAuthPage = ['/auth', '/login'].includes(location.pathname);
+  const showBackButton = location.pathname !== '/' && !isAuthPage;
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
@@ -178,7 +179,7 @@ const AppContent = () => {
               <NotificationSystem />
               <PWAInstallPrompt />
               
-              <MobileResponsiveNavigation />
+              {!isAuthPage && <MobileResponsiveNavigation />}
               
               {/* Back Button Placement */}
               {showBackButton && (
@@ -187,7 +188,7 @@ const AppContent = () => {
                 </div>
               )}
 
-              <main id="main-content" tabIndex={-1} className="flex-1 p-4 pt-36 outline-none transition-[padding] duration-300 sm:pt-32">
+              <main id="main-content" tabIndex={-1} className={isAuthPage ? "flex-1 outline-none" : "flex-1 p-4 pt-36 outline-none transition-[padding] duration-300 sm:pt-32"}>
                 <Suspense fallback={<RouteTerminal key={location.key} />}>
                     <PageTransitionWrapper>
                       <Routes>
