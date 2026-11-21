@@ -1,3 +1,4 @@
+import StoryboardMovie from "./StoryboardMovie";
 import { useRef, useState } from "react";
 import { Clapperboard, Download } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -128,6 +129,7 @@ export default function VideoStoryboard() {
         </button></li>)}
       </ol>
       <Button onClick={() => downloadJson(board, "eternyx-storyboard.json")}><Download aria-hidden="true" className="mr-2 size-4" />Download shot list (.json)</Button>
+      <StoryboardMovie key={JSON.stringify([text, seconds, format])} shots={shots} seconds={seconds} format={format} />
       <div className="space-y-3 border-t border-slate-700 pt-4">
         <h3 className="font-semibold">Selected shot {active.number}</h3>
         <p className="text-sm text-slate-300">Export a text-to-video request for Wan 2.1, or save the shot as a scratchpad copy shared in this browser.</p>
