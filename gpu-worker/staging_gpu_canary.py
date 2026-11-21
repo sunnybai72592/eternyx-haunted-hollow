@@ -141,9 +141,11 @@ def run_once(args):
         raise ValueError("local model not available")
     if storage_path.is_symlink() or not storage_path.is_dir() or storage_path.stat().st_mode & 0o077:
         raise ValueError("private media storage not secure")
-    gpu = inspect_gpu()
     payload = {"featureKey": "ai.video.text_to_video", "prompt": DEFAULT_PROMPT,
                "durationSeconds": 1, "aspectRatio": "16:9", "version": 1}
+    payload["seed"] = args.seed
+    module.parse_job(json.dumps(payload))
+    gpu = inspect_gpu()
     started = time.monotonic()
     stdout = bounded_subprocess(
         [sys.executable, str(inference_path)], stdin=json.dumps(payload),
@@ -158,7 +160,7 @@ def run_once(args):
     output = Path(args.private_dir) / (asset + ".mp4")
     media_info = inspect_mp4_decode(output, timeout_seconds=min(120, args.max_seconds))
     evidence = {"status": "gpu_inference_success", "modelId": MODEL_ID,
-                "pinnedRevision": model_revision,
+                "pinnedRevision": model_revision, "seed": args.seed,
                 "gpu": gpu[:128], "durationSecondsRequested": 1,
                 "wallSeconds": round(elapsed, 2), "budgetUpperBoundCents": estimated_cents,
                 "mp4Bytes": output.stat().st_size, **media_info,
@@ -167,6 +169,7 @@ def run_once(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Owner-approved one-video Wan GPU canary")
+    parser.add_argument("--seed", type=int, default=0, help="Starting noise seed for this staging comparison")
     parser.add_argument("--approval", default="")
     parser.add_argument("--max-seconds", type=int, default=300)
     parser.add_argument("--hourly-cents", type=int, default=0)
