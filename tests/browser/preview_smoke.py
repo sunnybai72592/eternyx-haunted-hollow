@@ -205,6 +205,23 @@ def storyboard(page):
     expect(editor).to_have_value("Dawn\nWorkshop")
     expect(planner.get_by_label("Frame format")).to_have_value("9:16")
     expect(planner.get_by_label("Seconds per shot")).to_have_value("3")
+    export = planner.get_by_role("button", name="Export Wan request")
+    expect(export).to_be_disabled()
+    planner.get_by_label("Frame format").select_option("16:9")
+    planner.get_by_label("Seconds per shot").select_option("10")
+    expect(export).to_be_disabled()
+    planner.get_by_label("Seconds per shot").select_option("3")
+    planner.get_by_role("button", name="0:03–0:06 Workshop").click()
+    with page.expect_download() as selected:
+        export.click()
+    # Exercise the actual inference parser without loading weights or invoking CUDA.
+    from runpy import run_path
+    parser = run_path(str(Path(__file__).resolve().parents[2] / "gpu-worker" / "wan21_infer.py"))["parse_job"]
+    job = parser(Path(selected.value.path()).read_text())
+    assert job["prompt"] == "Workshop" and job["num_frames"] == 49
+    planner.get_by_role("button", name="Save shot to Workspace").click()
+    planner.get_by_role("link", name="Open saved shot in Workspace").click()
+    expect(page.get_by_label("Note", exact=True)).to_have_value("Storyboard · Shot 2\n3 seconds · 16:9\nWorkshop")
 
 
 def document_search(page):
