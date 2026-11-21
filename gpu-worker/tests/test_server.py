@@ -112,6 +112,52 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.store.submit("job-00000005", payload)
 
+    def test_real_wan_staging_capability_contract_on_queue_admission(self):
+        """Unsupported settings are rejected BEFORE they can reserve GPU work."""
+        accepted = [
+            {**PAYLOAD, "durationSeconds": 1, "aspectRatio": "16:9"},
+            {**PAYLOAD, "durationSeconds": 5},
+            {**PAYLOAD, "durationSeconds": 2, "negativePrompt": "grain"},
+        ]
+        for index, payload in enumerate(accepted):
+            result = self.store.submit("wan-valid-" + str(index).zfill(8), payload)
+            self.assertEqual(result["state"], "queued")
+        rejected = [
+            {**PAYLOAD, "durationSeconds": 6},
+            {**PAYLOAD, "durationSeconds": 60},
+            {**PAYLOAD, "durationSeconds": 0},
+            {**PAYLOAD, "durationSeconds": 2.0},
+            {**PAYLOAD, "aspectRatio": "9:16"},
+            {**PAYLOAD, "aspectRatio": "1:1"},
+            {**PAYLOAD, "aspectRatio": None},
+            {**PAYLOAD, "featureKey": "ai.video.image_to_video",
+             "imageAssetId": "00000000-0000-4000-8000-000000000001"},
+        ]
+        count_before = self.store.db.execute("SELECT count(*) FROM jobs").fetchone()[0]
+        for index, payload in enumerate(rejected):
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                self.store.submit("wan-reject-" + str(index).zfill(8), payload)
+        self.assertEqual(
+            self.store.db.execute("SELECT count(*) FROM jobs").fetchone()[0],
+            count_before,
+        )
+
+    def test_real_wan_runner_accepts_every_queued_staging_shape(self):
+        """Test contract drift with the actual zero-GPU request parser."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "eternyx_wan_queue_contract", MODULE.parent / "wan21_infer.py")
+        wan = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wan)
+        for duration in range(1, 6):
+            payload = {"featureKey": "ai.video.text_to_video",
+                       "prompt": "Golden light on ocean waves",
+                       "durationSeconds": duration, "aspectRatio": "16:9",
+                       "negativePrompt": "", "version": 1}
+            self.assertEqual(worker.validate_payload(payload), payload)
+            parsed = wan.parse_job(json.dumps(payload))
+            self.assertEqual(parsed["num_frames"], 16 * duration + 1)
+
     def test_bounded_queue_and_cancel_frees_capacity(self):
         self.store.db.close()
         self.store = worker.JobStore(str(Path(self.temp.name) / "worker.sqlite"), max_pending=1)
