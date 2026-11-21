@@ -2308,6 +2308,7 @@ export type Database = {
         }[]
       }
       is_admin: { Args: never; Returns: boolean }
+      visitor_presence: { Args: { contribute?: boolean }; Returns: Json }
     }
     Enums: {
       access_level: "basic" | "premium" | "elite"
