@@ -1,7 +1,18 @@
 import { useRef, useState } from "react";
 import { Clapperboard, Download } from "lucide-react";
+import { Link } from "react-router-dom";
+import { saveCopy } from "@/lib/workspaceNotes.mjs";
 import { Button } from "@/components/ui/button";
 import { buildStoryboard, readStoryboard, frameFormats, shotDurations, timecode } from "@/lib/ai/storyboard.mjs";
+
+function downloadJson(value: unknown, filename: string) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export default function VideoStoryboard() {
   const [text, setText] = useState("");
@@ -41,14 +52,27 @@ export default function VideoStoryboard() {
   const shots = board?.shots ?? [];
   const active = shots[Math.min(selection, shots.length - 1)];
 
-  function download() {
-    if (!board?.shots.length) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(board, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "eternyx-storyboard.json";
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const [savedShot, setSavedShot] = useState<{ key: string; id: string } | null>(null);
+  const [saveError, setSaveError] = useState("");
+  const shotKey = JSON.stringify([active?.number, active?.description, seconds, format]);
+  const request = active && {
+    version: 1, featureKey: "ai.video.text_to_video", prompt: active.description,
+    durationSeconds: seconds, aspectRatio: format,
+  };
+  let constraint = "";
+  if (format !== "16:9" || seconds > 5) constraint = "For Wan, choose 16:9 and a shot of five seconds or less.";
+  else if (request && Array.from(request.prompt).length > 4000) constraint = "Shorten this shot to 4,000 characters for Wan.";
+  else if (request && new TextEncoder().encode(JSON.stringify(request, null, 2)).length > 12000) constraint = "Shorten the shot to fit the model’s 12,000-byte request limit.";
+
+  function saveShot() {
+    if (!active) return;
+    try {
+      const id = crypto.randomUUID();
+      const title = "Storyboard · Shot " + active.number;
+      saveCopy(localStorage, id, title, [title, seconds + " seconds · " + format, active.description].join("\n"), Date.now());
+      setSavedShot({ key: shotKey, id });
+      setSaveError("");
+    } catch { setSaveError("Couldn’t save this shot in this browser. You can still download the shot list."); }
   }
 
   return <section aria-labelledby="storyboard-title" className="space-y-5 rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6">
@@ -103,7 +127,19 @@ export default function VideoStoryboard() {
           <span className="min-w-0 break-words">{shot.description}</span>
         </button></li>)}
       </ol>
-      <Button onClick={download}><Download aria-hidden="true" className="mr-2 size-4" />Download shot list (.json)</Button>
+      <Button onClick={() => downloadJson(board, "eternyx-storyboard.json")}><Download aria-hidden="true" className="mr-2 size-4" />Download shot list (.json)</Button>
+      <div className="space-y-3 border-t border-slate-700 pt-4">
+        <h3 className="font-semibold">Selected shot {active.number}</h3>
+        <p className="text-sm text-slate-300">Export a text-to-video request for Wan 2.1, or save the shot as a scratchpad copy shared in this browser.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={Boolean(constraint)} aria-describedby={constraint ? "wan-shot-limit" : undefined}
+            onClick={() => request && !constraint && downloadJson(request, "eternyx-wan-shot-" + active.number + ".json")}>Export Wan request</Button>
+          {savedShot?.key === shotKey ? <Button asChild variant="outline"><Link to="/workspace" state={{resumeNote: {kind: "copy", id: savedShot.id}}}>Open saved shot in Workspace</Link></Button>
+            : <Button variant="outline" onClick={saveShot}>Save shot to Workspace</Button>}
+        </div>
+        {constraint && <p id="wan-shot-limit" className="text-sm text-amber-200">{constraint}</p>}
+        {saveError && <p role="alert">{saveError}</p>}
+      </div>
     </div>}
   </section>;
 }
