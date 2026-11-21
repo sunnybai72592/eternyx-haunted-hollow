@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - "gpu-worker/wan_adapter_step.py"
+      - "gpu-worker/prepare_training_frames.py"
+      - "gpu-worker/test_training_frames_cpu.py"
       - "gpu-worker/adapter-smoke-requirements.txt"
       - ".github/workflows/wan-adapter-smoke.yml"
 permissions:
@@ -25,3 +27,7 @@ jobs:
           HF_HUB_OFFLINE: "1"
           OMP_NUM_THREADS: "1"
         run: python gpu-worker/wan_adapter_step.py "$RUNNER_TEMP/wan-smoke"
+      - name: Decode a synthetic training clip on CPU
+        run: |
+          if ! command -v ffmpeg >/dev/null; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+          python gpu-worker/test_training_frames_cpu.py
