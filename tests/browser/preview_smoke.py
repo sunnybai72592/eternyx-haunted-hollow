@@ -222,6 +222,20 @@ def storyboard(page):
     with page.expect_download() as exported_movie:
         planner.get_by_role("link", name="Download storyboard movie").click()
     assert Path(exported_movie.value.path()).stat().st_size > 1000
+    review = planner.get_by_role("region", name="Blind video comparison")
+    for label in ["Baseline clip", "Candidate clip"]:
+        review.get_by_label(label).set_input_files({"name": label + ".webm", "mimeType": "video/webm",
+                                                   "buffer": Path(exported_movie.value.path()).read_bytes()})
+    review.get_by_label("Quality question").fill("Which clip keeps the framing consistent?")
+    review.get_by_role("button", name="Start blind review").click()
+    expect(review.get_by_text("Baseline", exact=False)).to_have_count(0)
+    review.get_by_role("button", name="Tie", exact=True).click()
+    with page.expect_download() as score:
+        review.get_by_role("button", name="Download review").click()
+    review_data = json.loads(Path(score.value.path()).read_text())
+    assert review_data["verdict"] == "Tie" and sorted(review_data["sources"].values()) == ["Baseline", "Candidate"]
+    review.get_by_role("button", name="New comparison").click()
+    expect(review.get_by_label("Baseline clip")).to_be_visible()
     with page.expect_download() as selected:
         export.click()
     # Exercise the actual inference parser without loading weights or invoking CUDA.
