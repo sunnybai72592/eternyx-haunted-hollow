@@ -212,6 +212,16 @@ def storyboard(page):
     expect(export).to_be_disabled()
     planner.get_by_label("Seconds per shot").select_option("3")
     planner.get_by_role("button", name="0:03–0:06 Workshop").click()
+    planner.get_by_role("button", name="Create storyboard movie").click()
+    movie = planner.get_by_label("Storyboard movie preview")
+    expect(movie).to_be_visible(timeout=20000)
+    page.wait_for_function("""() => {
+        const v = document.querySelector('video[aria-label="Storyboard movie preview"]');
+        return v && v.readyState >= 2 && v.videoWidth === 640 && v.videoHeight === 360;
+    }""")
+    with page.expect_download() as exported_movie:
+        planner.get_by_role("link", name="Download storyboard movie").click()
+    assert Path(exported_movie.value.path()).stat().st_size > 1000
     with page.expect_download() as selected:
         export.click()
     # Exercise the actual inference parser without loading weights or invoking CUDA.
