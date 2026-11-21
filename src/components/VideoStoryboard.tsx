@@ -1,3 +1,4 @@
+import BlindVideoReview from "./BlindVideoReview";
 import StoryboardMovie from "./StoryboardMovie";
 import { useRef, useState } from "react";
 import { Clapperboard, Download } from "lucide-react";
@@ -143,5 +144,6 @@ export default function VideoStoryboard() {
         {saveError && <p role="alert">{saveError}</p>}
       </div>
     </div>}
+    <BlindVideoReview />
   </section>;
 }
