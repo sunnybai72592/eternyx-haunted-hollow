@@ -4,6 +4,7 @@ No GPU, model weights, downloads, generation, or paid services. Fake export
 writes MP4-shaped fixture bytes ONLY to verify the concrete function wiring.
 """
 import contextlib
+import json
 import importlib.util
 import os
 import sys
@@ -113,6 +114,32 @@ class InferenceContractTests(unittest.TestCase):
         self.assertTrue(self.output.is_file())
         self.assertEqual(os.environ["HF_HUB_OFFLINE"], "1")
         self.assertEqual(os.environ["TRANSFORMERS_OFFLINE"], "1")
+
+    def test_seeded_runs_get_fresh_cpu_generators(self):
+        class Generator:
+            def __init__(self, device):
+                self.device = device
+
+            def manual_seed(self, seed):
+                self.seed = seed
+                return self
+
+        with patch.object(sys.modules["torch"], "Generator", Generator, create=True):
+            for seed in (0, 0, 4294967295):
+                job = wan.parse_job(json.dumps({"featureKey": "ai.video.text_to_video",
+                    "prompt": "Workshop", "durationSeconds": 1, "seed": seed}))
+                wan.generate_with_wan(job, self.snapshot, self.output)
+        generators = [data["generator"] for name, *args in self.calls
+                      if name == "generate" for data in args]
+        self.assertEqual([(g.device, g.seed) for g in generators],
+                         [("cpu", 0), ("cpu", 0), ("cpu", 4294967295)])
+        self.assertIsNot(generators[0], generators[1])
+
+    def test_malformed_seeds_are_rejected_before_inference(self):
+        for seed in (True, False, -1, 4294967296, None, "12", 1.5):
+            with self.subTest(seed=seed), self.assertRaisesRegex(ValueError, "seed"):
+                wan.parse_job(json.dumps({"featureKey": "ai.video.text_to_video",
+                    "prompt": "Workshop", "durationSeconds": 1, "seed": seed}))
 
     def test_no_cuda_fails_before_loading_any_model_weights(self):
         self.cuda_available = False

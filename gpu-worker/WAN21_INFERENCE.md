@@ -66,3 +66,9 @@ python3 -m unittest discover -s gpu-worker/tests -p 'test_*.py' -v
 These tests use synthetic MP4-shaped **fixtures**, clearly distinguished from
 AI-generated media, and do not invoke CUDA, download model weights or spend money.
 A real GPU end-to-end acceptance test is the next separate milestone.
+
+## Compare two staging runs
+
+For an approved staging canary, use the same `--seed` for the baseline and candidate (default 0, range 0–4294967295). Each render initializes a fresh CPU random generator, and the success report includes the seed and pinned model revision. Keep the prompt, duration, hardware and software versions fixed when comparing the clips. A shared seed controls starting noise; it does not guarantee identical frames across hardware or library versions.
+
+The direct offline executable also accepts an optional integer `seed` in its input JSON. Omitting the field preserves its previous sampling behavior. This comparison setting applies to the staging executable; the public queue contract is unchanged.

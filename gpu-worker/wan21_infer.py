@@ -25,7 +25,7 @@ def parse_job(raw):
     if not isinstance(request, dict):
         raise ValueError("invalid job")
     allowed = {"featureKey", "prompt", "durationSeconds", "aspectRatio",
-               "negativePrompt", "version"}
+               "negativePrompt", "version", "seed"}
     if set(request) - allowed or request.get("featureKey") != "ai.video.text_to_video":
         raise ValueError("unsupported feature or fields")
     prompt = request.get("prompt")
@@ -43,7 +43,9 @@ def parse_job(raw):
         raise ValueError("unsupported request version")
     # Wan requires (num_frames - 1) divisible by 4.
     frame_count = FPS * duration + 1
-    return {"prompt": prompt.strip(), "negative_prompt": negative.strip(),
+    if "seed" in request and (type(request["seed"]) is not int or not 0 <= request["seed"] <= 4294967295):
+        raise ValueError("seed must be an unsigned 32-bit integer")
+    return {**({"seed": request["seed"]} if "seed" in request else {}), "prompt": prompt.strip(), "negative_prompt": negative.strip(),
             "num_frames": frame_count}
 
 def validated_storage_path():
@@ -122,11 +124,15 @@ def generate_with_wan(job, snapshot, output):
         str(snapshot), vae=vae, torch_dtype=torch.bfloat16,
         local_files_only=True)
     pipe.enable_model_cpu_offload()
+    sampling = {}
+    if "seed" in job:
+        sampling["generator"] = torch.Generator(device="cpu").manual_seed(job["seed"])
     with torch.inference_mode():
         frames = pipe(
             prompt=job["prompt"],
             negative_prompt=job["negative_prompt"],
             num_frames=job["num_frames"],
+            **sampling,
         ).frames[0]
     export_to_video(frames, str(output), fps=FPS)
     check_mp4(output)
