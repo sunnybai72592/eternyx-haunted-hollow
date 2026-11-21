@@ -26,3 +26,13 @@ python gpu-worker/estimate_training_time.py --steps 500 --step-seconds 18 20 22 
 ```
 
 The example projects 3.28 hours from the mean step time plus overhead. The fastest and slowest samples give two scenarios, not a confidence interval. Supply total expected overhead across loading, checkpointing and evaluation. The calculator does not start training or reserve compute. Model quality must be evaluated separately.
+
+## Prepare the first training window
+
+Use a reviewed local manifest, Python 3.11+, NumPy and FFmpeg. For example:
+
+```sh
+python gpu-worker/prepare_training_frames.py ./clips dataset-v1.json workshop-wide.mp4 workshop-window.npz
+```
+
+This CPU step takes the first 17 frames at 16 fps after resampling, fits the picture inside 384 × 224 with black padding, and stores RGB bytes in time × height × width × channels order. Short clips fail instead of receiving invented frames. The archive includes the original caption, scene, frame rate and source digest. Open it with `numpy.load(path, allow_pickle=False)`. Keep clips unchanged while preparing windows, and check that the caption describes the opening window. VAE encoding and caption embedding are still required before these frames can enter the Wan adapter training step.
