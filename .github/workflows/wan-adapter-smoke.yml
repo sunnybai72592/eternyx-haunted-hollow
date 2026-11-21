@@ -1,0 +1,27 @@
+name: Wan adapter CPU smoke
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/wan_adapter_step.py"
+      - "gpu-worker/adapter-smoke-requirements.txt"
+      - ".github/workflows/wan-adapter-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  adapter-step:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CPU training dependencies
+        run: |
+          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r gpu-worker/adapter-smoke-requirements.txt
+      - name: Train and reload a disposable synthetic adapter
+        env:
+          HF_HUB_OFFLINE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python gpu-worker/wan_adapter_step.py "$RUNNER_TEMP/wan-smoke"

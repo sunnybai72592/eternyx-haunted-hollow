@@ -1,0 +1,4 @@
+diffusers==0.35.1
+peft==0.17.1
+transformers==4.55.4
+safetensors==0.6.2
