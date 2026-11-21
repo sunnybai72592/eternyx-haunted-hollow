@@ -236,6 +236,17 @@ def storyboard(page):
     assert review_data["verdict"] == "Tie" and sorted(review_data["sources"].values()) == ["Baseline", "Candidate"]
     review.get_by_role("button", name="New comparison").click()
     expect(review.get_by_label("Baseline clip")).to_be_visible()
+    review.get_by_text("Compare saved verdicts").click()
+    legacy = {"version": 1, "question": review_data["question"], "sources": {"A": "Baseline", "B": "Candidate"}, "verdict": "Clip B"}
+    reports = review.get_by_label("Review files (.json)")
+    def upload(name, data):
+        return {"name": name, "mimeType": "application/json", "buffer": json.dumps(data).encode()}
+    reports.set_input_files([upload("first.json", review_data), upload("again.json", review_data), upload("older.json", legacy)])
+    expect(review.get_by_text("2 counted · 1 duplicate downloads skipped")).to_be_visible()
+    expect(review.get_by_text("Candidate wins 1 · Baseline wins 0 · Ties 1")).to_be_visible()
+    reports.set_input_files([upload("first.json", review_data), upload("conflict.json", {**review_data, "verdict": "Clip A"})])
+    expect(review.get_by_text("Two files disagree", exact=False)).to_be_visible()
+    expect(review.get_by_text("Candidate wins", exact=False)).to_have_count(0)
     with page.expect_download() as selected:
         export.click()
     # Exercise the actual inference parser without loading weights or invoking CUDA.
