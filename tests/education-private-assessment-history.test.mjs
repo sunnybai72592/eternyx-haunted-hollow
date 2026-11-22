@@ -68,7 +68,7 @@ test("8. malformed or absent account/attempt/test identifiers fail closed",()=>{
 });
 test("9. unknown states are not relabeled as completed",()=>{
  for(const state of ["graded","expired","unknown",null,undefined]){
-  assert.equal(normalizeOwnedEducationAttempt(attempt(state),owner),null);
+  assert.equal(normalizeOwnedEducationAttempt({...attempt(),status:state},owner),null);
  }
 });
 test("10. nullable/invalid timestamps are not shown as fabricated dates",()=>{
