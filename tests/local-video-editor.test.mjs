@@ -62,20 +62,20 @@ test("supports repeated cuts of one source and exactly thirty seconds", () => {
 });
 
 test("rejects invalid files, paths, SHA-256 and case-insensitive filename collisions", () => {
-  for (const name of ("../clip.mp4", "/tmp/clip.mp4", "clip\\bad.mp4", "https://clip.mp4",
-                      "clip.mp4\n", "clip.mov", "", "~hidden.mp4", "a:b.mp4")) {
+  for (const name of ["../clip.mp4", "/tmp/clip.mp4", "clip\\bad.mp4", "https://clip.mp4",
+                      "clip.mp4\n", "clip.mov", "", "~hidden.mp4", "a:b.mp4"]) {
     assert.throws(() => checkLocalMediaName(name), {name: "Error"});
   }
-  for (const name of ("song.exe", "../music.wav", "x\\music.m4a")) {
+  for (const name of ["song.exe", "../music.wav", "x\\music.m4a"]) {
     assert.throws(() => checkLocalMediaName(name, "audio"), {name: "Error"});
   }
-  for (const sources of (
+  for (const sources of [
     [], [sourceA, {...sourceA, name: "MOTION.MP4"}],
     [{...sourceA, sha256: "A".repeat(64)}],
     [{...sourceA, size: true}],
     [{...sourceA, size: 64 * 1024 * 1024 + 1}],
     Array.from({length: 9}, (_, i) => ({...sourceA, name: "shot" + i + ".mp4"}))
-  )) {
+  ]) {
     assert.throws(() => build({sources}));
   }
 });
@@ -100,7 +100,7 @@ test("rejects unsafe shot fields, missing source, incomplete rights and invalid 
 });
 
 test("soundtrack requires a local verified file, permission reference, and bounded volume", () => {
-  for (const candidate of (
+  for (const candidate of [
     {...audio, source_sha256: "not_a_field", sha256: "0"},
     {...audio, name: "bad.mp4"},
     {...audio, size: 16 * 1024 * 1024 + 1},
@@ -110,7 +110,7 @@ test("soundtrack requires a local verified file, permission reference, and bound
     {...audio, volumePercent: -1},
     {...audio, volumePercent: true},
     {...audio, volumePercent: 5.5},
-  )) {
+  ]) {
     assert.throws(() => build({soundtrack: candidate}));
   }
   const withoutAudio = build();
@@ -122,10 +122,10 @@ test("soundtrack requires a local verified file, permission reference, and bound
 test("CLI handoff only uses supported static presets and exact arguments", () => {
   const command = localVideoCommand("portrait", "high");
   assert.equal(command, "python gpu-worker/render_video_timeline.py --storyboard ./eternyx-video-v2.json --media ./local-video-media --output ./eternyx-video-output --profile portrait --quality high");
-  for (const profile of ("landscape; echo hacked", "wide", "")) {
+  for (const profile of ["landscape; echo hacked", "wide", ""]) {
     assert.throws(() => localVideoCommand(profile, "standard"), /supported/);
   }
-  for (const quality of ("special", "high && whoami")) assert.throws(() => localVideoCommand("square", quality));
+  for (const quality of ["special", "high && whoami"]) assert.throws(() => localVideoCommand("square", quality));
 });
 
 test("AI Video Studio visibly links to actual local editor without pretending browser rendering", () => {
