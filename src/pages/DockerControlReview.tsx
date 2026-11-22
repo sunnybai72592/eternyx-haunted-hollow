@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 type Policy={enabled:boolean;daily_limit:number};
 type Agent={id:string;display_name:string;status:string};
-type Request={id:string;agent_id:string;operation:"start"|"stop"|"restart";container_id:string;state:string;effective_state:string;requested_at:string;expires_at:string;execution_status:string};
+type Request={id:string;agent_id:string;operation:"start"|"stop"|"restart";container_id:string;state:string;effective_state:string;requested_at:string;expires_at:string;execution_status:string;dispatch_claimed_at?:string|null;}
 type Event={request_id:string;event_kind:string;occurred_at:string};
 const containerIdPattern=/^[0-9a-f]{64}$/;
 async function control(action:string,fields:Record<string,unknown>={}):Promise<Record<string,unknown>>{
@@ -126,6 +126,12 @@ export default function DockerControlReview(){
             <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold">{row.effective_state}</span>
           </div>
           <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="h-4 w-4"/> Expires {new Date(row.expires_at).toLocaleString()} · Agent dispatch: {row.execution_status==="not_dispatched"?"not dispatched":row.execution_status==="claimed"?"claimed / outcome unknown":row.execution_status.replaceAll("_"," ")} (agent-reported)</p>
+          {row.execution_status==="claimed"&&<p role="status" className="mt-3 rounded-lg border border-amber-500/40 p-3 text-xs leading-6">
+            <ShieldAlert className="mr-2 inline h-4 w-4 text-amber-500"/>
+            {row.dispatch_claimed_at&&Date.now()-Date.parse(row.dispatch_claimed_at)>60000
+              ?"Claim older than the dispatch window: outcome unknown. Inspect the local operator journal. Never auto-retry."
+              :"Claimed by an agent; no signed final receipt yet. Execution outcome is not independently verified."}
+          </p>}
           {row.effective_state==="pending"&&<div className="mt-3 space-y-3">
             <label className="block text-xs text-muted-foreground">To approve, type: <strong className="font-mono">APPROVE {row.id.slice(0,8)}</strong>
               <input aria-label={"Approval confirmation "+row.id.slice(0,8)} value={confirmation[row.id]??""} onChange={e=>setConfirmation(s=>({...s,[row.id]:e.target.value}))} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3 font-mono text-xs"/>

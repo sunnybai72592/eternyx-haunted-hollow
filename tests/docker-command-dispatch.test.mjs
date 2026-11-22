@@ -89,7 +89,10 @@ test("agent requires explicit execution flag, pinned signed permit, isolation gu
   assert.match(file,/--execute-lab/);
   assert.match(file,/ETERNYX_REMOTE_LAB_ENABLED/);
   assert.match(file,/verify\(null,Buffer\.from\(labPermitMessage\(permit\)\)/);
-  assert.match(file,/verifyManagedTarget\(target,permit\.containerId\)/);
+  // The recovery-aware agent inspects before/after state with a stable target ID.
+  assert.match(file,/verifyManagedTarget\(before,permit\.containerId\)/);
+  assert.match(file,/labPostcondition\(permit\.operation,before,after\)/);
+  assert.match(file,/reserveLabClaim/);
   assert.match(file,/result:"attempted"/);
   assert.match(file,/Docker command failed|Local Docker command failed/);
   assert.doesNotMatch(file,/shell:true/);
