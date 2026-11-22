@@ -7,7 +7,8 @@ import {checkedIncidentReport,incidentReportCsv}
 const read=path=>readFile(new URL("../"+path,import.meta.url),"utf8");
 const id="11111111-1111-4111-8111-111111111111",key="22222222-2222-4222-8222-222222222222";
 const report={
-  source:"database_incident_reporting",generatedAt:"2026-11-22T20:45:00Z",
+  source:"authenticated_server",reportSource:"database_incident_reporting",
+  generatedAt:"2026-11-22T20:45:00Z",
   rangeDays:7,
   casesOpenedInWindow:3,resolutionEventsInWindow:1,currentOpen:1,
   currentInvestigating:1,currentResolved:1,currentHighUnresolved:1,
@@ -74,6 +75,7 @@ test("report sanitizer keeps only measured counters and never exports notes or c
 test("report sanitizer fails closed for invented success rates, missing counters or fabricated periods",()=>{
   for(const candidate of [
     {...report,source:"client_generated_placeholder"},
+    {...report,reportSource:"client_generated_placeholder"},
     {...report,rangeDays:14},
     {...report,recoveryExecuted:true},
     {...report,automaticDetectionEnabled:true},
