@@ -50,22 +50,7 @@ def holdout_loss(model, batch, noise):
     return losses
 
 
-def compare(batch, evaluation, provenance, vae, root, output):
-    base = small_model().eval()
-    transformer = root / "transformer"
-    base.save_pretrained(transformer)
-    window = root / "window.safetensors"
-    save_file(batch, str(window))
-    train_model = type(base).from_pretrained(transformer, local_files_only=True)
-    checkpoint = run(train_model, transformer_identity(transformer), [window], root / "training", 4)
-    seed = 1701
-    noise = torch.randn(evaluation["latents"].shape, generator=torch.Generator().manual_seed(seed))
-    text = evaluation["text_embeddings"]
-    baseline_losses = holdout_loss(base, evaluation, noise)
-    left = render(base, vae, noise, text)
-    load_for_inference(base, root, checkpoint)
-    candidate_losses = holdout_loss(base, evaluation, noise)
-    right = render(base, vae, noise, text)
+def export_pair(left, right, clip):
     if left.shape != (17, 32, 32, 3) or right.shape != left.shape:
         raise RuntimeError("Unexpected comparison dimensions")
     changed = (left != right).any(dim=-1).sum().item()
@@ -73,7 +58,6 @@ def compare(batch, evaluation, provenance, vae, root, output):
         raise RuntimeError("The trained adapter produced identical RGB frames")
     joined = torch.cat((left, right), dim=2).contiguous().numpy().tobytes()
     # Lossless RGB keeps even single-level differences intact in the review copy.
-    clip = root / "comparison.mp4"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
                     "-s", "64x32", "-r", "16", "-i", "pipe:0", "-c:v", "libx264rgb",
                     "-crf", "0", str(clip)], input=joined, check=True)
@@ -81,19 +65,52 @@ def compare(batch, evaluation, provenance, vae, root, output):
                                        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"])
     if decoded != joined:
         raise RuntimeError("Exported comparison did not preserve all RGB frames")
+    return changed
+
+
+def compare(batch, evaluations, provenance, vae, root, output):
+    base = small_model().eval()
+    transformer = root / "transformer"
+    base.save_pretrained(transformer)
+    window = root / "window.safetensors"
+    save_file(batch, str(window))
+    train_model = type(base).from_pretrained(transformer, local_files_only=True)
+    checkpoint = run(train_model, transformer_identity(transformer), [window], root / "training", 4)
+    candidate = type(base).from_pretrained(transformer, local_files_only=True)
+    load_for_inference(candidate, root, checkpoint)
+    cases = []
+    clips = []
+    for scene, evaluation in evaluations.items():
+        for seed in (1701, 1702, 1703):
+            noise = torch.randn(evaluation["latents"].shape, generator=torch.Generator().manual_seed(seed))
+            text = evaluation["text_embeddings"]
+            baseline_losses = holdout_loss(base, evaluation, noise)
+            candidate_losses = holdout_loss(candidate, evaluation, noise)
+            left = render(base, vae, noise, text)
+            right = render(candidate, vae, noise, text)
+            clip = root / ("comparison.mp4" if not cases else f"{scene}-{seed}.mp4")
+            changed = export_pair(left, right, clip)
+            clips.append(clip)
+            delta = sum(c - b for b, c in zip(baseline_losses, candidate_losses)) / len(baseline_losses)
+            cases.append({"scene": scene, "caption": provenance["evaluations"][scene]["caption"],
+                          "seed": seed, "baseline_flow_mse": baseline_losses, "adapter_flow_mse": candidate_losses,
+                          "mean_mse_delta": delta, "frames": len(left), "changed_pixel_positions_across_frames": changed,
+                          "file": clip.name, "comparison_sha256": fingerprint(clip)})
+    deltas = [case["mean_mse_delta"] for case in cases]
+    summary = {"pairs": len(cases), "lower_error": sum(d < 0 for d in deltas),
+               "higher_error": sum(d > 0 for d in deltas), "equal_error": deltas.count(0),
+               "mean_mse_delta": sum(deltas) / len(deltas)}
     report = {"fixture": "synthetic CPU test with randomly initialized tiny Wan models",
-              "left": "base", "right": "trained adapter", "caption": provenance["eval"]["caption"],
-              "clips": provenance, "eval_noise_levels": [0.25, 0.5, 0.75],
-              "baseline_flow_mse": baseline_losses, "adapter_flow_mse": candidate_losses,
-              "seed": seed, "training_steps": 4, "sampling_steps": 4, "fps": 16,
-              "frames": len(left), "changed_pixel_positions_across_frames": changed,
-              "adapter_sha256": fingerprint(checkpoint / "adapter.safetensors"),
-              "comparison_sha256": fingerprint(clip)}
+              "left": "base", "right": "trained adapter", "clips": provenance,
+              "eval_noise_levels": [0.25, 0.5, 0.75], "training_steps": 4, "sampling_steps": 4, "fps": 16,
+              "adapter_sha256": fingerprint(checkpoint / "adapter.safetensors"), **cases[0],
+              "cases": cases, "summary": summary}
     if output is not None:
         output.mkdir(parents=True, exist_ok=False)
-        (output / clip.name).write_bytes(clip.read_bytes())
+        for clip in clips:
+            (output / clip.name).write_bytes(clip.read_bytes())
         (output / "comparison.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(json.dumps(report), flush=True)
+    print(json.dumps(summary), flush=True)
 
 
 def main(output):
@@ -102,17 +119,22 @@ def main(output):
         root = Path(work)
         rows = []
         for split, source, caption in (("train", "testsrc2", "moving shapes"),
-                                       ("eval", "smptebars", "color bars")):
-            video = root / f"{split}.mp4"
+                                       ("eval", "smptebars", "color bars"),
+                                       ("eval", "testsrc", "moving bars")):
+            video = root / f"{source}.mp4"
             subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
                             f"{source}=size=64x64:rate=16:duration=2", "-c:v", "mpeg4", str(video)], check=True)
             rows.append({"file": video.name, "sha256": fingerprint(video), "caption": caption,
                          "scene": source, "split": split, "rights": "original",
                          "rights_ref": "synthetic test generator"})
         manifest = {"version": 1, "clips": rows}
-        window = prepare_frames(root, manifest, "train.mp4")
-        held_out = prepare_evaluation_frames(root, manifest, "eval.mp4")
-        provenance = {row["split"]: {k: row[k] for k in ("scene", "sha256", "caption")} for row in rows}
+        window = prepare_frames(root, manifest, "testsrc2.mp4")
+        held_out = {row["scene"]: prepare_evaluation_frames(root, manifest, row["file"])
+                    for row in rows if row["split"] == "eval"}
+        def describe(window):
+            return {key: window[key] for key in ("scene", "sha256", "caption")}
+        provenance = {"train": describe(window), "eval": describe(held_out["smptebars"]),
+                      "evaluations": {scene: describe(clip) for scene, clip in held_out.items()}}
     vocab = Tokenizer(WordLevel({"<pad>": 0, "<unk>": 1, "moving": 2, "shapes": 3,
                                  "color": 4, "bars": 5}, unk_token="<unk>"))
     vocab.pre_tokenizer = Whitespace()
@@ -121,13 +143,15 @@ def main(output):
     vae = AutoencoderKLWan(base_dim=8, dim_mult=[1, 2, 2, 2], z_dim=4, num_res_blocks=1,
                            latents_mean=[0]*4, latents_std=[1]*4)
     # Crop for the tiny CPU transformer; production encoding consumes the full window.
-    batch = encode(window["frames"][:, :32, 176:208].copy(), window["caption"], vae, tokenizer, encoder, length=8)
-    evaluation = encode(held_out["frames"][:, :32, 176:208].copy(), held_out["caption"], vae, tokenizer, encoder, length=8)
+    def encode_window(clip):
+        return encode(clip["frames"][:, :32, 176:208].copy(), clip["caption"], vae, tokenizer, encoder, length=8)
+    batch = encode_window(window)
+    evaluations = {scene: encode_window(clip) for scene, clip in held_out.items()}
     assert batch["latents"].shape == (1, 4, 5, 4, 4)
     text = batch["text_embeddings"]
     assert text.shape == (1, 8, 16) and text[:, 2:].count_nonzero() == 0
     with tempfile.TemporaryDirectory() as work:
-        compare(batch, evaluation, provenance, vae, Path(work).resolve(), output)
+        compare(batch, evaluations, provenance, vae, Path(work).resolve(), output)
 
 
 if __name__ == "__main__":
