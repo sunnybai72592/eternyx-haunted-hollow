@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AutomationApprovalPanel from "@/components/AutomationApprovalPanel";
+import AutomationWebhookBudgetPanel, { type WebhookBudget } from "@/components/AutomationWebhookBudgetPanel";
 import { ClipboardCopy, LockKeyhole, PauseCircle, RefreshCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { useAuthStore } from "@/store/authStore";
 
 type Trigger = {
   id: string; workflow_id: string; enabled: boolean; approval_required: boolean;
+  allowed_scope: "text_transform"; daily_execution_limit: number; daily_submission_limit: number;
   created_at: string; rotated_at: string; last_used_at: string | null;
 };
 type Reply = Record<string, unknown>;
@@ -36,6 +38,10 @@ function safeTriggers(raw: unknown): Trigger[] {
     const trigger = t as Record<string, unknown>;
     if (typeof trigger.id !== "string" || typeof trigger.workflow_id !== "string" ||
         typeof trigger.enabled !== "boolean" || typeof trigger.approval_required !== "boolean" ||
+        trigger.allowed_scope !== "text_transform" ||
+        !Number.isInteger(trigger.daily_execution_limit) || !Number.isInteger(trigger.daily_submission_limit) ||
+        (trigger.daily_execution_limit as number) < 1 || (trigger.daily_execution_limit as number) > 30 ||
+        (trigger.daily_submission_limit as number) < 1 || (trigger.daily_submission_limit as number) > 40 ||
         typeof trigger.rotated_at !== "string" ||
         typeof trigger.created_at !== "string" ||
         !(trigger.last_used_at === null || typeof trigger.last_used_at === "string")) {
@@ -54,6 +60,7 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [usage, setUsage] = useState<WebhookBudget[]>([]);
   const [configured, setConfigured] = useState(false);
   const [approvalConfigured, setApprovalConfigured] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -64,7 +71,7 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
   const [message, setMessage] = useState("");
   const webhookUrl = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/automation-webhook";
   useEffect(() => {
-    setTriggers([]); setIssued(null); setLoaded(false); setConfigured(false);
+    setTriggers([]); setUsage([]); setIssued(null); setLoaded(false); setConfigured(false);
     setApprovalConfigured(false);
     setError(""); setMessage(""); setShowKey(false);
   }, [userId]);
@@ -76,6 +83,22 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
       throw new Error("Webhook configuration has not been verified.");
     }
     setTriggers(safeTriggers(data.triggers));
+    if (!Array.isArray(data.usage) || data.usage.length > 5) {
+      throw new Error("Unverified webhook usage listing.");
+    }
+    const observed = data.usage.map((raw: unknown) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        throw new Error("Invalid webhook usage record.");
+      }
+      const row = raw as Record<string, unknown>;
+      if (typeof row.trigger_id !== "string" ||
+          !Number.isInteger(row.executions_24h) || !Number.isInteger(row.submissions_24h) ||
+          !Number.isInteger(row.pending)) {
+        throw new Error("Webhook usage data is incomplete.");
+      }
+      return row as WebhookBudget;
+    });
+    setUsage(observed);
     setConfigured(data.webhooksConfigured);
     setApprovalConfigured(data.approvalConfigured);
     setLoaded(true);
@@ -142,6 +165,9 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
             ? "Owner review required · signed event is queued and NOT executed at receipt"
             : "Direct signed execution · no human review required"}</p>
           <p className="break-all text-xs text-muted-foreground">Workflow: {trigger.workflow_id} · Key rotated {date(trigger.rotated_at)}</p>
+          <AutomationWebhookBudgetPanel trigger={trigger}
+            usage={usage.find((entry) => entry.trigger_id === trigger.id)}
+            refresh={reload} disabled={busy || !configured}/>
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy || !configured} size="sm" variant="outline" onClick={() => act(async () => {
               const result = await call("toggleWebhook", { triggerId: trigger.id, enabled: !trigger.enabled });
