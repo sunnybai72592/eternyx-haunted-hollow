@@ -208,7 +208,7 @@ export default function AdminServiceRequests() {
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={attentionOnly} onChange={(event) => { setPage(0); setAttentionOnly(event.target.checked); }} />Needs follow-up</label>
         <span className="text-xs text-muted-foreground">Signals are based on saved activity, not unread receipts or response deadlines.</span>
       </div>
-      {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>
+      {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
       <p className="mb-4 text-xs text-muted-foreground">Search and status filters are applied by the database. No first-250 cutoff or invented totals.</p>
       {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The migration may not yet be deployed, or access was denied.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading service requests…</Card>
