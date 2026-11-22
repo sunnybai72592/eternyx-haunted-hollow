@@ -66,7 +66,8 @@ test("backend executes a stored definition with verified identity rather than br
   assert.match(edge, /automation_record_run/);
   assert.match(edge, /crypto\.subtle\.digest\("SHA-256"/);
   assert.match(edge, /rawInputsStored: false, rawOutputsStored: false/);
-  assert.match(ui, /requestKey: crypto\.randomUUID\(\)/);
+  assert.match(ui, /pendingRun\.current/);
+  assert.match(ui, /crypto\.randomUUID\(\)/);
   assert.match(ui, /<textarea|<Textarea/);
   assert.match(workbench, /<AutomationCloudPanel/);
 });
