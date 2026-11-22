@@ -1,0 +1,38 @@
+name: Automation Manual Control SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261122220000_automation_manual_control_plane.sql'
+      - 'tests/sql/automation-control-db-smoke.sql'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+      - '.github/workflows/automation-control-sql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-postgres:
+    name: Verify Automation ownership, quotas and replay against PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Launch disposable network-isolated Postgres
+        run: |
+          docker run --detach --rm --network none --name eternyx-automation-sql-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          for i in $(seq 1 30); do
+            if docker exec eternyx-automation-sql-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec eternyx-automation-sql-ci pg_isready -U postgres
+      - name: Prepare minimal Auth roles and fixture users
+        run: docker exec --interactive eternyx-automation-sql-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply proposed migration in isolated database only
+        run: docker exec --interactive eternyx-automation-sql-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < supabase/migrations/20261122220000_automation_manual_control_plane.sql
+      - name: Assert owner isolation, 30-run quota, replay and pause
+        run: docker exec --interactive eternyx-automation-sql-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < tests/sql/automation-control-db-smoke.sql
+      - name: Tear down
+        if: always()
+        run: docker rm --force eternyx-automation-sql-ci || true
