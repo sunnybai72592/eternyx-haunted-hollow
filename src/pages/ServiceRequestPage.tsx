@@ -18,6 +18,10 @@ export default function ServiceRequestPage() {
   const [description, setDescription] = useState('');
   const [company, setCompany] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [expectedOutcome, setExpectedOutcome] = useState('');
+  const [timeframe, setTimeframe] = useState('flexible');
+  const [constraints, setConstraints] = useState('');
+  const [authorizationUnderstood, setAuthorizationUnderstood] = useState(false);
   const [busy, setBusy] = useState(false);
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
@@ -36,6 +40,9 @@ export default function ServiceRequestPage() {
     if (cleanTitle.length < 8 || cleanTitle.length > 120) return toast.error('Title must be 8–120 characters.');
     if (cleanDescription.length < 40 || cleanDescription.length > 4000) return toast.error('Brief must be 40–4,000 characters.');
     if (company.trim().length > 160) return toast.error('Company must be 160 characters or fewer.');
+    if (expectedOutcome.trim().length < 12 || expectedOutcome.trim().length > 800) return toast.error('Expected outcome must be 12–800 characters.');
+    if (constraints.length > 1200) return toast.error('Constraints must be 1,200 characters or fewer.');
+    if (serviceKey === 'security-review' && !authorizationUnderstood) return toast.error('Confirm you understand written authorization is required before any security testing.');
     if (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return toast.error('Enter a valid contact email.');
     setBusy(true);
     try {
@@ -48,6 +55,10 @@ export default function ServiceRequestPage() {
         description: cleanDescription,
         contact_email: cleanEmail,
         company: company.trim() || null,
+        expected_outcome: expectedOutcome.trim(),
+        timeframe,
+        constraints: constraints.trim() || null,
+        authorization_understood: serviceKey === 'security-review' && authorizationUnderstood,
       }).select('id').single();
       if (error || !data?.id) throw error ?? new Error('The request was not confirmed by the database.');
       toast.success('Project brief submitted for review.');
@@ -87,6 +98,29 @@ export default function ServiceRequestPage() {
               <Textarea id="service-description" required minLength={40} maxLength={4000} rows={9} value={description} onChange={(event) => setDescription(event.target.value)} disabled={busy} placeholder="Describe the problem, expected outcome, constraints and approximate timeline. Do not share passwords, credentials or production secrets." />
               <p className="mt-1 text-right text-xs text-muted-foreground">{description.length}/4,000 · minimum 40</p>
             </div>
+            <div><label htmlFor="service-outcome" className="mb-2 block text-sm font-semibold">What does success look like? *</label>
+              <Textarea id="service-outcome" required minLength={12} maxLength={800} rows={3} value={expectedOutcome} onChange={(event) => setExpectedOutcome(event.target.value)} disabled={busy} placeholder="Describe the measurable result you would like to achieve." />
+              <p className="mt-1 text-right text-xs text-muted-foreground">{expectedOutcome.length}/800</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label htmlFor="service-timeframe" className="mb-2 block text-sm font-semibold">Preferred planning timeframe</label>
+                <select id="service-timeframe" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={timeframe} onChange={(event) => setTimeframe(event.target.value)} disabled={busy}>
+                  <option value="flexible">Flexible / not decided</option>
+                  <option value="under_1_month">Under one month</option>
+                  <option value="1_3_months">1–3 months</option>
+                  <option value="3_plus_months">More than three months</option>
+                </select>
+              </div>
+              <div><label htmlFor="service-constraints" className="mb-2 block text-sm font-semibold">Constraints (optional)</label>
+                <Textarea id="service-constraints" rows={3} maxLength={1200} value={constraints} onChange={(event) => setConstraints(event.target.value)} disabled={busy} placeholder="Technology, compliance, accessibility, known dependencies — no secrets." />
+              </div>
+            </div>
+            {serviceKey === 'security-review' && (
+              <label className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm">
+                <input type="checkbox" checked={authorizationUnderstood} onChange={(event) => setAuthorizationUnderstood(event.target.checked)} required disabled={busy} className="mt-1" />
+                <span>I understand active security testing is not authorized by this request and will require separate verified written permission from the asset owner.</span>
+              </label>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div><label htmlFor="service-contact" className="mb-2 block text-sm font-semibold">Contact email *</label><Input id="service-contact" type="email" required maxLength={254} value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} disabled={busy} /></div>
               <div><label htmlFor="service-company" className="mb-2 block text-sm font-semibold">Company (optional)</label><Input id="service-company" maxLength={160} value={company} onChange={(event) => setCompany(event.target.value)} disabled={busy} /></div>
