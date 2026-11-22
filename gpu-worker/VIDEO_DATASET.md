@@ -71,6 +71,16 @@ python gpu-worker/prepare_training_frames.py ./clips dataset-v1.json workshop-wi
 
 This CPU step takes 17 frames from the selected offset (zero by default) at 16 fps after resampling, fits the picture inside 384 × 224 with black padding, and stores RGB bytes in time × height × width × channels order. Short clips fail instead of receiving invented frames. The archive includes the original caption, scene, frame rate and source digest. Open it with `numpy.load(path, allow_pickle=False)`. Keep clips unchanged while preparing windows, and check that the caption describes the opening window. VAE encoding and caption embedding are still required before these frames can enter the Wan adapter training step.
 
+## Run a local training pilot
+
+Use a reviewed local Wan snapshot and a new output directory. The step count is illustrative.
+
+```sh
+python gpu-worker/run_video_pilot.py ./wan-snapshot ./clips selected-windows/dataset.json ./pilot-01 --steps 10 --seeds 7 17
+```
+
+The command copies the exact manifest, encodes the training split, trains an indexed adapter, scores the held-out clips and writes `review.html`. Each stage runs in its own offline CPU process so its models are released before the next stage. The full-size snapshot still needs sufficient RAM and CPU time. A completed run writes `pilot.json` with the checkpoint path, dataset and adapter digests, evaluation seeds and case count. If a stage fails, its error is reported and intermediate files remain available for inspection. Use a fresh directory when rerunning the complete command.
+
 ## Prepare and train from a whole manifest
 
 With a reviewed manifest and a local Wan snapshot, run these commands in Bash on a CPU machine with FFmpeg and the training dependencies. Choose a new output directory for the encoded dataset.

@@ -219,11 +219,14 @@ def run_fixture(root, output):
         assert f"Identical adjacent frames: {repeats} of {len(frames) - 1}" in card
     assert all(row["sha256"] in page for row in rows)
     assert fingerprint(manifest_path) in page
-    dataset = root / "windows"
     worker_dir = Path(__file__).parent
-    encode_command = [sys.executable, str(worker_dir / "encode_training_manifest.py"), str(root),
-                      str(root), str(manifest_path), str(dataset)]
-    subprocess.run(encode_command, check=True)
+    pilot = root / "pilot"
+    subprocess.run([sys.executable, str(worker_dir / "run_video_pilot.py"), str(root), str(root),
+                    str(manifest_path), str(pilot), "--steps", "1", "--seeds", "7"], check=True)
+    receipt = json.loads((pilot / "pilot.json").read_bytes())
+    assert receipt["cases"] == 2 and receipt["evaluation_seeds"] == [7]
+    assert (pilot / "dataset.json").read_bytes() == manifest_path.read_bytes()
+    dataset = pilot / "windows"
     entries = json.loads((dataset / "index.json").read_text())["windows"]
     assert [entry["source_file"] for entry in entries] == ["testsrc2.mp4"]
     training_window = dataset / entries[0]["window"]
@@ -231,10 +234,9 @@ def run_fixture(root, output):
     assert entries[0]["start_frame"] == 4
     assert entries[0]["source_sha256"] == window["sha256"]
     train_command = [sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
-                     str(root / "manifest-training"), "--dataset-index", str(dataset / "index.json"),
+                     str(pilot / "training"), "--dataset-index", str(dataset / "index.json"),
                      "--manifest", str(manifest_path), "--steps", "1"]
-    subprocess.run(train_command, check=True)
-    indexed_checkpoint = root / "manifest-training" / "step-1"
+    indexed_checkpoint = pilot / "training" / "step-1"
     expected_dataset = {"manifest_sha256": fingerprint(manifest_path), "index_sha256": fingerprint(dataset / "index.json"),
                         "window_count": 1}
     assert json.loads((indexed_checkpoint / "adapter.json").read_text())["training_dataset"] == expected_dataset
@@ -243,12 +245,11 @@ def run_fixture(root, output):
     (dataset / "index.json").write_text(json.dumps(index))
     rejected = subprocess.run(train_command + ["--resume"], capture_output=True, text=True)
     assert rejected.returncode and "checksum differs" in rejected.stderr
-    report = root / "evaluation.json"
+    report = pilot / "evaluation.json"
     command = [sys.executable, str(Path(__file__).with_name("evaluate_video_adapter.py")),
                str(root), str(indexed_checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
-    subprocess.run(command, check=True)
-    subprocess.run([sys.executable, str(worker_dir / "review_video_evaluation.py"), str(report),
-                    str((output or root) / "evaluation-review.html")], check=True)
+    assert receipt["adapter_sha256"] == fingerprint(indexed_checkpoint / "adapter.safetensors")
+    (output or root).joinpath("evaluation-review.html").write_bytes((pilot / receipt["review"]).read_bytes())
     result = json.loads(report.read_text())
     assert [case["scene"] for case in result["cases"]] == ["smptebars", "testsrc"]
     assert all(case["start_frame"] == 4 for case in result["cases"])
