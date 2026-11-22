@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/sql/staging-education-*.sql'
       - 'tests/sql/education-db-*.sql'
+      - 'scripts/staging/verifyEducationConcurrency.mjs'
       - 'supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql'
       - '.github/workflows/education-postgres-security.yml'
   workflow_dispatch:
@@ -55,6 +56,8 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-adversarial.sql
       - name: Check Education authoring, review decisions and expiry edge cases
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-lifecycle-edge-cases.sql
+      - name: Exercise five concurrent Education database transaction races
+        run: node scripts/staging/verifyEducationConcurrency.mjs
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true
