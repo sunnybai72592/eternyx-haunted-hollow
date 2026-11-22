@@ -360,3 +360,9 @@ verify_jwt = true
 # Authenticated control plane; provider is disabled until a separately reviewed range is online.
 [functions.ctf-range-control]
 verify_jwt = true
+
+# Dedicated provider protocol has verify_jwt=false only because its handler
+# requires an independent server-only x-range-worker-token plus an explicit
+# CTF_RANGE_WORKER_ENABLED=true operator setting. Disabled by default.
+[functions.ctf-range-worker]
+verify_jwt = false
