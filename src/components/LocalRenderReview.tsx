@@ -77,9 +77,6 @@ export default function LocalRenderReview({project, profile, quality, original}:
 
   const verify = async () => {
     if (processing) return;
-    const current = ++version.current;
-    setError("");
-    setProcessing(true);
     clearVerified();
     // clearVerified increments version; capture the live request identity afterward.
     const token = version.current;
