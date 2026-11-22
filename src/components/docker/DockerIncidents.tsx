@@ -3,7 +3,7 @@ import {AlertTriangle,ClipboardCheck,FileWarning} from "lucide-react";
 import {supabase} from "@/integrations/supabase/client";
 
 type ClaimView={id:string;operation:string;container_id:string;dispatch_claim_id?:string|null;reconciliation?:{status:string;attentionRequired:boolean}};
-export type DockerIncident={id:string;claim_id:string;reason:string;status:"open"|"investigating"|"reviewed";created_at:string;updated_at:string};
+export type DockerIncident={id:string;claim_id:string;reason:string;status:"open"|"investigating"|"reviewed"|"escalated";created_at:string;updated_at:string};
 export type DockerIncidentEvent={id:number;incident_id:string;action:string;note:string;occurred_at:string};
 type Props={requests:ClaimView[];incidents:DockerIncident[];events:DockerIncidentEvent[];refresh:()=>Promise<void>};
 const actionable=new Set(["receipt_pending","reconciliation_required","agent_reported_failed","agent_reported_guard_denied"]);
@@ -19,6 +19,7 @@ async function mutate(body:Record<string,string>){
 }
 export default function DockerIncidents({requests,incidents,events,refresh}:Props){
  const [notes,setNotes]=useState<Record<string,string>>({});
+ const [confirmations,setConfirmations]=useState<Record<string,string>>({});
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
  const [message,setMessage]=useState("");
@@ -27,7 +28,12 @@ export default function DockerIncidents({requests,incidents,events,refresh}:Prop
   try{
    await mutate(body);await refresh();
    setNotes(v=>({...v,[noteKey]:""}));
-   setMessage("Incident investigation record updated. Docker execution status is unchanged.");
+   setConfirmations(v=>({...v,[noteKey]:""}));
+   setMessage(body.action==="incident_escalate"
+     ?"Incident hold activated. Queued plans cancelled; already-issued permits may remain in flight."
+     :body.action==="incident_release_hold"
+     ?"Release recorded. Owner review remains disabled; no Docker operation was resumed."
+     :"Incident investigation updated. Docker execution status is unchanged.");
   }catch(e){setError(e instanceof Error?e.message:"Incident action failed.");}
   finally{setBusy(false);}
  };
@@ -36,7 +42,19 @@ export default function DockerIncidents({requests,incidents,events,refresh}:Prop
    value={notes[key]??""} onChange={e=>setNotes(s=>({...s,[key]:e.target.value}))}
    placeholder="Record what you checked. Do not include credentials or secrets."
    className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm"/>;
- const canNote=(key:string)=>{const t=(notes[key]??"").trim();return t.length>=12&&t.length<=500&&!/[\u0000-\u001f\u007f]/.test(t);};
+ const canNote=(key:string,min=12)=>{const t=(notes[key]??"").trim();return t.length>=min&&t.length<=500&&!/[\u0000-\u001f\u007f]/.test(t);};
+ const phrase=(id:string,mode:"incident_escalate"|"incident_release_hold")=>
+   (mode==="incident_escalate"?"SUSPEND ":"RELEASE ")+id.slice(0,8);
+ const safetyConfirmation=(id:string,mode:"incident_escalate"|"incident_release_hold")=><label className="mt-3 block text-xs text-muted-foreground">
+   Type <strong className="font-mono">{phrase(id,mode)}</strong> to confirm
+   <input aria-label={"Confirm Docker incident containment "+id.slice(0,8)}
+     autoComplete="off" spellCheck={false} value={confirmations[id]??""}
+     onChange={e=>setConfirmations(v=>({...v,[id]:e.target.value}))}
+     className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3 font-mono text-xs"/>
+ </label>;
+ const contain=(item:DockerIncident,mode:"incident_escalate"|"incident_release_hold")=>
+   act({action:mode,incidentId:item.id,note:(notes[item.id]??"").trim(),
+      confirmation:confirmations[item.id]??""},item.id);
  const candidates=requests.filter(r=>r.dispatch_claim_id&&actionable.has(r.reconciliation?.status??"")&&!incidents.some(i=>i.claim_id===r.dispatch_claim_id));
  return <section className="rounded-2xl border border-border bg-card p-5 sm:p-6" aria-labelledby="docker-incidents-title">
   <h2 id="docker-incidents-title" className="flex items-center gap-2 text-xl font-semibold"><FileWarning className="h-5 w-5 text-amber-500"/> Docker incident investigations</h2>
@@ -59,18 +77,38 @@ export default function DockerIncidents({requests,incidents,events,refresh}:Prop
     <div className="flex flex-wrap items-start justify-between gap-2"><div>
      <p className="font-semibold">Case {c.id.slice(0,8)} · {c.reason.replaceAll("_"," ")}</p>
      <p className="mt-1 text-xs text-muted-foreground">Claim {c.claim_id.slice(0,8)} · Created {new Date(c.created_at).toLocaleString()}</p>
-    </div><span className="rounded-full border border-border px-3 py-1 text-xs font-semibold">{c.status==="reviewed"?"Reviewed (not resolved)":c.status}</span></div>
+    </div><span className="rounded-full border border-border px-3 py-1 text-xs font-semibold">{c.status==="reviewed"?"Reviewed (not resolved)":c.status==="escalated"?"Escalated — hold active":c.status}</span></div>
     <div className="mt-3 space-y-2">{events.filter(e=>e.incident_id===c.id).map(e=><div key={e.id} className="rounded-lg bg-muted/30 p-3">
      <p className="text-xs font-semibold">{e.action} · {new Date(e.occurred_at).toLocaleString()}</p>
      <p className="mt-1 whitespace-pre-wrap break-words text-sm">{e.note}</p>
     </div>)}</div>
     {input(c.id)}
     <div className="mt-2 flex flex-wrap gap-2">
-     {c.status!=="investigating"&&<button disabled={busy||!canNote(c.id)} onClick={()=>act({action:"incident_triage",incidentId:c.id,status:"investigating",note:(notes[c.id]??"").trim()},c.id)}
+     {c.status!=="investigating"&&c.status!=="escalated"&&<button disabled={busy||!canNote(c.id)} onClick={()=>act({action:"incident_triage",incidentId:c.id,status:"investigating",note:(notes[c.id]??"").trim()},c.id)}
        className="min-h-11 rounded-lg border border-border px-4 text-sm disabled:opacity-50">Investigating</button>}
-     {c.status!=="reviewed"&&<button disabled={busy||!canNote(c.id)} onClick={()=>act({action:"incident_triage",incidentId:c.id,status:"reviewed",note:(notes[c.id]??"").trim()},c.id)}
+     {c.status!=="reviewed"&&c.status!=="escalated"&&<button disabled={busy||!canNote(c.id)} onClick={()=>act({action:"incident_triage",incidentId:c.id,status:"reviewed",note:(notes[c.id]??"").trim()},c.id)}
        className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 text-sm disabled:opacity-50"><ClipboardCheck className="h-4 w-4"/> Mark reviewed</button>}
     </div>
+    {c.status!=="escalated"&&<div className="mt-4 rounded-xl border border-amber-500/35 p-3">
+      <p className="text-sm font-semibold">Escalate and suspend new Docker approvals</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">This disables the owner's review policy and cancels queued plans. Already-issued 15-second permits may still be in flight; this does not stop a running container.</p>
+      {safetyConfirmation(c.id,"incident_escalate")}
+      <button disabled={busy||!canNote(c.id,20)||confirmations[c.id]!==phrase(c.id,"incident_escalate")}
+        onClick={()=>contain(c,"incident_escalate")}
+        className="mt-3 min-h-11 rounded-lg border border-amber-500/50 px-4 text-sm font-semibold disabled:opacity-50">
+        Escalate and suspend approvals
+      </button>
+    </div>}
+    {c.status==="escalated"&&<div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
+      <p className="text-sm font-semibold">Explicitly release this incident hold</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">Releases this case to Investigating. Any other escalated case keeps the hold active. Review policy stays OFF; this does not re-enable execution.</p>
+      {safetyConfirmation(c.id,"incident_release_hold")}
+      <button disabled={busy||!canNote(c.id,20)||confirmations[c.id]!==phrase(c.id,"incident_release_hold")}
+        onClick={()=>contain(c,"incident_release_hold")}
+        className="mt-3 min-h-11 rounded-lg border border-border px-4 text-sm font-semibold disabled:opacity-50">
+        Release this hold (keep policy disabled)
+      </button>
+    </div>}
    </article>)}
   </div>
   <p className="mt-4 text-xs text-muted-foreground">Only your own cases are shown. Notes are stored on the server and may contain sensitive operational details; never paste keys, credentials, or unrestricted logs. Review status is administrative only.</p>

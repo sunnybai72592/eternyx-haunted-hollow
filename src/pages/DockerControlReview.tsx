@@ -4,7 +4,8 @@ import { Container, ShieldCheck, ShieldAlert, ClipboardCheck, Clock3, Copy, Refr
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import DockerIncidents,{type DockerIncident,type DockerIncidentEvent} from "@/components/docker/DockerIncidents";
-type Policy={enabled:boolean;daily_limit:number};
+import DockerReadinessPanel,{type DockerReadiness} from "@/components/docker/DockerReadinessPanel";
+type Policy={enabled:boolean;daily_limit:number;incident_hold?:boolean;incident_hold_at?:string|null};
 type Agent={id:string;display_name:string;status:string};
 type Reconciliation={status:string;attentionRequired:boolean;receiptPresent:boolean;ageSeconds:number|null};
 type Overview={window:string;total:number;receiptPending:number;requiresReconciliation:number;agentReportedComplete:number;agentReportedIssue:number;notDispatched:number};
@@ -27,6 +28,7 @@ export default function DockerControlReview(){
   const [agents,setAgents]=useState<Agent[]>([]);
   const [requests,setRequests]=useState<Request[]>([]);
   const [overview,setOverview]=useState<Overview|null>(null);
+  const [readiness,setReadiness]=useState<DockerReadiness|null>(null);
   const [observedAt,setObservedAt]=useState<string|null>(null);
   const [events,setEvents]=useState<Event[]>([]);
   const [incidents,setIncidents]=useState<DockerIncident[]>([]);
@@ -44,11 +46,12 @@ export default function DockerControlReview(){
     const data=await control("list");
     const next=Array.isArray(data.agents)?data.agents as Agent[]:[];
     const nextPolicy=data.policy as Policy|undefined;
-    setPolicy(nextPolicy&&typeof nextPolicy.enabled==="boolean"&&Number.isInteger(nextPolicy.daily_limit)?nextPolicy:{enabled:false,daily_limit:5});
+    setPolicy(nextPolicy&&typeof nextPolicy.enabled==="boolean"&&Number.isInteger(nextPolicy.daily_limit)?nextPolicy:{enabled:false,daily_limit:5,incident_hold:false});
     setAgents(next);
     setAgentId(id=>next.some(a=>a.id===id)?id:next[0]?.id||"");
     setRequests(Array.isArray(data.requests)?data.requests as Request[]:[]);
     setOverview(data.dispatchOverview&&typeof data.dispatchOverview==="object"?data.dispatchOverview as Overview:null);
+    setReadiness(data.readiness&&typeof data.readiness==="object"?data.readiness as DockerReadiness:null);
     setObservedAt(typeof data.observedAt==="string"?data.observedAt:null);
     setEvents(Array.isArray(data.events)?data.events as Event[]:[]);
     setIncidents(Array.isArray(data.incidents)?data.incidents as DockerIncident[]:[]);
@@ -80,7 +83,7 @@ export default function DockerControlReview(){
     setConfirmation(old=>({...old,[row.id]:""}));await load();
     setNotice(decision==="approve"?"Request approved on ETERNYX. No container operation was executed.":"Request decision recorded.");
   });
-  const canCreate=policy.enabled && !!agentId && containerIdPattern.test(containerId);
+  const canCreate=policy.enabled && !policy.incident_hold && !!agentId && containerIdPattern.test(containerId);
   const approved=requests.filter(x=>x.effective_state==="approved");
   const reviewed=useMemo(()=>requests.filter(r=>r.effective_state!=="unavailable"),[requests]);
   return <div className="mx-auto max-w-6xl space-y-6 px-4 pb-20 pt-4 text-foreground sm:px-6">
@@ -98,10 +101,14 @@ export default function DockerControlReview(){
       <h2 className="flex items-center gap-2 text-xl font-semibold"><ShieldCheck className="h-5 w-5 text-cyan-500"/> 1. Explicit owner opt-in</h2>
       <p className="mt-2 text-sm text-muted-foreground">Disabled by default. Turning it on permits creation of review plans only, not remote operation execution. Turning it off cancels outstanding plans.</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <span className="text-sm font-semibold">{policy.enabled?"Review enabled":"Review disabled"}</span>
-        <button disabled={busy||!loaded} onClick={()=>changePolicy(!policy.enabled)} className="min-h-11 rounded-lg border border-cyan-500/40 px-4 text-sm font-semibold disabled:opacity-50">{policy.enabled?"Disable and cancel open plans":"Enable operation review"}</button>
+        <span className="text-sm font-semibold">{policy.incident_hold?"Incident hold active":policy.enabled?"Review enabled":"Review disabled"}</span>
+        <button disabled={busy||!loaded||(!policy.enabled&&policy.incident_hold===true)} onClick={()=>changePolicy(!policy.enabled)} className="min-h-11 rounded-lg border border-cyan-500/40 px-4 text-sm font-semibold disabled:opacity-50">{policy.enabled?"Disable and cancel open plans":"Enable operation review"}</button>
       </div>
+      {policy.incident_hold&&<p role="status" className="mt-3 text-sm text-amber-500">
+        Incident containment prevents re-enabling review. Release all escalated cases through incident investigations first; the policy will remain disabled until manually re-enabled.
+      </p>}
     </section>
+    <DockerReadinessPanel readiness={readiness} observedAt={observedAt}/>
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <h2 className="text-xl font-semibold">2. Create an operation plan</h2>
       <p className="mt-2 text-sm text-muted-foreground">Requires a verified agent identity with a signed Docker report received within the last three minutes. The host must still be independently verified by its operator.</p>
