@@ -23,11 +23,22 @@ jobs:
       - name: Start disposable Postgres with networking disabled
         run: |
           docker run --detach --rm --network none --name eternyx-webhook-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
-          for i in $(seq 1 30); do
-            if docker exec eternyx-webhook-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+          # Initdb briefly starts and restarts Postgres; do not mistake
+          # the temporary bootstrap server for the final stable server.
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-webhook-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable + 1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
             sleep 1
           done
-          docker exec eternyx-webhook-ci pg_isready -U postgres
+          docker exec eternyx-webhook-ci pg_isready -U postgres || {
+            docker logs eternyx-webhook-ci
+            exit 1
+          }
       - name: Build limited Supabase Auth fixtures
         run: docker exec --interactive eternyx-webhook-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
       - name: Apply exact manual Automation dependency
