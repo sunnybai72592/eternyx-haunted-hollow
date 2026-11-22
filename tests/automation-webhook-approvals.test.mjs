@@ -98,7 +98,7 @@ test("no external automation or unreviewed code execution added",async()=>{
     assert.doesNotMatch(content,/\beval\s*\(|new Function|Deno\.Command/);
   }
   const docs=await read("docs/ETERNYX_AUTOMATION_APPROVALS.md");
-  assert.match(docs,/disabled by default/i);
+  assert.match(docs,/OFF by default|disabled by default/i);
   assert.match(docs,/40/);
   assert.match(docs,/production/i);
 });
