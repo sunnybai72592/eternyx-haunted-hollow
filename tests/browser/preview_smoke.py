@@ -191,9 +191,23 @@ def storyboard(page):
     planner.get_by_label("Frame format").select_option("9:16")
     planner.get_by_role("button", name="0:03–0:06 Workshop").click()
     with page.expect_download() as pending:
-        planner.get_by_role("button", name="Download shot list (.json)").click()
+        planner.get_by_role("button", name="Download storyboard JSON").click()
+    assert pending.value.suggested_filename == "eternyx-storyboard.json"
     contents = Path(pending.value.path()).read_bytes()
     assert json.loads(contents)["totalSeconds"] == 6
+
+    with page.expect_download() as csv_download:
+        planner.get_by_role("button", name="Export shot timeline CSV").click()
+    assert csv_download.value.suggested_filename == "eternyx-shot-timeline.csv"
+    csv_content = Path(csv_download.value.path()).read_text(encoding="utf-8")
+    assert '"2","3","6","3","9:16","Workshop"' in csv_content
+
+    with page.expect_download() as srt_download:
+        planner.get_by_role("button", name="Export shot captions SRT").click()
+    assert srt_download.value.suggested_filename == "eternyx-shot-captions.srt"
+    srt_content = Path(srt_download.value.path()).read_text(encoding="utf-8")
+    assert "00:00:03,000 --> 00:00:06,000" in srt_content
+    assert "Workshop" in srt_content
     editor.fill("Another draft")
     file = planner.get_by_label("Open exported storyboard (.json)")
     file.set_input_files({"name": "broken.json", "mimeType": "application/json", "buffer": b"{"})
