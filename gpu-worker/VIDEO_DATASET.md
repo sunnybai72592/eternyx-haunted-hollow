@@ -207,3 +207,53 @@ Five improvements in this milestone:
 5. **Optional reproducible checks:** Choose upper limits for dark frames or identical transitions. With `--fail-on-flags`, the CLI saves the audit **before** exiting with status 2 if a limit is exceeded. Existing output directories are never overwritten.
 
 The dedicated `CPU video frame audit` GitHub workflow exercises these paths using real FFmpeg-generated test MP4s with motion, static scenes and mismatched frame counts. These fixtures validate decoding and diagnostics; **they are not evidence of a trained high-quality video generator**. Subject realism, motion coherence, caption alignment and overall quality still require separately reviewed rendered clips. Input video thumbnails may contain sensitive imagery, so keep the generated local reports private.
+
+
+## Assemble a real CPU-only short video from reviewed clips
+
+You can now **create a playable MP4**, without a GPU, from clips you own or have the right to use. This is a local timeline renderer, not a trained text-to-video generator. Use Python 3.11+, FFmpeg/FFprobe with libx264, and the `gpu-worker/assemble_video_storyboard.py` CLI.
+
+Create a private `storyboard.json` with exact source-file SHA-256 values (from `sha256sum clips/name.mp4` on Linux, or your preferred SHA-256 utility):
+
+```json
+{
+  "version": 1,
+  "shots": [
+    {
+      "file": "motion.mp4",
+      "source_sha256": "REPLACE_WITH_THE_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+      "start_frame": 4,
+      "frames": 8,
+      "caption": "A moving subject enters the frame",
+      "rights_ref": "original-footage-log-001"
+    },
+    {
+      "file": "ending.mp4",
+      "source_sha256": "REPLACE_WITH_THE_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+      "start_frame": 0,
+      "frames": 8,
+      "caption": "The scene fades into darkness",
+      "rights_ref": "original-footage-log-002"
+    }
+  ]
+}
+```
+
+Replace the example digests before use. Source MP4s must have **fixed 16 FPS**, be no larger than 512 × 512 pixels or 32 MiB each, and have no more than 64 decoded frames. Choose 1–8 shots totaling no more than 64 frames (4 seconds); this intentionally stays within the existing short CPU audit boundary.
+
+```sh
+python gpu-worker/assemble_video_storyboard.py \
+  --storyboard ./storyboard.json --clips ./clips \
+  --output ./assembled-01 --width 128 --height 72
+```
+
+Six real capabilities in one milestone:
+
+1. **Reviewed shot manifests:** Every cut carries a relative local MP4 path, source SHA-256, starting frame, length, human caption and rights reference. Invalid paths, symlinks, corrupted checksums, unsafe text, oversized manifests and unsupported frame rates fail closed.
+2. **Real frame-accurate assembly:** FFmpeg decodes the selected source intervals, letterboxes them to a common even output size, concatenates the timeline and encodes a new H.264 MP4 at 16 FPS. It does not reuse or label test footage as AI-generated footage.
+3. **Subtitles as an editable sidecar:** The tool exports `captions.srt`, with captions placed on exact shot boundaries. The subtitles are deliberately **not burned into the MP4** and can be edited or switched off in compatible players.
+4. **Verified private output:** The compiler decodes the assembled MP4 again, confirms pixel dimensions, frame rate and total frame count, then records the rendered MP4 SHA-256 and all original source hashes in `manifest.json`. Original footage is never changed.
+5. **Actual visual review:** Local `preview.html` embeds an image taken from the rendered middle frame of each shot, alongside timeline frame positions, captions and rights references. Escaped HTML prevents captions from being interpreted as markup.
+6. **Create-only delivery and tests:** Outputs are packaged in a new directory with `video.mp4`, `captions.srt`, `manifest.json` and `preview.html`. Existing output directories are never intentionally overwritten. Dedicated CPU-only CI tests encode real sample videos with FFmpeg and verify cuts, rights/digests, the render, preview and failure behavior.
+
+**Scope:** The 4-second limit is intentional for short local experiments. This milestone does not synthesize new imagery, run a model, introduce audio, use external APIs or provision GPUs. Source clips may contain sensitive information: retain the outputs locally and review actual source rights independently.
