@@ -78,7 +78,7 @@ test("actual candidate MP4 size and SHA-256 match a specific seed and exact rece
   assert.equal(verified.candidate,"candidate-02");
   assert.equal(verified.seed,43);
   assert.equal(verified.frameCount,16);
-  assert.equal(verified.temporalMetrics,metrics);
+  assert.deepEqual(verified.temporalMetrics,metrics);
   for(const bad of [
     {name:"video.mp4",size:12035,sha256:a},
     {name:"video.mp4",size:12034,sha256:c},
