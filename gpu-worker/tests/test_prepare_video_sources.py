@@ -65,6 +65,28 @@ class PhoneFootagePreparationTests(unittest.TestCase):
         self.assertEqual((result["prepared_width"], result["prepared_height"]), (36, 64))
         self.assertEqual(result["reported_fps"], "24/1")
 
+    def test_phone_container_comments_are_not_copied(self):
+        # Camera/MOV global metadata can include confidential device/location notes.
+        marked = self.inputs / "private.mov"
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y",
+             "-f", "lavfi", "-i", "testsrc=size=64x36:rate=30:duration=1",
+             "-threads", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+             "-metadata", "comment=private-phone-device-tag", str(marked)],
+            capture_output=True, check=True, timeout=20,
+        )
+        def comments(path):
+            raw = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format_tags=comment",
+                 "-of", "json", str(path)],
+                capture_output=True, check=True, timeout=15,
+            ).stdout.decode()
+            return raw
+        self.assertIn("private-phone-device-tag", comments(marked))
+        prepared = self.root / "private-prepared"
+        prepare(self.inputs, prepared, clips=["private.mov"], seconds=1)
+        self.assertNotIn("private-phone-device-tag", comments(prepared / "clip-01.mp4"))
+
     def test_audio_is_removed_from_prepared_source_clips(self):
         with_audio = self.make("sound.m4v", rate=30, width=64, height=36, audio=True)
         result = prepare(self.inputs, self.root / "silenced", clips=["sound.m4v"], seconds=1)
