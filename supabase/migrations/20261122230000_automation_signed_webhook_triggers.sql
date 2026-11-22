@@ -12,6 +12,7 @@ CREATE TABLE public.automation_webhook_triggers (
   enabled boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   rotated_at timestamptz NOT NULL DEFAULT now(),
+  credential_version integer NOT NULL DEFAULT 1 CHECK (credential_version BETWEEN 1 AND 2147483647),
   last_used_at timestamptz,
   UNIQUE(workflow_id)
 );
@@ -42,8 +43,10 @@ BEGIN
   IF p_rotate THEN
     UPDATE public.automation_webhook_triggers
     SET credential_ciphertext=p_ciphertext,credential_iv=p_iv,
-        enabled=false,rotated_at=pg_catalog.statement_timestamp()
+        enabled=false,rotated_at=pg_catalog.statement_timestamp(),
+        credential_version=credential_version + 1
     WHERE user_id=p_user_id AND workflow_id=p_workflow_id
+      AND credential_version < 2147483647
     RETURNING * INTO v_trigger;
     IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;
   ELSE
@@ -117,7 +120,7 @@ CREATE OR REPLACE FUNCTION public.automation_record_webhook_run(
   p_trigger_id uuid, p_user_id uuid, p_workflow_id uuid, p_revision integer,
   p_request_key uuid, p_fingerprint text, p_input_lines integer,
   p_output_lines integer, p_input_characters integer,
-  p_output_characters integer, p_trace jsonb, p_rotated_at timestamptz
+  p_output_characters integer, p_trace jsonb, p_credential_version integer
 )
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 DECLARE
@@ -125,13 +128,13 @@ DECLARE
   v_result jsonb;
 BEGIN
   IF p_trigger_id IS NULL OR p_user_id IS NULL OR p_workflow_id IS NULL
-     OR p_rotated_at IS NULL THEN
+     OR p_credential_version IS NULL OR p_credential_version < 1 THEN
     RETURN jsonb_build_object('ok',false,'reason','invalid_request');
   END IF;
   PERFORM pg_catalog.pg_advisory_xact_lock(20261122,pg_catalog.hashtext(p_user_id::text));
   SELECT * INTO v_trigger FROM public.automation_webhook_triggers
   WHERE id=p_trigger_id AND user_id=p_user_id AND workflow_id=p_workflow_id
-    AND enabled=true AND rotated_at=p_rotated_at;
+    AND enabled=true AND credential_version=p_credential_version;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reason','trigger_revoked'); END IF;
   -- The same owner lock also protects pause and workflow revision changes.
   SELECT public.automation_record_run(
@@ -149,7 +152,7 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public.automation_record_webhook_run(
-  uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,timestamptz
+  uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,integer
 ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.automation_record_webhook_run(
   uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,timestamptz
