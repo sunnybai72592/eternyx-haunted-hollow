@@ -12,9 +12,7 @@ const app = read('src/App.tsx');
 test('all five original auth swatches drive the same root hue and semantic tokens', () => {
   const hues = {cyan: 181, violet: 270, emerald: 157, bronze: 28, rose: 336};
   for (const [name, hue] of Object.entries(hues)) {
-    const section = palette.match(new RegExp(
-      ':root\\[data-eternyx-palette=\\\'' + name + '\\\'\\] \\{([^}]+)\\}'
-    ))?.[1];
+    const section = palette.split(":root[data-eternyx-palette='" + name + "'] {")[1]?.split('}')[0];
     assert.ok(section, name + ' palette definition missing');
     assert.match(section, new RegExp('--eternyx-color-hue: ' + hue + ';'));
     assert.match(section, /--eternyx-color-saturation:\s*\d+%/);
