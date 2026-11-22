@@ -152,7 +152,7 @@ export default function LocalLearnedVideoStudio() {
         <p className="text-sm text-slate-300">
           After local CPU generation, open <code className="text-cyan-200">{paths.finished}</code>.
           Its <code>{paths.renderManifest}</code> can be imported in the real MP4 review section below.
-          The separate sample report flags these new pixels as learned non-neural texture generation.
+          The separate sample report <code>{paths.sampleReport}</code> flags these new pixels as learned non-neural texture generation.
           Choose a fresh output folder for each render—existing files are never overwritten.
         </p>
       </div>
