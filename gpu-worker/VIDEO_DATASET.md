@@ -31,6 +31,16 @@ Add `--playback` to embed a silent MP4 of each complete window. Use the player's
 
 Open the local HTML to compare timestamps, frames and adjacent-frame pixel changes. An incomplete candidate is marked individually. Save the manifest for the window that matches your caption, then use that file for encoding, training and evaluation. The exported copy changes only the selected clip's start frame. The HTML contains footage previews and downloadable copies of the dataset annotations.
 
+## Combine window choices from several clips
+
+Supply the same manifest used by the picker, a new output directory and one `--pick FILE START_FRAME` per selected clip.
+
+```sh
+python gpu-worker/select_footage_windows.py ./clips dataset-v1.json selected-windows --pick workshop-wide.mp4 8 --pick courtyard-pan.mp4 0
+```
+
+Open `selected-windows/footage-review.html` to review the resulting training and evaluation windows together. Use `selected-windows/dataset.json` in the encoder. The receipt in `selections.json` records previous and selected offsets and both manifest hashes. All windows are decoded and checked before the completed directory is published.
+
 ## Inspect the selected windows before encoding
 
 ```sh
