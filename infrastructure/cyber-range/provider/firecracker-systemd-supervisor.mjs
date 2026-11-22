@@ -360,6 +360,17 @@ export class SystemdMicrovmSupervisor {
     this.#command("systemctl",["stop",supervisedVmUnit(sessionId)]);
     return {requested:true,unit:supervisedVmUnit(sessionId)};
   }
+  /**
+   * Read-only independent timeout attribution after proving an empty cgroup.
+   * With --collect, systemd may unload the unit; missing Result fails closed.
+   */
+  async verifyTimedOut(sessionId){
+    if(await this.verifyDead(sessionId)!==true)return false;
+    const out=this.#command("systemctl",[
+      "show",supervisedVmUnit(sessionId),"-pResult",
+    ]);
+    return out.trim()==="Result=timeout";
+  }
   async verifyDead(sessionId){
     const raw=this.#read(sessionId),p=parseSystemdUnitShow(raw);
     if(p.LoadState!=="not-found"){

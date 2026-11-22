@@ -22,6 +22,10 @@ const usage=[
   "  npm run range:microvm:hardware -- --inspect --session UUID --uid 22001 --gid 22001 --kernel-sha SHA256 --rootfs-sha SHA256 --jailer-sha SHA256 --firecracker-sha SHA256",
   "Manually approved, offline guest boot and immediate teardown:",
   "  npm run range:microvm:hardware -- --run --confirm-local-kvm --session UUID --uid 22001 --gid 22001 --kernel-sha SHA256 --rootfs-sha SHA256 --jailer-sha SHA256 --firecracker-sha SHA256",
+  "Guest service challenge via offline vsock (requires pre-staged guest agent):",
+  "  npm run range:microvm:hardware -- --run --confirm-local-kvm --probe-guest [pinned fields]",
+  "Manual actual 900-second systemd expiry observation (extra environment opt-in):",
+  "  npm run range:microvm:hardware -- --run --confirm-local-kvm --expiry-drill [pinned fields]",
   "Optional protected evidence record (only after a successful local run):",
   "  npm run range:microvm:hardware -- --run --confirm-local-kvm --save-evidence [the same pinned fields as above]",
   "Read-only receipt verifier:",
@@ -55,8 +59,22 @@ try{
       if(!["--inspect","--run"].includes(mode))
         throw Error("Unknown acceptance mode");
       const run=mode==="--run";
-      const saveEvidence=run&&argv[2]==="--save-evidence";
-      const tail=run?argv.slice(saveEvidence?3:2):argv.slice(1);
+      const modes=new Set();
+      let cursor=run?2:1;
+      if(run){
+        for(;cursor<argv.length;cursor++){
+          if(!["--save-evidence","--probe-guest","--expiry-drill"].includes(argv[cursor]))
+            break;
+          if(modes.has(argv[cursor]))throw Error("Duplicate operator mode");
+          modes.add(argv[cursor]);
+        }
+      }
+      const saveEvidence=modes.has("--save-evidence");
+      const guestProbeEnabled=modes.has("--probe-guest");
+      const expiryDrill=modes.has("--expiry-drill");
+      if(saveEvidence&&(guestProbeEnabled||expiryDrill))
+        throw Error("Legacy receipt cannot attest expanded guest/drill modes");
+      const tail=argv.slice(cursor);
       if(run&&argv[1]!=="--confirm-local-kvm")
         throw Error("Missing human KVM run confirmation");
       if(tail.length!==keys.length*2)throw Error("Missing guest approval arguments");
@@ -86,7 +104,7 @@ try{
         process.once("SIGINT",()=>abort.abort());
         process.once("SIGTERM",()=>abort.abort());
         const result=await runOfflineHardwareAcceptance({
-          ...config,signal:abort.signal,
+          ...config,signal:abort.signal,guestProbeEnabled,expiryDrill,
         });
         if(saveEvidence){
           const receipt=createHardwareEvidence({config,result});

@@ -129,3 +129,77 @@ logs, trusted image provenance, separate expiry/cgroup teardown records,
 and a guest functional vsock challenge/response before claiming those
 remaining milestones are complete. GitHub CI exercises only file/receipt
 contracts and faked VM state, never actual KVM.
+
+
+## Follow-on milestone: optional guest vsock proof + separate 900-second drill
+
+Neither optional mode is enabled by default. This PR adds runnable **operator-only**
+paths and mocked CI regressions, but **does not assert that an actual physical
+KVM test has occurred**. The normal `--run` acceptance still stops the VM
+after a one-second liveness observation.
+
+### Guest proof (real vsock host-to-guest challenge)
+
+The guest probe connects exclusively to the pre-staged jailed Firecracker
+`/v.sock` Unix socket (not TCP), sends `CONNECT 5501`, expects
+Firecracker's `OK <port>` line, then sends a fresh 256-bit challenge and
+validates a session-bound SHA-256 response. Host cgroup/netns and watchdog
+attestations are repeated before and after the exchange.
+
+An independently approved, pinned guest rootfs **must contain and explicitly
+start** the reference Python service at
+`infrastructure/cyber-range/guest/eternyx_vsock_probe.py` on AF_VSOCK
+port 5501. This PR does NOT install it, edit the rootfs, fetch images,
+enable service startup, or configure any network interface. If the guest image
+has no service, the optional probe fails closed and kills the VM.
+
+After the existing root-only triple approval, the operator adds
+`--probe-guest` immediately after `--confirm-local-kvm`:
+
+```bash
+sudo --preserve-env=ETERNYX_FIRECRACKER_HOST_EXECUTION,ETERNYX_RANGE_OPERATOR_ACK,ETERNYX_FIRECRACKER_HARDWARE_ACCEPTANCE   npm run range:microvm:hardware -- --run --confirm-local-kvm --probe-guest   --session 123e4567-e89b-42d3-a456-426614174001   --uid 22001 --gid 22001   --kernel-sha KERNEL_SHA256 --rootfs-sha ROOTFS_SHA256   --jailer-sha JAILER_SHA256 --firecracker-sha FIRECRACKER_SHA256
+```
+
+This tests **guest service challenge responsiveness**; it is NOT signed
+guest identity, independent source provenance, root-host integrity, application
+security or a production service audit. A compromised host could impersonate
+this lightweight service.
+
+### Deliberate full watchdog timeout drill
+
+This test deliberately keeps a disposable, already approved local KVM guest
+running long enough for its independent `systemd RuntimeMaxSec=900s`
+to expire. It is **not suitable for CI or production** and requires an
+additional explicit root-operator approval flag:
+
+```bash
+export ETERNYX_FIRECRACKER_EXPIRY_DRILL=I_APPROVE_LOCAL_900_SECOND_WATCHDOG_DRILL
+sudo --preserve-env=ETERNYX_FIRECRACKER_HOST_EXECUTION,ETERNYX_RANGE_OPERATOR_ACK,ETERNYX_FIRECRACKER_HARDWARE_ACCEPTANCE,ETERNYX_FIRECRACKER_EXPIRY_DRILL   npm run range:microvm:hardware -- --run --confirm-local-kvm --expiry-drill   --session 123e4567-e89b-42d3-a456-426614174001   --uid 22001 --gid 22001   --kernel-sha KERNEL_SHA256 --rootfs-sha ROOTFS_SHA256   --jailer-sha JAILER_SHA256 --firecracker-sha FIRECRACKER_SHA256
+```
+
+The observer verifies the VM is alive and isolated near 840 seconds after
+launch, checks actual cgroup death around the configured deadline, and
+requires `systemctl show ... -pResult` to report `Result=timeout`.
+If a collected unit has lost that result, it **refuses to call it proven**.
+The original runner still performs an independent termination and no-descendant
+check on completion or failure. Cancellation is fail-closed. A host crash
+requires the existing separate `--verify-stopped` operator audit.
+
+`--probe-guest` and `--expiry-drill` can be combined for one
+manual run. `--save-evidence` is intentionally incompatible with both:
+the v1 receipt schema does **not** attest these stronger claims, so reporting
+them as documented acceptance evidence would be misleading. No user-facing
+lab or cloud billing integration is enabled.
+
+### No-cost verification
+
+```bash
+node --test tests/ctf-firecracker-guest-probe-expiry.test.mjs   tests/ctf-firecracker-hardware-acceptance.test.mjs
+npm test
+npm run build
+```
+
+The tests use fake Unix sockets, simulated time and mock systemd results.
+Actual 900-second execution and its evidence **must** be collected on an
+approved disposable Linux/KVM host and independently reviewed before treating
+the drill as hardware-verified.
