@@ -318,7 +318,7 @@ BEGIN
  last_day:=(pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date;
  first_day:=last_day-(p_days-1);
  WITH days AS (
-   SELECT (first_day+offset)::date AS day FROM generate_series(0,p_days-1) offset
+   SELECT (first_day+g.n)::date AS day FROM generate_series(0,p_days-1) AS g(n)
  ), openings AS (
    SELECT (created_at AT TIME ZONE 'UTC')::date AS day,count(*) AS ct
    FROM public.automation_incidents
