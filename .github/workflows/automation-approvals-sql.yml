@@ -1,0 +1,53 @@
+name: Automation Signed Webhook Approvals SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123000000_automation_webhook_approvals.sql'
+      - 'tests/sql/automation-webhook-approvals-db-smoke.sql'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+      - '.github/workflows/automation-approvals-sql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify approval owner locks, signatures, quotas, expiry and replay on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable network-isolated PostgreSQL 17
+        run: |
+          docker run --detach --rm --network none --name eternyx-approvals-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-approvals-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-approvals-ci pg_isready -U postgres || {
+            docker logs eternyx-approvals-ci
+            exit 1
+          }
+      - name: Create minimal Supabase fixture roles and two auth identities
+        run: docker exec --interactive eternyx-approvals-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply manual Automation foundation
+        run: docker exec --interactive eternyx-approvals-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122220000_automation_manual_control_plane.sql
+      - name: Apply signed webhook foundation
+        run: docker exec --interactive eternyx-approvals-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql
+      - name: Apply scheduled run foundation
+        run: docker exec --interactive eternyx-approvals-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122234500_automation_scheduled_runs.sql
+      - name: Apply signed approval migration
+        run: docker exec --interactive eternyx-approvals-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123000000_automation_webhook_approvals.sql
+      - name: Verify cross-owner decisions, quotas, policy, rotation, expiry and idempotency
+        run: docker exec --interactive eternyx-approvals-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-webhook-approvals-db-smoke.sql
+      - name: Tear down test PostgreSQL
+        if: always()
+        run: docker rm --force eternyx-approvals-ci || true

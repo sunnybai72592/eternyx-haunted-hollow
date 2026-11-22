@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AutomationApprovalPanel from "@/components/AutomationApprovalPanel";
 import { ClipboardCopy, LockKeyhole, PauseCircle, RefreshCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 
 type Trigger = {
-  id: string; workflow_id: string; enabled: boolean;
+  id: string; workflow_id: string; enabled: boolean; approval_required: boolean;
   created_at: string; rotated_at: string; last_used_at: string | null;
 };
 type Reply = Record<string, unknown>;
@@ -34,7 +35,8 @@ function safeTriggers(raw: unknown): Trigger[] {
     if (!t || typeof t !== "object" || Array.isArray(t)) throw new Error("Invalid trigger metadata.");
     const trigger = t as Record<string, unknown>;
     if (typeof trigger.id !== "string" || typeof trigger.workflow_id !== "string" ||
-        typeof trigger.enabled !== "boolean" || typeof trigger.rotated_at !== "string" ||
+        typeof trigger.enabled !== "boolean" || typeof trigger.approval_required !== "boolean" ||
+        typeof trigger.rotated_at !== "string" ||
         typeof trigger.created_at !== "string" ||
         !(trigger.last_used_at === null || typeof trigger.last_used_at === "string")) {
       throw new Error("Invalid trigger record.");
@@ -53,6 +55,7 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [configured, setConfigured] = useState(false);
+  const [approvalConfigured, setApprovalConfigured] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ triggerId: string; secret: string } | null>(null);
@@ -62,16 +65,19 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
   const webhookUrl = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/automation-webhook";
   useEffect(() => {
     setTriggers([]); setIssued(null); setLoaded(false); setConfigured(false);
+    setApprovalConfigured(false);
     setError(""); setMessage(""); setShowKey(false);
   }, [userId]);
 
   async function reload() {
     const data = await call("webhooks");
-    if (data.source !== "authenticated_server" || typeof data.webhooksConfigured !== "boolean") {
+    if (data.source !== "authenticated_server" || typeof data.webhooksConfigured !== "boolean" ||
+        typeof data.approvalConfigured !== "boolean") {
       throw new Error("Webhook configuration has not been verified.");
     }
     setTriggers(safeTriggers(data.triggers));
     setConfigured(data.webhooksConfigured);
+    setApprovalConfigured(data.approvalConfigured);
     setLoaded(true);
   }
   async function act(action: () => Promise<void>) {
@@ -111,6 +117,7 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
           triggers.some((trigger) => trigger.workflow_id === selectedWorkflowId) || triggers.length >= 5}
           onClick={() => act(() => provision("createWebhook", selectedWorkflowId!))}>Create disabled trigger for selected workflow</Button>
       </div>
+      {loaded && !approvalConfigured && <p className="text-xs text-amber-600 dark:text-amber-300">Owner-review mode needs its private encryption secret before it can be enabled. Direct signed webhooks are unchanged.</p>}
       {loaded && !configured && <p role="status" className="text-sm text-amber-600 dark:text-amber-300">The server encryption key is not configured; new triggers cannot be created or verified.</p>}
       {loaded && !selectedWorkflowId && <p className="text-xs text-muted-foreground">Load and select a saved workflow above to create a trigger.</p>}
       {issued && <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-4">
@@ -131,6 +138,9 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
             <span className="text-xs text-muted-foreground">Last used: {date(trigger.last_used_at)}</span>
           </div>
           <p className="break-all font-mono text-xs text-muted-foreground">Trigger: {trigger.id}</p>
+          <p className="text-xs text-muted-foreground">Delivery policy: {trigger.approval_required
+            ? "Owner review required · signed event is queued and NOT executed at receipt"
+            : "Direct signed execution · no human review required"}</p>
           <p className="break-all text-xs text-muted-foreground">Workflow: {trigger.workflow_id} · Key rotated {date(trigger.rotated_at)}</p>
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy || !configured} size="sm" variant="outline" onClick={() => act(async () => {
@@ -138,6 +148,24 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
               if (result.ok !== true) throw new Error("Unable to change trigger status.");
               await reload(); setMessage(trigger.enabled ? "Webhook disabled." : "Webhook enabled for signed traffic.");
             })}><PauseCircle className="mr-2 size-4" /> {trigger.enabled ? "Disable" : "Enable"}</Button>
+            <Button disabled={busy || (trigger.approval_required === false && !approvalConfigured)}
+              size="sm" variant="outline" onClick={() => {
+                if (!window.confirm(trigger.approval_required
+                  ? "Disable owner review? Future signed webhook events will execute immediately."
+                  : "Require explicit owner approval for every future signed webhook event? Incoming signed text will be queued, not run.")) return;
+                void act(async () => {
+                  const response = await call("setWebhookApproval", {
+                    triggerId:trigger.id,required:!trigger.approval_required,
+                  });
+                  if (response.ok !== true || response.approval_required !== !trigger.approval_required) {
+                    throw new Error("Webhook approval policy was not updated.");
+                  }
+                  await reload();
+                  setMessage(trigger.approval_required
+                    ? "Direct signed execution is now enabled."
+                    : "Review required: future signed events are queued for your approval.");
+                });
+              }}>{trigger.approval_required ? "Use direct execution" : "Require owner review"}</Button>
             <Button disabled={busy || !configured} size="sm" variant="outline" onClick={() => {
               if (!window.confirm("Rotate this webhook signing key? Old signatures will fail and the trigger will be disabled.")) return;
               void act(() => provision("rotateWebhook", trigger.id));
@@ -164,6 +192,7 @@ export default function AutomationWebhookPanel({ selectedWorkflowId }: { selecte
           Maximum five-minute clock skew. Never include the key itself in requests.
         </p>
       </div>
+      <AutomationApprovalPanel />
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
     </>}

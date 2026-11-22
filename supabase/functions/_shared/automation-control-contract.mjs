@@ -19,6 +19,11 @@ const fields = {
   rotateWebhook: ["action", "triggerId"],
   toggleWebhook: ["action", "triggerId", "enabled"],
   deleteWebhook: ["action", "triggerId"],
+  setWebhookApproval: ["action", "triggerId", "required"],
+  approvalInbox: ["action"],
+  previewApproval: ["action", "approvalId"],
+  approveWebhook: ["action", "approvalId"],
+  rejectWebhook: ["action", "approvalId"],
 };
 
 export function parseAutomationControlRequest(value) {
@@ -42,18 +47,29 @@ export function parseAutomationControlRequest(value) {
   if (["createWebhook"].includes(action) && typeof value.workflowId !== "string") {
     return { ok: false, reason: "missing_workflow_id" };
   }
-  if (["rotateWebhook", "toggleWebhook", "deleteWebhook"].includes(action) &&
+  if (["rotateWebhook", "toggleWebhook", "deleteWebhook", "setWebhookApproval"].includes(action) &&
       (typeof value.triggerId !== "string" || !UUID_RE.test(value.triggerId))) {
     return { ok: false, reason: "invalid_trigger_id" };
+  }
+  if (["previewApproval", "approveWebhook", "rejectWebhook"].includes(action) &&
+      (typeof value.approvalId !== "string" || !UUID_RE.test(value.approvalId))) {
+    return { ok: false, reason: "invalid_approval_id" };
+  }
+  if (action === "setWebhookApproval" && typeof value.required !== "boolean") {
+    return { ok: false, reason: "invalid_required" };
   }
   if (action === "toggleWebhook" && typeof value.enabled !== "boolean") {
     return { ok: false, reason: "invalid_enabled" };
   }
-  if (["webhooks", "createWebhook", "rotateWebhook", "toggleWebhook", "deleteWebhook"].includes(action)) {
+  if (["webhooks", "createWebhook", "rotateWebhook", "toggleWebhook", "deleteWebhook", "setWebhookApproval",
+       "approvalInbox", "previewApproval", "approveWebhook", "rejectWebhook"].includes(action)) {
     return { ok: true, action,
       ...(value.workflowId ? { workflowId: value.workflowId } : {}),
       ...(value.triggerId ? { triggerId: value.triggerId } : {}),
       ...(action === "toggleWebhook" ? { enabled: value.enabled } : {}),
+      ...(action === "setWebhookApproval" ? { required: value.required } : {}),
+      ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
+        ? { approvalId: value.approvalId } : {}),
     };
   }
   if (action === "save") {
