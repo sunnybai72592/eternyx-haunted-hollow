@@ -29,7 +29,7 @@ export function parseRangeRequest(input) {
 }
 
 export function providerIsOnline(provider, now = new Date()) {
-  if (!provider || provider.enabled !== true ||
+  if (!provider || provider.enabled !== true || provider.ingress_approved !== true ||
       !Number.isInteger(provider.max_active_sessions) ||
       provider.max_active_sessions < 1 || provider.max_active_sessions > 3) {
     return false;
