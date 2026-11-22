@@ -25,11 +25,11 @@ const cases=Object.freeze({
     "student-a-cannot-select-private-review-table",
     "student-b-cannot-select-private-review-table",
     "anonymous-cannot-select-private-review-table",
+  ]),
+  review:Object.freeze([
     "student-a-cannot-write-manual-review",
     "student-b-cannot-write-manual-review",
     "anonymous-cannot-write-manual-review",
-  ]),
-  review:Object.freeze([
     "instructor-records-synthetic-human-mark",
     "instructor-queue-records-reviewed-points",
     "instructor-idempotent-same-points",
