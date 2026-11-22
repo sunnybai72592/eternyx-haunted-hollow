@@ -135,8 +135,15 @@ BEGIN
     WHEN TG_OP = 'UPDATE' THEN 'updated' ELSE 'deleted' END;
   v_owner := CASE WHEN TG_OP = 'DELETE' THEN OLD.owner_id ELSE NEW.owner_id END;
   v_entity := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-  v_project := CASE WHEN TG_TABLE_NAME = 'workspace_projects' THEN v_entity
-    WHEN TG_OP = 'DELETE' THEN OLD.project_id ELSE NEW.project_id END;
+  -- Project rows have no project_id column. Separate branches so PL/pgSQL
+  -- never attempts to resolve a missing record field on project INSERT/UPDATE.
+  IF TG_TABLE_NAME = 'workspace_projects' THEN
+    v_project := v_entity;
+  ELSIF TG_OP = 'DELETE' THEN
+    v_project := OLD.project_id;
+  ELSE
+    v_project := NEW.project_id;
+  END IF;
   INSERT INTO public.workspace_activity(owner_id, project_id, entity_id, event_type)
     VALUES (v_owner, v_project, v_entity, v_action);
   -- AFTER triggers ignore the return value.
