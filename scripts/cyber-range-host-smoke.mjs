@@ -20,15 +20,18 @@ if (process.platform!=="linux" ||
   const runtime=new LocalDockerRangeRuntime();
   const ids=[randomUUID(),randomUUID()];
   const started=[];
+  let stage="host-validation";
   try {
     runtime.validateHost();
-    for(const id of ids){
+    for(const [index,id] of ids.entries()){
+      stage=index===0?"launch-first":"launch-second";
       const range=await runtime.start(id);
       assert.equal(range.instanceRef,"cr-"+id.replaceAll("-",""));
       assert.ok(Number.isInteger(range.localPort) &&
         range.localPort>=1024 && range.localPort<=65535);
       started.push(range);
     }
+    stage="host-local-http";
     assert.notEqual(started[0].localPort,started[1].localPort);
     const access=async(index,token,route="/api/tickets?ticket=102")=>
       fetch("http://127.0.0.1:"+started[index].localPort+route,{
@@ -54,6 +57,7 @@ if (process.platform!=="linux" ||
       assert.equal(inspection.internalNetworks,2);
     }
     assert.notEqual(flags[0],flags[1]);
+    stage="deny-egress-and-metadata";
     // Reject public Internet and cloud instance-metadata connections from
     // BOTH Docker services on BOTH independent internal-only networks.
     const composeFile=resolve(dirname(fileURLToPath(import.meta.url)),
@@ -84,7 +88,7 @@ if (process.platform!=="linux" ||
 
     console.log("Two private network labs verified; host-only ingress, isolation and token separation passed");
   }catch{
-    console.error("Host-only range smoke failed; inspect private CI Docker/network logs securely");
+    console.error("Host-only range smoke failed at safe stage: "+stage);
     process.exitCode=1;
   }finally{
     // Do not output secrets; the per-session host listeners terminate first.
