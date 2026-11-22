@@ -64,14 +64,21 @@ FROM (
         WHERE v.request_id = r.id AND s.user_id = r.user_id
       )
     ) AS last_customer_activity_at,
-    (
-      SELECT max(a.created_at)
-      FROM public.service_request_activity a
-      WHERE a.request_id = r.id
-        AND (
-          a.event_type = 'status_changed'
-          OR (a.event_type = 'message' AND a.actor_id IS DISTINCT FROM r.user_id)
-        )
+    greatest(
+      (
+        SELECT max(a.created_at)
+        FROM public.service_request_activity a
+        WHERE a.request_id = r.id
+          AND (
+            a.event_type = 'status_changed'
+            OR (a.event_type = 'message' AND a.actor_id IS DISTINCT FROM r.user_id)
+          )
+      ),
+      (
+        SELECT max(v.created_at)
+        FROM public.service_scope_reviews v
+        WHERE v.request_id = r.id
+      )
     ) AS last_admin_activity_at
   FROM public.service_requests r
   LEFT JOIN public.service_request_triage t ON t.request_id = r.id
