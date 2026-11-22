@@ -85,3 +85,40 @@ test("audit tool contains no Docker invocation or remote request",()=>{
  assert.match(s,/signLabAudit/);assert.match(s,/verifyLabAudit/);
  assert.doesNotMatch(s,/fetch\(|spawnSync|execSync|docker\.sock/);
 });
+
+
+test("owner-only dispatch API exposes bounded reconciliation without Docker control",()=>{
+ const s=readFileSync(new URL("../supabase/functions/docker-control/index.ts",import.meta.url),"utf8");
+ assert.match(s,/authenticateUser\(req\)/);
+ assert.match(s,/user\.is_anonymous/);
+ assert.match(s,/\.eq\("owner_id",owner\)\.order\("claimed_at"/);
+ assert.match(s,/reconciliation:reconcileDockerClaim\(claim,Date\.parse\(observedAt\)\)/);
+ assert.match(s,/dispatchOverview:dockerDispatchOverview\(ownedRequests\)/);
+ assert.match(s,/remoteExecutionEnabled:false/);
+ assert.doesNotMatch(s,/docker\.sock|spawnSync|Deno\.Command/);
+});
+test("agent attestation CLI signs and verifies a real journal with an explicitly pinned key",{
+ skip:process.platform==="win32"
+},async()=>{
+
+ const {mkdirSync}=await import("node:fs");
+ const {fileURLToPath}=await import("node:url");
+ fixture(({dir,secret,pub})=>{
+   const journalDir=join(dir,".eternyx","docker-lab-journal");
+   mkdirSync(journalDir,{recursive:true,mode:0o700});
+   reserve(journalDir);
+   const cli=fileURLToPath(new URL("../scripts/docker-lab-audit.mjs",import.meta.url));
+   const env={...process.env,HOME:dir};
+   const signed=spawnSync(process.execPath,[cli,"sign",claimId,secret],{env,encoding:"utf8"});
+   assert.equal(signed.status,0,signed.stderr);
+   const proof=JSON.parse(signed.stdout);
+   const path=join(dir,"attestation.json");
+   writeFileSync(path,JSON.stringify(proof));
+   const checked=spawnSync(process.execPath,[cli,"verify",path,pub],{env,encoding:"utf8"});
+   assert.equal(checked.status,0,checked.stderr);
+   assert.equal(JSON.parse(checked.stdout).verified,true);
+   const bad=spawnSync(process.execPath,[cli,"verify",path,pub+"bad"],{env,encoding:"utf8"});
+   assert.notEqual(bad.status,0);
+ });
+});
+
