@@ -10,8 +10,8 @@ from pathlib import Path
 import re
 import shutil
 
-DIGEST = re.compile(r"[0-9a-f]{64}\\Z")
-LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,39}\\Z")
+DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,39}\Z")
 METRIC = "flow velocity mean squared error"
 MAX_REPORT_BYTES = 4 * 1024 * 1024
 MAX_CASES = 5000
