@@ -18,7 +18,8 @@ export function buildWorkspaceExport(project, tasks, items, exportedAt = new Dat
       status: project.status, created_at: project.created_at,
     },
     tasks: tasks.map((task) => ({
-      title: task.title, status: task.status, priority: task.priority ?? "normal",
+      title: task.title, details: task.details ?? "",
+      status: task.status, priority: task.priority ?? "normal",
       due_on: task.due_on, created_at: task.created_at,
     })),
     items: items.map((item) => ({

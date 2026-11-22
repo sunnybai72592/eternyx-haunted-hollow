@@ -80,6 +80,7 @@ export default function WorkspaceImportPanel({ owner, disabled, onImported }: Pr
           batch.map((entry) => ({
             owner_id: owner, project_id: createdId!, title: entry.title,
             status: entry.status, due_on: entry.due_on, priority: entry.priority,
+            details: entry.details,
           }))
         );
         if (taskError) throw new Error("Task import failed after " + taskCount + " records: " + taskError.message);

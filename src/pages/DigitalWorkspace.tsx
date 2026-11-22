@@ -3,11 +3,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   Archive, ArrowUpRight, CheckCircle2, ClipboardList, CloudUpload, Download,
   FileText, FolderKanban, History, Link2, Loader2, Plus, RefreshCw,
-  RotateCcw, Search, ShieldCheck, Trash2, Pin, PinOff,
+  RotateCcw, Search, ShieldCheck, Trash2, Pin, PinOff, Copy, FileSpreadsheet,
 } from "lucide-react";
 import DeviceNote from "@/components/DeviceNote";
 import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
 import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
+import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklist";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import WorkspaceGlobalSearch from "@/components/workspace/WorkspaceGlobalSearch";
 import WorkspaceTaskFocus from "@/components/workspace/WorkspaceTaskFocus";
@@ -26,6 +27,7 @@ import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, works
 import { createWorkspaceFullBackup } from "@/lib/workspaceFullBackup.mjs";
 import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
 import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
+import { buildWorkspaceTasksCsv, workspaceTaskProgress, copyWorkspaceTask } from "@/lib/workspaceTaskOps.mjs";
 import { WORKSPACE_TASK_PRIORITIES, filterWorkspaceTaskPriority,
   sortWorkspaceProjectTasks, validWorkspacePriority } from "@/lib/workspaceTaskFocus.mjs";
 import {
@@ -82,6 +84,7 @@ export default function DigitalWorkspace() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [newTask, setNewTask] = useState("");
+  const [newTaskDetails, setNewTaskDetails] = useState("");
   const [taskDue, setTaskDue] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("normal");
   const [taskFilter, setTaskFilter] = useState("all");
@@ -168,6 +171,7 @@ export default function DigitalWorkspace() {
   const fileCount = useMemo(() => items.filter((item) => item.kind === "file").length, [items]);
   const registeredBytes = useMemo(() => workspaceRegisteredBytes(items), [items]);
   const remainingTaskCount = projectTasks.filter((task) => task.status !== "done").length;
+  const taskProgress = workspaceTaskProgress(projectTasks, localCalendarDate());
 
   useEffect(() => {
     setEditName(selected?.name ?? "");
@@ -270,10 +274,53 @@ export default function DigitalWorkspace() {
     }, "Archived project permanently deleted. This account slot is now available.");
   };
 
+  const reopenCompletedTasks = () => {
+    if (!owner || !selected || !active || !taskProgress.done) return;
+    if (!window.confirm("Reopen all " + taskProgress.done + " completed tasks in this project? Their completion timestamps will be cleared.")) return;
+    void mutate(async () => {
+      const { data, error: updateError } = await supabase.from("workspace_tasks")
+        .update({ status: "todo" }).eq("owner_id", owner).eq("project_id", selected.id)
+        .eq("status", "done").select("id");
+      if (updateError) throw new Error(updateError.message);
+      if (!data?.length) throw new Error("No completed tasks were changed. Refresh and try again.");
+    }, "Previously completed project tasks reopened.");
+  };
+
+  const duplicateTask = (task: Task) => {
+    if (!owner || !selected || !active || busy) return;
+    if (tasks.length >= WORKSPACE_TASK_LIMIT) {
+      setError("Task quota reached; the copy was not created.");
+      return;
+    }
+    if (!window.confirm("Duplicate task " + task.title + " as a fresh, unfinished task? Checklist steps and completion history are not copied.")) return;
+    void mutate(async () => {
+      const payload = copyWorkspaceTask(task, owner, selected.id);
+      const { error: insertError } = await supabase.from("workspace_tasks").insert(payload);
+      if (insertError) throw new Error(insertError.message);
+    }, "Task duplicated as an unfinished copy. Checklist steps were not copied.");
+  };
+
+  const downloadTaskCsv = () => {
+    if (!selected) return;
+    try {
+      const csv = buildWorkspaceTasksCsv(selected, projectTasks);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = workspaceExportFileName(selected.name).replace(/\.json$/, "-tasks.csv");
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+      setNotice("Exported actual project tasks as spreadsheet-safe CSV. Checklist steps are not in this CSV.");
+      setError("");
+    } catch (failure) { setError(messageFrom(failure)); }
+  };
+
   const createTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!owner || !selected || !active || !newTask.trim()) return;
     if (!validWorkspacePriority(newTaskPriority)) { setError("Choose an allowed priority."); return; }
+    if (newTaskDetails.length > 4000) { setError("Task details must be 4,000 characters or fewer."); return; }
     if (tasks.length >= WORKSPACE_TASK_LIMIT) {
       setError("Task cap reached (5,000 per account).");
       return;
@@ -281,9 +328,11 @@ export default function DigitalWorkspace() {
     void mutate(async () => {
       const { error: insertError } = await supabase.from("workspace_tasks")
         .insert({ owner_id: owner, project_id: selected.id, title: newTask.trim(),
-          status: "todo", due_on: taskDue || null, priority: newTaskPriority });
+          status: "todo", due_on: taskDue || null, priority: newTaskPriority,
+          details: newTaskDetails });
       requireResult(insertError);
       setNewTask("");
+      setNewTaskDetails("");
       setTaskDue("");
       setNewTaskPriority("normal");
     }, "Task added to the project.");
@@ -444,8 +493,8 @@ export default function DigitalWorkspace() {
   const exportProject = (includeFiles: boolean) => {
     if (!owner || !selected) return;
     if (!window.confirm(includeFiles
-      ? "Download a COMPLETE local backup containing your private file contents? It may contain sensitive data. Keep this file secure. Up to 8 files / 12 MiB of file bytes; historical revisions are not included."
-      : "Download a local JSON export of this project? Notes and saved links contain private data. File contents are not included.")) return;
+      ? "Download a private-file-inclusive project backup? It may contain sensitive data. Protect it. Up to 8 files / 12 MiB; checklist steps, completion timestamps and historical revisions are not included."
+      : "Download a local JSON export of this project? Notes and saved links contain private data. File contents, checklist steps and historical revisions are not included.")) return;
     void mutate(async () => {
       // Fetch ALL rows for this project, not just the dashboard's initial 1000.
       // An incomplete export is an error, never represented as a full backup.
@@ -688,9 +737,28 @@ export default function DigitalWorkspace() {
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-cyan-400" aria-hidden="true" />
                   <h2 className="text-xl font-semibold">Tasks ({projectTasks.length})</h2>
+                  <Button type="button" variant="outline" size="sm" onClick={downloadTaskCsv}
+                    disabled={busy || loading} className="ml-auto">
+                    <FileSpreadsheet className="mr-1 h-4 w-4" aria-hidden="true" /> Export task CSV
+                  </Button>
                   {active && remainingTaskCount > 0 && <Button type="button" size="sm" variant="outline"
-                    disabled={busy} className="ml-auto" onClick={finishRemainingTasks}>
+                    disabled={busy} onClick={finishRemainingTasks}>
                     <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" /> Complete remaining ({remainingTaskCount})
+                  </Button>}
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>{taskProgress.done} of {taskProgress.total} tasks complete ({taskProgress.percentage}%) ·
+                    {" " + taskProgress.open} open · {taskProgress.overdue} overdue ·
+                    {" " + taskProgress.urgentOpen} urgent open</p>
+                  <div role="progressbar" aria-label="Project task completion"
+                    aria-valuemin={0} aria-valuemax={100} aria-valuenow={taskProgress.percentage}
+                    className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-cyan-500"
+                      style={{ width: taskProgress.percentage + "%" }} />
+                  </div>
+                  {active && taskProgress.done > 0 && <Button type="button" size="sm"
+                    variant="outline" disabled={busy} onClick={reopenCompletedTasks}>
+                    <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" /> Reopen completed ({taskProgress.done})
                   </Button>}
                 </div>
                 {active && <form className="flex flex-wrap items-end gap-2" onSubmit={createTask}>
@@ -698,6 +766,12 @@ export default function DigitalWorkspace() {
                     <label htmlFor="workspace-task-name" className="text-sm font-medium">Task</label>
                     <Input id="workspace-task-name" value={newTask} maxLength={200} required
                       placeholder="What needs to be done?" onChange={(event) => setNewTask(event.target.value)} />
+                  </div>
+                  <div className="min-w-[200px] flex-1 space-y-2">
+                    <label htmlFor="workspace-task-details" className="block text-sm font-medium">Instructions (optional)</label>
+                    <Textarea id="workspace-task-details" rows={2} maxLength={4000}
+                      value={newTaskDetails} placeholder="Instructions or acceptance criteria"
+                      onChange={event => setNewTaskDetails(event.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="workspace-task-due" className="block text-sm font-medium">Due (optional)</label>
@@ -756,6 +830,13 @@ export default function DigitalWorkspace() {
                       <span className={"text-xs " + (task.due_on && task.due_on < localCalendarDate() && task.status !== "done" ? "text-amber-400" : "text-muted-foreground")}>
                         {task.priority + " priority · " + (task.due_on ? task.due_on + " · " + (task.status === "done" ? "Completed" : scheduleLabel(task.due_on, localCalendarDate())) : "No due date")}
                       </span>
+                      {task.status === "done" && <span className="block text-xs text-muted-foreground">
+                        {task.completed_at ? "Completed " + dateText(task.completed_at) :
+                          "Completion time unavailable for historical task"}
+                      </span>}
+                      {task.details && <span className="mt-1 block whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                        {task.details}
+                      </span>}
                     </span>
                     <label className="sr-only" htmlFor={"workspace-task-status-" + task.id}>Task status for {task.title}</label>
                     <select id={"workspace-task-status-" + task.id} value={task.status} disabled={!active || busy}
@@ -765,10 +846,15 @@ export default function DigitalWorkspace() {
                     </select>
                     {active && <WorkspaceTaskEditor task={task} owner={owner} disabled={busy}
                       onRun={(action, message) => void mutate(action, message)} />}
+                    {active && <Button size="icon" type="button" variant="ghost" disabled={busy}
+                      aria-label={"Duplicate task " + task.title} onClick={() => duplicateTask(task)}>
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    </Button>}
                     {active && <Button size="icon" variant="ghost" disabled={busy}
                       aria-label={"Delete task " + task.title} onClick={() => deleteTask(task)}>
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>}
+                    <WorkspaceTaskChecklist task={task} owner={owner!} archived={!active} />
                   </div>)}
                   {!projectTasks.length && <p className="py-4 text-sm text-muted-foreground">No tasks saved for this project.</p>}
                   {!!projectTasks.length && !shownTasks.length && <p className="py-4 text-sm text-muted-foreground">No tasks match this filter.</p>}

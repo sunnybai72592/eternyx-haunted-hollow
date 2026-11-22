@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { WORKSPACE_TASK_PRIORITIES, validWorkspacePriority } from "@/lib/workspaceTaskFocus.mjs";
@@ -15,12 +16,14 @@ type Props = {
 export default function WorkspaceTaskEditor({ task, owner, disabled, onRun }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
+  const [details, setDetails] = useState(task.details);
   const [due, setDue] = useState(task.due_on ?? "");
   const [priority, setPriority] = useState(task.priority);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setTitle(task.title);
+    setDetails(task.details);
     setDue(task.due_on ?? "");
     setPriority(task.priority);
     setEditing(false);
@@ -34,6 +37,10 @@ export default function WorkspaceTaskEditor({ task, owner, disabled, onRun }: Pr
       setError("Task title must contain 1–200 characters.");
       return;
     }
+    if (details.length > 4000) {
+      setError("Task details cannot exceed 4,000 characters.");
+      return;
+    }
     if (!validWorkspacePriority(priority)) {
       setError("Choose an allowed task priority.");
       return;
@@ -41,7 +48,7 @@ export default function WorkspaceTaskEditor({ task, owner, disabled, onRun }: Pr
     setError("");
     onRun(async () => {
       const { data, error: queryError } = await supabase.from("workspace_tasks")
-        .update({ title: title.trim(), due_on: due || null, priority })
+        .update({ title: title.trim(), due_on: due || null, priority, details })
         .eq("id", task.id).eq("owner_id", owner)
         .eq("updated_at", task.updated_at).select("id").maybeSingle();
       if (queryError) throw new Error(queryError.message);
@@ -58,6 +65,10 @@ export default function WorkspaceTaskEditor({ task, owner, disabled, onRun }: Pr
       <label htmlFor={"workspace-task-title-" + task.id} className="block text-sm font-medium">Task title</label>
       <Input id={"workspace-task-title-" + task.id} value={title} maxLength={200} required
         onChange={(event) => setTitle(event.target.value)} />
+      <label htmlFor={"workspace-task-details-edit-" + task.id} className="block text-sm font-medium">Task details (optional)</label>
+      <Textarea id={"workspace-task-details-edit-" + task.id} value={details}
+        onChange={event => setDetails(event.target.value)} rows={3} maxLength={4000}
+        placeholder="Useful instructions, expected output or acceptance notes…" />
       <label htmlFor={"workspace-task-due-edit-" + task.id} className="block text-sm font-medium">Due date (optional)</label>
       <Input id={"workspace-task-due-edit-" + task.id} type="date" value={due}
         onChange={(event) => setDue(event.target.value)} />
@@ -71,7 +82,7 @@ export default function WorkspaceTaskEditor({ task, owner, disabled, onRun }: Pr
       </select>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <Button type="submit" size="sm" disabled={disabled || !title.trim() ||
-        (title.trim() === task.title && due === (task.due_on ?? "") && priority === task.priority)}>
+        (title.trim() === task.title && due === (task.due_on ?? "") && priority === task.priority && details === task.details)}>
         Save task details
       </Button>
     </form>}
