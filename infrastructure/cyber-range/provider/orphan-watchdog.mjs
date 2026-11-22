@@ -9,7 +9,7 @@
 import { validSessionId } from "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
 const PROJECT = /^cr-([0-9a-f]{32})$/;
-const ALLOWED_SERVICES = new Set(["gateway", "http-range", "ingress"]);
+const ALLOWED_SERVICES = new Set(["gateway", "http-range"]);
 export const RANGE_MAX_AGE_SECONDS = 900;
 export const RANGE_CLEANUP_GRACE_SECONDS = 120;
 

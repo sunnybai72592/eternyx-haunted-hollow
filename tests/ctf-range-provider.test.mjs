@@ -183,7 +183,12 @@ test("managed Docker stack has per-session network isolation, no target port and
   const config = await read("supabase/config.toml");
   const cli = await read("scripts/cyber-range-provider.mjs");
 
-  assert.match(compose, /127\.0\.0\.1::8081/);
+  // Trusted Linux host process owns loopback; NO Docker container may publish.
+  assert.doesNotMatch(compose, /(?:^|\n)\s+ports:\s*\n/m);
+  assert.equal((compose.match(/internal: true/g)||[]).length,2);
+  const hostRelay=await read("infrastructure/cyber-range/provider/host-relay.mjs");
+  assert.match(hostRelay,/server\.listen\(0,"127\.0\.0\.1"/);
+  assert.match(hostRelay,/verifyUpstream\(\)/);
   assert.match(compose, /internal: true/);
   assert.match(compose, /RANGE_MANAGED_MODE: "required"/);
   assert.match(compose, /ETERNYX_MANAGED_GATEWAY_TOKEN/);

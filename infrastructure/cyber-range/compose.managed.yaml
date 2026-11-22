@@ -1,5 +1,7 @@
 # Developer-/staging-local managed range template. Never use as public ingress.
-# Only a trusted host-side provider worker may set ETERNYX_GATEWAY_TOKEN.
+# Only a trusted Linux operator-host provider may set ETERNYX_GATEWAY_TOKEN.
+# NO managed Docker service has a published host port or a routable bridge.
+# The operator-host process exclusively binds 127.0.0.1 for lab access.
 # The target never receives the token, Supabase keys or Docker socket.
 services:
   http-range:
@@ -71,44 +73,6 @@ services:
       retries: 3
       start_period: 5s
 
-  ingress:
-    # The ONLY service with a published port. Fixed-destination relay; no
-    # vulnerable target access and no gateway secret in its environment.
-    labels:
-      org.eternyx.range.managed: "v1"
-      org.eternyx.range.ttl_seconds: "900"
-    build:
-      context: ./relay
-      dockerfile: Dockerfile
-    restart: "no"
-    init: true
-    user: "10001:10001"
-    read_only: true
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    pids_limit: 24
-    cpus: 0.10
-    mem_limit: 32m
-    memswap_limit: 32m
-    environment:
-      RANGE_MAX_AGE_SECONDS: "900"
-    depends_on:
-      gateway:
-        condition: service_healthy
-    networks:
-      - gateway_ingress_only
-      - localhost_ingress
-    ports:
-      - "127.0.0.1::8081"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/healthz').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 2s
-      retries: 3
-      start_period: 5s
-
 
 networks:
   local_target_only:
@@ -116,6 +80,4 @@ networks:
     driver: bridge
   gateway_ingress_only:
     internal: true
-    driver: bridge
-  localhost_ingress:
     driver: bridge

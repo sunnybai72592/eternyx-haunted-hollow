@@ -11,6 +11,7 @@ import { projectForSession, validSessionId } from "../../../supabase/functions/_
 import { sessionFromProject, verifyManagedContainer } from "./orphan-watchdog.mjs";
 import { assertLocalLaunchAllowed } from "./local-kill-switch.mjs";
 import { admitHostLab, verifyRuntimeIsolation } from "./isolation-policy.mjs";
+import { createHostRangeRelay, verifyInternalGatewayAddress } from "./host-relay.mjs";
 
 const composeFile = resolve(dirname(fileURLToPath(import.meta.url)), "../compose.managed.yaml");
 const managedPlaceholder = "0".repeat(64);
@@ -62,6 +63,7 @@ const composeArgs = (id, extra) => [
 
 export class LocalDockerRangeRuntime {
   #validated = false;
+  #hostRelays = new Map();
 
   validateHost() {
     assertLocalDockerHost(process.env);
@@ -76,6 +78,8 @@ export class LocalDockerRangeRuntime {
 
   async start(sessionId) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
+    if (process.platform !== "linux") throw new Error("Host-only internal-bridge ingress requires a Linux Docker host");
+    if (this.#hostRelays.has(sessionId)) throw new Error("Range already has an active host relay");
     if (process.env.ETERNYX_PROVIDER_EXECUTION !== "enabled" ||
         process.env.ETERNYX_RANGE_OPERATOR_ACK !== "LOCAL_ONLY_NO_PUBLIC_INGRESS") {
       throw new Error("Local provider execution requires explicit operator opt-in");
@@ -96,42 +100,60 @@ export class LocalDockerRangeRuntime {
 
     const token = randomBytes(32).toString("hex");
     let launched = false;
+    let phase = "compose-start";
     try {
       await assertLocalLaunchAllowed();
       executeDocker(composeArgs(sessionId, ["up", "--detach", "--build", "--force-recreate"]), token);
       launched = true;
-      const portLine = executeDocker(composeArgs(sessionId, ["port", "ingress", "8081"]), token);
-      const match = /^127\.0\.0\.1:(\d{1,5})$/.exec(portLine);
-      const port = match ? Number(match[1]) : NaN;
-      if (!Number.isInteger(port) || port < 1024 || port > 65535) {
-        throw new Error("Gateway was not published only to loopback");
-      }
-
+      // Only verified live containers on both internal-only Docker bridges
+      // can supply a destination to the trusted-host loopback listener.
+      phase="verify-private-upstream";
+      const destination = await this.trustedGatewayDestination(sessionId);
+      const relay = createHostRangeRelay({
+        sessionId, token,
+        verifyUpstream: async () => {
+          const latest = await this.trustedGatewayDestination(sessionId);
+          if (latest.containerId !== destination.containerId || latest.ip !== destination.ip) {
+            throw new Error("Internal Docker gateway identity changed");
+          }
+          return latest;
+        },
+      });
+      phase="bind-host-loopback";
+      await relay.listen();
+      this.#hostRelays.set(sessionId, relay);
+      const port = relay.port;
+      phase="probe-private-gateway";
       for (let attempt = 0; attempt < 20; attempt++) {
         try {
           const response = await fetch("http://127.0.0.1:" + port + "/healthz", {
             headers: { authorization: "Bearer " + token },
             signal: AbortSignal.timeout(1300),
           });
+          if (process.env.ETERNYX_RANGE_HOST_SMOKE === "CI_DISPOSABLE_ONLY" &&
+              attempt < 2 && !response.ok) {
+            console.error("Local private gateway probe status:", response.status);
+          }
           if (response.ok) {
             await this.attest(sessionId);
-            // Caller MUST NOT log token or put it in DB/HTTP responses. An
-            // authenticated browser ingress proxy is a separate milestone.
+            // The private gateway bearer is never stored in Supabase or logs.
             return { instanceRef: projectForSession(sessionId), localPort: port, token };
           }
-        } catch {
-          // The local container gateway may still be booting.
-        }
-        await new Promise((done) => setTimeout(done, 400));
+        } catch { /* private Docker bridge may still be starting */ }
+        await new Promise(done=>setTimeout(done,400));
       }
-      throw new Error("Managed gateway did not become healthy");
-    } catch (error) {
+      throw new Error("Internal gateway unavailable to operator host");
+    } catch {
       if (launched) {
-        try { await this.stop(sessionId); } catch { /* Retain error; operator reconciliation needed. */ }
+        try { await this.stop(sessionId); }
+        catch { /* Do not report successful cleanup. */ }
       }
-      throw error;
+      // Error phases are allowlisted internal identifiers, never Docker logs,
+      // gateway bearer values or upstream headers.
+      throw new Error("Managed host-only range startup failed at "+phase);
     }
   }
+
 
   /**
    * Discover all ETERNYX-labelled projects and verify EVERY member of each
@@ -205,7 +227,7 @@ export class LocalDockerRangeRuntime {
     const containers = all.filter(item=>
       item.Config.Labels["com.docker.compose.project"] === project);
     const networks = [];
-    for (const name of [project + "_local_target_only",project + "_gateway_ingress_only",project + "_localhost_ingress"]) {
+    for (const name of [project + "_local_target_only",project + "_gateway_ingress_only"]) {
       const raw = executeDocker(["network","inspect","--format","{{json .}}",name]);
       let data;
       try { data = JSON.parse(raw); }
@@ -216,19 +238,61 @@ export class LocalDockerRangeRuntime {
     return verifyRuntimeIsolation(sessionId, containers, networks);
   }
 
+  async trustedGatewayDestination(sessionId) {
+    if (!validSessionId(sessionId)) throw new Error("Invalid managed session");
+    this.#requireHost();
+    const project = projectForSession(sessionId);
+    await this.attest(sessionId);
+    const found = (await this.listVerifiedManagedProjects()).filter(c =>
+      c.Config?.Labels?.["com.docker.compose.project"] === project &&
+      c.Config?.Labels?.["com.docker.compose.service"] === "gateway");
+    if (found.length !== 1) throw new Error("Managed internal gateway not uniquely identified");
+    const inspect = found[0];
+    const networkName = project + "_gateway_ingress_only";
+    const ip = inspect.NetworkSettings?.Networks?.[networkName]?.IPAddress;
+    const raw = executeDocker(["network","inspect","--format","{{json .}}",networkName]);
+    let network;
+    try { network = JSON.parse(raw); }
+    catch { throw new Error("Private Docker network inspection unavailable"); }
+    const configurations = network?.IPAM?.Config;
+    if (network?.Name !== networkName || network?.Internal !== true ||
+        network?.Driver !== "bridge" || !Array.isArray(configurations) ||
+        configurations.length !== 1) {
+      throw new Error("Unverified internal gateway network configuration");
+    }
+    return verifyInternalGatewayAddress({
+      ip, subnet: configurations[0].Subnet, network: networkName,
+      project, containerId: inspect.Id,
+    });
+  }
+
   async exists(sessionId) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
-    const listed = executeDocker(composeArgs(sessionId, ["ps", "--status", "running", "-q", "ingress"]));
+    // After a worker crash the localhost listener disappears; the new worker
+    // must tear down the orphan, never pretend the range is reachable.
+    if (!this.#hostRelays.has(sessionId)) return false;
+    const listed = executeDocker(composeArgs(sessionId, ["ps", "--status", "running", "-q", "gateway"]));
     if (!listed.length) return false;
-    await this.attest(sessionId);
+    await this.trustedGatewayDestination(sessionId);
     return true;
   }
 
   async stop(sessionId) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
+    const relay=this.#hostRelays.get(sessionId);
+    let relayFailed=false;
+    if(relay) {
+      try{await relay.close();}
+      catch{relayFailed=true;}
+      this.#hostRelays.delete(sessionId);
+    }
+    // Always attempt Docker removal, even if stopping the host listener
+    // encountered a local error. Never declare the reservation cleaned when
+    // either part fails.
     executeDocker(composeArgs(sessionId, ["down", "--volumes", "--remove-orphans"]));
+    if(relayFailed)throw new Error("Host relay teardown requires operator review");
     return true;
   }
 }
