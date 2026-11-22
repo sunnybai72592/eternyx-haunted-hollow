@@ -30,6 +30,9 @@ export default function MyServiceRequests() {
   const [search, setSearch] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [notice, setNotice] = useState('');
+  const [linkedRequest, setLinkedRequest] = useState<RequestRow | null>(null);
+  const [linkedLoading, setLinkedLoading] = useState(false);
+  const [linkedError, setLinkedError] = useState('');
   const [openConversation, setOpenConversation] = useState<string | null>(new URLSearchParams(location.search).get('request'));
   const [openScope, setOpenScope] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -59,8 +62,32 @@ export default function MyServiceRequests() {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
-    if (selected) setOpenConversation(selected);
-  }, [location.search]);
+    setLinkedRequest(null);
+    setLinkedError('');
+    if (!user || !selected) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(selected)) {
+      setLinkedError('Invalid request reference.');
+      return;
+    }
+    setOpenConversation(selected);
+    let active = true;
+    setLinkedLoading(true);
+    void (async () => {
+      const { data, error } = await supabase.from('service_requests')
+        .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints')
+        .eq('user_id', user.id)
+        .eq('id', selected)
+        .maybeSingle();
+      if (!active) return;
+      setLinkedLoading(false);
+      if (error || !data) {
+        setLinkedError('The request was not found or your account cannot access it.');
+      } else {
+        setLinkedRequest(data as RequestRow);
+      }
+    })();
+    return () => { active = false; };
+  }, [user?.id, location.search]);
 
   const copyLink = async (id: string) => {
     try {
@@ -130,6 +157,20 @@ export default function MyServiceRequests() {
         <span className="text-xs text-muted-foreground">{rows.length} of {total} matching requests</span>
       </form>
       {notice && <p role="status" className="mb-4 rounded-lg border border-primary/20 p-3 text-sm text-muted-foreground">{notice}</p>}
+      {linkedLoading && <p className="mb-4 text-sm text-muted-foreground">Opening your private request…</p>}
+      {linkedError && <p role="alert" className="mb-4 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{linkedError}</p>}
+      {linkedRequest && !rows.some((item) => item.id === linkedRequest.id) && user && (
+        <Card className="mb-6 border-primary/20 p-5 sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Opened by private link</p>
+          <h2 className="mt-2 break-words text-xl font-bold">{linkedRequest.title}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{getServiceOffering(linkedRequest.service_key)?.title ?? linkedRequest.service_key} · {serviceRequestStatuses[linkedRequest.status]?.label ?? linkedRequest.status}</p>
+          <details className="mt-4"><summary className="cursor-pointer text-sm font-semibold text-primary">View project brief</summary>
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{linkedRequest.description}</p>
+          </details>
+          <ServiceRequestTimeline requestId={linkedRequest.id} ownerId={user.id} refreshToken={Date.parse(linkedRequest.updated_at)} />
+          <ServiceScopeReview requestId={linkedRequest.id} ownerId={user.id} />
+        </Card>
+      )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The service desk may require its database migration to be deployed. No results are being simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
         : rows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">No requests yet</h2><p className="mt-2 text-muted-foreground">Your confirmed project briefs will appear here.</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
