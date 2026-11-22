@@ -67,11 +67,11 @@ const domains = [
   {
     id: "learning",
     number: "06",
-    title: "Labs & knowledge",
-    description: "Strengthen defensive thinking with structured learning and practical security exercises.",
+    title: "Hands-on labs & knowledge",
+    description: "Practice web development, defensive security analysis, and vulnerability concepts in isolated browser exercises.",
     icon: BookOpen,
-    href: "/knowledge",
-    capabilities: ["Security fundamentals", "Guided learning", "Knowledge checks"],
+    href: "/labs",
+    capabilities: ["Interactive workstations", "Isolated previews", "Guided security practice"],
   },
 ];
 
@@ -139,6 +139,14 @@ const destinations: Destination[] = [
     icon: Activity,
     category: "Platform monitoring",
     kind: "Workbench",
+  },
+  {
+    name: "ETERNYX Labs",
+    description: "Five functional browser-based practices for web development, XSS, headers, SQL parameterization, and access control.",
+    href: "/labs",
+    icon: BookOpen,
+    category: "Hands-on learning",
+    kind: "Learning",
   },
   {
     name: "Security knowledge hub",
