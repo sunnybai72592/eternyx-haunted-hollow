@@ -259,7 +259,7 @@ BEGIN
     ) VALUES((v_record->>'run_id')::uuid,s.user_id,s.id,p_output_ciphertext,p_output_nonce);
   END IF;
   UPDATE public.automation_schedules
-  SET next_run_at=pg_catalog.greatest(pg_catalog.statement_timestamp(),next_run_at)
+  SET next_run_at=GREATEST(pg_catalog.statement_timestamp(),next_run_at)
       +pg_catalog.make_interval(mins=>interval_minutes),
       lease_token=NULL,lease_expires_at=NULL,run_request_key=gen_random_uuid(),
       attempt_count=0,last_run_at=pg_catalog.statement_timestamp(),
