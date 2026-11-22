@@ -1,0 +1,44 @@
+name: CPU tiny neural video model
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/train_tiny_neural_video.py"
+      - "gpu-worker/tests/test_train_tiny_neural_video.py"
+      - "gpu-worker/learn_cpu_video_texture.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-tiny-neural-video.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/train_tiny_neural_video.py"
+      - "gpu-worker/tests/test_train_tiny_neural_video.py"
+      - "gpu-worker/learn_cpu_video_texture.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-tiny-neural-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  learned-video:
+    name: Train tiny real neural video model and render H264 on CPU
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check FFmpeg with CPU libx264
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Train genuine neural MLP and sample actual MP4s with no external model or GPU
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_train_tiny_neural_video.py' -v

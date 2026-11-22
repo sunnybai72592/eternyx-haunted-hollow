@@ -466,3 +466,53 @@ In AI Video Studio, expand the CPU learned-model section. Copy commands, choose 
 - ETERNYX's separate Wan adapter research workflow remains distinct and is **not represented as trained, deployed or operational** by this prototype.
 
 Dedicated CI creates actual synthetic MP4 training clips, trains on real decoded frames, checks held-out sample counts and provenance, generates new seeded frames, rejects tampered model schemas, renders real portrait/square/landscape MP4s and tests the CLI. Browser regressions cover command injection, model receipt integrity, accurate metrics and no-upload Studio integration.
+
+
+
+## Genuine tiny neural video baseline (CPU-only): learn a predictor, sample new frames
+
+The **AI Video Studio** local editor now includes the collapsible **Experimental tiny neural video model · CPU-only** workspace. This is ETERNYX's first locally trainable **neural network** video baseline. It is independent of the earlier Markov color-count baseline and the fixed mathematical animation presets. This MLP has *trainable matrices, biases, non-linear activations and explicit stochastic-gradient backpropagation*, so it is a real, albeit exceptionally small, neural model.
+
+**Limitations are essential:** This is a pixel-level **12-input → 12-hidden-unit → 3-output** autoregressive next-frame color predictor operating on **32×18** frames, **not** a latent diffusion transformer, pretrained foundation model, high-resolution real-scene generator or natural-language text-to-video system. Expect highly abstract, noisy/colorful, low-detail textures, not cinematic output. Do not describe its output as photorealistic AI video.
+
+### Train the tiny neural model with local, rights-reviewed video
+
+Place 1–8 genuinely owned/licensed, fixed **16 FPS** MP4 clips in `./local-video-media`. Each must contain at least eight decoded frames and meet the local 512×512 / 64 MiB source limits. The trainer works with only the first **64 decoded frames** from each source. It quantizes each video frame to a 64-color representation at 32×18 resolution. Training uses the earlier 75% of each temporal window; later windows are held out from optimizer updates.
+
+```sh
+python gpu-worker/train_tiny_neural_video.py train \
+  --input ./local-video-media --output ./eternyx-tiny-neural-model \
+  --rights-ref owner-reviewed-local-video --seed 42 --epochs 3
+```
+
+The model takes RGB information from the previous frame's current, left and upper pixels, normalized x/y position, and temporal fraction. Its tanh hidden layer and sigmoid RGB output are fitted by explicit backpropagation using bounded per-pair pixel samples. Training uses deterministic seeds and 1–4 CPU epochs; it does not import PyTorch, install model weights, call cloud models, require CUDA or download data.
+
+Real evaluations are recorded for the same held-out next-frame examples: **neural per-channel squared error** and a **previous-frame persistence baseline**. The report also records training MSE before/after SGD. Those are *measured predictive errors*, not invented perceptual ratings or evidence of realistic motion. The neural model is not required to outperform the persistence baseline on all material; results determine whether it did on that dataset.
+
+Outputs in the new create-only directory `eternyx-tiny-neural-model`:
+
+- `model.json` contains the neural weight matrices, biases, initialization grid, observed coarse motion frequencies, source SHA-256 and rights references; no full input MP4 or raw original decoded frames are copied
+- `training-report.json` contains model SHA-256, measured train/held-out losses, architecture and sources
+
+The learned spatial color grid and model parameters can still reveal style information from the training material; keep the model and reports private, and never assume that not storing raw MP4s provides complete privacy.
+
+### Sample and render novel learned video pixels offline
+
+```sh
+python gpu-worker/train_tiny_neural_video.py generate \
+  --model ./eternyx-tiny-neural-model/model.json \
+  --output ./eternyx-tiny-neural-sample \
+  --seconds 2 --seed 42 --profile landscape --quality standard
+```
+
+The generator uses seeded stochastic initialization and neural next-frame predictions with bounded variation and empirical coarse motion frequencies. It **samples novel pixels rather than replaying source MP4s**. A different seed yields different results; the same model and seed yield repeatable uncompressed RGB frames. Exact MP4 encoder bytes can differ between FFmpeg versions.
+
+The output directory includes an actual playable `clip-01.mp4`, `eternyx-video-v2.json`, `render/video.mp4`, `render/manifest.json`, `render/captions.srt`, `render/preview.html` and `generation-report.json`. The **neural sample report explicitly labels generation as neural**, while the v2 renderer's receipt describes only the non-generative *assembly/encoding* step. The final video is an upscaled, low-information neural texture, not a high-detail new world scene.
+
+Use the Studio's **Inspect your actual rendered MP4** workflow to re-import the finished video and renderer manifest for local hash/codec checks and a human review. You can also select `model.json` and `training-report.json` together in the neural Studio workspace for browser-local WebCrypto SHA-256 comparison and inspection of measured MSE.
+
+### CPU, security and evaluation boundaries
+
+Training and sampling run via Python's standard library and locally installed FFmpeg/FFprobe with libx264. The model fits small 12×12 and 3×12 trainable matrices and generates **1–8 seconds at 16 FPS** per sample; no API key, paid GPU or external AI service is needed. Local folder names are create-only; source path traversal, symlinks, malformed checkpoints, unsupported frame rates or sizes, nonfinite weights, missing rights references and excessive budgets are rejected.
+
+A dedicated GitHub Actions workflow trains neural weights from real CI-generated MP4s and verifies independent seeded outputs, actual decoded frame counts, original/assembled video receipts, malformed model refusal and CLI operation. Browser regression tests verify command safety, model/report integrity and that no remote inference is implied. This baseline does **not** claim the ETERNYX flagship generative model is finished; separate Wan/adapter research remains ongoing.
