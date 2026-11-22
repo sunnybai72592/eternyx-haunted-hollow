@@ -5,6 +5,9 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { LocalDockerRangeRuntime } from "../infrastructure/cyber-range/provider/docker-runtime.mjs";
 
 if (process.platform!=="linux" ||
@@ -51,6 +54,34 @@ if (process.platform!=="linux" ||
       assert.equal(inspection.internalNetworks,2);
     }
     assert.notEqual(flags[0],flags[1]);
+    // Reject public Internet and cloud instance-metadata connections from
+    // BOTH Docker services on BOTH independent internal-only networks.
+    const composeFile=resolve(dirname(fileURLToPath(import.meta.url)),
+      "../infrastructure/cyber-range/compose.managed.yaml");
+    const deniedTargets=[
+      "https://example.com",
+      "http://169.254.169.254/latest/meta-data/",
+    ];
+    for(const id of ids){
+      for(const service of ["http-range","gateway"]){
+        for(const url of deniedTargets){
+          const test=spawnSync("docker",[
+            "compose","-p","cr-"+id.replaceAll("-",""),
+            "-f",composeFile,"exec","-T",service,"node","-e",
+            "fetch(process.argv[1],{signal:AbortSignal.timeout(1300)}).then(()=>process.exit(1),()=>process.exit(0))",
+            url,
+          ],{
+            encoding:"utf8",shell:false,timeout:12_000,maxBuffer:64000,
+            env:{PATH:process.env.PATH??"/usr/local/bin:/usr/bin:/bin",
+              HOME:process.env.HOME??"/tmp"},
+          });
+          if(test.error||test.status!==0){
+            throw Error("Managed lab service had outbound network access");
+          }
+        }
+      }
+    }
+
     console.log("Two private network labs verified; host-only ingress, isolation and token separation passed");
   }catch{
     console.error("Host-only range smoke failed; inspect private CI Docker/network logs securely");
