@@ -80,8 +80,10 @@ BEGIN
   END IF;
   SELECT a.* INTO v_attempt FROM public.user_attempts AS a
   WHERE a.id = p_attempt_id FOR UPDATE OF a;
-  IF NOT FOUND OR v_attempt.status NOT IN ('submitted','auto_submitted') THEN
-    RAISE EXCEPTION 'Only submitted attempts can be graded' USING ERRCODE = '22023';
+  IF NOT FOUND OR v_attempt.status NOT IN ('submitted','auto_submitted')
+     OR v_attempt.end_time IS NULL THEN
+    RAISE EXCEPTION 'Only completed submitted attempts can be graded'
+      USING ERRCODE = '22023';
   END IF;
 
   SELECT f.* INTO v_existing FROM public.education_final_grades AS f
@@ -106,8 +108,12 @@ BEGIN
     ON r.test_id = t.id AND r.status = 'approved'
   WHERE t.id = v_attempt.test_id AND t.is_published IS TRUE
     AND t.is_active IS TRUE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Reviewed published test required' USING ERRCODE = '22023';
+  IF NOT FOUND OR NOT EXISTS (
+    SELECT 1 FROM public.education_test_enrollments AS e
+    WHERE e.test_id = v_attempt.test_id AND e.user_id = v_attempt.user_id
+  ) THEN
+    RAISE EXCEPTION 'Reviewed enrolled published test required'
+      USING ERRCODE = '22023';
   END IF;
 
   IF EXISTS (
