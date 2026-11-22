@@ -58,6 +58,10 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-lifecycle-edge-cases.sql
       - name: Exercise five concurrent Education database transaction races
         run: node scripts/staging/verifyEducationConcurrency.mjs
+      - name: Apply staged written-review RPCs to disposable database ONLY
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-written-review.sql
+      - name: Verify ten written-review authorization and unfinalized-grade cases
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-written-review.sql
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true

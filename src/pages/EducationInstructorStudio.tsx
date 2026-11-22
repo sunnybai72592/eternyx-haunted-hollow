@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Download, FileUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import EducationWrittenReviewPanel from "@/components/education/EducationWrittenReviewPanel";
 import { useAuthStore } from "@/store/authStore";
 import { publicationRpcEnabled, requestEducationPublication } from "@/lib/educationPublicationRpc";
 import {
@@ -305,6 +306,10 @@ export default function EducationInstructorStudio() {
               </div>}
             </>}
           </section>
+        )}
+
+        {instructorRpcEnabled && accessQuery.data?.approved === true && user?.id && (
+          <EducationWrittenReviewPanel key={user.id} userId={user.id} />
         )}
 
         <div className="flex flex-wrap items-center gap-2">
