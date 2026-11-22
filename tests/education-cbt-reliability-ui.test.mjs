@@ -120,12 +120,14 @@ test("19. Official final timestamp only appears in verified mode",()=>{
 });
 test("20. Instructor written review defaults to pending and exposes reviewed filter",()=>{
  assert.match(review,/useState<"pending" \| "reviewed" \| "all">\("pending"\)/);
- assert.match(review,/reviewFilter === "pending"/);
+ assert.match(review,/filter: reviewFilter, search, assessment, sort/);
+ assert.match(review,/filterWrittenReviewQueue\(query\.data \?\? \[\], \{/);
  assert.match(review,/reviewedCount/);
  assert.match(review,/pendingCount/);
 });
 test("21. An instructor must confirm a change to a previously recorded mark",()=>{
- assert.match(review,/previous !== null && previous !== points/);
+ assert.match(review,/previous !== null && previous !== checked\.points/);
+ assert.match(review,/checkWrittenReviewDraft\(raw, max, previous\)/);
  assert.match(review,/window\.confirm\("Replace this provisional written-review mark/);
  assert.match(review,/saved as review evidence|Official grade remains pending/);
 });
