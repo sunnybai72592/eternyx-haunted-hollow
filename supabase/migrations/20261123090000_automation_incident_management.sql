@@ -367,7 +367,7 @@ GRANT EXECUTE ON FUNCTION public.automation_review_quarantine(
 
 CREATE OR REPLACE FUNCTION public.automation_recovery_review_inbox(p_user_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $inbox$
-DECLARE rows jsonb;total integer;
+DECLARE rows jsonb;total integer;review_rows jsonb;review_total integer;
 BEGIN
  IF p_user_id IS NULL THEN
    RETURN jsonb_build_object('ok',false,'reason','invalid_request');
@@ -391,9 +391,20 @@ BEGIN
       pg_catalog.statement_timestamp()-interval '30 days'
    ORDER BY q.created_at DESC LIMIT 20
  ) t;
+ SELECT count(*) INTO review_total FROM public.automation_recovery_reviews
+   WHERE user_id=p_user_id;
+ SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY r.created_at DESC),
+   '[]'::jsonb) INTO review_rows FROM (
+    SELECT id,quarantine_request_key,schedule_id,schedule_revision,decision,
+      note,created_at
+    FROM public.automation_recovery_reviews
+    WHERE user_id=p_user_id
+    ORDER BY created_at DESC LIMIT 20
+ ) r;
  RETURN jsonb_build_object('ok',true,'source','real_quarantine_receipts',
    'rows',rows,'totalMatching',total,'truncated',total>20,
-   'automaticRecoveryEnabled',false);
+   'pastReviews',review_rows,'pastReviewTotal',review_total,
+   'pastReviewsTruncated',review_total>20,'automaticRecoveryEnabled',false);
 END;
 $inbox$;
 REVOKE ALL ON FUNCTION public.automation_recovery_review_inbox(uuid)
