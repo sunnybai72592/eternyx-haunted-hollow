@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AutomationGitHubIssueWorkflowPanel, { type WorkflowOption } from "@/components/AutomationGitHubIssueWorkflowPanel";
 import { Github, LockKeyhole, Eye, ShieldCheck, RefreshCcw, Trash2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,11 +17,14 @@ type Draft={
   connection_version:number;
   created_at:string;expires_at:string;decided_at:string|null;
   issue_number:number|null;issue_url:string|null;error_code:string|null;
+  source_workflow_id:string|null;source_workflow_revision:number|null;
+  last_known_issue_state:"open"|"closed"|null;last_checked_at:string|null;
 };
 type Status={
   connected:boolean;enabled:boolean;connection:Conn|null;
   writeAttempts24h:number;writeLimit24h:number;openDraftLimit:number;
   draftLimit24h:number;permissionProvedByRead:boolean;
+  statusReadCalls24h:number;statusReadLimit24h:number;workflows?:WorkflowOption[];
   drafts?:Draft[];
 };
 type Preview={id:string;owner:string;repo:string;title:string;body:string};
@@ -46,7 +50,8 @@ function validateStatus(r:Record<string,unknown>,needDrafts:boolean):Status{
   if(r.source!=="authenticated_server"||typeof r.connected!=="boolean"||
      typeof r.enabled!=="boolean"||r.writeLimit24h!==3||
      !Number.isInteger(r.writeAttempts24h)||r.openDraftLimit!==3||
-     r.draftLimit24h!==10||r.permissionProvedByRead!==false){
+     r.draftLimit24h!==10||r.permissionProvedByRead!==false||
+     !Number.isInteger(r.statusReadCalls24h)||r.statusReadLimit24h!==12){
     throw new Error("Unverified issue connection or audit data.");
   }
   if(r.connection!==null &&
@@ -54,7 +59,12 @@ function validateStatus(r:Record<string,unknown>,needDrafts:boolean):Status{
     throw new Error("Invalid connection metadata.");
   }
   if(needDrafts &&
-      (!Array.isArray(r.drafts)||r.drafts.length>20||
+      (!Array.isArray(r.workflows)||r.workflows.length>20||
+       r.workflows.some((w:unknown)=>!w||typeof w!=="object"||
+         typeof (w as Record<string,unknown>).id!=="string"||
+         typeof (w as Record<string,unknown>).name!=="string"||
+         !Number.isInteger((w as Record<string,unknown>).revision))||
+       !Array.isArray(r.drafts)||r.drafts.length>20||
        r.drafts.some((x:unknown)=>{
          if(!x||typeof x!=="object"||Array.isArray(x))return true;
          const d=x as Record<string,unknown>;
@@ -137,6 +147,7 @@ export default function AutomationGitHubIssuesPanel(){
         </p>}
         <p className="text-xs text-muted-foreground">
           Write attempts used in the last 24h: {status.writeAttempts24h}/{status.writeLimit24h}.
+          {" "}Issue status GETs: {status.statusReadCalls24h}/{status.statusReadLimit24h}.
           Token read verification cannot prove Issues: write permission; GitHub checks that
           separately when you approve a draft.
         </p>
@@ -219,6 +230,9 @@ export default function AutomationGitHubIssuesPanel(){
             setMessage("Encrypted draft saved; no GitHub issue was created.");
           })}>Save draft without executing</Button>
       </div>}
+      {status?.enabled&&status.workflows&&
+        <AutomationGitHubIssueWorkflowPanel enabled={status.enabled}
+          workflows={status.workflows} busy={busy} onSaved={()=>load()}/>}
       {status?.drafts&&<div className="space-y-3">
         <p className="text-sm font-semibold">2. Review or reject pending issues; approval submits a real issue</p>
         {status.drafts.length===0&&<p className="text-xs text-muted-foreground">No issue draft or submission history yet.</p>}
@@ -234,6 +248,35 @@ export default function AutomationGitHubIssuesPanel(){
               <a href={d.issue_url} target="_blank" rel="noopener noreferrer"
                 className="text-sm underline">Open confirmed issue #{d.issue_number}</a>}
             {d.error_code&&<p className="text-xs text-muted-foreground">GitHub outcome: {d.error_code}</p>}
+            {d.source_workflow_id&&<p className="text-xs text-muted-foreground">
+              Created from saved ETERNYX workflow {d.source_workflow_id.slice(0,8)}
+              {" · "}revision {d.source_workflow_revision}
+            </p>}
+            {d.status==="succeeded"&&<div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Last confirmed GitHub state: {d.last_known_issue_state??"Not yet checked"}
+                {d.last_checked_at?" · "+date(d.last_checked_at):""}.
+                Read-only live status checks use a separate 12/day database quota.
+              </p>
+              {status.connected&&status.connection?.owner.toLowerCase()===d.repo_owner.toLowerCase()&&
+                status.connection?.repo.toLowerCase()===d.repo_name.toLowerCase()&&
+                <Button type="button" variant="outline" size="sm"
+                  disabled={busy||status.statusReadCalls24h>=status.statusReadLimit24h}
+                  onClick={()=>void run(async()=>{
+                    const r=await invoke("trackIssue",{
+                      draftId:d.id,requestKey:crypto.randomUUID(),
+                    });
+                    if(r.source!=="authenticated_server"||r.upstreamCalled!==true||
+                       r.state!=="succeeded"||!["open","closed"].includes(String(r.observedState))){
+                      throw new Error("Live GitHub status was not confirmed; check integration audit.");
+                    }
+                    await load();
+                    setMessage("GitHub confirmed issue #"+d.issue_number+
+                      " is "+r.observedState+".");
+                  })}>
+                  <RefreshCcw className="mr-2 size-4"/> Fetch actual GitHub issue status
+                </Button>}
+            </div>}
             {d.status==="uncertain"&&<p className="text-xs text-amber-600 dark:text-amber-300">
               GitHub may have created the issue despite losing the response. Check the repository
               manually. This draft will never be auto-submitted again.
