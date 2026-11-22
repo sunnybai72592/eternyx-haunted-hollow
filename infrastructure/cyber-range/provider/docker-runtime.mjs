@@ -12,6 +12,7 @@ import { sessionFromProject, verifyManagedContainer } from "./orphan-watchdog.mj
 import { assertLocalLaunchAllowed } from "./local-kill-switch.mjs";
 import { admitHostLab, verifyRuntimeIsolation } from "./isolation-policy.mjs";
 import { createHostRangeRelay, verifyInternalGatewayAddress } from "./host-relay.mjs";
+import { assertNoUnverifiedHostedRuntime } from "./hosted-readiness.mjs";
 
 const composeFile = resolve(dirname(fileURLToPath(import.meta.url)), "../compose.managed.yaml");
 const managedPlaceholder = "0".repeat(64);
@@ -77,6 +78,7 @@ export class LocalDockerRangeRuntime {
   }
 
   async start(sessionId) {
+    assertNoUnverifiedHostedRuntime(process.env);
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     if (process.platform !== "linux") throw new Error("Host-only internal-bridge ingress requires a Linux Docker host");
     if (this.#hostRelays.has(sessionId)) throw new Error("Range already has an active host relay");
