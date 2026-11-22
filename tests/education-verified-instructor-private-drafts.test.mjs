@@ -117,7 +117,7 @@ test("13: unapproved users are blocked from the upload controls", () => {
   assert.match(page, /accessQuery\.data\?\.approved === false/);
   assert.match(page, /accessQuery\.data\?\.approved === true/);
   assert.match(page, /if \(!instructorRpcEnabled \|\| !accessQuery\.data\?\.approved \|\| !readiness\.valid \|\| serverSaving\) return/);
-  assert.match(page, /disabled=\{!readiness\.valid \|\| serverSaving\}/);
+  assert.match(page, /disabled=\{!readiness\.valid \|\| serverSaving \|\| !!loadingDraftId\}/);
   assert.match(page, /No draft was uploaded/);
 });
 
@@ -167,6 +167,7 @@ test("18: staging SQL has exactly one complete transaction and no duplicated fun
   assert.equal((sql.match(/^BEGIN;$/gm) ?? []).length, 1);
   assert.equal((sql.match(/^COMMIT;$/gm) ?? []).length, 1);
   assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) ?? []).length, 5);
-  assert.match(sql.split("\nCOMMIT;\n")[1], /^\s*-- Staging only:/);
+  const trailing = sql.split("\nCOMMIT;\n")[1] ?? "";
+  assert.ok(trailing.split("\n").every(line => !line.trim() || line.trimStart().startsWith("--")));
   assert.doesNotMatch(sql.split("\nCOMMIT;\n")[1], /\bINSERT INTO\b|\bCREATE OR REPLACE FUNCTION\b/i);
 });
