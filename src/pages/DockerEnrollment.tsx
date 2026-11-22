@@ -6,6 +6,19 @@ import { useAuthStore } from "@/store/authStore";
 
 type Workspace = {id:string;name:string;created_at:string};
 type Agent = {id:string;workspace_id:string;display_name:string;status:"pending"|"key_verified"|"revoked";created_at:string;key_verified_at:string|null;revoked_at:string|null};
+type SignedReport = {agent_id:string;last_signed_at:string;last_received_at:string;engine_available:boolean;engine_version:string;container_count:number|null;accepted_count:number};
+function signedReportState(agent:Agent,report:SignedReport|undefined){
+  if(agent.status==="revoked")return "Enrollment revoked — signed reports disabled";
+  if(agent.status!=="key_verified")return "No verified signing identity";
+  if(!report)return "No signed reports received";
+  const observed=Date.parse(report.last_received_at);
+  if(!Number.isFinite(observed)||Date.now()-observed>180000 || Date.now()<observed-60000)
+    return "Signed report is stale — not a live status";
+  return report.engine_available
+    ? "Recent signed report: Docker CLI answered on reporting machine"
+    : "Recent signed report: Docker CLI did not answer";
+}
+
 type Challenge = {agentId:string;nonce:string;expiresAt:string;message:string};
 async function call(action:string,fields:Record<string,string>={}):Promise<Record<string,unknown>>{
   const {data,error}=await supabase.functions.invoke("docker-enrollment",{body:{action,...fields}});
@@ -21,6 +34,7 @@ export default function DockerEnrollment(){
   const user=useAuthStore(s=>s.user);
   const [workspaces,setWorkspaces]=useState<Workspace[]>([]);
   const [agents,setAgents]=useState<Agent[]>([]);
+  const [reports,setReports]=useState<SignedReport[]>([]);
   const [workspaceId,setWorkspaceId]=useState("");
   const [workspaceName,setWorkspaceName]=useState("");
   const [agentName,setAgentName]=useState("");
@@ -35,6 +49,7 @@ export default function DockerEnrollment(){
     const ws=Array.isArray(data.workspaces)?data.workspaces as Workspace[]:[];
     const list=Array.isArray(data.agents)?data.agents as Agent[]:[];
     setWorkspaces(ws);setAgents(list);
+    setReports(Array.isArray(data.reports)?data.reports as SignedReport[]:[]);
     setWorkspaceId(old=>ws.some(w=>w.id===old)?old:(ws[0]?.id||""));
   },[]);
   useEffect(()=>{if(user?.id)load().catch(e=>setError(e instanceof Error?e.message:"Enrollment service unavailable"));},[user?.id,load]);
@@ -112,15 +127,19 @@ export default function DockerEnrollment(){
     </section>}
     <section className="rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">Registered agent identities</h2>
+        <h2 className="text-xl font-semibold">Registered agent identities &amp; signed reports</h2>
         <button disabled={busy} onClick={()=>execute(async()=>{await load();setNotice("Enrollment records refreshed. No live Docker check performed.");})} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 text-sm"><RefreshCw className="h-4 w-4"/> Refresh</button>
       </div>
       <div className="mt-4 space-y-3">{agents.map(agent=><div key={agent.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4">
-        <div><p className="font-medium">{agent.display_name}</p><p className="mt-1 text-xs text-muted-foreground">{agent.status==="key_verified"?"Ed25519 key possession verified":agent.status==="revoked"?"Enrollment revoked":"Challenge pending or expired"}</p><p className="mt-1 text-xs text-muted-foreground">Server reachability: not checked</p></div>
+        <div><p className="font-medium">{agent.display_name}</p><p className="mt-1 text-xs text-muted-foreground">{agent.status==="key_verified"?"Ed25519 key possession verified":agent.status==="revoked"?"Enrollment revoked":"Challenge pending or expired"}</p><p className="mt-1 text-xs text-muted-foreground">{signedReportState(agent,reports.find(r=>r.agent_id===agent.id))}</p>
+          {reports.some(r=>r.agent_id===agent.id)&&<p className="mt-1 text-xs text-muted-foreground">
+            Latest signed report: {new Date(reports.find(r=>r.agent_id===agent.id)!.last_received_at).toLocaleString()}
+            {" · "}Reports accepted: {reports.find(r=>r.agent_id===agent.id)!.accepted_count}
+          </p>}</div>
         {agent.status!=="revoked"&&<button disabled={busy} onClick={()=>revoke(agent.id)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-rose-400/40 px-3 text-sm text-rose-500"><Trash2 className="h-4 w-4"/> Revoke</button>}
       </div>)}</div>
       {agents.length===0&&<div className="mt-4 flex items-center gap-3 text-sm text-muted-foreground"><CloudOff className="h-5 w-5"/> No enrolled agent identities yet.</div>}
-      <p className="mt-5 flex items-start gap-2 text-sm text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0"/> Enrollment does not grant access to Docker Engine. Live agent verification, owner authorization and safe remote operations require separate future milestones.</p>
+      <p className="mt-5 flex items-start gap-2 text-sm text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0"/> Key verification and signed reports do not grant Docker Engine access, prove physical machine ownership, or create an inbound server connection. A fresh report means a trusted enrolled key recently submitted an observation.</p>
     </section>
   </div>;
 }

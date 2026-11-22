@@ -21,7 +21,8 @@
     "docker:agent": "node scripts/docker-readonly-agent.mjs",
     "docker:agent:client": "node scripts/docker-agent-client.mjs",
     "docker:connections": "node scripts/docker-connections.mjs",
-    "range:microvm:preflight": "node scripts/cyber-range-microvm-preflight.mjs"
+    "range:microvm:preflight": "node scripts/cyber-range-microvm-preflight.mjs",
+    "docker:heartbeat": "node scripts/docker-agent-heartbeat.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
