@@ -1,0 +1,46 @@
+name: CTF Worker Fencing and Resource Budgets
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261122200000_ctf_worker_fencing_budget.sql'
+      - 'tests/sql/ctf-range-worker-fencing-smoke.sql'
+      - 'tests/ctf-range-fenced-worker.test.mjs'
+      - 'infrastructure/cyber-range/provider/**'
+      - 'supabase/functions/ctf-range-worker/**'
+      - 'supabase/functions/_shared/ctf-range-fenced-contract.mjs'
+      - '.github/workflows/ctf-range-worker-fencing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-postgres:
+    name: Confirm worker leases, takeover fencing and zero-default budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Launch disposable networkless PostgreSQL
+        run: |
+          # Unique random secret per CI run; nothing hardcoded or committed.
+          ephemeral_password="$(openssl rand -hex 32)"
+          docker run --detach --rm --network none --name eternyx-fenced-pg-ci -e POSTGRES_PASSWORD="$ephemeral_password" postgres:17-alpine
+          unset ephemeral_password
+          for i in $(seq 1 30); do
+            if docker exec eternyx-fenced-pg-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec eternyx-fenced-pg-ci pg_isready -U postgres
+      - name: Bootstrap synthetic auth and roles
+        run: docker exec -i eternyx-fenced-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply original range control migration
+        run: docker exec -i eternyx-fenced-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122180000_ctf_range_session_control.sql
+      - name: Apply new worker fencing and launch budget migration
+        run: docker exec -i eternyx-fenced-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122200000_ctf_worker_fencing_budget.sql
+      - name: Exercise live Postgres lease/budget/cleanup/privilege acceptance
+        run: docker exec -i eternyx-fenced-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-worker-fencing-smoke.sql
+      - name: Destroy temporary test database
+        if: always()
+        run: docker rm -f eternyx-fenced-pg-ci || true

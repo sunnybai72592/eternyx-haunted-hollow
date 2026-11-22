@@ -1,25 +1,24 @@
 #!/usr/bin/env node
 /**
- * Trusted host-side provider process. Never deploy inside ETERNYX frontend,
- * Supabase Edge Runtime, a vulnerable target or the public web server.
- *
- * No scheduled/background service is created by adding this file.
- * Manually invoked; disabled until two explicit local execution opt-ins.
+ * Trusted local operator only. No background worker or paid infrastructure is
+ * started by committing this file. Explicit operator opt-ins are mandatory.
  */
 import { LocalDockerRangeRuntime } from "../infrastructure/cyber-range/provider/docker-runtime.mjs";
-import { RangeWorkerApi, runProviderTick } from "../infrastructure/cyber-range/provider/worker.mjs";
+import { RangeWorkerApi } from "../infrastructure/cyber-range/provider/worker.mjs";
+import { runFencedProviderTick } from "../infrastructure/cyber-range/provider/fenced-worker.mjs";
+import { acquireLocalOperatorLock } from "../infrastructure/cyber-range/provider/process-lock.mjs";
 
 const usage = () => {
-  process.stdout.write([
-    "ETERNYX isolated range provider (operator-only, no paid cloud deployment)",
-    "Usage: node scripts/cyber-range-provider.mjs --once | --loop",
-    "Required: RANGE_PROVIDER_API_URL, CTF_RANGE_WORKER_TOKEN (secret)",
-    "Required opt-ins: ETERNYX_PROVIDER_EXECUTION=enabled",
-    "                 ETERNYX_RANGE_OPERATOR_ACK=LOCAL_ONLY_NO_PUBLIC_INGRESS",
-    "The endpoint must be HTTPS, at /functions/v1/ctf-range-worker.",
-    "The provider runs on a dedicated operator-controlled host with local Docker.",
-    "Operator must separately enable provider capability and approve ingress in DB.",
-  ].join("\n") + "\n");
+  console.log([
+    "ETERNYX Labs operator-only fenced worker",
+    "Usage: npm run range:provider -- --once | --loop",
+    "Required: RANGE_PROVIDER_API_URL, CTF_RANGE_WORKER_TOKEN (never log)",
+    "Required: ETERNYX_PROVIDER_EXECUTION=enabled",
+    "Required: ETERNYX_RANGE_OPERATOR_ACK=LOCAL_ONLY_NO_PUBLIC_INGRESS",
+    "Host must have local Docker and a dedicated operator process lock.",
+    "Database quotas/ingress are disabled until independently approved.",
+    "A stale operator lock must be manually inspected before recovery.",
+  ].join("\n"));
 };
 
 const flag = process.argv[2];
@@ -28,15 +27,18 @@ if (!["--once", "--loop"].includes(flag)) {
   if (flag && !["--help", "-h"].includes(flag)) process.exitCode = 2;
 } else if (process.env.ETERNYX_PROVIDER_EXECUTION !== "enabled" ||
            process.env.ETERNYX_RANGE_OPERATOR_ACK !== "LOCAL_ONLY_NO_PUBLIC_INGRESS") {
-  console.error("Range execution is disabled; operator opt-in is required.");
+  console.error("Range execution disabled: explicit operator opt-in required.");
   process.exitCode = 1;
 } else {
   let shutdown = false;
-  process.on("SIGINT", () => { shutdown = true; });
-  process.on("SIGTERM", () => { shutdown = true; });
-
+  process.once("SIGINT", () => { shutdown = true; });
+  process.once("SIGTERM", () => { shutdown = true; });
+  let localLock;
+  let leaseId = null;
+  let api;
   try {
-    const api = new RangeWorkerApi(
+    localLock = await acquireLocalOperatorLock();
+    api = new RangeWorkerApi(
       process.env.RANGE_PROVIDER_API_URL ?? "",
       process.env.CTF_RANGE_WORKER_TOKEN ?? "",
     );
@@ -44,14 +46,25 @@ if (!["--once", "--loop"].includes(flag)) {
     runtime.validateHost();
 
     do {
-      const result = await runProviderTick({ api, runtime });
-      // Safe metrics only: never print the worker token, gateway bearer or user ID.
-      console.log("Range tick:", JSON.stringify(result));
+      const tick = await runFencedProviderTick({ api, runtime, leaseId });
+      leaseId = tick.leaseId; // NEVER print the private lease generation.
+      console.log("Range worker tick:", JSON.stringify(tick.stats));
       if (flag === "--once" || shutdown) break;
-      await new Promise((done) => setTimeout(done, 10_000));
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
     } while (!shutdown);
   } catch {
-    console.error("Range provider stopped: inspect trusted control-plane health and Docker state.");
+    console.error("Range provider halted; verify owner lease, quota and local Docker safely.");
     process.exitCode = 1;
+  } finally {
+    // Releasing the fence on clean exit permits a new operator to recover
+    // running sessions. A crash leaves a 180-second stale DB lease instead.
+    if (api && leaseId) {
+      try { await api.call({ action: "release", leaseId }); }
+      catch { console.error("Worker lease release failed; timeout will handle failover."); }
+    }
+    if (localLock) {
+      try { await localLock.release(); }
+      catch { console.error("Local lock release failed; operator review required."); }
+    }
   }
 }

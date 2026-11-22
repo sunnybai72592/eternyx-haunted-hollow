@@ -197,8 +197,8 @@ test("managed Docker stack has per-session network isolation, no target port and
   assert.match(edge, /CTF_RANGE_WORKER_ENABLED/);
   assert.match(edge, /verifyWorkerToken\(supplied, configured\)/);
   assert.match(edge, /getSupabaseSecretKey\(\)/);
-  assert.match(edge, /ctf_range_claim_queued_session/);
-  assert.match(edge, /ctf_range_report_session/);
+  assert.match(edge, /ctf_range_worker_claim/);
+  assert.match(edge, /ctf_range_worker_report/);
   assert.match(config, /\[functions\.ctf-range-worker\]\s*verify_jwt\s*=\s*false/);
   assert.match(cli, /ETERNYX_PROVIDER_EXECUTION/);
   assert.doesNotMatch(compose, /docker\.sock|privileged:\s*true|network_mode:\s*host/);

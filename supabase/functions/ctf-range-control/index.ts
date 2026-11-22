@@ -46,7 +46,7 @@ serve(async (req: Request) => {
   try {
     if (parsed.action === "status") {
       const { data, error } = await supabase.from("ctf_range_provider")
-        .select("enabled,ingress_approved,max_active_sessions,last_heartbeat_at").eq("singleton_id", 1)
+        .select("enabled,ingress_approved,max_active_sessions,last_heartbeat_at,max_starts_per_24h,max_reserved_minutes_per_24h").eq("singleton_id", 1)
         .maybeSingle();
       if (error) {
         console.error("Range provider capability unavailable", { code: error.code });
@@ -55,10 +55,16 @@ serve(async (req: Request) => {
 
       // A false status does not create any session or incur VM/container costs.
       return reply({
-        providerOnline: providerIsOnline(data, new Date()),
+        providerOnline: providerIsOnline(data, new Date()) &&
+          Number(data?.max_starts_per_24h) > 0 &&
+          Number(data?.max_reserved_minutes_per_24h) >= 15,
         maxConcurrentSessions: data && Number.isInteger(data.max_active_sessions)
           ? data.max_active_sessions : 0,
         sessionDurationMinutes: 15,
+        // Conservative starts/day budget; NOT cloud billing or currency.
+        dailyLaunchBudgetConfigured:
+          Number(data?.max_starts_per_24h) > 0 &&
+          Number(data?.max_reserved_minutes_per_24h) >= 15,
         hostedAccessAvailable: false, // No secure routed challenge URLs in this milestone.
         message: "Provider sessions require a separately deployed, reviewed isolation service.",
       });
