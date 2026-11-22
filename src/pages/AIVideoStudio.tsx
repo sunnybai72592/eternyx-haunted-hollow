@@ -36,7 +36,7 @@ const statusTone: Record<string, string> = {
   queued: "border-slate-500/40 text-slate-300",
   reserved: "border-blue-400/40 text-blue-200",
   submitted: "border-cyan-400/40 text-cyan-200",
-  processing: "border-violet-400/40 text-violet-200",
+  processing: "border-violet-400/40 text-primary",
   cancel_requested: "border-amber-400/40 text-amber-200",
   succeeded: "border-emerald-400/40 text-emerald-200",
   failed: "border-rose-400/40 text-rose-200",
@@ -180,10 +180,10 @@ const AIVideoStudio = () => {
   const canCancel = !!job && !isTerminalAIJobStatus(job.status) && job.status !== "cancel_requested" && job.status !== "reconciliation_required";
 
   return (
-    <div className="min-h-screen bg-background text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button asChild variant="ghost" className="text-slate-300 hover:bg-slate-800 hover:text-white">
+          <Button asChild variant="ghost" className="text-slate-300 hover:bg-slate-800 hover:text-foreground">
             <Link to="/ai-arsenal"><ArrowLeft className="mr-2 h-4 w-4" />AI Arsenal</Link>
           </Button>
           <Badge variant="outline" className="border-amber-400/30 text-amber-200">
@@ -191,10 +191,10 @@ const AIVideoStudio = () => {
           </Badge>
         </div>
 
-        <section className="relative overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-950/50 via-slate-950 to-cyan-950/30 p-7 sm:p-10">
-          <div className="pointer-events-none absolute -right-12 -top-16 h-64 w-64 rounded-full bg-violet-400/10 blur-3xl" />
+        <section className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.12] via-background to-accent/[0.08] p-7 sm:p-10">
+          <div className="pointer-events-none absolute -right-12 -top-16 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
           <div className="relative max-w-3xl">
-            <div className="flex items-center gap-3 text-violet-200">
+            <div className="flex items-center gap-3 text-primary">
               <Clapperboard className="h-8 w-8" />
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Flagship creative workspace</span>
             </div>
@@ -203,8 +203,8 @@ const AIVideoStudio = () => {
               A dedicated workspace for text-to-video, image-to-video, video transformation and presenter-style generation.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Badge variant="outline" className="border-violet-300/30 bg-violet-300/10 text-violet-100">Async job architecture prepared</Badge>
-              <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">Multi-provider ready</Badge>
+              <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">Async job architecture prepared</Badge>
+              <Badge variant="outline" className="border-accent/30 bg-accent/10 text-accent">Multi-provider ready</Badge>
               <Badge variant="outline" className="border-slate-600 text-slate-300">Generation disabled</Badge>
             </div>
           </div>
@@ -225,10 +225,10 @@ const AIVideoStudio = () => {
             return (
               <Card key={feature.id} className="border-slate-800 bg-slate-900/60 text-slate-100">
                 <CardHeader className="pb-3">
-                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-400/10 text-violet-200">
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <CardTitle className="text-base text-white">{feature.title}</CardTitle>
+                  <CardTitle className="text-base text-foreground">{feature.title}</CardTitle>
                   <CardDescription className="leading-5 text-slate-400">{feature.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -242,7 +242,7 @@ const AIVideoStudio = () => {
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white"><Clock3 className="h-5 w-5 text-cyan-300" />Job lifecycle console</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-foreground"><Clock3 className="h-5 w-5 text-primary" />Job lifecycle console</CardTitle>
               <CardDescription className="text-slate-400">
                 Retrieve a job you already own by its ID, inspect its safe lifecycle state, or request cancellation.
               </CardDescription>
@@ -260,7 +260,7 @@ const AIVideoStudio = () => {
                   aria-invalid={Boolean(jobId.trim()) && !validJobId}
                   aria-describedby="ai-video-job-help"
                   maxLength={36}
-                  className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500"
+                  className="border-slate-700 bg-slate-950 text-foreground placeholder:text-slate-500"
                 />
                 <Button onClick={lookupJob} disabled={isLoading || isCancelling || !validJobId} className="bg-primary text-primary-foreground hover:bg-primary/90">
                   {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -276,7 +276,7 @@ const AIVideoStudio = () => {
                 </Alert>
               )}
               {notice && (
-                <Alert className="border-cyan-400/30 bg-cyan-950/20 text-cyan-100">
+                <Alert className="border-primary/30 bg-primary/10 text-foreground">
                   <ShieldCheck className="h-4 w-4" />
                   <AlertDescription>{notice}</AlertDescription>
                 </Alert>
@@ -285,7 +285,7 @@ const AIVideoStudio = () => {
               {job && (
                 <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold text-white">Job status</span>
+                    <span className="font-semibold text-foreground">Job status</span>
                     <Badge variant="outline" className={statusTone[job.status] ?? "border-slate-600 text-slate-300"}>{job.status.replace(/_/g, " ")}</Badge>
                   </div>
                   <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -320,12 +320,12 @@ const AIVideoStudio = () => {
 
           <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
             <CardHeader>
-              <CardTitle className="text-white">Built for safe generation</CardTitle>
+              <CardTitle className="text-foreground">Built for safe generation</CardTitle>
               <CardDescription className="text-slate-400">The interface reflects the platform's current implementation boundary.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm leading-6 text-slate-300">
               <div className="flex gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" /><p>Job access is delegated to authenticated, user-scoped server endpoints.</p></div>
-              <div className="flex gap-3"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" /><p>Long-running generation uses durable asynchronous job states rather than a browser request held open.</p></div>
+              <div className="flex gap-3"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><p>Long-running generation uses durable asynchronous job states rather than a browser request held open.</p></div>
               <div className="flex gap-3"><Film className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /><p>Provider task IDs, prompts, worker leases and private storage keys are not shown in this client view.</p></div>
               <div className="flex gap-3"><XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" /><p>Cancellation remains a request until the provider outcome is confirmed; uncertain outcomes are not treated as refunds or completed cancellations.</p></div>
               <Button asChild variant="outline" className="w-full border-slate-700 bg-transparent text-slate-200 hover:bg-slate-800">
