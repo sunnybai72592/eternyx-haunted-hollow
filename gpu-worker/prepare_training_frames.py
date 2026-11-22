@@ -10,6 +10,10 @@ import numpy as np
 WIDTH, HEIGHT, FPS, FRAMES = 384, 224, 16, 17
 
 
+class IncompleteWindow(ValueError):
+    """The selected offset has fewer than the required decoded frames."""
+
+
 def prepare_frames(root, manifest, name):
     return _prepare_split(root, manifest, name, "train")
 
@@ -54,7 +58,7 @@ def _prepare_split(root, manifest, name, split):
         "-frames:v", str(FRAMES), "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1",
     ], capture_output=True, check=True, timeout=60)
     if len(decoded.stdout) != FRAMES * HEIGHT * WIDTH * 3:
-        raise ValueError("Clip is too short for 17 frames at 16 fps")
+        raise IncompleteWindow("Clip is too short for 17 frames at 16 fps")
     frames = np.frombuffer(decoded.stdout, dtype=np.uint8).reshape(FRAMES, HEIGHT, WIDTH, 3)
     return {"frames": frames, "caption": row["caption"], "scene": row["scene"],
             "sha256": digest, "start_frame": start, "fps": FPS, "version": 1}

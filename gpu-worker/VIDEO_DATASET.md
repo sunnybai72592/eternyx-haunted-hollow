@@ -19,6 +19,14 @@ courtyard-pan.mp4,courtyard-evening,eval,Camera pans left as a bicycle crosses t
 
 Add an optional `start_frame` column to the annotation CSV. Count from zero on the resampled 16 fps timeline. For example, `32` selects the 17 frames from 2.00 through 3.00 seconds. A blank or omitted value selects the opening window. Select a point with 17 real frames remaining and caption the selected action. The contact sheet displays timestamps relative to the clip. Encoded windows and evaluation cases carry the selected offset.
 
+## Compare possible windows for one clip
+
+```sh
+python gpu-worker/compare_footage_windows.py ./clips dataset-v1.json workshop-wide.mp4 options.html --starts 0 8 32
+```
+
+Open the local HTML to compare timestamps, frames and adjacent-frame pixel changes. An incomplete candidate is marked individually. Save the manifest for the window that matches your caption, then use that file for encoding, training and evaluation. The exported copy changes only the selected clip's start frame. The HTML contains footage previews and downloadable copies of the dataset annotations.
+
 ## Inspect the selected windows before encoding
 
 ```sh
