@@ -69,7 +69,7 @@ test("SQL claims are one-time, account bound, owner read only, fail closed",()=>
   assert.match(file,/state='approved'/);
   assert.match(file,/authorized_at IS NOT NULL/);
   assert.match(file,/NOT EXISTS\(SELECT 1 FROM public\.docker_command_claims/);
-  assert.match(file,/FOR UPDATE SKIP LOCKED/);
+  assert.match(file,/FOR UPDATE OF r SKIP LOCKED/);
   assert.match(file,/DELETE FROM public\.docker_command_nonces/);
   assert.match(file,/status='key_verified'/);
   assert.match(file,/interval '15 seconds'/);
