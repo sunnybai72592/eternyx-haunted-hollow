@@ -76,7 +76,7 @@ export default function MyServiceRequests() {
       setTotal(0);
     } else {
       const size = count ?? 0;
-      if (page > 0 && page * 20 >= size) { setPage(Math.max(0, Math.ceil(size / 20) - 1)); return; }
+      if (page > 0 && page * 20 >= size) { setPage(Math.max(0, Math.ceil(size / 20) - 1)); setLoading(false); return; }
       setRows((data ?? []) as RequestRow[]);
       setRowsOwner(userId);
       setTotal(size);
@@ -158,7 +158,7 @@ export default function MyServiceRequests() {
       void load();
     } catch (reason) {
       console.error('Customer service check-in failed', reason);
-      setNotice('Could not record your check-in. Verify your connection and account, then retry.');
+      if (useAuthStore.getState().user?.id === userId) setNotice('Could not record your check-in. Verify your connection and account, then retry.');
     } finally {
       setCheckingId(null);
     }
