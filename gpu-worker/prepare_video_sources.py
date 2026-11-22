@@ -125,7 +125,7 @@ def normalize_one(source, output, *, start_seconds=0, seconds=60):
 
 def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60):
     if folder.is_symlink() or not folder.is_dir():
-        raise ValueError("Input must be a real local directory")
+        raise ValueError("Input must be a real local directory, not a symlink")
     if destination.exists() or destination.is_symlink():
         raise ValueError("Output directory must be new; existing files are never overwritten")
     if destination.parent.is_symlink() or not destination.parent.is_dir():
