@@ -175,7 +175,9 @@ async function main(){
         .select("answer_id,points_awarded").eq("answer_id",f.answerId)));
     });
   }
-  if(config.mode!=="verify"){
+  // Never attempt even a rejected mutation in read-only preflight/verify.
+  if(config.mode==="preflight")return;
+  if(config.mode==="review"){
     for(const [name,c] of [
       ["student-a-cannot-write-manual-review",studentA],
       ["student-b-cannot-write-manual-review",studentB],
@@ -185,9 +187,6 @@ async function main(){
         must(denied(await mark(c,config.awarded)));
       });
     }
-  }
-  if(config.mode==="preflight")return;
-  if(config.mode==="review"){
     await step("instructor-records-synthetic-human-mark",async()=>{
       reviewWriteAttempted=true;
       const r=succeeded(await mark(owner,config.awarded));
