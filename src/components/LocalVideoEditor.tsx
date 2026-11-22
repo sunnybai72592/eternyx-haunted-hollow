@@ -81,6 +81,7 @@ export default function LocalVideoEditor() {
     setMessage("");
     setNotice("");
     const prepared: LocalFile[] = [];
+    let committed = false;
     try {
       if (!files.length || files.length > LOCAL_VIDEO_LIMITS.maxClips) {
         throw new Error("Choose between 1 and 8 local MP4 files.");
@@ -97,6 +98,7 @@ export default function LocalVideoEditor() {
       if (current !== videoVersion.current) return;
       urls.current.forEach(url => URL.revokeObjectURL(url));
       urls.current = prepared.map(item => item.url);
+      committed = true;
       setSources(prepared);
       setShots(prepared.map(file => newShot(file.name)));
       setSelectedSource(prepared[0].name);
@@ -106,9 +108,8 @@ export default function LocalVideoEditor() {
         setMessage(error instanceof Error ? error.message : "Could not read the selected files.");
       }
     } finally {
-      if (current !== videoVersion.current) {
-        prepared.forEach(item => URL.revokeObjectURL(item.url));
-      } else setWorking(false);
+      if (!committed) prepared.forEach(item => URL.revokeObjectURL(item.url));
+      if (current === videoVersion.current) setWorking(false);
     }
   };
 
@@ -327,7 +328,16 @@ export default function LocalVideoEditor() {
               <Download className="mr-2 h-4 w-4"/>Download SRT preview
             </Button>
             <Button variant="outline" disabled={!ready || working || audioWorking}
-              onClick={() => { void navigator.clipboard.writeText(command).then(() => setNotice("Local render command copied."), () => setMessage("Clipboard access denied. Select and copy the command below.")); }}>
+              onClick={() => {
+                if (!navigator.clipboard?.writeText) {
+                  setMessage("Clipboard access is unavailable. Select and copy the command below.");
+                  return;
+                }
+                void navigator.clipboard.writeText(command).then(
+                  () => setNotice("Local render command copied."),
+                  () => setMessage("Clipboard access denied. Select and copy the command below."),
+                );
+              }}>
               <Copy className="mr-2 h-4 w-4"/>Copy local render command
             </Button>
           </div>
