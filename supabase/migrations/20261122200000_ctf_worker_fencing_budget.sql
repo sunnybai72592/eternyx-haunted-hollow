@@ -171,6 +171,7 @@ BEGIN
   IF NOT FOUND OR v_limits.enabled IS DISTINCT FROM true
      OR v_limits.ingress_approved IS DISTINCT FROM true
      OR v_limits.max_active_sessions < 1
+     OR v_limits.last_heartbeat_at IS NULL
      OR v_limits.last_heartbeat_at <= v_now - interval '60 seconds' THEN
     RETURN jsonb_build_object('ok',false,'reason','provider_offline');
   END IF;
