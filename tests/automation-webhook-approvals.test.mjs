@@ -40,7 +40,7 @@ test("signed event can be encrypted at rest, decrypted solely with the server ke
   assert.equal(await decryptScheduledText(key,encrypted.ciphertext,encrypted.nonce,2000),text);
   await assert.rejects(decryptScheduledText("b".repeat(64),encrypted.ciphertext,encrypted.nonce,2000));
   await assert.rejects(encryptScheduledText(key,"é".repeat(1001),2000));
-  await assert.rejects(decryptScheduledText(key,encrypted.ciphertext,encrypted.nonce,100));
+  await assert.rejects(decryptScheduledText(key,encrypted.ciphertext,encrypted.nonce,4));
 });
 
 test("approvals extend verified signed webhooks, not anonymous or fake client decisions",async()=>{
