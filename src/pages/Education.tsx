@@ -62,6 +62,23 @@ export default function Education() {
           </p>
         </header>
 
+        {!authLoading && isAuthenticated && (
+          <section aria-label="Local question-bank authoring" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="font-semibold text-foreground">Create your own question bank</h2>
+              <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+                Write, validate, and export MCQ, True/False and written questions locally.
+                This does not publish assessments or grant an instructor role.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="min-h-11 shrink-0">
+              <Link to="/education/question-bank">Open Question Bank Studio
+                <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </section>
+        )}
+
         {!authLoading && !isAuthenticated && (
           <Alert className="border-primary/25 bg-card">
             <ShieldCheck aria-hidden="true" className="h-4 w-4 text-primary" />
