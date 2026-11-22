@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import AutomationWebhookPanel from "@/components/AutomationWebhookPanel";
 import AutomationSchedulePanel from "@/components/AutomationSchedulePanel";
 import AutomationGitHubReadPanel from "@/components/AutomationGitHubReadPanel";
+import AutomationGitHubIssuesPanel from "@/components/AutomationGitHubIssuesPanel";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
@@ -218,6 +219,7 @@ export default function AutomationCloudPanel({
         </div>
         <AutomationWebhookPanel selectedWorkflowId={selectedId} />
         <AutomationGitHubReadPanel />
+        <AutomationGitHubIssuesPanel />
         <AutomationSchedulePanel selectedWorkflowId={selectedId} currentInput={input}
           scheduledRuns={history.filter((item) => item.trigger_type === "scheduled")} />
         {error && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive"><CloudOff className="mr-2 inline size-4" /> {error}</p>}
