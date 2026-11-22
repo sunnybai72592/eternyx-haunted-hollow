@@ -148,7 +148,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
       {/* Top accent line */}
       <motion.div
         className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: section.accentColor }}
+        style={{ background: 'hsl(var(--primary))' }}
         initial={{ scaleX: 0 }}
         animate={{ scaleX: isHovered ? 1 : 0 }}
         transition={{ duration: 0.4 }}
