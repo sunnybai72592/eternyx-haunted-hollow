@@ -43,7 +43,7 @@ export function readStoryboard(json) {
 /** Escape CSV text (including formula-like values) for spreadsheet applications. */
 function csvCell(value) {
   const text = String(value);
-  const safe = /^[\\s]*[=+@-]/.test(text) ? "'" + text : text;
+  const safe = /^\s*[=+@-]/.test(text) ? "'" + text : text;
   return '"' + safe.replace(/"/g, '""') + '"';
 }
 
@@ -80,6 +80,6 @@ export function storyboardShotCaptionsSrt(board) {
   return board.shots.map(shot => [
     shot.number,
     storyboardSrtTimestamp(shot.startSeconds) + " --> " + storyboardSrtTimestamp(shot.endSeconds),
-    String(shot.description).replace(/[\\r\\n]+/g, " ").trim()
+    String(shot.description).replace(/[\r\n]+/g, " ").trim()
   ].join("\n")).join("\n\n") + (board.shots.length ? "\n" : "");
 }
