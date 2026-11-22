@@ -102,6 +102,7 @@ test("agent attestation CLI signs and verifies a real journal with an explicitly
 },async()=>{
 
  const {mkdirSync}=await import("node:fs");
+ const {spawnSync}=await import("node:child_process");
  const {fileURLToPath}=await import("node:url");
  fixture(({dir,secret,pub})=>{
    const journalDir=join(dir,".eternyx","docker-lab-journal");
