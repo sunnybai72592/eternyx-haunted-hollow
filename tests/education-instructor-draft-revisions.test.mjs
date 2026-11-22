@@ -121,7 +121,7 @@ test("12: the UI requires approval and prompts before losing local unsaved edits
 
 test("13: loading a private draft restores every editor dimension and error state", () => {
   assert.match(studio, /const draft = await loadInstructorDraft\(draftId\)/);
-  assert.match(studio, /setBank\(draft\.bank as Bank\)/);
+  assert.match(studio, /resetEditor\(draft\.bank as Bank\)/);
   assert.match(studio, /setActiveId\(draft\.bank\.questions\[0\]\?\.id \?\? null\)/);
   assert.match(studio, /setMode\("edit"\)/);
   assert.match(studio, /Private draft could not be loaded/);
@@ -138,10 +138,11 @@ test("14: saving a revision explicitly creates a new private draft instead of ov
 
 test("15: switching accounts clears server-loaded answer keys from UI state", () => {
   assert.match(studio, /currentUserRef\.current === user\?\.id/);
-  assert.match(studio, /if \(sourceDraftId\) \{/);
-  assert.match(studio, /setBank\(emptyQuestionBank\(\) as Bank\)/);
+  assert.match(studio, /useLayoutEffect\(\(\) => \{/);
+  assert.match(studio, /resetEditor\(emptyQuestionBank\(\) as Bank\)/);
   assert.match(studio, /setSourceDraftId\(null\)/);
-  assert.match(studio, /Previous instructor draft cleared after the account changed/);
+  assert.match(studio, /Editor cleared after the account changed/);
+  assert.match(studio, /historyController\.reset\(next\)/);
 });
 
 test("16: local JSON editing is available with staging disabled", () => {
