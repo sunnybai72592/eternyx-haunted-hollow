@@ -48,18 +48,50 @@ serve(async (req) => {
       if (updated) expired.push(updated.id);
     }
 
+    // Recover manual submissions and auto-submissions whose previous grading
+    // call failed. A non-null max_score records that grading was processed,
+    // even when the final score remains null for manual review.
+    const { data: ungraded, error: ungradedError } = await db.from("user_attempts")
+      .select("id").in("status", ["submitted", "auto_submitted"])
+      .is("max_score", null).order("end_time", { ascending: true }).limit(200);
+    if (ungradedError) throw new Error("Unable to load pending grading work");
+
+    const gradingIds = new Set([
+      ...expired,
+      ...(ungraded ?? []).map((attempt) => attempt.id),
+    ]);
     let graded = 0;
-    for (const attemptId of expired) {
-      const response = await fetch(`${url}/functions/v1/grade-test`, {
-        method: "POST",
-        headers: { apikey: key, "Content-Type": "application/json" },
-        body: JSON.stringify({ attemptId }),
-      });
-      if (response.ok) graded++;
-      else console.error("Grading request failed for an auto-submitted attempt");
+    let manualReviewPending = 0;
+    let gradingFailures = 0;
+
+    for (const attemptId of gradingIds) {
+      try {
+        const response = await fetch(`${url}/functions/v1/grade-test`, {
+          method: "POST",
+          headers: { apikey: key, "Content-Type": "application/json" },
+          body: JSON.stringify({ attemptId }),
+        });
+        if (!response.ok) throw new Error("Grading function did not accept the attempt");
+        const outcome = await response.json();
+        if (outcome?.success !== true) throw new Error("Grading function did not confirm success");
+        if (outcome.gradingPending === true) manualReviewPending++;
+        else graded++;
+      } catch {
+        gradingFailures++;
+        // Do not log IDs, answer contents, or secret service credentials.
+        console.error("CBT grading failed; the submitted attempt remains eligible for retry");
+      }
     }
 
-    return reply({ success: true, checkedCount: attempts?.length ?? 0, autoSubmittedCount: expired.length, gradedCount: graded });
+    return reply({
+      success: gradingFailures === 0,
+      checkedCount: attempts?.length ?? 0,
+      autoSubmittedCount: expired.length,
+      gradeProcessingCount: gradingIds.size,
+      gradedCount: graded,
+      manualReviewPendingCount: manualReviewPending,
+      gradingFailureCount: gradingFailures,
+    });
   } catch (error) {
     console.error("Exam auto-submission failed:", error);
     return reply({ error: "Exam auto-submission failed" }, 500);
