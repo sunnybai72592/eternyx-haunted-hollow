@@ -3,7 +3,8 @@ import AutomationWebhookPanel from "@/components/AutomationWebhookPanel";
 import AutomationSchedulePanel from "@/components/AutomationSchedulePanel";
 import AutomationGitHubReadPanel from "@/components/AutomationGitHubReadPanel";
 import AutomationGitHubIssuesPanel from "@/components/AutomationGitHubIssuesPanel";
-import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2 } from "lucide-react";
+import AutomationTemplateGallery from "@/components/AutomationTemplateGallery";
+import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2, FlaskConical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/button";
@@ -83,17 +84,22 @@ export default function AutomationCloudPanel({
   const [history, setHistory] = useState<SavedRun[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [output, setOutput] = useState<CloudResult | null>(null);
+  const [previewResult, setPreviewResult] = useState<{
+    output:string; outputLines:number; revision:number;
+    trace:CloudResult["trace"]; replayed:boolean; previewedAt:string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loaded, setLoaded] = useState(false);
   // Preserve a request key across transport failures for safe user-initiated retries.
   const pendingRun = useRef<{ signature: string; key: string } | null>(null);
+  const pendingPreview = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
     setWorkflows([]); setHistory([]); setSelectedId(null);
-    setOutput(null); setError(""); setNotice(""); setLoaded(false);
-    pendingRun.current = null;
+    setOutput(null); setPreviewResult(null); setError(""); setNotice(""); setLoaded(false);
+    pendingRun.current = null; pendingPreview.current = null;
   }, [userId]);
 
   const selected = workflows.find((item) => item.id === selectedId);
@@ -112,17 +118,19 @@ export default function AutomationCloudPanel({
   async function refresh() {
     const response = await callAutomation("list");
     if (response.source !== "authenticated_server") throw new Error("The server could not verify the workflow list.");
-    setWorkflows(readWorkflows(response.workflows));
+    const verified=readWorkflows(response.workflows);
+    setWorkflows(verified);
     setLoaded(true);
+    return verified;
   }
   function select(workflow: SavedWorkflow) {
     setSelectedId(workflow.id);
     setName(workflow.name);
     onLoadSteps(workflow.steps);
-    setOutput(null); setError(""); setNotice("Saved workflow loaded into the editor.");
+    setOutput(null); setPreviewResult(null); setError(""); setNotice("Saved workflow loaded into the editor.");
   }
   function clearSelection() {
-    setSelectedId(null); setName("My automation"); setOutput(null);
+    setSelectedId(null); setName("My automation"); setOutput(null); setPreviewResult(null);
   }
 
   return <section aria-labelledby="automation-cloud-title" className="space-y-4 rounded-2xl border border-border/70 bg-card/70 p-4 sm:p-6">
@@ -133,10 +141,17 @@ export default function AutomationCloudPanel({
       Cloud runs use existing backend resources, so hosting/compute usage may have a cost.
     </p>
     <p className="rounded-lg border border-border/70 bg-background/60 p-3 text-xs leading-6 text-muted-foreground">
-      <strong>Manual only.</strong> Cloud schedules, recurring triggers, webhooks, arbitrary code, AI providers and external actions are not enabled. Maximum 20 saved workflows and 30 manual runs per 24 hours.
+      <strong>Permission boundaries:</strong> Manual runs require your action. Signed webhooks, scheduled runs and GitHub integrations are separately configured below; GitHub issue writes additionally require owner approval. Workflow templates only copy deterministic text steps. Maximum 20 saved workflows and 30 recorded cloud runs per 24 hours.
     </p>
     {!isAuthenticated || !userId ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="size-4" /> Sign in to use account-owned workflows. Local Automation above still works without an account.</p> :
       <>
+        <AutomationTemplateGallery key={userId} disabled={busy}
+          onInstalled={async(workflowId)=>{
+            const list=await refresh();
+            const installed=list.find(w=>w.id===workflowId);
+            if(!installed)throw Error("Installed workflow is not listed on this account.");
+            select(installed);
+          }}/>
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[180px] flex-1 text-sm">Workflow name
             <Input className="mt-1" maxLength={80} value={name} onChange={(event) => { setName(event.target.value); setOutput(null); }} />
@@ -165,6 +180,34 @@ export default function AutomationCloudPanel({
           <p className="text-sm">Saved revision <strong>{selected.revision}</strong> · <strong>{selected.active ? "Active for manual runs" : "Paused"}</strong></p>
           {!unchanged && <p role="status" className="text-xs text-amber-600 dark:text-amber-300">Local steps or name differ from the saved workflow. Save changes before running on the server.</p>}
           <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline"
+              disabled={busy || !selected.active || !unchanged ||
+                new TextEncoder().encode(input).byteLength>2000}
+              onClick={()=>manage(async()=>{
+                const signature=JSON.stringify([selected.id,selected.revision,input]);
+                const requestKey=pendingPreview.current?.signature===signature
+                  ?pendingPreview.current.key:crypto.randomUUID();
+                pendingPreview.current={signature,key:requestKey};
+                const response=await callAutomation("previewWorkflow",{
+                  workflowId:selected.id,input,requestKey,
+                });
+                if(response.source!=="authenticated_preview"||response.executed!==false||
+                   response.cloudRunRecorded!==false||
+                   response.externalActionTriggered!==false||
+                   response.rawOutputStored!==false||
+                   typeof response.output!=="string"||
+                   typeof response.revision!=="number"||
+                   !Array.isArray(response.trace)){
+                  throw Error("Preview was not verified as side-effect free.");
+                }
+                if(response.revision!==selected.revision)throw Error("Saved workflow changed; reload it.");
+                pendingPreview.current=null;
+                setPreviewResult(response as unknown as {
+                  output:string;outputLines:number;revision:number;
+                  trace:CloudResult["trace"];replayed:boolean;previewedAt:string;
+                });
+                setNotice("Verified server-side preview. No recorded run, webhook, schedule or GitHub write was started.");
+              })}><FlaskConical className="mr-2 size-4"/> Preview safely (20/day)</Button>
             <Button type="button" disabled={busy || !selected.active || !unchanged || input.length > 12000}
               onClick={() => manage(async () => {
                 const signature = JSON.stringify([selected.id, selected.revision, input]);
@@ -195,6 +238,21 @@ export default function AutomationCloudPanel({
             }}><Trash2 className="mr-2 size-4" /> Delete</Button>
           </div>
           {input.length > 12000 && <p className="text-xs text-muted-foreground">Cloud input limit: 12,000 characters. The local runner supports larger inputs.</p>}
+          {new TextEncoder().encode(input).byteLength>2000 && <p className="text-xs text-muted-foreground">
+            Private server preview limit: 2,000 UTF-8 input bytes. Use manual execution for larger payloads.
+          </p>}
+        </div>}
+        {previewResult&&<div className="space-y-2 rounded-xl border border-primary/20 p-4">
+          <h4 className="text-sm font-semibold">Actual saved workflow preview · {previewResult.outputLines} lines</h4>
+          <p className="text-xs text-muted-foreground">
+            Saved revision {previewResult.revision}. Preview receipt at {formatDate(previewResult.previewedAt)}.
+            No cloud run was recorded and no external trigger or write was activated.
+          </p>
+          <Textarea readOnly rows={6} className="font-mono text-xs" value={previewResult.output}/>
+          <p className="text-xs text-muted-foreground">
+            {previewResult.trace.length} deterministic steps tested.
+            Raw preview inputs/outputs are not stored in audit metadata.
+          </p>
         </div>}
         {output && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
           <h4 className="font-semibold">Server-computed output · {output.outputLines} lines</h4>

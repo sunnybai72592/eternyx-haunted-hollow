@@ -4,6 +4,7 @@ import {
   CLOUD_INPUT_LIMIT, CLOUD_OUTPUT_LIMIT, parseAutomationControlRequest,
 } from "../_shared/automation-control-contract.mjs";
 import { runLocalWorkflow } from "../../../src/lib/automationWorkflow.mjs";
+import { createTemplateCards, fingerprintPreview } from "../_shared/automation-template-catalog.mjs";
 import { issueWebhookCredential } from "../_shared/automation-webhook-crypto.mjs";
 import { decryptScheduledText, SCHEDULE_INPUT_BYTES } from "../_shared/automation-schedule-crypto.mjs";
 
@@ -25,6 +26,7 @@ const rpcStatus: Record<string, number> = {
   trigger_limit: 429, already_exists: 409, trigger_revoked: 404,
   pending_limit: 429, daily_approval_limit: 429, not_pending: 409,
   expired: 410, trigger_run_limit: 429, trigger_submission_limit: 429,
+  preview_limit: 429, template_copy_deleted: 409, unknown_template:404,
 };
 
 function failureReason(reason: unknown): string {
@@ -86,6 +88,65 @@ serve(async (req: Request) => {
       return reply({ workflows: data ?? [], source: "authenticated_server", schedulingEnabled: false,
         webhooksConfigured: /^[0-9a-f]{64}$/i.test(Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY") ?? ""),
         approvalConfigured: /^[0-9a-f]{64}$/i.test(Deno.env.get("AUTOMATION_APPROVAL_ENCRYPTION_KEY") ?? "") });
+    }
+    if (request.action === "templates") {
+      const { data:pruned, error:pruneError } = await supabase.rpc(
+        "automation_prune_template_metadata",{p_user_id:user.id});
+      if (pruneError || pruned?.ok!==true) throw pruneError ?? Error("template_cleanup_failed");
+      const [{data:rows,error:catalogError},{data:usage,error:usageError}] = await Promise.all([
+        supabase.from("automation_template_catalog")
+          .select("id,version,name,category,description,sample_input,steps")
+          .order("name",{ascending:true}).limit(16),
+        supabase.rpc("automation_preview_usage",{p_user_id:user.id}),
+      ]);
+      if (catalogError || usageError) throw catalogError ?? usageError;
+      if (usage?.ok!==true) throw Error("preview_usage_unavailable");
+      return reply({source:"authenticated_server",templates:createTemplateCards(rows??[]),
+        previewUsage:usage, automaticExecution:false, externalWritesEnabled:false});
+    }
+    if (request.action === "installTemplate") {
+      const {data,error}=await supabase.rpc("automation_instantiate_template",{
+        p_user_id:user.id,p_template_id:request.templateId,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      return rpcResponse(data,"template_install_failed");
+    }
+    if (request.action === "previewWorkflow") {
+      const auditKey = Deno.env.get("AUTOMATION_PREVIEW_AUDIT_KEY") ?? "";
+      if(!/^[0-9a-f]{64}$/i.test(auditKey)) {
+        return reply({error:"Private workflow preview audit key is not configured"},503);
+      }
+      const {data:workflow,error:readError}=await supabase.from("automation_workflows")
+        .select("id,revision,steps,active,trigger_kind")
+        .eq("id",request.workflowId).eq("user_id",user.id).maybeSingle();
+      if(readError)throw readError;
+      if(!workflow||workflow.active!==true||workflow.trigger_kind!=="manual") {
+        return reply({error:"Saved workflow is paused, unavailable or not owned"},404);
+      }
+      let result;
+      try{result=runLocalWorkflow(request.input,workflow.steps);}
+      catch{return reply({error:"Preview input or saved workflow failed safety validation"},400);}
+      const encoder=new TextEncoder();
+      const inputBytes=encoder.encode(request.input).byteLength;
+      const outputBytes=encoder.encode(result.output).byteLength;
+      if(inputBytes>2000||outputBytes>10000)return reply({
+        error:"Private preview supports 2,000 input bytes and 10,000 output bytes"},413);
+      const {data:receipt,error:recordError}=await supabase.rpc(
+        "automation_record_workflow_preview",{
+          p_user_id:user.id,p_workflow_id:workflow.id,p_revision:workflow.revision,
+          p_request_key:request.requestKey,
+          p_fingerprint:await fingerprintPreview(auditKey,user.id,workflow.id,
+            workflow.revision,request.input),
+          p_input_bytes:inputBytes,p_output_bytes:outputBytes,
+          p_output_lines:result.outputLines,
+        });
+      if(recordError)throw recordError;
+      if(receipt?.ok!==true)return rpcResponse(receipt,"preview_failed");
+      return reply({source:"authenticated_preview",workflowId:workflow.id,
+        revision:workflow.revision,output:result.output,outputLines:result.outputLines,
+        trace:result.trace,previewedAt:receipt.created_at,
+        replayed:receipt.replayed,executed:false,cloudRunRecorded:false,
+        externalActionTriggered:false,rawOutputStored:false});
     }
     if (request.action === "history") {
       const { data, error } = await supabase.from("automation_runs")

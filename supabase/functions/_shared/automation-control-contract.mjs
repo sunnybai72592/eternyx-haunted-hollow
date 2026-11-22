@@ -9,6 +9,9 @@ export const CLOUD_OUTPUT_LIMIT = 30000;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fields = {
   list: ["action"],
+  templates: ["action"],
+  installTemplate: ["action","templateId","requestKey"],
+  previewWorkflow: ["action","workflowId","input","requestKey"],
   history: ["action"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
@@ -38,12 +41,12 @@ export function parseAutomationControlRequest(value) {
     return { ok: false, reason: "unexpected_field" };
   }
   const action = value.action;
-  if (["save", "run", "toggle", "delete", "createWebhook"].includes(action) &&
+  if (["save", "run", "toggle", "delete", "createWebhook", "previewWorkflow"].includes(action) &&
       value.workflowId !== undefined &&
       (typeof value.workflowId !== "string" || !UUID_RE.test(value.workflowId))) {
     return { ok: false, reason: "invalid_workflow_id" };
   }
-  if (["run", "toggle", "delete"].includes(action) && typeof value.workflowId !== "string") {
+  if (["run", "toggle", "delete", "previewWorkflow"].includes(action) && typeof value.workflowId !== "string") {
     return { ok: false, reason: "missing_workflow_id" };
   }
   if (["createWebhook"].includes(action) && typeof value.workflowId !== "string") {
@@ -84,6 +87,23 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if (action === "installTemplate") {
+    if (typeof value.templateId !== "string" ||
+        !/^[a-z][a-z0-9-]{2,40}$/.test(value.templateId) ||
+        typeof value.requestKey !== "string" || !UUID_RE.test(value.requestKey)) {
+      return { ok:false, reason:"invalid_template_install" };
+    }
+    return { ok:true, action, templateId:value.templateId, requestKey:value.requestKey };
+  }
+  if (action === "previewWorkflow") {
+    if (typeof value.input !== "string" ||
+        new TextEncoder().encode(value.input).byteLength > 2000 ||
+        typeof value.requestKey !== "string" || !UUID_RE.test(value.requestKey)) {
+      return { ok:false, reason:"invalid_preview" };
+    }
+    return { ok:true, action, workflowId:value.workflowId,
+      requestKey:value.requestKey, input:value.input };
   }
   if (action === "save") {
     if (typeof value.name !== "string" || !value.name.trim() || value.name.trim().length > 80 ||
