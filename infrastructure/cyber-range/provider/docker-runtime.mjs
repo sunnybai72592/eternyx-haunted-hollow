@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { projectForSession, validSessionId } from "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 import { sessionFromProject, verifyManagedContainer } from "./orphan-watchdog.mjs";
 import { assertLocalLaunchAllowed } from "./local-kill-switch.mjs";
+import { admitHostLab, verifyRuntimeIsolation } from "./isolation-policy.mjs";
 
 const composeFile = resolve(dirname(fileURLToPath(import.meta.url)), "../compose.managed.yaml");
 const managedPlaceholder = "0".repeat(64);
@@ -81,6 +82,17 @@ export class LocalDockerRangeRuntime {
     }
     this.#requireHost();
     await assertLocalLaunchAllowed();
+    // The host also enforces a local 3-lab resource envelope independently
+    // of the Supabase rolling daily budget and maximum active sessions.
+    const previous = await this.listVerifiedManagedProjects();
+    const projects = [...new Set(previous.map(item=>
+      verifyManagedContainer(item).project))];
+    admitHostLab({ existingProjects: projects, sessionId });
+    for (const project of projects) {
+      const record = previous.find(item=>
+        item.Config.Labels["com.docker.compose.project"] === project);
+      await this.attest(verifyManagedContainer(record).sessionId);
+    }
 
     const token = randomBytes(32).toString("hex");
     let launched = false;
@@ -102,6 +114,7 @@ export class LocalDockerRangeRuntime {
             signal: AbortSignal.timeout(1300),
           });
           if (response.ok) {
+            await this.attest(sessionId);
             // Caller MUST NOT log token or put it in DB/HTTP responses. An
             // authenticated browser ingress proxy is a separate milestone.
             return { instanceRef: projectForSession(sessionId), localPort: port, token };
@@ -180,11 +193,36 @@ export class LocalDockerRangeRuntime {
     return all;
   }
 
+  /**
+   * Independently inspect actual Docker state, not just Compose YAML.
+   * Never return raw host/docker inspect output or gateway credentials.
+   */
+  async attest(sessionId) {
+    if (!validSessionId(sessionId)) throw new Error("Invalid range session for isolation audit");
+    this.#requireHost();
+    const project = projectForSession(sessionId);
+    const all = await this.listVerifiedManagedProjects();
+    const containers = all.filter(item=>
+      item.Config.Labels["com.docker.compose.project"] === project);
+    const networks = [];
+    for (const name of [project + "_local_target_only",project + "_localhost_ingress"]) {
+      const raw = executeDocker(["network","inspect","--format","{{json .}}",name]);
+      let data;
+      try { data = JSON.parse(raw); }
+      catch { throw new Error("Managed Docker network attestation failed"); }
+      if (data?.Name !== name) throw new Error("Managed Docker network attestation failed");
+      networks.push(data);
+    }
+    return verifyRuntimeIsolation(sessionId, containers, networks);
+  }
+
   async exists(sessionId) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
     const listed = executeDocker(composeArgs(sessionId, ["ps", "--status", "running", "-q", "gateway"]));
-    return listed.length > 0;
+    if (!listed.length) return false;
+    await this.attest(sessionId);
+    return true;
   }
 
   async stop(sessionId) {

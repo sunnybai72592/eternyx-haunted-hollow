@@ -15,7 +15,8 @@
     "range": "node scripts/cyber-range.mjs",
     "range:provider": "node scripts/cyber-range-provider.mjs",
     "range:ingress": "node scripts/cyber-range-ingress.mjs",
-    "range:watchdog": "node scripts/cyber-range-watchdog.mjs"
+    "range:watchdog": "node scripts/cyber-range-watchdog.mjs",
+    "range:audit": "node scripts/cyber-range-isolation-audit.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",

@@ -33,6 +33,20 @@ jobs:
           docker run --detach --name eternyx-watchdog-unrelated --network none alpine:3.20 sleep 120
           test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 2
           docker ps --filter name=eternyx-watchdog-unrelated --format '{{.ID}}' | grep -q .
+      - name: Attest actual running Docker sandbox limits and private network boundaries
+        run: |
+          node scripts/cyber-range-isolation-audit.mjs --json > /tmp/eternyx-range-isolation-ci.json
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const result = JSON.parse(readFileSync('/tmp/eternyx-range-isolation-ci.json', 'utf8').trim());
+          assert.equal(result.inspectedProjects,1);
+          assert.equal(result.passed,1);
+          assert.equal(result.drifted,0);
+          assert.ok(result.results[0].project.startsWith('cr-'));
+          NODE
+          # The intentionally vulnerable target must not reach a public site.
+          ETERNYX_GATEWAY_TOKEN="$ETERNYX_GATEWAY_TOKEN" docker compose -p "$ETERNYX_PROJECT" -f infrastructure/cyber-range/compose.managed.yaml exec -T http-range node -e "fetch('https://example.com',{signal:AbortSignal.timeout(1200)}).then(()=>process.exit(1),()=>process.exit(0))"
       - name: Verify non-destructive default preview and refuse unapproved apply
         run: |
           node scripts/cyber-range-watchdog.mjs --dry-run > /tmp/eternyx-watchdog-ci-preview.jsonl
@@ -59,4 +73,4 @@ jobs:
         run: |
           docker compose -p "$ETERNYX_PROJECT" -f infrastructure/cyber-range/compose.managed.yaml down --volumes --remove-orphans || true
           docker rm --force eternyx-watchdog-unrelated || true
-          rm -f "$HOME/.eternyx-range-launches-halted" "$HOME/.eternyx-range-watchdog.lock" /tmp/eternyx-watchdog-ci-preview.jsonl
+          rm -f "$HOME/.eternyx-range-launches-halted" "$HOME/.eternyx-range-watchdog.lock" /tmp/eternyx-watchdog-ci-preview.jsonl /tmp/eternyx-range-isolation-ci.json
