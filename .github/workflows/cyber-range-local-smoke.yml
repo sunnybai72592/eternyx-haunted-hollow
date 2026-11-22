@@ -1,0 +1,72 @@
+name: Cyber Range Local Docker Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/**'
+      - 'scripts/cyber-range.mjs'
+      - '.github/workflows/cyber-range-local-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-isolated-range:
+    name: Build and verify disposable local target
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate Docker Compose networking and constraints
+        run: |
+          docker compose version
+          docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml config --quiet
+      - name: Build and launch target with loopback-only gateway
+        run: |
+          docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml up --build -d
+          docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml ps
+          if ! curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:8765/healthz; then
+            docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml ps
+            docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml logs --tail 100
+            exit 1
+          fi
+          docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml port gateway 8081 | grep -F -q '127.0.0.1:8765'
+      - name: Verify real local HTTP challenge endpoints and flags
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const base = 'http://127.0.0.1:8765';
+          async function call(path, options) {
+            const response = await fetch(base + path, options);
+            return { status: response.status, body: await response.json() };
+          }
+          const a = await call('/api/tickets?ticket=101');
+          const b = await call('/api/tickets?ticket=102');
+          assert.equal(a.body.owner_id, 7);
+          assert.equal(b.body.owner_id, 8);
+          const flag = b.body.content.match(/ETERNYX\{[a-z0-9_]+\}/)?.[0];
+          assert.ok(flag);
+          const checked = await call('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: 'ticket-idor', flag }),
+          });
+          assert.equal(checked.body.accepted, true);
+          assert.equal(checked.body.accountVerified, false);
+          const privateFile = await call('/api/files?name=..%2Fprivate%2Fbrief.txt');
+          assert.match(privateFile.body.content, /ETERNYX\{file_traversal_/);
+          assert.equal((await call('/api/files?name=..%2F..%2Fetc%2Fpasswd')).status, 403);
+          assert.equal((await call('/api/ops/report')).status, 403);
+          const elevated = await call('/api/ops/report', { headers: {'X-Lab-Role':'admin'} });
+          assert.match(elevated.body.evidence, /ETERNYX\{role_header_/);
+          NODE
+      - name: Confirm target cannot fetch from external Internet
+        run: |
+          docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml exec -T http-range node -e "fetch('https://example.com', {signal: AbortSignal.timeout(1500)}).then(() => process.exit(1), () => process.exit(0))"
+      - name: Clean up vulnerable test containers and networks
+        if: always()
+        run: docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml down --volumes --remove-orphans
