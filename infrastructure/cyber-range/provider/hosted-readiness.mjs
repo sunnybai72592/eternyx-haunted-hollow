@@ -9,11 +9,10 @@
  * atomic spend reservation, enforce a provider-side budget/kill switch, and
  * attest its separately isolated microVM before reporting a range "running".
  */
-import { createPublicKey, verify as verifySignature } from "node:crypto";
+import { createHash, createPublicKey, timingSafeEqual, verify as verifySignature } from "node:crypto";
 import { validSessionId } from "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
 const SHA = /^[a-f0-9]{64}$/;
-const USD_MICROS = 1_000_000n;
 const HOUR_SECONDS = 3600n;
 const GIB_MIB = 1024n;
 const PROFILE = "http-basics-v1";
@@ -87,13 +86,14 @@ export function canonicalHostedQuote(quote) {
 }
 
 export function verifySignedHostedQuote({
-  quote,signatureBase64,publicKeyPem,sessionId,now=new Date(),
+  quote,signatureBase64,publicKeyPem,trustedKeyFingerprintSha256,sessionId,now=new Date(),
 }={}) {
   if(!validSessionId(sessionId) || quote?.sessionId!==sessionId ||
      !(now instanceof Date)||!Number.isFinite(now.getTime()) ||
      typeof signatureBase64!=="string"||
      !/^[a-zA-Z0-9+/]{86}==$/.test(signatureBase64) ||
-     typeof publicKeyPem!=="string" || publicKeyPem.length>2048) {
+     typeof publicKeyPem!=="string" || publicKeyPem.length>2048 ||
+     typeof trustedKeyFingerprintSha256!=="string" || !SHA.test(trustedKeyFingerprintSha256)) {
     throw Error("Trusted hosted quote verification unavailable");
   }
   const content=canonicalHostedQuote(quote);
@@ -107,6 +107,11 @@ export function verifySignedHostedQuote({
   try{
     key=createPublicKey(publicKeyPem);
     if(key.asymmetricKeyType!=="ed25519")throw Error("Wrong quote key");
+    const actualHash=createHash("sha256").update(
+      key.export({type:"spki",format:"der"})).digest();
+    const trustedHash=Buffer.from(trustedKeyFingerprintSha256,"hex");
+    if(!timingSafeEqual(actualHash,trustedHash))
+      throw Error("Provider quote verification key not pinned");
     const sig=Buffer.from(signatureBase64,"base64");
     verified=sig.length===64 &&
       verifySignature(null,content,key,sig);
@@ -140,13 +145,13 @@ export function quotedMaximumMicros(quote) {
  * spend facts; never expose this as a publicly callable cloud launch API.
  */
 export function evaluateHostedSpend({
-  quote,sessionId,signatureBase64,publicKeyPem,manifest,
+  quote,sessionId,signatureBase64,publicKeyPem,trustedKeyFingerprintSha256,manifest,
   budget={singleSessionMicros:0,rolling24hMicros:0},
   ledger={spent24hMicros:0,reserved24hMicros:0},
   now=new Date(),
 }={}) {
   validateMicrovmManifest(manifest);
-  verifySignedHostedQuote({quote,sessionId,signatureBase64,publicKeyPem,now});
+  verifySignedHostedQuote({quote,sessionId,signatureBase64,publicKeyPem,trustedKeyFingerprintSha256,now});
   if(!isExactFields(budget,["rolling24hMicros","singleSessionMicros"]) ||
      !isExactFields(ledger,["reserved24hMicros","spent24hMicros"])) {
     throw Error("Hosted budget or reservation snapshot invalid");
