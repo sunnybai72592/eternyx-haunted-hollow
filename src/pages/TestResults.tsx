@@ -136,8 +136,8 @@ export default function TestResults() {
                 {summary.graded ? (
                   <>
                     <p className="text-center text-4xl font-bold text-primary">{summary.score} / {summary.maxScore}</p>
-                    <p className="text-center text-lg">{summary.percentage.toFixed(1)}%</p>
-                    <Progress value={summary.percentage} aria-label="Recorded score percentage" />
+                    <p className="text-center text-lg">{(summary.percentage ?? 0).toFixed(1)}%</p>
+                    <Progress value={summary.percentage ?? 0} aria-label="Recorded score percentage" />
                     <p className="text-sm text-muted-foreground">A pass or fail result is not shown because a verified passing threshold is not available.</p>
                   </>
                 ) : (
