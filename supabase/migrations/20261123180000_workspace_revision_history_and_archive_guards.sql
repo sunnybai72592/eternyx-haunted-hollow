@@ -106,6 +106,27 @@ CREATE TRIGGER workspace_items_activity_update
   AFTER UPDATE ON public.workspace_items
   FOR EACH ROW EXECUTE FUNCTION public.workspace_record_activity();
 
+-- Archived project metadata is immutable too: reactivation is a distinct step.
+-- A REST client cannot rename an archived project while changing its status.
+CREATE OR REPLACE FUNCTION public.workspace_project_archive_guard()
+RETURNS trigger LANGUAGE plpgsql SET search_path = ''
+AS $workspace_project_guard$
+BEGIN
+  IF OLD.status = 'archived' AND (
+    NEW.name IS DISTINCT FROM OLD.name
+    OR NEW.description IS DISTINCT FROM OLD.description
+  ) THEN
+    RAISE EXCEPTION 'Restore an archived project before editing its details'
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$workspace_project_guard$;
+REVOKE ALL ON FUNCTION public.workspace_project_archive_guard() FROM PUBLIC, anon, authenticated;
+CREATE TRIGGER workspace_projects_archive_guard_before_update
+  BEFORE UPDATE ON public.workspace_projects FOR EACH ROW
+  EXECUTE FUNCTION public.workspace_project_archive_guard();
+
 -- "Archived · read-only" must be a server-enforced guarantee, not a disabled
 -- button that can be bypassed by sending REST requests.
 DROP POLICY IF EXISTS workspace_tasks_insert ON public.workspace_tasks;
