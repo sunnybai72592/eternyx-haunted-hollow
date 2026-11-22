@@ -1,0 +1,44 @@
+name: CPU neural spatiotemporal v2
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - "gpu-worker/tests/test_spatiotemporal_neural_video.py"
+      - "gpu-worker/render_video_timeline.py"
+      - "gpu-worker/learn_cpu_video_texture.py"
+      - ".github/workflows/cpu-neural-spatiotemporal-v2.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - "gpu-worker/tests/test_spatiotemporal_neural_video.py"
+      - "gpu-worker/render_video_timeline.py"
+      - "gpu-worker/learn_cpu_video_texture.py"
+      - ".github/workflows/cpu-neural-spatiotemporal-v2.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-neural-v2:
+    name: Train 48x28 two-frame CPU neural video and verify real MP4
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require local CPU FFmpeg and H264 encoder
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Actual CPU neural two-frame training, heldout rollout and H264 video regressions
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_spatiotemporal_neural_video.py' -v
