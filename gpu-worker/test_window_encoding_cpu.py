@@ -222,8 +222,18 @@ def run_fixture(root, output):
     worker_dir = Path(__file__).parent
     pilot = root / "pilot"
     subprocess.run([sys.executable, str(worker_dir / "run_video_pilot.py"), str(root), str(root),
-                    str(manifest_path), str(pilot), "--steps", "1", "--seeds", "7"], check=True)
+                    str(manifest_path), str(pilot), "--steps", "3", "--seeds", "7"], check=True)
     receipt = json.loads((pilot / "pilot.json").read_bytes())
+    assert len(receipt["stage_seconds"]) == 4 and min(receipt["stage_seconds"].values()) > 0
+    assert receipt["elapsed_seconds"] >= sum(receipt["stage_seconds"].values())
+    assert len(receipt["step_seconds"]) == 3 and min(receipt["step_seconds"]) > 0
+    projection = subprocess.check_output([sys.executable, str(worker_dir / "estimate_training_time.py"),
+                                          "--steps", "100", "--pilot", str(pilot / "pilot.json")])
+    estimate = json.loads(projection)
+    assert estimate["sample_count"] == 2
+    assert estimate["projected_hours"] == round(100 * sum(receipt["step_seconds"][1:]) / 2 / 3600, 4)
+    if output:
+        (output / "pilot-timing.json").write_bytes((pilot / "pilot.json").read_bytes())
     assert receipt["cases"] == 2 and receipt["evaluation_seeds"] == [7]
     assert (pilot / "dataset.json").read_bytes() == manifest_path.read_bytes()
     dataset = pilot / "windows"
@@ -236,7 +246,7 @@ def run_fixture(root, output):
     train_command = [sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
                      str(pilot / "training"), "--dataset-index", str(dataset / "index.json"),
                      "--manifest", str(manifest_path), "--steps", "1"]
-    indexed_checkpoint = pilot / "training" / "step-1"
+    indexed_checkpoint = pilot / "training" / "step-3"
     expected_dataset = {"manifest_sha256": fingerprint(manifest_path), "index_sha256": fingerprint(dataset / "index.json"),
                         "window_count": 1}
     assert json.loads((indexed_checkpoint / "adapter.json").read_text())["training_dataset"] == expected_dataset
@@ -254,7 +264,7 @@ def run_fixture(root, output):
     assert [case["scene"] for case in result["cases"]] == ["smptebars", "testsrc"]
     assert all(case["start_frame"] == 4 for case in result["cases"])
     assert all(case["seed"] == 7 for case in result["cases"])
-    assert result["training_dataset"] == expected_dataset and result["training_step"] == 1
+    assert result["training_dataset"] == expected_dataset and result["training_step"] == 3
     assert result["adapter_sha256"] == fingerprint(indexed_checkpoint / "adapter.safetensors")
     report.unlink()
     manifest_path.write_text(json.dumps(manifest, indent=2))

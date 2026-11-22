@@ -5,9 +5,11 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from time import perf_counter
 
 
 def run_pilot(snapshot, clips, manifest, output, steps, seeds):
+    pilot_start = perf_counter()
     if steps < 1 or not seeds or len(set(seeds)) != len(seeds) or any(not 0 <= s < 2**32 for s in seeds):
         raise ValueError("Provide positive steps and distinct unsigned 32-bit evaluation seeds")
     raw = manifest.read_bytes()
@@ -27,17 +29,22 @@ def run_pilot(snapshot, clips, manifest, output, steps, seeds):
     stages = [
         ("encode_training_manifest.py", [snapshot, clips, reviewed, encoded]),
         ("train_video_adapter.py", [snapshot, training, "--dataset-index", encoded / "index.json",
-                                    "--manifest", reviewed, "--steps", str(steps)]),
+                                    "--manifest", reviewed, "--steps", str(steps), "--timings", output / "step-seconds.json"]),
         ("evaluate_video_adapter.py", [snapshot, checkpoint, clips, reviewed, evaluation,
                                        "--seeds", *map(str, seeds)]),
         ("review_video_evaluation.py", [evaluation, output / "review.html"]),
     ]
+    stage_seconds = {}
     for script, arguments in stages:
         print(f"Running {script}", flush=True)
+        started = perf_counter()
         subprocess.run([sys.executable, Path(__file__).with_name(script), *arguments], env=env, check=True)
+        stage_seconds[script] = perf_counter() - started
     report = json.loads(evaluation.read_bytes())
     receipt = {"version": 1, "training_step": report["training_step"], "training_dataset": report["training_dataset"],
                "adapter_sha256": report["adapter_sha256"], "evaluation_seeds": seeds, "cases": len(report["cases"]),
+               "elapsed_seconds": perf_counter() - pilot_start, "stage_seconds": stage_seconds,
+               "step_seconds": json.loads((output / "step-seconds.json").read_bytes()),
                "checkpoint": str(checkpoint.relative_to(output)), "review": "review.html"}
     pending = output / ".pilot.json.tmp"
     pending.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

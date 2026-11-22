@@ -3,6 +3,7 @@ import argparse
 import json
 import math
 import statistics
+from pathlib import Path
 
 
 def estimate(steps, samples, overhead_minutes=0):
@@ -29,14 +30,23 @@ def estimate(steps, samples, overhead_minutes=0):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, required=True, help="Total planned optimizer updates")
-    parser.add_argument("--step-seconds", type=float, nargs="+", required=True,
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--pilot", type=Path, help="Completed pilot.json with measured optimizer steps")
+    inputs.add_argument("--step-seconds", type=float, nargs="+",
                         help="Measured wall time per complete optimizer update after warm-up")
     parser.add_argument("--overhead-minutes", type=float, default=0,
                         help="Combined loading, warm-up, checkpoint and evaluation time")
     args = parser.parse_args()
     try:
-        print(json.dumps(estimate(args.steps, args.step_seconds, args.overhead_minutes), indent=2))
-    except (ValueError, OverflowError) as exc:
+        samples = args.step_seconds
+        if args.pilot:
+            receipt = json.loads(args.pilot.read_bytes())
+            samples = receipt.get("step_seconds") if isinstance(receipt, dict) else None
+            if not isinstance(samples, list) or len(samples) < 3:
+                raise ValueError("A timed pilot needs at least three steps to exclude warm-up and retain two samples")
+            samples = samples[1:]
+        print(json.dumps(estimate(args.steps, samples, args.overhead_minutes), indent=2))
+    except (ValueError, OverflowError, TypeError, OSError) as exc:
         parser.error(str(exc))
 
 
