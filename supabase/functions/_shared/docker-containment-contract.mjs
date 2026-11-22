@@ -13,7 +13,8 @@ export function parseDockerContainmentAction(input) {
  if(input.confirmation!==phrase)return null;
  return {action:input.action,incidentId:input.incidentId,note:input.note.trim()};
 }
-export function deriveDockerReadiness({policy,agents,reports,incidents,claims},now=Date.now()) {
+export function deriveDockerReadiness(input,now=Date.now()) {
+ const {policy,agents,reports,incidents,claims}=input||{};
  if(!policy||!Array.isArray(agents)||!Array.isArray(reports)||!Array.isArray(incidents)||!Array.isArray(claims))
    return {classification:"unknown",checks:[],checkedAt:null,executionAuthorized:false};
  const validAgents=new Set(agents.filter(a=>a?.status==="key_verified").map(a=>a.id));
