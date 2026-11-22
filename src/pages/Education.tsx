@@ -5,6 +5,7 @@ import { ArrowRight, BookOpen, Clock3, RefreshCw, Search, ShieldCheck } from "lu
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { filterEducationTests, normalizeEducationTest } from "@/lib/educationCatalog.mjs";
+import { atomicCbtEnabled } from "@/lib/educationCbtRpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,11 +31,14 @@ export default function Education() {
     enabled: !authLoading && isAuthenticated && !!user?.id,
     retry: 1,
     queryFn: async () => {
-      const { data, error: loadError } = await supabase
+      const activeTests = supabase
         .from("tests")
         .select("id,title,description,duration_minutes,created_at,is_active")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
+        .eq("is_active", true);
+      // Only list published assessments when staged server admission is live.
+      // Protected tests require a separate verified password/enrollment flow.
+      const catalog = atomicCbtEnabled ? activeTests.eq("is_published", true) : activeTests;
+      const { data, error: loadError } = await catalog.order("created_at", { ascending: false });
       if (loadError) throw loadError;
       return (data ?? []).map(normalizeEducationTest).filter((row): row is EducationTest => row !== null);
     },

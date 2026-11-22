@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { answeredExamCount, examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
+import { atomicCbtEnabled, startCbtAttempt, saveCbtAnswer, submitCbtAttempt } from "@/lib/educationCbtRpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -37,6 +38,10 @@ export default function TestInterface() {
   const expirySubmitRequested = useRef(false);
   const submitRef = useRef<(expired: boolean) => Promise<void>>(async () => {});
   const [visibilityNotice, setVisibilityNotice] = useState(false);
+  const pendingAnswersRef = useRef<Map<string, Answer>>(new Map());
+  const answerSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const answerSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const restoredAttemptRef = useRef<string | null>(null);
 
   const testQuery = useQuery<Exam>({
     queryKey: ["education-exam", user?.id, testId],
@@ -61,6 +66,9 @@ export default function TestInterface() {
     retry: 0,
     refetchOnWindowFocus: false,
     queryFn: async () => {
+      if (atomicCbtEnabled) {
+        return await startCbtAttempt(testId!);
+      }
       const { data: previous, error: findError } = await supabase.from("user_attempts")
         .select("id,start_time,status").eq("user_id", user!.id).eq("test_id", testId!)
         .eq("status", "in_progress").maybeSingle();
@@ -73,6 +81,30 @@ export default function TestInterface() {
       return created as Attempt;
     },
   });
+
+  const restoredAnswersQuery = useQuery<Answer[]>({
+    queryKey: ["education-saved-answers", user?.id, attemptQuery.data?.id],
+    enabled: atomicCbtEnabled && enabled && !!attemptQuery.data?.id,
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_answers")
+        .select("question_id,selected_option_id,short_answer_text")
+        .eq("attempt_id", attemptQuery.data!.id);
+      if (error) throw error;
+      return (data ?? []).flatMap(row => row.question_id ? [{
+        questionId: row.question_id,
+        selectedOptionId: row.selected_option_id || undefined,
+        shortAnswer: row.short_answer_text || undefined,
+      }] : []);
+    },
+  });
+
+  useEffect(() => {
+    if (!atomicCbtEnabled || !attemptQuery.data?.id || !restoredAnswersQuery.data ||
+        restoredAttemptRef.current === attemptQuery.data.id) return;
+    restoredAttemptRef.current = attemptQuery.data.id;
+    setAnswers(new Map(restoredAnswersQuery.data.map(answer => [answer.questionId, answer])));
+  }, [attemptQuery.data?.id, restoredAnswersQuery.data]);
 
   const question = testQuery.data?.questions[questionIndex];
   const optionsQuery = useQuery<ExamOption[]>({
@@ -88,9 +120,41 @@ export default function TestInterface() {
     },
   });
 
+  // Server-authoritative mode persists changed answers before submission;
+  // status updates and deadline validation occur inside PostgreSQL RPCs.
+  const flushPendingAnswers = useCallback(async () => {
+    if (!atomicCbtEnabled || !attemptQuery.data) return;
+    if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
+    answerSaveTimerRef.current = null;
+    const batch = [...pendingAnswersRef.current.values()];
+    pendingAnswersRef.current.clear();
+    if (!batch.length) {
+      await answerSaveChainRef.current;
+      return;
+    }
+    const work = answerSaveChainRef.current.then(async () => {
+      for (let i = 0; i < batch.length; i++) {
+        try {
+          await saveCbtAnswer(attemptQuery.data!.id, batch[i]);
+        } catch (error) {
+          for (const missed of batch.slice(i)) pendingAnswersRef.current.set(missed.questionId, missed);
+          throw error;
+        }
+      }
+    });
+    // Preserve a working queue after a failed write; caller sees the error.
+    answerSaveChainRef.current = work.catch(() => {});
+    await work;
+  }, [attemptQuery.data?.id]);
+
+  useEffect(() => () => {
+    if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
+  }, []);
+
   const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
   const expired = remaining === 0;
-  const canEdit = !!attemptQuery.data && !submitting && !expired;
+  const canEdit = !!attemptQuery.data && !submitting && !expired &&
+    (!atomicCbtEnabled || restoredAnswersQuery.isSuccess);
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
     if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
     submittingRef.current = true;
@@ -99,8 +163,27 @@ export default function TestInterface() {
     setNotice("");
     try {
       const attemptId = attemptQuery.data.id;
-      // This client sequence is not a server-side transaction. RLS, status and
-      // deadlines must be enforced by an atomic server-side submission service.
+      if (atomicCbtEnabled) {
+        try {
+          await flushPendingAnswers();
+        } catch (error) {
+          // Past-deadline writes are denied by the server. Finalize the attempt
+          // regardless; stale local text must never bypass the deadline.
+          if (!dueToExpiry) throw error;
+        }
+        const result = await submitCbtAttempt(attemptId);
+        if (!["submitted", "auto_submitted"].includes(result.status)) {
+          throw new Error("The server did not confirm assessment submission.");
+        }
+        toast.success("Assessment submission recorded.");
+        navigate("/test-results/" + attemptId, { replace: true });
+        return;
+      }
+
+      // Legacy path is retained only while the coordinated server rollout is
+      // disabled; it is not an atomic or production-secure submission workflow.
+      // This path must be enforced by an atomic server-side submission service
+      // before any high-stakes deployment.
       for (const answer of answers.values()) {
         const { error } = await supabase.from("user_answers").upsert({
           attempt_id: attemptId,
@@ -125,7 +208,7 @@ export default function TestInterface() {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [attemptQuery.data, testQuery.data, user, answers, navigate]);
+  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers]);
   submitRef.current = submitExam;
 
   useEffect(() => {
@@ -156,23 +239,33 @@ export default function TestInterface() {
 
   const updateAnswer = (value: string) => {
     if (!question || !canEdit) return;
-    setAnswers(previous => {
-      const next = new Map(previous);
-      next.set(question.id, question.question_type === "short_answer"
-        ? { questionId: question.id, shortAnswer: value }
-        : { questionId: question.id, selectedOptionId: value });
-      return next;
-    });
+    const nextAnswer: Answer = question.question_type === "short_answer"
+      ? { questionId: question.id, shortAnswer: value }
+      : { questionId: question.id, selectedOptionId: value };
+    setAnswers(previous => new Map(previous).set(question.id, nextAnswer));
+    if (atomicCbtEnabled) {
+      pendingAnswersRef.current.set(question.id, nextAnswer);
+      if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
+      answerSaveTimerRef.current = setTimeout(() => {
+        void flushPendingAnswers().then(() => {
+          setNotice("");
+        }).catch(() => {
+          setNotice("The latest answer could not be saved to the assessment server. Check your connection before submitting.");
+        });
+      }, question.question_type === "short_answer" ? 700 : 150);
+    }
   };
 
-  if (authLoading || (enabled && (testQuery.isPending || (!!testQuery.data?.questions.length && attemptQuery.isPending)))) {
+  if (authLoading || (enabled && (testQuery.isPending ||
+      (!!testQuery.data?.questions.length && attemptQuery.isPending) ||
+      (atomicCbtEnabled && !!attemptQuery.data && restoredAnswersQuery.isPending)))) {
     return <p role="status" className="mx-auto max-w-2xl p-8">Preparing your assessment…</p>;
   }
   if (!isAuthenticated) {
     return <div className="mx-auto max-w-xl p-8">Sign in to take an assessment. <Link className="text-primary underline" to="/auth?redirect=%2Feducation">Sign in</Link></div>;
   }
   if (!validTestId) return <p role="alert" className="p-8">Invalid assessment ID.</p>;
-  if (testQuery.error || attemptQuery.error) {
+  if (testQuery.error || attemptQuery.error || (atomicCbtEnabled && restoredAnswersQuery.error)) {
     return <div role="alert" className="mx-auto max-w-xl space-y-4 p-8">
       <p>Assessment or attempt could not be loaded. It may be unavailable or your account may lack access.</p>
       <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
