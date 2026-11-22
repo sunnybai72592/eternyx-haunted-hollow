@@ -142,6 +142,7 @@ export default function MyServiceRequests() {
       if (authError || auth.user?.id !== userId) throw new Error('Account changed');
       const { data, error } = await supabase.rpc('mark_service_request_checked', { p_request_id: id });
       if (error || !data) throw error ?? new Error('Check-in not confirmed');
+      if (useAuthStore.getState().user?.id !== userId) return;
       setNotice('Your check-in was recorded. This records a manual action, not a read receipt.');
       setLinkedRequest((current) => current?.id === id ? { ...current, last_checked_at: data, has_updates_since_check: false } : current);
       void load();
