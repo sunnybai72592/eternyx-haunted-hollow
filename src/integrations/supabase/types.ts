@@ -391,6 +391,42 @@ export type Database = {
           },
         ]
       }
+      service_brief_amendments: {
+        Row: {
+          id: string
+          request_id: string
+          author_id: string
+          category: "scope" | "requirements" | "timeframe" | "constraints" | "other"
+          summary: string
+          details: string
+          status: "pending" | "reviewed"
+          created_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          id?: string
+          request_id: string
+          author_id: string
+          category: "scope" | "requirements" | "timeframe" | "constraints" | "other"
+          summary: string
+          details: string
+          status?: "pending" | "reviewed"
+          created_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: { status?: "pending" | "reviewed" }
+        Relationships: [
+          {
+            foreignKeyName: "service_brief_amendments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       service_clarification_questions: {
         Row: {
           id: string
@@ -2605,6 +2641,79 @@ export type Database = {
       }
     }
     Views: {
+      service_admin_amendment_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          contact_email: string
+          company: string | null
+          status: string
+          client_update: string | null
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          created_at: string
+          updated_at: string
+          priority: string
+          priority_rank: number
+          assigned_admin_id: string | null
+          triage_updated_at: string | null
+          last_customer_activity_at: string | null
+          last_admin_activity_at: string | null
+          needs_follow_up: boolean
+          next_action_kind: string
+          next_review_on: string | null
+          review_bucket: string
+          last_checked_at: string | null
+          needs_my_check: boolean
+          open_clarification_count: number
+          awaiting_customer_count: number
+          awaiting_admin_review_count: number
+          last_customer_answer_at: string | null
+          needs_my_check_extended: boolean
+          needs_follow_up_extended: boolean
+          customer_answers_since_check: number
+          amendment_count: number
+          pending_amendment_count: number
+          last_amendment_submitted_at: string | null
+          needs_my_check_complete: boolean
+          needs_follow_up_complete: boolean
+        }
+        Relationships: []
+      }
+      service_customer_amendment_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          status: string
+          client_update: string | null
+          created_at: string
+          updated_at: string
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          last_admin_activity_at: string | null
+          last_checked_at: string | null
+          has_updates_since_check: boolean
+          open_clarification_count: number
+          awaiting_customer_count: number
+          awaiting_admin_review_count: number
+          last_clarification_activity_at: string | null
+          has_updates_since_check_extended: boolean
+          clarification_changes_since_check: number
+          amendment_count: number
+          pending_amendment_count: number
+          last_amendment_reviewed_at: string | null
+          has_updates_since_check_complete: boolean
+        }
+        Relationships: []
+      }
       service_admin_followup_queue: {
         Row: {
           id: string
