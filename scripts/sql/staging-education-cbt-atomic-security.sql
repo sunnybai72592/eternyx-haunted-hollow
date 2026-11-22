@@ -67,7 +67,7 @@ DECLARE
   v_user uuid := (SELECT auth.uid());
   v_attempt public.user_attempts%ROWTYPE;
   v_minutes integer;
-  v_now timestamptz := clock_timestamp();
+  v_now timestamptz;
 BEGIN
   IF v_user IS NULL OR p_test_id IS NULL THEN
     RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
@@ -84,6 +84,8 @@ BEGIN
   WHERE a.user_id = v_user AND a.test_id = p_test_id
   FOR UPDATE OF a;
   IF FOUND THEN
+    -- Compute after acquiring the lock, never before waiting for it.
+    v_now := clock_timestamp();
     IF v_attempt.status IS DISTINCT FROM 'in_progress' OR
        (v_attempt.start_time IS NULL OR v_now >= v_attempt.start_time + v_minutes * INTERVAL '1 minute') THEN
       RAISE EXCEPTION 'Attempt already completed or expired' USING ERRCODE = '22023';
@@ -112,7 +114,7 @@ DECLARE
   v_attempt public.user_attempts%ROWTYPE;
   v_minutes integer;
   v_type text;
-  v_now timestamptz := clock_timestamp();
+  v_now timestamptz;
 BEGIN
   IF v_user IS NULL OR p_attempt_id IS NULL OR p_question_id IS NULL THEN
     RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
@@ -124,6 +126,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Attempt unavailable' USING ERRCODE = '42501';
   END IF;
+  v_now := clock_timestamp();
   IF v_attempt.status IS DISTINCT FROM 'in_progress' THEN
     RETURN pg_catalog.jsonb_build_object('status', 'already_submitted');
   END IF;
@@ -195,7 +198,7 @@ DECLARE
   v_user uuid := (SELECT auth.uid());
   v_attempt public.user_attempts%ROWTYPE;
   v_minutes integer;
-  v_now timestamptz := clock_timestamp();
+  v_now timestamptz;
   v_status text;
 BEGIN
   IF v_user IS NULL OR p_attempt_id IS NULL THEN
@@ -208,6 +211,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Attempt unavailable' USING ERRCODE = '42501';
   END IF;
+  v_now := clock_timestamp();
   IF v_attempt.status IS DISTINCT FROM 'in_progress' THEN
     RETURN pg_catalog.jsonb_build_object(
       'id', v_attempt.id, 'status', v_attempt.status
