@@ -4,6 +4,7 @@ import AutomationSchedulePanel from "@/components/AutomationSchedulePanel";
 import AutomationGitHubReadPanel from "@/components/AutomationGitHubReadPanel";
 import AutomationGitHubIssuesPanel from "@/components/AutomationGitHubIssuesPanel";
 import AutomationWorkflowPolicyPanel from "@/components/AutomationWorkflowPolicyPanel";
+import AutomationOperationsPanel from "@/components/AutomationOperationsPanel";
 import AutomationTemplateGallery from "@/components/AutomationTemplateGallery";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2, FlaskConical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -277,6 +278,11 @@ export default function AutomationCloudPanel({
           </ol>}
         </div>
         {selected&&<AutomationWorkflowPolicyPanel key={userId+":"+selected.id} workflowId={selected.id} revision={selected.revision} input={input} />}
+        {loaded&&<AutomationOperationsPanel key={userId} disabled={busy}
+          workflows={workflows.map(w=>({
+            id:w.id,name:w.name,revision:w.revision,active:w.active,
+          }))}
+          refresh={refresh}/>}
         <AutomationWebhookPanel selectedWorkflowId={selectedId} />
         <AutomationGitHubReadPanel />
         <AutomationGitHubIssuesPanel />

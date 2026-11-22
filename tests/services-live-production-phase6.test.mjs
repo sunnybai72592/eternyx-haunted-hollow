@@ -42,7 +42,7 @@ test('private deep links do not display data from a different authenticated user
 
 test('cursor history uses timestamp plus id and ignores superseded responses', async () => {
   const source = await read('src/components/services/ServiceRequestTimeline.tsx');
-  assert.match(source, /const oldest = activity\[0\]/);
+  assert.match(source, /const oldest = visibleActivity\[0\]/);
   assert.match(source, /created_at\.lt\./);
   assert.match(source, /created_at\.eq\./);
   assert.match(source, /id\.lt\./);

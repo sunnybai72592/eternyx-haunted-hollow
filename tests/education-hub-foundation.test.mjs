@@ -74,7 +74,8 @@ test("9: accessible filtering, responsive cards and direct route navigation are 
   assert.match(page,/onChange=\{e => setSearch\(e\.target\.value\)\}/);
   assert.match(page,/setSort\(e\.target\.value\)/);
   assert.match(page,/Clear filters/);
-  assert.match(page,/to=\{\`\/test\/\$\{test\.id\}\`\}/);
+  assert.match(page,/educationAttemptNavigation\(test\.id, previous, attemptCheckReady, user\?\.id\)/);
+  assert.match(page,/to=\{action\.path\}/);
   assert.match(page,/sm:grid-cols-2 xl:grid-cols-3/);
 });
 
