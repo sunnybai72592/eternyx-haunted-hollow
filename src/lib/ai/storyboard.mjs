@@ -39,3 +39,47 @@ export function readStoryboard(json) {
   if (input.totalSeconds !== board.totalSeconds) throw new Error("The total duration does not match the shot timings.");
   return { text, seconds, format: board.format, count: board.shots.length };
 }
+
+/** Escape CSV text (including formula-like values) for spreadsheet applications. */
+function csvCell(value) {
+  const text = String(value);
+  const safe = /^\s*[=+@-]/.test(text) ? "'" + text : text;
+  return '"' + safe.replace(/"/g, '""') + '"';
+}
+
+/**
+ * Export a plain CSV shot timeline that editors can inspect in spreadsheet tools.
+ * This does not render video, call an API, or imply AI generation.
+ */
+export function storyboardCsv(board) {
+  if (!board || !Array.isArray(board.shots)) throw new Error("Choose a valid storyboard.");
+  const header = ["Shot", "Start (seconds)", "End (seconds)", "Duration (seconds)", "Frame format", "Description"];
+  const lines = board.shots.map(shot => [
+    shot.number, shot.startSeconds, shot.endSeconds, shot.endSeconds - shot.startSeconds, board.format, shot.description
+  ].map(csvCell).join(","));
+  return [header.map(csvCell).join(","), ...lines].join("\r\n") + "\r\n";
+}
+
+/** Format a timeline position in valid SRT hh:mm:ss,mmm notation. */
+export function storyboardSrtTimestamp(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0 || !Number.isInteger(seconds)) {
+    throw new Error("Shot timestamps must be nonnegative whole seconds.");
+  }
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds / 60) % 60;
+  const remaining = seconds % 60;
+  return [hours, minutes, remaining].map(n => String(n).padStart(2, "0")).join(":") + ",000";
+}
+
+/**
+ * These captions describe storyboard shots; they are NOT transcripts of
+ * generated speech or audio and are not synced to an actual AI video.
+ */
+export function storyboardShotCaptionsSrt(board) {
+  if (!board || !Array.isArray(board.shots)) throw new Error("Choose a valid storyboard.");
+  return board.shots.map(shot => [
+    shot.number,
+    storyboardSrtTimestamp(shot.startSeconds) + " --> " + storyboardSrtTimestamp(shot.endSeconds),
+    String(shot.description).replace(/[\r\n]+/g, " ").trim()
+  ].join("\n")).join("\n\n") + (board.shots.length ? "\n" : "");
+}
