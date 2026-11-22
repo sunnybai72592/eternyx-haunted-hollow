@@ -257,3 +257,64 @@ Six real capabilities in one milestone:
 6. **Create-only delivery and tests:** Outputs are packaged in a new directory with `video.mp4`, `captions.srt`, `manifest.json` and `preview.html`. Existing output directories are never intentionally overwritten. Dedicated CPU-only CI tests encode real sample videos with FFmpeg and verify cuts, rights/digests, the render, preview and failure behavior.
 
 **Scope:** The 4-second limit is intentional for short local experiments. This milestone does not synthesize new imagery, run a model, introduce audio, use external APIs or provision GPUs. Source clips may contain sensitive information: retain the outputs locally and review actual source rights independently.
+
+
+
+## CPU-only video editing v2: 30-second timelines, fades, aspect profiles and licensed soundtrack
+
+The earlier `assemble_video_storyboard.py` is intentionally capped at four seconds because it uses the miniature `audit_video_render.py` frame-buffer validator. The new `render_video_timeline.py` is a **separate v2 workflow** for longer, practical short-form editing. It uses FFprobe's counted decoded frames and FFmpeg streaming rather than loading the entire source or finished 30-second RGB timeline into Python memory. Both editors remain available.
+
+Create `storyboard-v2.json` locally; replace each illustrative digest below with the actual SHA-256 of the original file. Every media file should remain outside the Git repository.
+
+```json
+{
+  "version": 2,
+  "shots": [
+    {
+      "file": "intro.mp4",
+      "source_sha256": "REPLACE_WITH_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+      "start_frame": 16,
+      "frames": 64,
+      "caption": "An introduction filmed outdoors",
+      "rights_ref": "original-footage-log-001",
+      "fade_in_frames": 8,
+      "fade_out_frames": 0
+    },
+    {
+      "file": "detail.mp4",
+      "source_sha256": "REPLACE_WITH_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+      "start_frame": 0,
+      "frames": 96,
+      "caption": "Close-up of the work",
+      "rights_ref": "original-footage-log-002",
+      "fade_in_frames": 0,
+      "fade_out_frames": 8
+    }
+  ],
+  "soundtrack": {
+    "file": "approved-audio.wav",
+    "source_sha256": "REPLACE_WITH_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+    "rights_ref": "audio-use-permission-001",
+    "volume_percent": 35
+  }
+}
+```
+
+To create a real 10-second video with external subtitles and a looping approved audio track:
+
+```sh
+python gpu-worker/render_video_timeline.py \
+  --storyboard ./storyboard-v2.json --media ./my-footage \
+  --output ./timeline-v2-01 --profile portrait --quality standard
+```
+
+This milestone delivers **six functional improvements in one PR**:
+
+1. **Longer streaming CPU timelines:** Cuts one to eight locally reviewed MP4 shots into a playable H.264 MP4 up to 480 frames, or 30 seconds at 16 FPS. Each source can contain up to 960 frames (60 seconds), be no larger than 512 × 512 pixels and 64 MiB, and must be fixed-rate 16 FPS. All actual decoded frame counts are checked before selecting cuts.
+2. **Optional shot fades:** Set `fade_in_frames` and `fade_out_frames` to 0–16 frames within each shot. These fade **to/from black**, not cross-dissolves or generated animation. Hard cuts otherwise preserve exact shot boundaries.
+3. **Licensed background audio:** Add an optional WAV, MP3 or M4A soundtrack with its own SHA-256, rights reference and bounded 0–100% volume. FFmpeg loops short soundtracks to cover the timeline, trims the output and encodes the result as AAC. Source-video audio is discarded. The rights reference is an operator assertion, not a legal license verification.
+4. **Platform-sized exports:** `--profile landscape|portrait|square` selects 16:9, 9:16 or 1:1. `--quality standard|high` outputs 256px base profiles or up to 512px high profiles. Scaling preserves the original scene aspect ratio using padding rather than stretching.
+5. **Real rendered preview and subtitles:** A single bounded FFmpeg pass selects one actual output frame per shot for offline PNG-based `preview.html`. Human-authored captions become precisely timed, editable `captions.srt`, not baked into the video.
+6. **Private, verified output:** Before publishing, the tool recounts real decoded output frames and verifies dimensions, 16 FPS, expected audio presence and output SHA-256. The create-only directory contains `video.mp4`, `captions.srt`, `manifest.json` and `preview.html`, without exposing source absolute paths.
+
+**Constraints and costs:** This is a genuine CPU-based local video **editor**, not generative AI training, text-to-video synthesis, or a promise of production image quality. No paid GPU, external AI API, cloud hosting, GPU scheduling or subscription enforcement is required. Keep private source media and review pages outside the repo. A dedicated CPU integration CI suite creates and validates real MP4 and WAV fixtures; synthetic FFmpeg test patterns prove editing correctness, not AI-generated video quality.
