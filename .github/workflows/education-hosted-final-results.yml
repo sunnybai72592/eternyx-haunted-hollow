@@ -1,0 +1,79 @@
+name: ETERNYX Education hosted final results read-only acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      approve_education_final_results_reads:
+        description: "I approve ONLY READ-ONLY Education verified-result checks on separate Supabase staging"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-education-hosted-final-result-reads
+  cancel-in-progress: false
+
+jobs:
+  verify-hosted-final-results:
+    name: Real JWT owner-only results and final-grade ledger protection
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 12
+    env:
+      ETERNYX_EDU_RESULTS_READ_APPROVAL: ${{ inputs.approve_education_final_results_reads && 'I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY' || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT }}
+      ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_A_SCORE: ${{ vars.ETERNYX_EDU_RESULT_A_SCORE }}
+      ETERNYX_EDU_RESULT_A_MAX: ${{ vars.ETERNYX_EDU_RESULT_A_MAX }}
+      ETERNYX_EDU_RESULT_B_SCORE: ${{ vars.ETERNYX_EDU_RESULT_B_SCORE }}
+      ETERNYX_EDU_RESULT_B_MAX: ${{ vars.ETERNYX_EDU_RESULT_B_MAX }}
+    steps:
+      - name: Checkout read-only staging acceptance
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require owner approval and verify all isolated staging guards
+        run: |
+          node --input-type=module -e '
+            import {validateEducationResultsReadConfig} from "./scripts/staging/educationHostedResultsConfig.mjs";
+            try {
+              validateEducationResultsReadConfig(process.env);
+              process.stdout.write("Read-only verified result staging preflight approved.\n");
+            } catch {
+              process.stderr.write("Refused: missing approval or unsafe staging configuration.\n");
+              process.exitCode = 1;
+            }
+          '
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Verify real hosted Auth and final-grade PostgREST boundaries
+        timeout-minutes: 7
+        run: node scripts/staging/verifyEducationHostedFinalResults.mjs
+      - name: Independently validate all sanitized staging-only evidence
+        if: always()
+        run: node scripts/staging/verifyEducationHostedFinalEvidence.mjs
+      - name: Upload limited, sanitized verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-staging-final-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-final-results.json
+          if-no-files-found: warn
+          retention-days: 7
