@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, ClipboardList, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Bell, CalendarClock, ClipboardList, Link2, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
@@ -11,6 +11,8 @@ import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline
 import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceTriagePanel from '@/components/services/ServiceTriagePanel';
 import { Input } from '@/components/ui/input';
+import { useLocation } from 'react-router-dom';
+import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
 
 type ServiceRow = {
   id: string; user_id: string; title: string; service_key: string; description: string;
@@ -19,11 +21,13 @@ type ServiceRow = {
   expected_outcome: string | null; timeframe: string | null; constraints: string | null;
   priority: string; priority_rank: number; assigned_admin_id: string | null;
   needs_follow_up: boolean; last_customer_activity_at: string | null; last_admin_activity_at: string | null;
+  next_action_kind: ServiceNextAction; next_review_on: string | null; review_bucket: ServiceReviewBucket;
 };
 type Draft = { status: ServiceRequestStatus; client_update: string };
 
 export default function AdminServiceRequests() {
   const { user, isLoading: authLoading } = useAuthStore();
+  const location = useLocation();
   const [authorizedFor, setAuthorizedFor] = useState<string | null>(null);
   const authorized = !!user && authorizedFor === user.id;
   const fetchGeneration = useRef(0);
@@ -39,7 +43,9 @@ export default function AdminServiceRequests() {
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
-  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity'>('newest');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review'>('newest');
+  const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
+  const [actionFilter, setActionFilter] = useState<'all' | ServiceNextAction>('all');
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
@@ -55,8 +61,8 @@ export default function AdminServiceRequests() {
     const generation = ++fetchGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_admin_attention_queue')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at', { count: 'exact' });
+    let query = supabase.from('service_admin_review_queue')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -70,8 +76,11 @@ export default function AdminServiceRequests() {
     if (assignmentFilter === 'mine') query = query.eq('assigned_admin_id', user.id);
     if (assignmentFilter === 'unassigned') query = query.is('assigned_admin_id', null);
     if (attentionOnly) query = query.eq('needs_follow_up', true);
+    if (reviewBucket !== 'all') query = query.eq('review_bucket', reviewBucket);
+    if (actionFilter !== 'all') query = query.eq('next_action_kind', actionFilter);
     if (sortOrder === 'priority') query = query.order('priority_rank', { ascending: false });
     if (sortOrder === 'customer_activity') query = query.order('last_customer_activity_at', { ascending: false, nullsFirst: false });
+    if (sortOrder === 'next_review') query = query.order('next_review_on', { ascending: true, nullsFirst: false });
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -79,15 +88,24 @@ export default function AdminServiceRequests() {
     if (generation !== fetchGeneration.current) return;
     if (error) {
       setLoadError(true);
+      setRows([]);
+      setTotal(0);
+      setDrafts({});
       console.error('Admin service requests query failed:', error);
     } else {
+      if (page > 0 && page * PAGE_SIZE >= (count ?? 0)) {
+        setPage(Math.max(0, Math.ceil((count ?? 0) / PAGE_SIZE) - 1));
+        setRows([]);
+        setLoading(false);
+        return;
+      }
       const next = (data ?? []) as ServiceRow[];
       setRows(next);
       setTotal(count ?? 0);
       setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
     }
     setLoading(false);
-  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder]);
+  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter]);
 
   useEffect(() => {
     let active = true;
@@ -115,6 +133,51 @@ export default function AdminServiceRequests() {
   }, [user?.id, authLoading]);
 
   useEffect(() => { if (authorized) void load(); }, [authorized, load]);
+
+  useEffect(() => {
+    const selected = new URLSearchParams(location.search).get('request');
+    if (!selected) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selected)) {
+      setFeedback('The administrator request link is invalid.');
+      return;
+    }
+    setFilter('all');
+    setPriorityFilter('all');
+    setAssignmentFilter('all');
+    setAttentionOnly(false);
+    setReviewBucket('all');
+    setActionFilter('all');
+    setPage(0);
+    setSearchField('id');
+    setActiveSearchField('id');
+    setSearch(selected);
+    setActiveSearch(selected);
+  }, [location.search]);
+
+  const clearFilters = () => {
+    setFilter('all');
+    setPriorityFilter('all');
+    setAssignmentFilter('all');
+    setAttentionOnly(false);
+    setReviewBucket('all');
+    setActionFilter('all');
+    setSortOrder('newest');
+    setSearch('');
+    setActiveSearch('');
+    setSearchField('title');
+    setActiveSearchField('title');
+    setPage(0);
+    setFeedback(null);
+  };
+
+  const copyAdminLink = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(window.location.origin + '/admin/service-requests?request=' + encodeURIComponent(id));
+      setFeedback('Private administrator link copied. Access still requires a verified administrator session.');
+    } catch {
+      setFeedback('Could not copy the link. Use the request reference instead.');
+    }
+  };
 
   const filtered = rows;
   const applySearch = () => {
