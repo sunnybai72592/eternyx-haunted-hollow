@@ -24,7 +24,7 @@ const rpcStatus: Record<string, number> = {
   stale_workflow: 409, idempotency_conflict: 409,
   trigger_limit: 429, already_exists: 409, trigger_revoked: 404,
   pending_limit: 429, daily_approval_limit: 429, not_pending: 409,
-  expired: 410,
+  expired: 410, trigger_run_limit: 429, trigger_submission_limit: 429,
 };
 
 function failureReason(reason: unknown): string {
@@ -42,6 +42,8 @@ function failureReason(reason: unknown): string {
     case "daily_approval_limit": return "Maximum 40 signed approval submissions per account per day.";
     case "not_pending": return "This request has already been decided or expired.";
     case "expired": return "This approval request expired after 24 hours.";
+    case "trigger_run_limit": return "This webhook reached its owner-defined execution cap for the last 24 hours.";
+    case "trigger_submission_limit": return "This webhook reached its owner-defined intake cap for the last 24 hours.";
     default: return "The workflow action was not accepted.";
   }
 }
@@ -94,11 +96,23 @@ serve(async (req: Request) => {
     }
     if (request.action === "webhooks") {
       const { data, error } = await supabase.from("automation_webhook_triggers")
-        .select("id,workflow_id,enabled,approval_required,created_at,rotated_at,last_used_at")
+        .select("id,workflow_id,enabled,approval_required,allowed_scope,daily_execution_limit,daily_submission_limit,created_at,rotated_at,last_used_at")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
       if (error) throw error;
-      return reply({ triggers: data ?? [], source: "authenticated_server",
+      const { data:usage, error:usageError } = await supabase.rpc("automation_webhook_usage", {
+        p_user_id:user.id,
+      });
+      if (usageError) throw usageError;
+      return reply({ triggers: data ?? [], usage:usage ?? [], source: "authenticated_server",
         webhooksConfigured: /^[0-9a-f]{64}$/i.test(Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY") ?? "") });
+    }
+    if (request.action === "setWebhookLimits") {
+      const { data, error } = await supabase.rpc("automation_set_webhook_limits", {
+        p_user_id:user.id,p_trigger_id:request.triggerId,
+        p_executions:request.dailyExecutions,p_submissions:request.dailySubmissions,
+      });
+      if (error) throw error;
+      return rpcResponse(data, "limits_failed");
     }
     if (request.action === "setWebhookApproval") {
       if (request.required === true &&
@@ -112,12 +126,23 @@ serve(async (req: Request) => {
       return rpcResponse(data, "approval_policy_failed");
     }
     if (request.action === "approvalInbox") {
+      const { data:cleaned,error:cleanupError } = await supabase.rpc("automation_housekeep_approval_inbox", {
+        p_user_id:user.id,
+      });
+      if (cleanupError || cleaned?.ok !== true) throw cleanupError ?? new Error("cleanup_failed");
       const { data, error } = await supabase.from("automation_approval_requests")
         .select("id,trigger_id,workflow_id,workflow_revision,input_bytes,status,created_at,expires_at,decided_at,run_id")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(30);
       if (error) throw error;
       return reply({ approvals: data ?? [], source: "authenticated_server",
         plaintextStored: false, pendingLimit: 10, intakeDailyLimit: 40 });
+    }
+    if (request.action === "clearResolvedApprovals") {
+      const { data,error } = await supabase.rpc("automation_clear_resolved_approvals", {
+        p_user_id:user.id,
+      });
+      if (error) throw error;
+      return rpcResponse(data,"clear_failed");
     }
     if (request.action === "rejectWebhook") {
       const { data, error } = await supabase.rpc("automation_reject_webhook_approval", {
