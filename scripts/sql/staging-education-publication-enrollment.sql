@@ -38,7 +38,7 @@ BEGIN
       AND t.is_active IS FALSE AND t.is_published IS FALSE
       AND t.duration_minutes BETWEEN 1 AND 1440
       AND pg_catalog.char_length(pg_catalog.btrim(t.title)) BETWEEN 3 AND 160
-      AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL
+      AND NULLIF(pg_catalog.btrim(t.access_password_hash), '') IS NULL
       AND NOT EXISTS (SELECT 1 FROM public.user_attempts AS a WHERE a.test_id = t.id)
   ) THEN RETURN false; END IF;
 
@@ -209,7 +209,7 @@ BEGIN
       JOIN public.education_publication_requests AS r ON r.test_id = t.id
       WHERE t.id = p_test_id AND t.is_published IS TRUE AND t.is_active IS TRUE
         AND r.status = 'approved'
-        AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL
+        AND NULLIF(pg_catalog.btrim(t.access_password_hash), '') IS NULL
     ) THEN
     RAISE EXCEPTION 'Published approved test and existing student required'
       USING ERRCODE = '22023';
@@ -275,7 +275,7 @@ BEGIN
     JOIN public.education_test_enrollments AS e ON e.test_id = t.id
     WHERE e.user_id = (SELECT auth.uid())
       AND t.is_published IS TRUE AND t.is_active IS TRUE
-      AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL
+      AND NULLIF(pg_catalog.btrim(t.access_password_hash), '') IS NULL
     ORDER BY t.created_at DESC LIMIT 100
   ) AS s;
   RETURN v_rows;
