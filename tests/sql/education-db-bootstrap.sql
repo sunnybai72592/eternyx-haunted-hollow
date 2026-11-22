@@ -10,7 +10,7 @@ GRANT USAGE ON SCHEMA public TO authenticated, anon;
 CREATE TABLE auth.users (id uuid PRIMARY KEY);
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SET search_path = ''
 AS $fn$
-  SELECT pg_catalog.nullif(pg_catalog.current_setting('request.jwt.claim.sub',true),'')::uuid;
+  SELECT NULLIF(pg_catalog.current_setting('request.jwt.claim.sub',true),'')::uuid;
 $fn$;
 GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 
