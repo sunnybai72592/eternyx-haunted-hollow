@@ -21,9 +21,9 @@ export type Database = {
         Relationships: []
       }
       workspace_tasks: {
-        Row: { id: string; owner_id: string; project_id: string; title: string; status: string; due_on: string | null; created_at: string; updated_at: string }
-        Insert: { id?: string; owner_id: string; project_id: string; title: string; status?: string; due_on?: string | null; created_at?: string; updated_at?: string }
-        Update: { id?: string; owner_id?: string; project_id?: string; title?: string; status?: string; due_on?: string | null; created_at?: string; updated_at?: string }
+        Row: { id: string; owner_id: string; project_id: string; title: string; status: string; priority: string; due_on: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; project_id: string; title: string; status?: string; priority?: string; due_on?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; owner_id?: string; project_id?: string; title?: string; status?: string; priority?: string; due_on?: string | null; created_at?: string; updated_at?: string }
         Relationships: []
       }
       workspace_items: {
@@ -2572,6 +2572,7 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_delete_archived_project: { Args: { p_project_id: string }; Returns: boolean }
       admin_list_users: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {

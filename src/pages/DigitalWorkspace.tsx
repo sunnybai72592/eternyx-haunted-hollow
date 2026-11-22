@@ -10,6 +10,7 @@ import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
 import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import WorkspaceGlobalSearch from "@/components/workspace/WorkspaceGlobalSearch";
+import WorkspaceTaskFocus from "@/components/workspace/WorkspaceTaskFocus";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +26,8 @@ import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, works
 import { createWorkspaceFullBackup } from "@/lib/workspaceFullBackup.mjs";
 import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
 import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
+import { WORKSPACE_TASK_PRIORITIES, filterWorkspaceTaskPriority,
+  sortWorkspaceProjectTasks, validWorkspacePriority } from "@/lib/workspaceTaskFocus.mjs";
 import {
   WORKSPACE_PROJECT_LIMIT, WORKSPACE_TASK_LIMIT, WORKSPACE_ITEM_LIMIT,
   WORKSPACE_REGISTERED_FILE_BYTES_LIMIT,
@@ -80,7 +83,10 @@ export default function DigitalWorkspace() {
   const [editDescription, setEditDescription] = useState("");
   const [newTask, setNewTask] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState("normal");
   const [taskFilter, setTaskFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [taskSort, setTaskSort] = useState("due");
   const [scheduleFilter, setScheduleFilter] = useState("all");
   const [taskQuery, setTaskQuery] = useState("");
   const [itemFilter, setItemFilter] = useState("all");
@@ -149,7 +155,9 @@ export default function DigitalWorkspace() {
   const selected = projects.find((project) => project.id === projectId) ?? null;
   const projectTasks = tasks.filter((task) => task.project_id === projectId);
   const projectItems = items.filter((item) => item.project_id === projectId);
-  const shownTasks = filterScheduledTasks(filterWorkspaceTasks(projectTasks, taskFilter, taskQuery), scheduleFilter, localCalendarDate());
+  const shownTasks = sortWorkspaceProjectTasks(filterWorkspaceTaskPriority(
+    filterScheduledTasks(filterWorkspaceTasks(projectTasks, taskFilter, taskQuery), scheduleFilter, localCalendarDate()),
+    priorityFilter), taskSort);
   const shownItems = filterWorkspaceItems(projectItems, itemFilter, itemQuery);
   const active = selected?.status === "active";
   const visibleProjects = sortWorkspaceProjects(projects.filter((project) =>
@@ -246,9 +254,26 @@ export default function DigitalWorkspace() {
     }, "Remaining project tasks marked complete.");
   };
 
+  const deleteArchivedProject = () => {
+    if (!owner || !selected || selected.status !== "archived") return;
+    if (projectItems.some((item) => item.kind === "file")) {
+      setError("Restore this project, delete its private files through Workspace, then archive it again before permanent deletion.");
+      return;
+    }
+    if (window.prompt("Permanently delete archived project " + selected.name +
+      " with ALL tasks, saved notes, links, revisions and activity? This cannot be undone. Type DELETE to confirm:") !== "DELETE") return;
+    void mutate(async () => {
+      const { data, error: removeError } = await supabase.rpc("workspace_delete_archived_project",
+        { p_project_id: selected.id });
+      if (removeError) throw new Error(removeError.message);
+      if (!data) throw new Error("The server did not confirm project removal.");
+    }, "Archived project permanently deleted. This account slot is now available.");
+  };
+
   const createTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!owner || !selected || !active || !newTask.trim()) return;
+    if (!validWorkspacePriority(newTaskPriority)) { setError("Choose an allowed priority."); return; }
     if (tasks.length >= WORKSPACE_TASK_LIMIT) {
       setError("Task cap reached (5,000 per account).");
       return;
@@ -256,10 +281,11 @@ export default function DigitalWorkspace() {
     void mutate(async () => {
       const { error: insertError } = await supabase.from("workspace_tasks")
         .insert({ owner_id: owner, project_id: selected.id, title: newTask.trim(),
-          status: "todo", due_on: taskDue || null });
+          status: "todo", due_on: taskDue || null, priority: newTaskPriority });
       requireResult(insertError);
       setNewTask("");
       setTaskDue("");
+      setNewTaskPriority("normal");
     }, "Task added to the project.");
   };
 
@@ -267,8 +293,10 @@ export default function DigitalWorkspace() {
     if (!owner || !active || !["todo", "in_progress", "done"].includes(status)) return;
     void mutate(async () => {
       const { data, error: updateError } = await supabase.from("workspace_tasks")
-        .update({ status }).eq("id", task.id).eq("owner_id", owner).select("id").maybeSingle();
-      requireResult(updateError, data);
+        .update({ status }).eq("id", task.id).eq("owner_id", owner)
+        .eq("updated_at", task.updated_at).select("id").maybeSingle();
+      if (updateError) throw new Error(updateError.message);
+      if (!data) throw new Error("Task was changed in another tab or is no longer editable. Refresh before editing.");
     }, "Task status updated.");
   };
 
@@ -530,12 +558,30 @@ export default function DigitalWorkspace() {
             if (target?.status === "archived") setShowArchived(true);
             setSearch("");
             setProjectId(result.projectId);
-            setTaskFilter("all"); setScheduleFilter("all"); setTaskQuery("");
-            setItemFilter("all"); setItemQuery("");
+            setTaskFilter("all"); setScheduleFilter("all"); setPriorityFilter("all");
+            setTaskQuery(result.kind === "task" ? result.title : "");
+            setItemFilter("all"); setItemQuery(result.kind === "item" ? result.title : "");
             setNotice("Opened " + result.projectName + " for " + result.kind + " · " + result.title + ".");
-            window.setTimeout(() => document.getElementById("workspace-project-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+            const targetId = result.kind === "task" ? "workspace-project-tasks"
+              : result.kind === "item" ? "workspace-project-saved-items" : "workspace-project-panel";
+            window.setTimeout(() => document.getElementById(targetId)
+              ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
           }} />
 
+        <WorkspaceTaskFocus projects={projects} tasks={tasks} disabled={busy}
+          onOpen={(targetProjectId, targetTaskId) => {
+            const found = tasks.find((task) => task.id === targetTaskId);
+            if (projects.some((project) => project.id === targetProjectId && project.status === "archived")) {
+              setShowArchived(true);
+            }
+            setSearch("");
+            setProjectId(targetProjectId);
+            setTaskFilter("all"); setScheduleFilter("all"); setPriorityFilter("all");
+            setTaskQuery(found?.title ?? "");
+            window.setTimeout(() => document.getElementById("workspace-project-tasks")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+          }}
+          onComplete={(task) => updateTask(task, "done")} />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(250px,320px)_minmax(0,1fr)]">
           <aside className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
             <h2 className="text-xl font-semibold">Projects</h2>
@@ -616,6 +662,10 @@ export default function DigitalWorkspace() {
                       <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />}
                     {active ? "Archive" : "Restore"}
                   </Button>
+                  {!active && <Button type="button" variant="destructive" disabled={busy}
+                    onClick={deleteArchivedProject}>
+                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Permanently delete archived project
+                  </Button>}
                 </div>
                 {active && <form onSubmit={saveProject} className="grid gap-3 sm:grid-cols-[1fr_auto]">
                   <div className="space-y-2">
@@ -634,7 +684,7 @@ export default function DigitalWorkspace() {
                 {!active && <p className="text-sm text-muted-foreground">{selected.description || "No description."}</p>}
               </section>
 
-              <section className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <section id="workspace-project-tasks" className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-cyan-400" aria-hidden="true" />
                   <h2 className="text-xl font-semibold">Tasks ({projectTasks.length})</h2>
@@ -654,6 +704,16 @@ export default function DigitalWorkspace() {
                     <Input type="date" id="workspace-task-due" value={taskDue}
                       onChange={(event) => setTaskDue(event.target.value)} />
                   </div>
+                  <div className="space-y-2">
+                    <label htmlFor="workspace-new-task-priority" className="block text-sm font-medium">Priority</label>
+                    <select id="workspace-new-task-priority" value={newTaskPriority}
+                      onChange={(event) => setNewTaskPriority(event.target.value)}
+                      className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
+                      {WORKSPACE_TASK_PRIORITIES.map(priority => <option key={priority} value={priority}>
+                        {priority.slice(0, 1).toUpperCase() + priority.slice(1)}
+                      </option>)}
+                    </select>
+                  </div>
                   <Button type="submit" disabled={busy || !newTask.trim()}>
                     <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Add task
                   </Button>
@@ -670,6 +730,21 @@ export default function DigitalWorkspace() {
                     <option value="today">Due today</option><option value="upcoming">Upcoming</option>
                     <option value="unscheduled">No due date</option>
                   </select>
+                  <label htmlFor="workspace-task-priority" className="text-sm">Priority</label>
+                  <select id="workspace-task-priority" value={priorityFilter}
+                    onChange={(event) => setPriorityFilter(event.target.value)}
+                    className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
+                    <option value="all">All</option>
+                    {WORKSPACE_TASK_PRIORITIES.map(priority => <option key={priority} value={priority}>
+                      {priority.slice(0, 1).toUpperCase() + priority.slice(1)}
+                    </option>)}
+                  </select>
+                  <label htmlFor="workspace-task-sort" className="text-sm">Sort</label>
+                  <select id="workspace-task-sort" value={taskSort} onChange={(event) => setTaskSort(event.target.value)}
+                    className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
+                    <option value="due">Due date</option><option value="priority">Priority</option>
+                    <option value="recent">Recently changed</option><option value="status">Open first</option>
+                  </select>
                   <label htmlFor="workspace-task-search" className="sr-only">Find a task</label>
                   <Input id="workspace-task-search" placeholder="Search task names / due dates" value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} className="min-w-[180px] flex-1" />
                 </div>
@@ -679,7 +754,7 @@ export default function DigitalWorkspace() {
                       <span className={"block break-words text-sm font-medium " +
                         (task.status === "done" ? "text-muted-foreground line-through" : "")}>{task.title}</span>
                       <span className={"text-xs " + (task.due_on && task.due_on < localCalendarDate() && task.status !== "done" ? "text-amber-400" : "text-muted-foreground")}>
-                        {task.due_on ? task.due_on + " · " + (task.status === "done" ? "Completed" : scheduleLabel(task.due_on, localCalendarDate())) : "No due date"}
+                        {task.priority + " priority · " + (task.due_on ? task.due_on + " · " + (task.status === "done" ? "Completed" : scheduleLabel(task.due_on, localCalendarDate())) : "No due date")}
                       </span>
                     </span>
                     <label className="sr-only" htmlFor={"workspace-task-status-" + task.id}>Task status for {task.title}</label>
@@ -700,7 +775,7 @@ export default function DigitalWorkspace() {
                 </div>
               </section>
 
-              <section className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <section id="workspace-project-saved-items" className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-6">
                 <h2 className="flex items-center gap-2 text-xl font-semibold">
                   <FileText className="h-5 w-5 text-cyan-400" aria-hidden="true" />
                   Notes, links & files ({projectItems.length})
