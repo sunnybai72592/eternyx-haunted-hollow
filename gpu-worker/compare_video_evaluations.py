@@ -200,7 +200,7 @@ def compare(reference, candidates, *, max_mean_regression=0, max_pair_regression
 
 def render_csv(rows):
     buf = io.StringIO(newline="")
-    writer = csv.writer(buf)
+    writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(["candidate", "source_sha256", "scene", "start_frame", "seed",
                      "noise_level", "reference_adapter_mse", "candidate_adapter_mse", "mse_change"])
     writer.writerows(rows)
