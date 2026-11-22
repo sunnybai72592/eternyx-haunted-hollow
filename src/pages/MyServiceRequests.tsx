@@ -32,7 +32,7 @@ export default function MyServiceRequests() {
       setLoadError(true);
     } else setRows((data ?? []) as RequestRow[]);
     setLoading(false);
-  }, [user?.id]);
+  }, [user]);
 
   useEffect(() => { void load(); }, [load]);
 
