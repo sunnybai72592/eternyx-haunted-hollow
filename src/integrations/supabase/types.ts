@@ -385,6 +385,35 @@ export type Database = {
           },
         ]
       }
+      service_triage_history: {
+        Row: {
+          id: string
+          request_id: string
+          actor_id: string | null
+          operation: "created" | "updated"
+          old_priority: string | null
+          new_priority: string
+          old_assigned_admin_id: string | null
+          new_assigned_admin_id: string | null
+          old_next_action_kind: string | null
+          new_next_action_kind: string
+          old_next_review_on: string | null
+          new_next_review_on: string | null
+          internal_note_changed: boolean
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "service_triage_history_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       service_request_triage: {
         Row: {
           request_id: string

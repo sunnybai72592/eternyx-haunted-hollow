@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ClipboardList, LockKeyhole, RefreshCw, Save, UserRoundCheck } from 'lucide-react';
+import { ClipboardList, History, LockKeyhole, RefreshCw, Save, UserRoundCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { serviceNextActionLabels, validInternalReviewDate, type ServiceNextAction } from '@/lib/serviceReviewPlanner';
+import ServiceTriageHistory from './ServiceTriageHistory';
 
 type Triage = {
   request_id: string;
@@ -22,6 +23,10 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
   const currentUser = useAuthStore((s) => s.user);
   const viewerId = currentUser?.id ?? null;
   const viewerKey = requestId + ':' + (viewerId ?? 'signed-out');
+  const viewerKeyRef = useRef(viewerKey);
+  viewerKeyRef.current = viewerKey;
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const loadGeneration = useRef(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [saved, setSaved] = useState<Triage | null>(null);
@@ -84,6 +89,8 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
     setNote('');
     setNextActionKind('not_set');
     setNextReviewOn('');
+    setShowHistory(false);
+    setHistoryRevision(0);
     setNotice('');
     setError('');
   }, [viewerKey]);
@@ -105,6 +112,9 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user || user.id !== currentUser.id) throw authError ?? new Error('Session expired');
+      const { data: permitted, error: verifyError } = await supabase.rpc('is_admin');
+      if (verifyError || permitted !== true) throw verifyError ?? new Error('Administrator permission required');
+      if (viewerKeyRef.current !== viewerKey) throw new Error('Account changed while verifying');
       const values = {
         priority, assigned_admin_id: assignedId, internal_note: note.trim(),
         next_action_kind: nextActionKind, next_review_on: nextReviewOn || null,
@@ -118,9 +128,11 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
           .select('request_id,priority,assigned_admin_id,internal_note,next_action_kind,next_review_on,updated_at').maybeSingle();
       const { data, error: writeError } = await write;
       if (writeError || !data) throw writeError ?? new Error('Triage changed in another session');
+      if (viewerKeyRef.current !== viewerKey) return;
       setSaved(data as Triage);
       setLoadedKey(viewerKey);
       setNotice('Private triage saved for administrators only.');
+      setHistoryRevision((n) => n + 1);
       onSaved?.();
     } catch (reason) {
       console.error('Private triage update failed', reason);
@@ -172,8 +184,21 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
               <p className="mt-1 text-xs text-muted-foreground">Optional. Leave empty if no internal review is planned.</p>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Internal planning only. Dates are not customer deadlines, delivery promises or service-level agreements.</p>
-          <Button type="button" onClick={() => void save()} disabled={!changed || saving || !currentUser}><Save className="mr-2 h-4 w-4" />{saving ? 'Saving…' : 'Save private triage'}</Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">Internal planning only. Dates are not customer deadlines, delivery promises or service-level agreements.</p>
+            {(nextActionKind !== 'not_set' || nextReviewOn) && (
+              <Button type="button" variant="outline" size="sm" disabled={saving} onClick={() => { setNextActionKind('not_set'); setNextReviewOn(''); }}>
+                Clear planned follow-up (save to confirm)
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => void save()} disabled={!changed || saving || !currentUser}><Save className="mr-2 h-4 w-4" />{saving ? 'Saving…' : 'Save private triage'}</Button>
+            <Button type="button" variant="outline" aria-expanded={showHistory} disabled={saving} onClick={() => setShowHistory((current) => !current)}>
+              <History className="mr-2 h-4 w-4" />{showHistory ? 'Close decision history' : 'View decision history'}
+            </Button>
+          </div>
+          {showHistory && <ServiceTriageHistory requestId={requestId} refreshToken={historyRevision} />}
         </div>
       )}
     </section>
