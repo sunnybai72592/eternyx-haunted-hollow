@@ -1,0 +1,33 @@
+# ETERNYX Education — hosted instructor review and final-grade acceptance
+
+**Status: source only; NOT DEPLOYED. No live staging or production calls have been performed by this change.**
+
+PR #388 prepared a manually authorized synthetic student start/save/submit workflow. This continuation verifies what happens **after submission**, with actual hosted Supabase Auth JWTs for the synthetic learner, an independent non-enrolled learner, and the approved instructor.
+
+## Three execution modes
+
+- **preflight (default, no Education data writes).** Authenticate and verify three distinct identities; verify the instructor's current grant and non-admin status; confirm both learners have no instructor rights; inspect Student A's **already submitted** exam and real nonblank written answer; verify instructor ownership through the genuine private review queue; verify **no mark exists yet**, and that the learner's official grade remains pending. Confirm student B cannot read the attempt or essay, and that no student or anonymous client can select the private review table or submit an unauthorized human mark. All three accounts sign out.
+- **review (requires two independent acknowledgements).** Runs the same preflight first, then the verified owning instructor records one synthetic mark through the existing narrow **education_instructor_review_written_answer** RPC. Checks persisted review points, same-mark retry behavior, rejection of above-maximum marks, unchanged stored points following a rejected correction, and continued absence of an official student grade until the trusted grader runs. This is a **real staging DB write**. It leaves the reviewed mark intact and never resets or deletes it.
+- **verify (read-only).** Requires a previously approved instructor review **and separate trusted atomic finalization performed outside this workflow**. Verifies the instructor's private queue reflects the expected mark, student A's matching ledger-backed final score/max and timestamp, stable re-reads, owned attempt score and essay points, no fabricated essay correct/incorrect boolean, cross-student and anonymous denials, and direct official-grade ledger privilege denials. It intentionally **never calls the service-role finalizer**, never uses a secret backend API key, and never changes instructor marks.
+
+A successful review run is **not** a successful verify run. The official score is expected to remain pending immediately after the instructor review. A separate, approved staging trusted-grader deployment/invocation is necessary between these stages.
+
+## Manual setup
+
+1. Use an **independent separate Supabase staging project**, never the production project; apply the reviewed Education SQL by an independently authorized procedure. All existing strict host, project-reference and production-reference fingerprint guards are retained. No cloud infrastructure is created by this PR.
+2. Under the protected **rls-staging** GitHub environment, configure the existing two dedicated learner accounts and a third, **independent verified instructor** account. All must use `rls-` staging-only email names and passwords at least 12 characters. Keep credentials exclusively in GitHub environment secrets. The instructor must be trusted through the real education_instructor_grants table and must **not** be an administrator. Student A/B cannot be instructors or admins.
+3. Use a **previously approved published synthetic exam**, not customer data. Student A must already have submitted a nonblank short answer, and the instructor's review queue must contain it (first 100 queue items; use a clean isolated project). Student B cannot own or see Student A's attempt.
+4. Configure the following **reviewed, distinct synthetic fixture UUID** environment variables: `ETERNYX_EDU_REVIEW_TEST_ID`, `ETERNYX_EDU_REVIEW_ATTEMPT_ID`, and `ETERNYX_EDU_REVIEW_ANSWER_ID`. Configure `ETERNYX_EDU_REVIEW_AWARDED_POINTS` as a nonnegative whole number no greater than the question's real maximum. For verify mode, also configure expected `ETERNYX_EDU_REVIEW_FINAL_SCORE` and `ETERNYX_EDU_REVIEW_FINAL_MAX` from an independently verified trusted grading record—not from an untrusted student input.
+5. Run **ETERNYX Education hosted instructor review and final-grade acceptance** manually from the default branch in `preflight` mode. Do **not** check either write approval box. Inspect all exact sanitized cases and confirm the fixture is still unreviewed.
+6. If an operator approves the real synthetic review, select `review` mode and **both** `approve_instructor_review_write` and `acknowledge_review_persists`. The workflow stops before any mark write if any guard or preflight check fails. This mutation must be explicitly authorized; if a network request fails, inspect staging because the mark may already have persisted.
+7. In a separate authorized staging service process, run the existing **atomic final-grade** RPC with service-only authorization. The workflow in this PR does not implement, call or authorize that operation.
+8. Once trusted final grading is confirmed, manually select `verify`. This is read-only; do not check write approval. It checks the expected finalized ledger-backed score, awarded essay points and student privacy.
+9. Rotate fresh synthetic fixtures when needed. **Manual cleanup**/rollout and backup review are independent operations. Do not silently erase official grades, reset submissions or modify a real account to make testing repeatable.
+
+## Evidence and release boundaries
+
+The runner produces only a fixed case name and pass/fail marker to stdout and a short-lived sanitized JSON artifact. An independent validator requires **all** expected mode-specific cases in exact order, no extra user IDs, grade totals, response texts, access tokens, endpoint or credentials, accurate review write flags, `trusted_finalizer_invoked:false`, and successful Auth session sign-out. A source-only PR never counts as evidence that hosted staging has been run.
+
+The workflow is manual-only, uses the existing GitHub protected environment, a single-flight concurrency group, minimum read-only CI permissions and a publishable key. There are no production SQL writes, production switches, billing providers, subscriptions, GPU or paid AI API requests. Hosted Supabase staging may have normal usage quotas or plan costs **only if an operator separately chooses to provision/run it**.
+
+**Production is not verified or activated.** Even if these cases pass in staging, comprehensive backup, migration, operational readiness, frontend and deployment validation are separate release gates.
