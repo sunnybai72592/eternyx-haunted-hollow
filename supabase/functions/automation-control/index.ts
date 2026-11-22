@@ -4,6 +4,7 @@ import {
   CLOUD_INPUT_LIMIT, CLOUD_OUTPUT_LIMIT, parseAutomationControlRequest,
 } from "../_shared/automation-control-contract.mjs";
 import { runLocalWorkflow } from "../../../src/lib/automationWorkflow.mjs";
+import { issueWebhookCredential } from "../_shared/automation-webhook-crypto.mjs";
 
 const responseHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +21,7 @@ const rpcStatus: Record<string, number> = {
   invalid_request: 400, invalid_steps: 400, workflow_limit: 429,
   daily_run_limit: 429, not_found: 404, not_found_or_paused: 404,
   stale_workflow: 409, idempotency_conflict: 409,
+  trigger_limit: 429, already_exists: 409, trigger_revoked: 404,
 };
 
 function failureReason(reason: unknown): string {
@@ -30,6 +32,9 @@ function failureReason(reason: unknown): string {
     case "idempotency_conflict": return "This request key was already used with different content.";
     case "not_found_or_paused": return "The workflow was not found, is not yours, or is paused.";
     case "not_found": return "The workflow could not be found.";
+    case "trigger_limit": return "This account has reached the five webhook trigger limit.";
+    case "already_exists": return "This workflow already has a webhook; rotate its signing secret instead.";
+    case "trigger_revoked": return "This trigger was revoked or rotated.";
     default: return "The workflow action was not accepted.";
   }
 }
@@ -69,14 +74,62 @@ serve(async (req: Request) => {
         .select("id,name,steps,revision,active,trigger_kind,created_at,updated_at")
         .eq("user_id", user.id).order("updated_at", { ascending: false }).limit(20);
       if (error) throw error;
-      return reply({ workflows: data ?? [], source: "authenticated_server", schedulingEnabled: false, webhooksEnabled: false });
+      return reply({ workflows: data ?? [], source: "authenticated_server", schedulingEnabled: false,
+        webhooksConfigured: /^[0-9a-f]{64}$/i.test(Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY") ?? "") });
     }
     if (request.action === "history") {
       const { data, error } = await supabase.from("automation_runs")
-        .select("id,workflow_id,workflow_revision,status,input_lines,output_lines,input_characters,output_characters,trace,created_at")
+        .select("id,workflow_id,workflow_revision,status,trigger_type,webhook_trigger_id,input_lines,output_lines,input_characters,output_characters,trace,created_at")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
       if (error) throw error;
       return reply({ runs: data ?? [], source: "authenticated_server", rawInputsStored: false, rawOutputsStored: false });
+    }
+    if (request.action === "webhooks") {
+      const { data, error } = await supabase.from("automation_webhook_triggers")
+        .select("id,workflow_id,enabled,created_at,rotated_at,last_used_at")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
+      if (error) throw error;
+      return reply({ triggers: data ?? [], source: "authenticated_server",
+        webhooksConfigured: /^[0-9a-f]{64}$/i.test(Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY") ?? "") });
+    }
+    if (request.action === "createWebhook" || request.action === "rotateWebhook") {
+      const master = Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY") ?? "";
+      if (!/^[0-9a-f]{64}$/i.test(master)) {
+        return reply({ error: "Webhook encryption secret is not configured; triggers are disabled." }, 503);
+      }
+      let workflowId = request.workflowId;
+      if (request.action === "rotateWebhook") {
+        const { data: existing, error } = await supabase.from("automation_webhook_triggers")
+          .select("workflow_id").eq("id", request.triggerId).eq("user_id", user.id).maybeSingle();
+        if (error) throw error;
+        if (!existing) return reply({ error: "Webhook not found" }, 404);
+        workflowId = existing.workflow_id;
+      }
+      const created = await issueWebhookCredential(master);
+      const { data, error } = await supabase.rpc("automation_register_webhook", {
+        p_user_id: user.id, p_workflow_id: workflowId,
+        p_ciphertext: created.credential_ciphertext, p_iv: created.credential_iv,
+        p_rotate: request.action === "rotateWebhook",
+      });
+      if (error) throw error;
+      if (!data || data.ok !== true) return rpcResponse(data, "webhook_failed");
+      return reply({ ok: true, triggerId: data.trigger_id, workflowId,
+        enabled: false, signingKey: created.secret,
+        message: "Save this signing key now. It cannot be retrieved later; rotation disables the trigger until you explicitly enable it." });
+    }
+    if (request.action === "toggleWebhook") {
+      const { data, error } = await supabase.rpc("automation_set_webhook_enabled", {
+        p_user_id: user.id, p_trigger_id: request.triggerId, p_enabled: request.enabled,
+      });
+      if (error) throw error;
+      return rpcResponse(data, "webhook_toggle_failed");
+    }
+    if (request.action === "deleteWebhook") {
+      const { data, error } = await supabase.rpc("automation_delete_webhook", {
+        p_user_id: user.id, p_trigger_id: request.triggerId,
+      });
+      if (error) throw error;
+      return rpcResponse(data, "webhook_delete_failed");
     }
     if (request.action === "save") {
       const { data, error } = await supabase.rpc("automation_save_workflow", {
