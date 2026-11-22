@@ -295,6 +295,18 @@ export class SystemdMicrovmSupervisor {
   }
   async attest(sessionId){
     const state=verifySystemdUnitProperties(sessionId,this.#read(sessionId));
+    // A named unit alone is insufficient: the jailer PID must actually be
+    // inside that systemd service cgroup, not an escaped nested/foreign group.
+    let currentCgroup;
+    try{
+      currentCgroup=await this.#fs.readFile("/proc/"+state.mainPid+"/cgroup","utf8");
+    }catch{throw Error("Cannot attest the VM main process cgroup");}
+    const member=currentCgroup.trim().split("\n").some(line=>{
+      if(!line.startsWith("0::"))return false;
+      const path=line.slice(3);
+      return path===state.cgroup || path.startsWith(state.cgroup+"/");
+    });
+    if(!member)throw Error("VM escaped supervised systemd unit cgroup");
     await this.#loopback(sessionId);
     // A transient systemd unit has an independently enforced lifetime even
     // if this Node process dies. We never rely on a JS setTimeout watchdog.
@@ -327,15 +339,21 @@ export class SystemdMicrovmSupervisor {
       const status=verifySystemdUnitProperties(sessionId,p,{allowStopped:true});
       if(status.active)return false;
     }
-    // Never trust a stopped MainPID alone; verify the service cgroup has no
-    // processes. Cgroup escape and a compromised privileged host are NOT
-    // solved by this check and remain future audit gates.
+    // MainPID=0 is insufficient. Check both direct processes and cgroup
+    // 'populated' (which includes nested descendants) before confirming dead.
     const path=join("/sys/fs/cgroup/system.slice",supervisedVmUnit(sessionId));
     try{
       const value=await this.#fs.readFile(join(path,"cgroup.procs"),"utf8");
       if(value.trim()!=="")return false;
     }catch(e){
       if(e?.code!=="ENOENT")throw Error("Cannot verify VM cgroup teardown");
+    }
+    try{
+      const events=await this.#fs.readFile(join(path,"cgroup.events"),"utf8");
+      if(!/(?:^|\n)populated 0(?:\n|$)/.test(events))
+        return false;
+    }catch(e){
+      if(e?.code!=="ENOENT")throw Error("Cannot verify descendant VM cgroup teardown");
     }
     return true;
   }
