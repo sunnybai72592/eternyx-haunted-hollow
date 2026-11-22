@@ -131,6 +131,15 @@ EXCEPTION WHEN insufficient_privilege THEN NULL;
 END;
 $check$;
 
+-- Even project details are immutable until explicit restoration.
+DO $archivecheck$
+BEGIN
+  UPDATE public.workspace_projects SET name='bypassed archive' WHERE status='archived';
+  RAISE EXCEPTION 'Archived project metadata accepted UPDATE';
+EXCEPTION WHEN insufficient_privilege THEN NULL;
+END;
+$archivecheck$;
+
 -- Restore project and prove normal writes work once again.
 UPDATE public.workspace_projects SET status='active' WHERE name='Alice workspace';
 UPDATE public.workspace_tasks SET status='done' WHERE title='First draft';
