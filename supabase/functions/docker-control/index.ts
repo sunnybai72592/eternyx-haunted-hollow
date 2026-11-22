@@ -51,9 +51,11 @@ serve(async(req:Request)=>{
       ]);
       if(policy.error||requests.error||events.error||agents.error||dispatch.error)throw new Error("Database read unavailable");
       const observedAt=new Date().toISOString();
-      const claimsByRequest=new Map((dispatch.data??[]).map((x:Record<string,unknown>)=>[x.request_id,x]));
+      const claimsByRequest=new Map<string,Record<string,unknown>>(
+        (dispatch.data??[]).map((x:Record<string,unknown>)=>[String(x.request_id),x] as const)
+      );
       const ownedRequests=(requests.data??[]).map((r:Record<string,unknown>)=>{
-        const claim=claimsByRequest.get(r.id);
+        const claim=claimsByRequest.get(String(r.id));
         return {...r,effective_state:effectiveDockerControlState(r),
           execution_status:claim?claim.state:"not_dispatched",
           dispatch_claimed_at:claim?.claimed_at??null,
