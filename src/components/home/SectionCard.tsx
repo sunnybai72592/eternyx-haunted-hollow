@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ArrowRight, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +33,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
   index,
 }) => {
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
   const Icon = section.icon;
 
   const handleClick = () => {
@@ -51,16 +52,16 @@ export const SectionCard: React.FC<SectionCardProps> = ({
       style={{
         background: 'linear-gradient(140deg, hsl(var(--primary) / .12), hsl(var(--card)) 60%, hsl(var(--accent) / .08))',
       }}
-      initial={{ opacity: 0, y: 40, scale: 0.95 }}
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 40, scale: 0.95 }}
       animate={{ 
         opacity: isAnyHovered && !isHovered ? 0.5 : 1, 
         y: 0, 
-        scale: isHovered ? 1.02 : isAnyHovered ? 0.98 : 1,
-        filter: isAnyHovered && !isHovered ? 'blur(1px)' : 'blur(0px)',
+        scale: prefersReducedMotion ? 1 : isHovered ? 1.02 : isAnyHovered ? 0.98 : 1,
+        filter: prefersReducedMotion ? 'none' : isAnyHovered && !isHovered ? 'blur(1px)' : 'blur(0px)',
       }}
       transition={{ 
-        duration: 0.5, 
-        delay: index * 0.08,
+        duration: prefersReducedMotion ? 0 : 0.5, 
+        delay: prefersReducedMotion ? 0 : index * 0.08,
         ease: [0.25, 0.46, 0.45, 0.94]
       }}
       onMouseEnter={() => onHover(section.id)}
@@ -72,7 +73,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
       onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleClick(); } }}
       onFocus={() => onHover(section.id)}
       onBlur={() => onHover(null)}
-      whileTap={{ scale: 0.98 }}
+      whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
     >
       {/* Background Pattern - Grid */}
       {section.bgPattern === 'grid' && (
@@ -137,7 +138,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.4 }}
             style={{
               background: `radial-gradient(ellipse at 50% 80%, hsl(var(--primary) / .15) 0%, transparent 60%)`,
             }}
@@ -151,7 +152,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         style={{ background: 'hsl(var(--primary))' }}
         initial={{ scaleX: 0 }}
         animate={{ scaleX: isHovered ? 1 : 0 }}
-        transition={{ duration: 0.4 }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.4 }}
       />
 
       {/* Content */}
@@ -166,8 +167,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
           style={{ 
             backgroundColor: `hsl(var(--primary) / .08)`,
           }}
-          animate={isHovered ? { scale: 1.1 } : { scale: 1 }}
-          transition={{ duration: 0.3 }}
+          animate={prefersReducedMotion ? { scale: 1 } : isHovered ? { scale: 1.1 } : { scale: 1 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
         >
           <Icon 
             className="w-6 h-6 md:w-7 md:h-7" 
@@ -198,7 +199,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
             >
               {section.description}
             </motion.p>
@@ -210,7 +211,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
           className="flex items-center gap-2 text-sm font-medium"
           style={{ color: 'hsl(var(--primary))' }}
           animate={isHovered ? { x: 6 } : { x: 0 }}
-          transition={{ duration: 0.25 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.25 }}
         >
           <span className="opacity-80">Explore</span>
           <ArrowRight className="w-4 h-4" />
@@ -225,7 +226,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
             style={{
               boxShadow: `inset 0 0 0 1px hsl(var(--primary) / .38), 0 0 40px hsl(var(--primary) / .12)`,
             }}

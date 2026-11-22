@@ -22,61 +22,61 @@ export const EnhancedButton: React.FC<EnhancedButtonProps> = ({
     switch (variant) {
       case 'cyber':
         return `
-          bg-gradient-to-r from-cyan-500/20 to-blue-500/20 
-          border-2 border-cyan-400/50 
-          text-cyan-100 
-          hover:from-cyan-400/30 hover:to-blue-400/30 
-          hover:border-cyan-300 
+          bg-gradient-to-r from-primary/20 to-accent/20 
+          border-2 border-primary/50 
+          text-primary 
+          hover:from-primary/30 hover:to-accent/30 
+          hover:border-primary 
           hover:text-white
-          hover:shadow-lg hover:shadow-cyan-400/25
+          hover:shadow-lg hover:shadow-primary/25
           active:scale-95
           transition-all duration-300
           backdrop-blur-sm
-          ${animated ? 'hover:animate-pulse' : ''}
+          ${animated ? 'motion-safe:hover:animate-pulse' : ''}
         `;
       case 'neon':
         return `
           bg-black/80 
-          border-2 border-${glowColor}-400 
-          text-${glowColor}-100 
-          hover:bg-${glowColor}-500/10 
-          hover:border-${glowColor}-300 
+          border-2 border-primary/60 
+          text-primary 
+          hover:bg-primary/10 
+          hover:border-primary 
           hover:text-white
-          hover:shadow-lg hover:shadow-${glowColor}-400/50
+          hover:shadow-lg hover:shadow-primary/35
           active:scale-95
           transition-all duration-300
           backdrop-blur-sm
-          ${animated ? 'animate-pulse' : ''}
+          ${animated ? 'motion-safe:animate-pulse' : ''}
         `;
       case 'glitch':
         return `
-          bg-gradient-to-r from-red-500/20 to-purple-500/20 
-          border-2 border-red-400/50 
-          text-red-100 
-          hover:from-red-400/30 hover:to-purple-400/30 
-          hover:border-red-300 
+          bg-gradient-to-r from-primary/20 to-accent/20 
+          border-2 border-primary/50 
+          text-primary 
+          hover:from-primary/30 hover:to-accent/30 
+          hover:border-primary 
           hover:text-white
-          hover:shadow-lg hover:shadow-red-400/25
+          hover:shadow-lg hover:shadow-primary/25
           active:scale-95
           transition-all duration-300
           backdrop-blur-sm
           relative overflow-hidden
-          ${animated ? 'hover:animate-pulse' : ''}
+          ${animated ? 'motion-safe:hover:animate-pulse' : ''}
         `;
       case 'hologram':
         return `
-          bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 
-          border-2 border-purple-400/50 
-          text-purple-100 
-          hover:from-blue-400/30 hover:via-purple-400/30 hover:to-pink-400/30 
-          hover:border-purple-300 
+          bg-gradient-to-r from-primary/20 via-accent/20 to-primary/10 
+          border-2 border-primary/50 
+          text-primary 
+          hover:from-primary/30 hover:via-accent/30 hover:to-primary/20 
+          hover:border-primary 
           hover:text-white
-          hover:shadow-lg hover:shadow-purple-400/25
+          hover:shadow-lg hover:shadow-primary/25
           active:scale-95
           transition-all duration-300
           backdrop-blur-sm
           relative overflow-hidden
-          ${animated ? 'hover:animate-pulse' : ''}
+          ${animated ? 'motion-safe:hover:animate-pulse' : ''}
         `;
       default:
         return '';
@@ -97,7 +97,7 @@ export const EnhancedButton: React.FC<EnhancedButtonProps> = ({
     if (variant === 'cyber' || variant === 'neon' || variant === 'glitch' || variant === 'hologram') {
       return `
         before:absolute before:inset-0 before:rounded-lg 
-        before:bg-gradient-to-r before:from-${glowColor}-400/0 before:via-${glowColor}-400/20 before:to-${glowColor}-400/0
+        before:bg-gradient-to-r before:from-primary/0 before:via-primary/20 before:to-primary/0
         before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300
         before:blur-sm before:-z-10
       `;
@@ -121,8 +121,8 @@ export const EnhancedButton: React.FC<EnhancedButtonProps> = ({
       >
         {variant === 'glitch' && (
           <>
-            <span className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-purple-500/10 animate-pulse"></span>
-            <span className="absolute inset-0 bg-gradient-to-l from-cyan-500/5 to-blue-500/5 animate-ping"></span>
+            <span className="absolute inset-0 bg-gradient-to-r from-primary/10 to-accent/10 motion-safe:animate-pulse"></span>
+            <span className="absolute inset-0 bg-gradient-to-l from-primary/5 to-accent/5 motion-safe:animate-ping"></span>
           </>
         )}
         <span className="relative z-10 flex items-center gap-2">
