@@ -11,6 +11,7 @@ Workspace is the user's private organizational layer across ETERNYX. The Cyberse
 - Create projects with names/descriptions, edit details, archive/restore (no hard-delete of projects and their files).
 - Create tasks, assign optional due dates, change statuses, and delete tasks; server timestamps and owner-scoped records.
 - Save project notes and HTTPS/internal route references. Links are reviewed by the owner before saving.
+- From Developer Studio, Cybersecurity Hub, AI Arsenal, Cloud & Integrations and Automation, users can explicitly prepare a bookmark of the current page and choose a project before saving. This does not import execution results.
 - Upload and download real Supabase Storage files through a **private** bucket. 5 MiB limit; PDF, PNG, JPEG, WebP, TXT, CSV and JSON only.
 - Remove saved items and uploaded objects; error state is shown if cleanup is unsuccessful.
 - Database-triggered activity events; browser roles have **SELECT only** on activity.
@@ -37,7 +38,7 @@ Activity is written by restricted database triggers, not user-provided JSON. The
 ## Known constraints / next milestones
 
 - Shared-team collaboration, ACLs/invitations and organization tenancy are **not enabled**. Adding them requires a separate audited access model.
-- Full cross-pillar artifact capture and auto-sync are **not enabled**; this iteration saves owner-chosen routes, links and notes. Do not call manual bookmarks automatic workflow orchestration.
+- Full cross-pillar artifact capture and auto-sync are **not enabled**; the current-page handoff and owner-confirmed bookmarks are functional but do not transfer results or perform automatic workflow orchestration.
 - File versions, quota billing, large-file transfer, backup/export, full-text search and automatic account-deletion cleanup for Storage objects need separate implementation and tests.
 - There is no free-cost guarantee for hosted Storage/database usage. Review project-level quota and abuse protection before offering files to an unrestricted public audience.
 - The current UI limits reads to 100 projects, 1000 tasks, 1000 items and the 30 newest activity events. Add paginated queries before presenting them as unbounded archives.
