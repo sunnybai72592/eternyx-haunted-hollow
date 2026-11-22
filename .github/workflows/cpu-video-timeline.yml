@@ -1,0 +1,40 @@
+name: CPU video v2 timeline with licensed audio
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/render_video_timeline.py"
+      - "gpu-worker/tests/test_render_video_timeline.py"
+      - ".github/workflows/cpu-video-timeline.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/render_video_timeline.py"
+      - "gpu-worker/tests/test_render_video_timeline.py"
+      - ".github/workflows/cpu-video-timeline.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-timeline:
+    name: Render real CPU timelines, soundtracks and previews
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ensure local FFmpeg H.264 and audio codecs
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+          ffmpeg -hide_banner -encoders | grep -q ' aac '
+      - name: Exercise CPU video timeline integration with actual media files
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_render_video_timeline.py' -v
