@@ -128,7 +128,7 @@ export default function AccountCenter() {
       </div>
 
       <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-[#080f1e] shadow-[0_28px_100px_rgba(0,0,0,.38)]">
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_78%_10%,rgba(34,211,238,.13),transparent_36%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_55%,rgba(13,20,43,.92))]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_78%_10%,hsl(var(--primary)/.13),transparent_36%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_55%,rgba(13,20,43,.92))]" />
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center lg:p-10">
           <div className="min-w-0">
@@ -143,7 +143,7 @@ export default function AccountCenter() {
               Your identity, preferences and activity—connected in one place. Make this environment yours.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Button asChild className="h-11 rounded-xl bg-cyan-200 px-5 font-semibold text-slate-950 shadow-[0_8px_30px_rgba(103,232,249,.14)] hover:bg-cyan-100">
+              <Button asChild className="h-11 rounded-xl bg-cyan-200 px-5 font-semibold text-slate-950 shadow-[0_8px_30px_hsl(var(--primary)/.14)] hover:bg-cyan-100">
                 <Link to="/profile">Manage profile <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
               <Button asChild variant="outline" className="h-11 rounded-xl border-white/15 bg-white/[0.035] px-5 text-slate-200 hover:bg-white/[0.08] hover:text-white">
