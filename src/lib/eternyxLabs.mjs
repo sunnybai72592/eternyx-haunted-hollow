@@ -78,49 +78,65 @@ export function parseResponseHeaders(text) {
 export function auditResponseHeaders(text) {
   const headers = parseResponseHeaders(text);
   if (headers.size === 0) return { error: "Paste valid HTTP response headers, one per line.", checks: [] };
-  const get = (name) => (headers.get(name) || []).join("; ");
-  const csp = get("content-security-policy");
-  const hsts = get("strict-transport-security");
-  const frame = get("x-frame-options").toLowerCase();
-  const referrer = get("referrer-policy").toLowerCase();
+  const values = (name) => headers.get(name) || [];
+  const single = (name) => values(name).length === 1 ? values(name)[0].trim() : "";
+  const csp = single("content-security-policy");
+  const hsts = single("strict-transport-security");
+  const frame = single("x-frame-options").toLowerCase();
+  const referrer = single("referrer-policy").toLowerCase();
+  const cspDirectives = csp.split(";").map((part) => part.trim()).filter(Boolean);
+  const frameAncestors = cspDirectives.find((part) => /^frame-ancestors(?:\s|$)/i.test(part));
+  // A bare frame-ancestors directive or a wildcard is not a meaningful restriction.
+  const restrictedAncestors = frameAncestors && /^frame-ancestors\s+(?!\s*$)/i.test(frameAncestors) &&
+    !/^frame-ancestors\s+\*(?:\s|$)/i.test(frameAncestors);
+  const hstsAges = [...hsts.matchAll(/(?:^|;)\s*max-age\s*=\s*(\d+)\s*(?=;|$)/gi)];
+  const validHsts = values("strict-transport-security").length === 1 &&
+    hstsAges.length === 1 && Number(hstsAges[0][1]) >= 31536000;
+  const validReferrers = new Set([
+    "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin",
+    "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin",
+  ]);
   const checks = [
     {
       name: "Content Security Policy",
-      passed: csp.length > 0,
-      detail: csp ? "CSP is present. Review its directives and exceptions manually." : "No CSP header was supplied. Define an appropriate policy for the application.",
+      passed: !!csp && cspDirectives.some((part) => /^default-src\s+\S/i.test(part)),
+      detail: csp ? "Check CSP directives, sources and exceptions manually. A present header is not proof of safety; this check expects a default-src directive." : "Supply a Content-Security-Policy with an appropriate default-src directive.",
     },
     {
       name: "Content-type sniffing",
-      passed: get("x-content-type-options").toLowerCase() === "nosniff",
-      detail: get("x-content-type-options").toLowerCase() === "nosniff" ? "nosniff is present." : "Set X-Content-Type-Options: nosniff.",
+      passed: single("x-content-type-options").toLowerCase() === "nosniff",
+      detail: "Provide exactly one X-Content-Type-Options: nosniff header.",
     },
     {
       name: "HTTPS transport policy",
-      passed: /(?:^|;)\s*max-age\s*=\s*(\d+)/i.test(hsts) && Number(hsts.match(/max-age\s*=\s*(\d+)/i)?.[1] || 0) >= 31536000,
-      detail: "Check Strict-Transport-Security on a real HTTPS response; this offline check looks for max-age of at least one year.",
+      passed: validHsts,
+      detail: "Provide a single Strict-Transport-Security header with one max-age of at least one year. This offline check cannot verify HTTPS delivery.",
     },
     {
       name: "Embedding protection",
-      passed: /(?:^|;)\s*frame-ancestors\b/i.test(csp) || /^(deny|sameorigin)$/.test(frame.trim()),
-      detail: "Restrict framing with CSP frame-ancestors, or X-Frame-Options DENY/SAMEORIGIN for older clients.",
+      passed: !!restrictedAncestors || /^(deny|sameorigin)$/.test(frame),
+      detail: "Restrict framing using a non-wildcard frame-ancestors policy or X-Frame-Options DENY/SAMEORIGIN. Check effective browser behavior manually.",
     },
     {
       name: "Referrer policy",
-      passed: referrer.length > 0 && referrer !== "unsafe-url",
-      detail: "Specify a privacy-conscious Referrer-Policy appropriate to your application.",
+      passed: validReferrers.has(referrer),
+      detail: "Use a recognized privacy-conscious Referrer-Policy; unsafe-url, unrecognized and duplicate headers do not pass this clinic.",
     },
   ];
-  const cookies = headers.get("set-cookie") || [];
+  const cookies = values("set-cookie");
   if (cookies.length) {
-    const weak = cookies.filter((cookie) =>
-      !/(?:^|;)\s*secure(?:;|$)/i.test(cookie) ||
-      !/(?:^|;)\s*httponly(?:;|$)/i.test(cookie) ||
-      !/(?:^|;)\s*samesite\s*=\s*(strict|lax|none)(?:;|$)/i.test(cookie)
-    );
+    const weak = cookies.filter((cookie) => {
+      const secure = /(?:^|;)\s*secure\s*(?:;|$)/i.test(cookie);
+      const httpOnly = /(?:^|;)\s*httponly\s*(?:;|$)/i.test(cookie);
+      const sameSites = [...cookie.matchAll(/(?:^|;)\s*samesite\s*=\s*(strict|lax|none)\s*(?=;|$)/gi)];
+      const allSameSiteAttributes = [...cookie.matchAll(/(?:^|;)\s*samesite\s*=/gi)];
+      return !secure || !httpOnly || sameSites.length !== 1 || allSameSiteAttributes.length !== 1 ||
+        (sameSites[0][1].toLowerCase() === "none" && !secure);
+    });
     checks.push({
       name: "Cookie attributes",
       passed: weak.length === 0,
-      detail: weak.length ? weak.length + " cookie(s) need Secure, HttpOnly, and explicit SameSite review (not all cookies require HttpOnly)." : "Supplied cookies include Secure, HttpOnly, and SameSite attributes.",
+      detail: weak.length ? weak.length + " cookie(s) need review for Secure, HttpOnly and one valid SameSite attribute (HttpOnly may be inappropriate for some non-session cookies)." : "Supplied cookies include Secure, HttpOnly, and a single valid SameSite value.",
     });
   }
   return { error: null, checks };
