@@ -43,14 +43,14 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
       .from('service_request_activity')
       .select('id,actor_id,event_type,body,from_status,to_status,created_at')
       .eq('request_id', requestId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
       .limit(200);
     if (queryError) {
       console.error('Service request activity query failed:', queryError);
       setActivity([]);
       setError('Could not load the conversation. Verify that the service desk migration is active.');
     } else {
-      setActivity((data ?? []) as ActivityRow[]);
+      setActivity(((data ?? []) as ActivityRow[]).reverse());
     }
     setLoading(false);
   }, [requestId]);
@@ -124,7 +124,7 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
               </article>
             );
           })}
-        {activity.length === 200 && <p className="text-xs text-muted-foreground">Showing the first 200 events. Contact support if you need older records.</p>}
+        {activity.length === 200 && <p className="text-xs text-muted-foreground">Showing the latest 200 events. Older activity requires a separate history export.</p>}
       </div>
       <form onSubmit={(event) => void submit(event)} className="mt-5 space-y-3 border-t border-border pt-4">
         <label htmlFor={'service-request-message-' + requestId} className="block text-sm font-semibold">Send a follow-up</label>
