@@ -191,10 +191,13 @@ test("full actual Unix API boot sequence is withheld without independent host su
     sessionId:session,manifest:manifest(),jailBase:base,
     guardian:guardian({attest:{...owned(),hostNetworkDenied:false}}),
   }),/unverified/);
+  const watchdog=guardian({armed:{armed:false,maxSeconds:900}});
   await assert.rejects(bootJailedMicrovm({
     sessionId:session,manifest:manifest(),jailBase:base,
-    guardian:guardian({armed:{armed:false,maxSeconds:900}}),
-  }),/unavailable/);
+    guardian:watchdog,
+  }),/boot verification failed/);
+  assert.ok(watchdog.events.includes("kill:"+session));
+  assert.ok(watchdog.events.includes("verifyDead:"+session));
 });
 
 test("real Unix HTTP boot steps + bounded lifetime arm + repeat attest",async(t)=>{
@@ -222,6 +225,19 @@ test("real Unix HTTP boot steps + bounded lifetime arm + repeat attest",async(t)
   ]);
   assert.equal(calls[4].body.action_type,"InstanceStart");
   assert.equal(g.events.some(e=>e.startsWith("kill")),false);
+});
+
+test("image pin failure also stops existing jailed process before boot",async(t)=>{
+  const {base}=await fixture(t);
+  const g=guardian();
+  await assert.rejects(bootJailedMicrovm({
+    sessionId:session,
+    manifest:{...manifest(),kernelSha256:"f".repeat(64)},
+    jailBase:base,guardian:g,
+  }),/boot verification failed/);
+  assert.ok(g.events.includes("kill:"+session));
+  assert.ok(g.events.includes("verifyDead:"+session));
+  assert.ok(!g.events.includes("arm:900"));
 });
 
 test("partial boot failures force supervised kill + proof of death",async(t)=>{
