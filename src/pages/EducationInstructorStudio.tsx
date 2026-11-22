@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Download, FileUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import {
-  createInstructorDraft, instructorRpcEnabled,
+  createInstructorDraft, instructorRpcEnabled, loadInstructorDraft,
   readInstructorAccess, readInstructorDrafts,
 } from "@/lib/educationInstructorRpc";
 import {
@@ -40,8 +40,22 @@ export default function EducationInstructorStudio() {
   const [importing, setImporting] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
   const [serverSaving, setServerSaving] = useState(false);
+  const [loadingDraftId, setLoadingDraftId] = useState<string | null>(null);
+  const [sourceDraftId, setSourceDraftId] = useState<string | null>(null);
   const { user, isAuthenticated } = useAuthStore();
   const queryClient = useQueryClient();
+  const currentUserRef = useRef(user?.id);
+  useEffect(() => {
+    if (currentUserRef.current === user?.id) return;
+    currentUserRef.current = user?.id;
+    if (sourceDraftId) {
+      // A loaded server answer key must never survive a change of account.
+      setBank(emptyQuestionBank() as Bank);
+      setActiveId(null);
+      setSourceDraftId(null);
+      setMessage("Previous instructor draft cleared after the account changed.");
+    }
+  }, [user?.id, sourceDraftId]);
   const accessQuery = useQuery({
     queryKey: ["education-instructor-access", user?.id],
     enabled: instructorRpcEnabled && isAuthenticated && !!user?.id,
@@ -138,6 +152,24 @@ export default function EducationInstructorStudio() {
       setMessage(error instanceof Error ? error.message : "Cannot export this bank.");
     }
   };
+  const handleLoadPrivateDraft = async (draftId: string) => {
+    if (!instructorRpcEnabled || !accessQuery.data?.approved || loadingDraftId || serverSaving) return;
+    if (!window.confirm("Load this private instructor draft? Unsaved edits in the current editor will be lost. Export local JSON first if needed.")) return;
+    setLoadingDraftId(draftId);
+    setMessage("");
+    try {
+      const draft = await loadInstructorDraft(draftId);
+      setBank(draft.bank as Bank);
+      setSourceDraftId(draft.id);
+      setActiveId(draft.bank.questions[0]?.id ?? null);
+      setMode("edit");
+      setMessage("Private draft loaded. Saving these edits will create a NEW unpublished draft; the original is preserved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Private draft could not be loaded.");
+    } finally {
+      setLoadingDraftId(null);
+    }
+  };
   const handlePrivateDraftSave = async () => {
     if (!instructorRpcEnabled || !accessQuery.data?.approved || !readiness.valid || serverSaving) return;
     setServerSaving(true);
@@ -147,7 +179,8 @@ export default function EducationInstructorStudio() {
       if (created.question_count !== bank.questions.length) {
         throw new Error("The server returned an unexpected question count; inspect your draft list.");
       }
-      setMessage("Private draft saved to your approved instructor account. This assessment is inactive and unpublished.");
+      setSourceDraftId(created.id);
+      setMessage("New private draft saved. It is inactive and unpublished. Earlier drafts are preserved.");
       toast.success("Unpublished instructor draft saved.");
       await queryClient.invalidateQueries({ queryKey: ["education-instructor-private-drafts", user?.id] });
     } catch (error) {
@@ -166,6 +199,7 @@ export default function EducationInstructorStudio() {
     try {
       const parsed = parseQuestionBankJson(await file.text()) as Bank;
       setBank(parsed);
+      setSourceDraftId(null);
       setActiveId(parsed.questions[0]?.id ?? null);
       setMode("edit");
       setMessage("Question-bank draft imported. Review its content before exporting.");
@@ -217,16 +251,20 @@ export default function EducationInstructorStudio() {
             {accessQuery.data?.approved === true && <>
               <p className="text-sm text-muted-foreground">
                 Approved instructor access verified. You may explicitly save a validated bank as an inactive, unpublished server draft.
-                An answer-key file must not be shared with students.
+                Loading a private draft is allowed only for its owner. Saving edits creates a new revision copy, leaving the earlier draft unchanged.
+                Answer-key files must not be shared with students.
               </p>
-              <Button disabled={!readiness.valid || serverSaving} onClick={() => void handlePrivateDraftSave()}>
-                {serverSaving ? "Saving private draft…" : "Save as private server draft"}
+              <Button disabled={!readiness.valid || serverSaving || !!loadingDraftId} onClick={() => void handlePrivateDraftSave()}>
+                {serverSaving ? "Saving private draft…" : "Save as new private draft"}
               </Button>
               {draftsQuery.isPending && <p role="status" className="text-sm">Loading your private drafts…</p>}
               {draftsQuery.error && <div className="flex flex-wrap items-center gap-3 text-sm">
                 <p role="alert">Could not load your private draft list.</p>
                 <Button variant="outline" onClick={() => void draftsQuery.refetch()}>Retry drafts</Button>
               </div>}
+              {sourceDraftId && <p role="status" className="text-xs text-muted-foreground">
+                Source draft: {sourceDraftId.slice(0, 8)}… Revisions are saved as new drafts, never in place.
+              </p>}
               {draftsQuery.data && <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Your private drafts ({draftsQuery.data.length})</h3>
                 {draftsQuery.data.length === 0 && <p className="text-sm text-muted-foreground">No server drafts have been returned for this account.</p>}
@@ -234,6 +272,11 @@ export default function EducationInstructorStudio() {
                   {draftsQuery.data.map(draft => <li key={draft.id} className="rounded-lg border border-border bg-background p-3 text-sm">
                     <span className="font-medium">{draft.title}</span>
                     <span className="ml-2 text-muted-foreground">{draft.duration_minutes} min · Unpublished</span>
+                    <Button size="sm" variant="outline" className="mt-2 min-h-10 w-full sm:ml-3 sm:mt-0 sm:w-auto"
+                      disabled={!!loadingDraftId || serverSaving}
+                      onClick={() => void handleLoadPrivateDraft(draft.id)}>
+                      {loadingDraftId === draft.id ? "Loading draft…" : "Load for revision"}
+                    </Button>
                   </li>)}
                 </ul>
               </div>}
@@ -257,7 +300,7 @@ export default function EducationInstructorStudio() {
           </Button>
           <Button variant="ghost" onClick={() => {
             if (!window.confirm("Clear this unsaved local question bank? Download a draft first if needed.")) return;
-            setBank(emptyQuestionBank() as Bank); setActiveId(null); setMode("edit"); setMessage("");
+            setBank(emptyQuestionBank() as Bank); setActiveId(null); setSourceDraftId(null); setMode("edit"); setMessage("");
           }}>New bank</Button>
         </div>
 
