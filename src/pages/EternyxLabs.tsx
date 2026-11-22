@@ -104,6 +104,15 @@ export default function EternyxLabs() {
           </div>
         </section>
 
+        <section className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-card/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Account-linked missions</p>
+            <h2 className="mt-2 text-xl font-bold">Verified CTF Forensics</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Recover per-user flags from security casefiles. Verified progress is stored server-side, never inferred from browser storage. Requires deployed backend and sign-in.</p>
+          </div>
+          <Link to="/labs/verified" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-primary/30 px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10">Explore verified missions <ArrowRight className="ml-2 h-4 w-4" /></Link>
+        </section>
+
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(245px,290px)_minmax(0,1fr)]">
           <nav aria-label="Choose a practical lab" className="rounded-2xl border border-border/70 bg-card/70 p-3">
             <p className="px-3 pb-3 pt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Practical workstations</p>

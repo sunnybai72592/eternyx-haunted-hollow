@@ -40,6 +40,7 @@ const AIAgentsStudio = lazy(() => import("./pages/AIAgentsStudio"));
 const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
 const EternyxLabs = lazy(() => import("./pages/EternyxLabs"));
 const EternyxCtf = lazy(() => import("./pages/EternyxCtf"));
+const EternyxVerifiedCtf = lazy(() => import("./pages/EternyxVerifiedCtf"));
 const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
 const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
@@ -215,6 +216,7 @@ const AppContent = () => {
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
                          <Route path="/labs" element={<EternyxLabs />} />
                          <Route path="/labs/ctf" element={<EternyxCtf />} />
+                         <Route path="/labs/verified" element={<EternyxVerifiedCtf />} />
                         <Route path="/developer-studio/advanced" element={<AdvancedDeveloperTools />} />
                         <Route path="/developer-studio/api-workbench" element={<ApiEngineeringWorkbench />} />
                         <Route path="/developer-studio/devops" element={<DevOpsLaunchpad />} />
