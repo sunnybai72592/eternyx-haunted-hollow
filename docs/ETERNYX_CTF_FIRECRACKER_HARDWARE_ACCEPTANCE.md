@@ -421,3 +421,132 @@ It never signs a real operator record, runs KVM, opens public ports, downloads
 VMs, invokes AI APIs or starts paid infrastructure. Public ETERNYX Labs
 remain disabled until separate image, host, billing, authorization and
 multi-tenant security assessments succeed.
+
+
+## Offline signed operator-receipt handoff (follow-up PR)
+
+This milestone bridges the **operator KVM test workstation** and the
+**independent review workstation** without cloud accounts, automatic network
+transfers, private signing-key disclosure or public ETERNYX lab activation.
+
+The transport package includes **only**:
+- the already signed **operator v2 receipt**;
+- the **operator's Ed25519 public PEM**;
+- exact session/mode/fingerprint/receipt-hash metadata;
+- restrictive flags making clear that **no independent source files** are
+  contained and **hardware is not independently attested**.
+
+It deliberately **excludes** raw host systemd logs, cgroup snapshots,
+image provenance documents, guest transcripts, independent reviewer
+attestations and all private keys. Those artifacts must be separately
+collected and verified by the actual reviewer, following the previous
+second-person review instructions.
+
+### 1. Operator: manual export after a real, successful offline test
+
+The operator must already have a **verified v2 signed receipt** and its
+corresponding public key at the paths from the previous section. The
+\`/var/lib/eternyx-firecracker/evidence\` directory must be manually
+provisioned as private root-owned \`0700\`.
+
+A trusted reviewer obtains the operator's **SPKI SHA-256 fingerprint** via a
+separate channel. On the **offline operator host**, explicitly approve only
+the read-and-export step:
+
+\`\`\`bash
+export ETERNYX_OFFLINE_HANDOFF_ACK=I_APPROVE_OFFLINE_OPERATOR_RECEIPT_EXPORT
+sudo --preserve-env=ETERNYX_OFFLINE_HANDOFF_ACK \
+  node scripts/cyber-range-operator-handoff.mjs \
+  --export --confirm-offline-transfer \
+  --session 123e4567-e89b-42d3-a456-426614174001 \
+  --operator-sha OPERATOR_SPKI_SHA256
+\`\`\`
+
+The command validates the existing Ed25519 receipt, signer fingerprint,
+guest/drill mode, offline-only policy and exact session, then exclusively
+creates a private
+\`/var/lib/eternyx-firecracker/evidence/<UUID>.handoff.json\`.
+The command returns a **SHA-256 of the exact canonical JSON bytes**. Record
+this hash independently of the transferred USB/file. The tool has no network
+transfer, remote command, cloud API, VM start, or log scraping capability.
+Never use this as a substitute for an independently obtained host log.
+
+### 2. Human-controlled offline transfer
+
+The host operator deliberately copies **only the .handoff.json** using an
+approved, scanned offline removable medium. The independent reviewer manually
+places it, unchanged, under a pre-provisioned private directory:
+
+\`\`\`text
+/var/lib/eternyx-reviewer/inbox/<UUID>.handoff.json
+\`\`\`
+
+Both \`/var/lib/eternyx-reviewer/inbox\` and the handoff JSON must be
+**root-owned 0700/0600**, respectively, with no symlinks or hardlink aliases.
+The reviewer records the source SHA-256 and operator SPKI fingerprint using
+a **separate trusted channel**. A digest carried inside the same USB bundle
+is not an independent pin.
+
+### 3. Reviewer: read-only inspection followed by exclusive import
+
+First verify the staged packet with **both independent pins**:
+
+\`\`\`bash
+sudo node scripts/cyber-range-operator-handoff.mjs \
+  --inspect --session 123e4567-e89b-42d3-a456-426614174001 \
+  --operator-sha OPERATOR_SPKI_SHA256 \
+  --transport-sha INDEPENDENT_TRANSFER_SHA256
+\`\`\`
+
+Prepare a private, root-owned \`0700\` case directory manually, with the
+same UUID. Inspect it to ensure no existing \`operator-report.json\` or
+\`operator-public.pem\` exists. The importer will **never overwrite either**
+file and will refuse an ambiguous or partially completed prior import.
+
+\`\`\`bash
+export ETERNYX_OFFLINE_HANDOFF_ACK=I_APPROVE_OFFLINE_REVIEWER_RECEIPT_IMPORT
+sudo --preserve-env=ETERNYX_OFFLINE_HANDOFF_ACK \
+  node scripts/cyber-range-operator-handoff.mjs \
+  --import --confirm-offline-receipt \
+  --session 123e4567-e89b-42d3-a456-426614174001 \
+  --operator-sha OPERATOR_SPKI_SHA256 \
+  --transport-sha INDEPENDENT_TRANSFER_SHA256
+\`\`\`
+
+The importer creates **only two** private files in the case:
+\`operator-report.json\` and \`operator-public.pem\`, both mode \`0600\`.
+They are byte-for-byte linked to the externally pinned envelope and operator
+signature. Writes are exclusive with file and parent-directory sync. A crash
+can leave partial files; it must be **investigated and reconciled manually**
+rather than silently retried or overwritten.
+
+The reviewer can recheck the staged files **without opening a private signing
+key or writing anything**:
+
+\`\`\`bash
+sudo node scripts/cyber-range-operator-handoff.mjs \
+  --verify-import --session 123e4567-e89b-42d3-a456-426614174001 \
+  --operator-sha OPERATOR_SPKI_SHA256 \
+  --transport-sha INDEPENDENT_TRANSFER_SHA256
+\`\`\`
+
+Only after obtaining and manually inspecting **independent host evidence**
+should the reviewer use the separate
+\`scripts/cyber-range-independent-review.mjs --endorse\` workflow.
+Import success alone **does not** prove physical KVM, real systemd expiry,
+guest identity, image provenance, source authenticity or production safety.
+
+### Free offline tests
+
+\`\`\`bash
+node --test tests/ctf-firecracker-operator-handoff.test.mjs
+npm test
+npm run build
+\`\`\`
+
+Tests exercise all three guest/expiry modes, Ed25519 substitution resistance,
+canonical transfer digest mismatch, wrong session, signed receipt tampering,
+unsupported claims, private-key leakage rejection, overlong payloads, explicit
+export/import approvals and fixed production paths. CI does not create a real
+host acceptance record or perform an actual USB transfer. No VM, paid GPU,
+cloud service, external AI API, or public lab runtime is enabled.
