@@ -139,6 +139,15 @@ export default function DeveloperStudio() {
           </div>
         </section>
 
+        <section className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-primary/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Practice in the browser</p>
+            <h2 className="mt-2 text-xl font-semibold">ETERNYX Labs</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Write HTML, CSS and JavaScript in a restricted live preview, and practice real local security exercises without targeting a third-party server.</p>
+          </div>
+          <Button asChild className="shrink-0"><Link to="/labs">Open Labs <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
+        </section>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">Workbench</p>
