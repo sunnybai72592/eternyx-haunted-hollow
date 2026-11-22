@@ -47,7 +47,7 @@ test('shared palette still supports five swatches, contrast and real error/statu
   for (const name of ['cyan', 'violet', 'emerald', 'bronze', 'rose']) {
     assert.ok(palette.includes(":root[data-eternyx-palette='" + name + "']"));
   }
-  assert.match(config, /card: 'hsl\(var\(--card\) \/ <alpha-value>\)'/);
+  assert.match(config, /DEFAULT: 'hsl\(var\(--card\) \/ <alpha-value>\)'/);
   assert.match(config, /background: 'hsl\(var\(--background\) \/ <alpha-value>\)'/);
   assert.doesNotMatch(config, /red: paletteScale\(/);
   assert.doesNotMatch(config, /emerald: neutralScale\(/);
