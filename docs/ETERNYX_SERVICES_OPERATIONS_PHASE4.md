@@ -12,8 +12,8 @@ checkout, contracts, priced orders, availability promises or unverified delivery
    restricted; status and title filtering are server-side.
 3. **Private deep links:** customers can copy a URL containing their request UUID.
    Authorization is still enforced by Supabase RLS; knowing a UUID never grants
-   access. Link opens the selected request's conversation only if it is returned
-   by an authorized owner query.
+   access. A separate owner-scoped lookup opens the request even if it is
+   outside the current page or filter, with no leak when access is denied.
 4. **Local record export:** users can explicitly export the persisted brief,
    objectives and latest status as a text file on their own device. The app does
    not upload or email the export. These files may contain confidential data,
