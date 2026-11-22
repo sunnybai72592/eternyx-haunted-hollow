@@ -11,7 +11,7 @@ test("1: orbit pauses offscreen and releases intersection observer on unmount", 
   assert.match(scene, /threshold: 0\.01/);
   assert.match(scene, /observer\.observe\(element\)/);
   assert.match(scene, /observer\.disconnect\(\)/);
-  assert.match(scene, /data-motion=\{inView && pageVisible \? "running" : "paused"\}/);
+  assert.match(scene, /data-motion=\{inView && pageVisible && !userPaused \? "running" : "paused"\}/);
   assert.match(css, /\.eternyx-constellation\[data-motion="paused"\]/);
   assert.match(css, /animation-play-state: paused !important/);
 });

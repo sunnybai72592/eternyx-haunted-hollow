@@ -307,3 +307,55 @@
   .eternyx-constellation__node-icon,
   .eternyx-constellation__tagline { transition: none !important; }
 }
+
+/* Explicit motion control stays separate from the descriptive image semantics. */
+.eternyx-constellation__motion-toggle {
+  position: absolute;
+  z-index: 8;
+  top: 2%;
+  right: 0;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: .35rem;
+  min-height: 36px;
+  padding: .45rem .65rem;
+  border: 1px solid hsl(var(--primary) / .3);
+  border-radius: 999px;
+  background: hsl(var(--card) / .94);
+  color: hsl(var(--foreground));
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  box-shadow: 0 7px 21px hsl(0 0% 0% / .16);
+  cursor: pointer;
+  transition: border-color .25s ease, background-color .25s ease;
+}
+.eternyx-constellation__motion-toggle:hover {
+  border-color: hsl(var(--primary) / .7);
+  background: hsl(var(--muted));
+}
+.eternyx-constellation__motion-toggle:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .eternyx-constellation__motion-toggle {
+    min-width: 36px;
+    min-height: 36px;
+    padding: .4rem;
+  }
+  .eternyx-constellation__motion-toggle span { display: none; }
+}
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  /* The system already requests a static constellation; do not show a
+     control that misleadingly implies the user can override that policy. */
+  .eternyx-constellation__motion-toggle { display: none; }
+}
+@media (forced-colors: active) {
+  .eternyx-constellation__motion-toggle {
+    background: Canvas;
+    color: CanvasText;
+    border-color: ButtonText;
+  }
+}

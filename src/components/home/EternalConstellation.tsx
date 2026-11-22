@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Compass, LockKeyhole, Sparkles, Workflow, Zap } from "lucide-react";
+import { ArrowRight, Compass, LockKeyhole, Pause, Play, Sparkles, Workflow, Zap } from "lucide-react";
 import "./eternal-constellation.css";
 
 /**
@@ -17,9 +17,18 @@ const nodes = [
   { label: "AUTOMATE", icon: ArrowRight, position: "automate" },
 ] as const;
 
+const MOTION_STORAGE_KEY = "eternyx-constellation-paused";
+
+function readPausedPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return window.localStorage.getItem(MOTION_STORAGE_KEY) === "true"; }
+  catch { return false; }
+}
+
 export function EternalConstellation() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(true);
+  const [userPaused, setUserPaused] = useState(readPausedPreference);
   const [pageVisible, setPageVisible] = useState(() =>
     typeof document === "undefined" || !document.hidden
   );
@@ -36,6 +45,25 @@ export function EternalConstellation() {
     return () => observer.disconnect();
   }, []);
 
+  // Persist the user's explicit motion choice, without requiring sign-in.
+  const toggleMotion = () => {
+    const next = !userPaused;
+    setUserPaused(next);
+    try { window.localStorage.setItem(MOTION_STORAGE_KEY, String(next)); }
+    catch { /* Storage may be disabled; in-memory control still works. */ }
+  };
+
+  // Keep multiple ETERNYX tabs consistent without touching unrelated preferences.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === MOTION_STORAGE_KEY || event.key === null) {
+        setUserPaused(readPausedPreference());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // No needless animation while the browser tab is hidden.
   useEffect(() => {
     const update = () => setPageVisible(!document.hidden);
@@ -46,13 +74,16 @@ export function EternalConstellation() {
   return (
     <div
       ref={sceneRef}
-      data-motion={inView && pageVisible ? "running" : "paused"}
+      data-motion={inView && pageVisible && !userPaused ? "running" : "paused"}
       className="eternyx-constellation relative mx-auto aspect-square w-full max-w-[500px] lg:ml-auto"
-      role="img"
-      aria-label="ETERNYX connected by design: six ecosystem nodes named Security, Develop, AI, Workspace, Cloud, and Automate orbit a stable central ETERNYX mark"
     >
-      <div className="eternyx-constellation__ambient" aria-hidden="true" />
-      <div className="eternyx-constellation__scene" aria-hidden="true">
+      <div
+        className="eternyx-constellation__scene"
+        role="img"
+        aria-label="ETERNYX connected by design: six ecosystem nodes named Security, Develop, AI, Workspace, Cloud, and Automate orbit a stable central ETERNYX mark"
+      >
+        <div className="eternyx-constellation__ambient" aria-hidden="true" />
+      <div className="eternyx-constellation__orbit-layers" aria-hidden="true">
         <div className="eternyx-constellation__aura" />
         <div className="eternyx-constellation__ring eternyx-constellation__ring--outer" />
         <div className="eternyx-constellation__ring eternyx-constellation__ring--dashed" />
@@ -78,6 +109,18 @@ export function EternalConstellation() {
           </div>
         ))}
       </div>
+      </div>
+      <button
+        type="button"
+        className="eternyx-constellation__motion-toggle"
+        onClick={toggleMotion}
+        aria-label={userPaused ? "Resume ETERNYX orbital animation" : "Pause ETERNYX orbital animation"}
+        aria-pressed={userPaused}
+        title={userPaused ? "Resume orbital motion" : "Pause orbital motion"}
+      >
+        {userPaused ? <Play aria-hidden="true" size={15} /> : <Pause aria-hidden="true" size={15} />}
+        <span>{userPaused ? "Resume" : "Pause"}</span>
+      </button>
     </div>
   );
 }
