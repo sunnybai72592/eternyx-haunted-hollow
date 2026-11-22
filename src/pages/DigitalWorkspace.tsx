@@ -3,12 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   Archive, ArrowUpRight, CheckCircle2, ClipboardList, CloudUpload, Download,
   FileText, FolderKanban, History, Link2, Loader2, Plus, RefreshCw,
-  RotateCcw, Search, ShieldCheck, Trash2,
+  RotateCcw, Search, ShieldCheck, Trash2, Pin, PinOff,
 } from "lucide-react";
 import DeviceNote from "@/components/DeviceNote";
 import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
 import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
+import WorkspaceGlobalSearch from "@/components/workspace/WorkspaceGlobalSearch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +25,11 @@ import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, works
 import { createWorkspaceFullBackup } from "@/lib/workspaceFullBackup.mjs";
 import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
 import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
+import {
+  WORKSPACE_PROJECT_LIMIT, WORKSPACE_TASK_LIMIT, WORKSPACE_ITEM_LIMIT,
+  WORKSPACE_REGISTERED_FILE_BYTES_LIMIT,
+  sortWorkspaceProjects, workspaceRegisteredBytes, workspaceByteLabel,
+} from "@/lib/workspaceInsights.mjs";
 
 type Project = Database["public"]["Tables"]["workspace_projects"]["Row"];
 type Task = Database["public"]["Tables"]["workspace_tasks"]["Row"];
@@ -146,12 +152,14 @@ export default function DigitalWorkspace() {
   const shownTasks = filterScheduledTasks(filterWorkspaceTasks(projectTasks, taskFilter, taskQuery), scheduleFilter, localCalendarDate());
   const shownItems = filterWorkspaceItems(projectItems, itemFilter, itemQuery);
   const active = selected?.status === "active";
-  const visibleProjects = projects.filter((project) =>
+  const visibleProjects = sortWorkspaceProjects(projects.filter((project) =>
     (showArchived || project.status === "active") &&
     (project.name + " " + project.description).toLowerCase().includes(search.toLowerCase())
-  );
+  ));
   const openTaskCount = useMemo(() => tasks.filter((task) => task.status !== "done").length, [tasks]);
   const fileCount = useMemo(() => items.filter((item) => item.kind === "file").length, [items]);
+  const registeredBytes = useMemo(() => workspaceRegisteredBytes(items), [items]);
+  const remainingTaskCount = projectTasks.filter((task) => task.status !== "done").length;
 
   useEffect(() => {
     setEditName(selected?.name ?? "");
@@ -178,6 +186,10 @@ export default function DigitalWorkspace() {
   const createProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!owner || !newProjectName.trim()) return;
+    if (projects.length >= WORKSPACE_PROJECT_LIMIT) {
+      setError("Project cap reached (100 per account). Archive does not free a project slot.");
+      return;
+    }
     void mutate(async () => {
       const { data, error: insertError } = await supabase.from("workspace_projects")
         .insert({ owner_id: owner, name: newProjectName.trim(), description: newProjectDescription.trim() })
@@ -212,9 +224,35 @@ export default function DigitalWorkspace() {
     }, archive ? "Project archived without deleting its data." : "Project restored.");
   };
 
+  const pinProject = () => {
+    if (!owner || !selected) return;
+    void mutate(async () => {
+      const { data, error: updateError } = await supabase.from("workspace_projects")
+        .update({ pinned: !selected.pinned }).eq("id", selected.id).eq("owner_id", owner)
+        .select("id").maybeSingle();
+      requireResult(updateError, data);
+    }, selected.pinned ? "Project unpinned." : "Project pinned to the top of your list.");
+  };
+
+  const finishRemainingTasks = () => {
+    if (!owner || !selected || !active || !remainingTaskCount) return;
+    if (!window.confirm("Mark all " + remainingTaskCount + " unfinished tasks in this project as done?")) return;
+    void mutate(async () => {
+      const { data, error: updateError } = await supabase.from("workspace_tasks")
+        .update({ status: "done" }).eq("owner_id", owner)
+        .eq("project_id", selected.id).neq("status", "done").select("id");
+      if (updateError) throw new Error(updateError.message);
+      if (!data?.length) throw new Error("No tasks were changed. The project may have been archived or updated in another tab.");
+    }, "Remaining project tasks marked complete.");
+  };
+
   const createTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!owner || !selected || !active || !newTask.trim()) return;
+    if (tasks.length >= WORKSPACE_TASK_LIMIT) {
+      setError("Task cap reached (5,000 per account).");
+      return;
+    }
     void mutate(async () => {
       const { error: insertError } = await supabase.from("workspace_tasks")
         .insert({ owner_id: owner, project_id: selected.id, title: newTask.trim(),
@@ -246,6 +284,10 @@ export default function DigitalWorkspace() {
   const saveItem = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!owner || !selected || !active || !itemName.trim()) return;
+    if (items.length >= WORKSPACE_ITEM_LIMIT) {
+      setError("Saved item cap reached (5,000 per account).");
+      return;
+    }
     if (itemMode === "link" && !validWorkspaceLink(itemBody)) {
       setError("Use a secure https:// link or a relative ETERNYX path beginning with one slash.");
       return;
@@ -271,6 +313,10 @@ export default function DigitalWorkspace() {
     const file = filePicker.current?.files?.[0];
     if (!workspaceFileAllowed(file)) {
       setError("Choose a supported PDF, image, text, CSV or JSON file between 1 byte and 5 MiB.");
+      return;
+    }
+    if (items.length >= WORKSPACE_ITEM_LIMIT || registeredBytes + file!.size > WORKSPACE_REGISTERED_FILE_BYTES_LIMIT) {
+      setError("Registered Workspace limit reached: 5,000 saved items or 100 MiB of registered files per account.");
       return;
     }
     void mutate(async () => {
@@ -470,11 +516,25 @@ export default function DigitalWorkspace() {
       {error && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="rounded-lg border border-border p-3 text-sm text-cyan-300">{notice}</p>}
       {ownedDataVisible && <>
-        <div className="grid gap-3 sm:grid-cols-3" aria-label="Actual workspace totals">
-          <Summary title="Owned projects" value={projects.length} subtitle="From your authenticated Workspace" />
-          <Summary title="Open tasks" value={openTaskCount} subtitle="Across your loaded projects" />
-          <Summary title="Private files" value={fileCount} subtitle="Registered project uploads" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Actual workspace totals">
+          <Summary title="Owned projects" value={projects.length} subtitle={"Limit " + WORKSPACE_PROJECT_LIMIT + " (including archives)"} />
+          <Summary title="Open tasks" value={openTaskCount} subtitle={tasks.length + " of " + WORKSPACE_TASK_LIMIT + " tasks registered"} />
+          <Summary title="Private files" value={fileCount} subtitle={items.length + " of " + WORKSPACE_ITEM_LIMIT + " saved items"} />
+          <Summary title="Registered file bytes" value={workspaceByteLabel(registeredBytes)}
+            subtitle={"Limit " + workspaceByteLabel(WORKSPACE_REGISTERED_FILE_BYTES_LIMIT) + "; orphan objects not counted"} />
         </div>
+
+        <WorkspaceGlobalSearch projects={projects} tasks={tasks} items={items}
+          onOpen={(result) => {
+            const target = projects.find((entry) => entry.id === result.projectId);
+            if (target?.status === "archived") setShowArchived(true);
+            setSearch("");
+            setProjectId(result.projectId);
+            setTaskFilter("all"); setScheduleFilter("all"); setTaskQuery("");
+            setItemFilter("all"); setItemQuery("");
+            setNotice("Opened " + result.projectName + " for " + result.kind + " · " + result.title + ".");
+            window.setTimeout(() => document.getElementById("workspace-project-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+          }} />
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(250px,320px)_minmax(0,1fr)]">
           <aside className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
@@ -486,7 +546,7 @@ export default function DigitalWorkspace() {
               <Textarea aria-label="Project description" rows={2} maxLength={2000}
                 placeholder="Purpose (optional)" value={newProjectDescription}
                 onChange={(event) => setNewProjectDescription(event.target.value)} />
-              <Button type="submit" disabled={busy || !newProjectName.trim()} className="w-full">
+              <Button type="submit" disabled={busy || projects.length >= WORKSPACE_PROJECT_LIMIT || !newProjectName.trim()} className="w-full">
                 <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Create project
               </Button>
             </form>
@@ -514,7 +574,7 @@ export default function DigitalWorkspace() {
                   onClick={() => setProjectId(project.id)} aria-current={projectId === project.id ? "page" : undefined}
                   className={"w-full rounded-lg border p-3 text-left focus-visible:ring-2 " +
                     (projectId === project.id ? "border-cyan-400 bg-cyan-400/10" : "border-border hover:border-cyan-400/50")}>
-                  <span className="block break-words text-sm font-semibold">{project.name}</span>
+                  <span className="block break-words text-sm font-semibold">{project.pinned ? "📌 " : ""}{project.name}</span>
                   <span className="mt-1 block text-xs text-muted-foreground">
                     {project.status === "archived" ? "Archived" : "Active"} · Updated {dateText(project.updated_at)}
                   </span>
@@ -534,7 +594,7 @@ export default function DigitalWorkspace() {
             </section>}
 
             {selected && <>
-              <section className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <section id="workspace-project-panel" className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-wider text-cyan-400">
@@ -542,6 +602,10 @@ export default function DigitalWorkspace() {
                     </p>
                     <h2 className="mt-1 break-words text-2xl font-semibold">{selected.name}</h2>
                   </div>
+                  <Button type="button" variant="outline" disabled={busy}
+                    onClick={pinProject}>{selected.pinned ? <PinOff className="mr-2 h-4 w-4" aria-hidden="true" /> :
+                      <Pin className="mr-2 h-4 w-4" aria-hidden="true" />}
+                    {selected.pinned ? "Unpin" : "Pin project"}</Button>
                   <Button type="button" variant="outline" disabled={busy}
                     onClick={() => exportProject(false)}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export JSON</Button>
                   <Button type="button" variant="outline" disabled={busy}
@@ -574,6 +638,10 @@ export default function DigitalWorkspace() {
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-cyan-400" aria-hidden="true" />
                   <h2 className="text-xl font-semibold">Tasks ({projectTasks.length})</h2>
+                  {active && remainingTaskCount > 0 && <Button type="button" size="sm" variant="outline"
+                    disabled={busy} className="ml-auto" onClick={finishRemainingTasks}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" /> Complete remaining ({remainingTaskCount})
+                  </Button>}
                 </div>
                 {active && <form className="flex flex-wrap items-end gap-2" onSubmit={createTask}>
                   <div className="min-w-[180px] flex-1 space-y-2">
@@ -780,7 +848,7 @@ export default function DigitalWorkspace() {
   </main>;
 }
 
-function Summary({ title, value, subtitle }: { title: string; value: number; subtitle: string }) {
+function Summary({ title, value, subtitle }: { title: string; value: number | string; subtitle: string }) {
   return <div className="rounded-xl border border-border bg-card p-4">
     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
     <p className="mt-2 text-3xl font-bold tabular-nums">{value}</p>
