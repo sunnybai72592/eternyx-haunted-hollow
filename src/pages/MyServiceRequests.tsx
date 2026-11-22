@@ -44,7 +44,7 @@ export default function MyServiceRequests() {
       .eq('user_id', user.id);
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
-      const escaped = activeSearch.replace(/[\\%_]/g, '\\    const { data, error } = await supabase.from('service_requests')
+      const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
       .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints')
       .eq('user_id', user.id).order('created_at', { ascending: false });');
       query = query.ilike('title', '%' + escaped + '%');
