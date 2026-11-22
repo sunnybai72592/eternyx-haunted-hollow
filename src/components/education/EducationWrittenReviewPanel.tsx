@@ -216,7 +216,7 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
             {query.data.length === 100 && <p role="note" className="text-xs text-muted-foreground">
               The authorized review service returned its 100-response limit. This is not the full historical backlog.
             </p>}
-            {query.data.length === 0 && <p className="text-sm text-muted-foreground">No submitted written responses are available for review.</p>
+            {query.data.length === 0 && <p className="text-sm text-muted-foreground">No submitted written responses are available for review.</p>}
             {query.data.length > 0 && visibleReviews.length === 0 &&
               <p className="text-sm text-muted-foreground">No responses match this filter.</p>}
           </>}
