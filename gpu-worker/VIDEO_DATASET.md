@@ -348,3 +348,31 @@ The Studio local CPU editor now has a **rendered-output verification and review*
 6. Select a **human** outcome (approved for local use, needs revision, undecided), enter observations, and download `eternyx-local-video-human-review.json`. It records the exact rendered MP4 hash, project hash, whether the current project matched, review timestamp, and human notes; it does **not** invent motion realism, aesthetic or prompt-fidelity scores.
 
 **Important boundaries:** An MP4 and manifest with matching SHA-256 values show only **local file/receipt consistency**; hashes alone are not a trusted digital signature and a forged matching pair is possible. Independently assess footage licensing, audio, timing and visual quality. All original and rendered files remain on your device unless you deliberately share them. No paid GPU, external AI API, model download, hosted rendering or subscription feature is enabled.
+
+
+
+## CPU-only smartphone video preparation: MOV, M4V and MP4 to 16 FPS
+
+Previously, the v2 CPU video editor required input clips to already be fixed-rate **16 FPS**. The new `gpu-worker/prepare_video_sources.py` accepts existing phone or camera clips as local inputs and produces compatible H.264 16 FPS MP4 files, without a GPU or cloud video processing.
+
+On the AI Video Studio page, expand **Import ordinary phone footage (24/30/60 FPS)** for the local command, bounds, and report-verification controls. With FFmpeg/FFprobe with libx264 installed on your own computer:
+
+```sh
+# Create ./phone-clips containing 1–8 original MP4, MOV, or M4V files
+python gpu-worker/prepare_video_sources.py \
+  --input ./phone-clips --output ./local-video-media \
+  --start-seconds 0 --seconds 30
+```
+
+Optional `--clip "my-file.mov"` can be repeated to choose specific filenames if a folder contains more videos. The converter never rewrites originals; it first processes files in a private temporary directory and atomically publishes a **new**, create-only output folder with `clip-01.mp4`, `clip-02.mp4` and `preparation-report.json`. The report includes original/output SHA-256, source frame rate and duration, normalized dimensions, actual decoded frame count and output byte size.
+
+Six practical improvements:
+
+1. **Ordinary footage compatibility.** Accept MP4, MOV and M4V files, including 24 FPS, 30 FPS and other rates up to 120 FPS. FFmpeg converts their timing to **fixed 16 FPS**. Container auto-rotation handles typical phone orientation metadata; the local output is constrained to even H.264 dimensions, max 512 by 512 pixels, and keeps the original display proportions.
+2. **Bounded local trimming.** Set an integer start offset from 0–299 seconds and per-file duration limit from 1–60 seconds. Source clips must be up to 300 seconds, 1920×1080 pixels and 64 MiB each. Generated clips contain up to 960 frames (60 seconds), compatible with the existing v2 editor.
+3. **Explicit audio removal.** Original video audio, subtitles, attachments and metadata are not copied into the prepared clip. Add a separately rights-reviewed soundtrack through the existing AI Video Studio audio selector.
+4. **Verified output and provenance.** Every prepared MP4 is probed and its frames actually counted; output resolution, 16 FPS and bounded frame count are verified. Source and output SHA-256 values are included in a small, local preparation report.
+5. **Private Studio handoff.** Select generated `clip-XX.mp4` in Studio. Optionally open `preparation-report.json` to compare the report’s sizes and SHA-256 values to the actual bytes the browser has hashed. This is **local self-reported consistency**, not trusted digital-signature verification.
+6. **Real integration tests.** Dedicated CI exercises actual 24/30 FPS sample videos, source audio removal, portrait output, trimming, output overwrite protections, malformed inputs, path/symlink refusal, CLI and the full route **phone file → 16 FPS MP4 → v2 CPU editor → playable final video**. Browser tests validate commands and report matching.
+
+**Boundary:** This is a video transcoder and editor input preparer. It does **not** create new AI images/videos, learn a generative model, enable external inference APIs, spend paid GPU credits, upload private media, or activate subscriptions. This tool processes camera footage you already have rights to use.
