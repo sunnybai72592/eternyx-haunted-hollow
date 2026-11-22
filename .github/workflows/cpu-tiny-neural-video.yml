@@ -5,6 +5,8 @@ on:
     paths:
       - "gpu-worker/train_tiny_neural_video.py"
       - "gpu-worker/tests/test_train_tiny_neural_video.py"
+      - "gpu-worker/tests/test_audit_neural_video_variants.py"
+      - "gpu-worker/audit_neural_video_variants.py"
       - "gpu-worker/learn_cpu_video_texture.py"
       - "gpu-worker/render_video_timeline.py"
       - ".github/workflows/cpu-tiny-neural-video.yml"
@@ -24,7 +26,7 @@ jobs:
   learned-video:
     name: Train tiny real neural video model and render H264 on CPU
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,4 +43,4 @@ jobs:
           CUDA_VISIBLE_DEVICES: ""
           PYTHONDONTWRITEBYTECODE: "1"
           OMP_NUM_THREADS: "1"
-        run: python -m unittest discover -s gpu-worker/tests -p 'test_train_tiny_neural_video.py' -v
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_*neural_video*.py' -v
