@@ -15,8 +15,8 @@ The flags use cryptographic random bytes at **each target start**. The app has a
 ### Safety controls in this PR
 
 - It is a developer-local container, NOT a remotely hosted public or multi-tenant range, and it MUST NOT be deployed on the ETERNYX main domain, cloud server, public IP, or shared workstation.
-- Docker Compose exposes ONLY `127.0.0.1:8765:8080`. The private target bridge is `internal: true`. Always verify Docker host port binding and effective egress on your actual Docker version before use.
-- The image runs as UID/GID 10001; root filesystem is read-only; Linux capabilities are dropped; `no-new-privileges` is enabled; PID and CPU/memory limits are configured; only /tmp has a 16MB tmpfs.
+- Docker Compose exposes ONLY the **gateway** at `127.0.0.1:8765:8081`; the vulnerable target has **no published port** and resides only on `local_target_only` with `internal: true`. The gateway is connected to that internal bridge and a separate ingress bridge, and forwards to one fixed internal service. Verify the actual Docker host mapping and the target's denied egress on your Docker version.
+- Both the target and fixed-destination gateway run as UID/GID 10001 with read-only root filesystems, dropped Linux capabilities, no-new-privileges and CPU/RAM/PID limits. Only the target has a 16MB writable tmpfs for temporary synthetic fixtures.
 - No host bind mounts, Docker socket, Supabase API keys, production secrets, cloud credentials, production data, or shared ETERNYX login state are included.
 - The directory traversal challenge is *bounded to the disposable lab root*, so it cannot trivially read /etc/passwd or production files through the challenge endpoint.
 - Request handlers reject non-loopback Host values, omit CORS, restrict responses with security headers, and apply a small local flag submission limit.
@@ -65,7 +65,7 @@ After PR merge, a maintainer with Docker must run:
 2. `npm run range -- start`, then inspect Docker-reported port `127.0.0.1:8765` and container network isolation.
 3. Visit `http://127.0.0.1:8765` and reproduce all three local HTTP challenge behaviors.
 4. Confirm local flag verification works and rejects wrong flags; reset and prove previous flag is invalidated.
-5. Confirm target cannot reach the external network or ETERNYX private infrastructure; confirm CPU/RAM/PID limits and read-only filesystem.
+5. Confirm the target (not the gateway) cannot reach external networks or ETERNYX private infrastructure; confirm that only the gateway has a host port, and check CPU/RAM/PID limits and read-only filesystems.
 6. Confirm after 30 minutes the service has stopped and cannot restart automatically.
 7. Run a container security review (Docker network isolation, kernel/capabilities, symlinks, path traversal boundary, localhost DNS rebinding, request limits) before any non-local testing.
 
