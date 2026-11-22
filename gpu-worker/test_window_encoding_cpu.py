@@ -158,7 +158,7 @@ def run_fixture(root, output):
     assert entries[0]["source_sha256"] == window["sha256"]
     train_command = [sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
                      str(root / "manifest-training"), "--dataset-index", str(dataset / "index.json"),
-                     "--manifest", str(manifest_path), "--steps", "1"]
+                     "--manifest", str(manifest_path), "--steps", "2", "--checkpoint-every", "1"]
     subprocess.run(train_command, check=True)
     indexed_checkpoint = root / "manifest-training" / "step-1"
     expected_dataset = {"manifest_sha256": fingerprint(manifest_path), "index_sha256": fingerprint(dataset / "index.json"),
@@ -178,6 +178,22 @@ def run_fixture(root, output):
     assert all(case["seed"] == 7 for case in result["cases"])
     assert result["training_dataset"] == expected_dataset and result["training_step"] == 1
     assert result["adapter_sha256"] == fingerprint(indexed_checkpoint / "adapter.safetensors")
+    later_report = root / "later.json"
+    later_command = [str(root / "manifest-training" / "step-2") if arg == str(indexed_checkpoint)
+                     else str(later_report) if arg == str(report) else arg for arg in command]
+    subprocess.run(later_command, check=True)
+    comparison = (output or root) / "checkpoint-comparison.json"
+    compare_command = [sys.executable, str(worker_dir / "compare_video_checkpoints.py"),
+                       str(report), str(later_report), str(comparison)]
+    subprocess.run(compare_command, check=True)
+    paired = json.loads(comparison.read_text())
+    assert paired["summary"]["pairs"] == 2
+    assert [checkpoint["step"] for checkpoint in paired["checkpoints"]] == [1, 2]
+    changed = json.loads(later_report.read_text())
+    changed["cases"][0]["baseline_flow_mse"][0] += 1
+    later_report.write_text(json.dumps(changed))
+    rejected = subprocess.run(compare_command, capture_output=True, text=True)
+    assert rejected.returncode and "Unmatched baseline" in rejected.stderr
     report.unlink()
     manifest_path.write_text(json.dumps(manifest, indent=2))
     mismatch = subprocess.run(command, capture_output=True, text=True)
