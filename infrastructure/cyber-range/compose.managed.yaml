@@ -3,6 +3,9 @@
 # The target never receives the token, Supabase keys or Docker socket.
 services:
   http-range:
+    labels:
+      org.eternyx.range.managed: "v1"
+      org.eternyx.range.ttl_seconds: "900"
     build:
       context: ./target
       dockerfile: Dockerfile
@@ -33,6 +36,9 @@ services:
       start_period: 5s
 
   gateway:
+    labels:
+      org.eternyx.range.managed: "v1"
+      org.eternyx.range.ttl_seconds: "900"
     build:
       context: ./gateway
       dockerfile: Dockerfile
