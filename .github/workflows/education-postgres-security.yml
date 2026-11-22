@@ -6,6 +6,7 @@ on:
       - 'scripts/sql/staging-education-*.sql'
       - 'tests/sql/education-db-*.sql'
       - 'scripts/staging/verifyEducationConcurrency.mjs'
+      - 'scripts/staging/verifyEducationFinalGradingRaces.mjs'
       - 'supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql'
       - '.github/workflows/education-postgres-security.yml'
   workflow_dispatch:
@@ -62,6 +63,12 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-written-review.sql
       - name: Verify ten written-review authorization and unfinalized-grade cases
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-written-review.sql
+      - name: Apply staged trusted atomic grading to disposable PostgreSQL ONLY
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-atomic-final-grading.sql
+      - name: Verify ten atomic objective and reviewed-written grade boundaries
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-final-grading.sql
+      - name: Exercise three real concurrent trusted finalization and review races
+        run: node scripts/staging/verifyEducationFinalGradingRaces.mjs
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true

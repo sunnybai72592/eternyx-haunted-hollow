@@ -42,6 +42,54 @@ serve(async (req) => {
       return reply({ error: "Attempt must be submitted before grading" }, 409);
     }
 
+    // Opt-in coordinated staging path only. The database RPC performs every
+    // correctness/points update plus official score + ledger in one transaction,
+    // and refuses incomplete human reviews without writing partial grades.
+    // Enable only with the exact reviewed staged SQL already applied, and
+    // disable the legacy independent-write path on the same environment.
+    if (Deno.env.get("EDUCATION_TRUSTED_FINAL_GRADING") === "true") {
+      const { data, error } = await db.rpc("education_finalize_cbt_grade",
+        { p_attempt_id: attemptId });
+      if (error || !data || typeof data !== "object") {
+        throw new Error("Atomic final grading RPC unavailable");
+      }
+      const outcome = data as {
+        attempt_id?: string;
+        status?: string;
+        score?: number | null;
+        max_score?: number | null;
+        pending_manual_review?: number;
+      };
+      if (outcome.attempt_id !== attemptId ||
+          !["finalized", "already_finalized", "pending_review"].includes(outcome.status ?? "") ||
+          !Number.isInteger(outcome.pending_manual_review) ||
+          (outcome.pending_manual_review ?? -1) < 0) {
+        throw new Error("Invalid atomic grading result");
+      }
+      const pending = outcome.status === "pending_review";
+      if (pending && (outcome.score !== null || outcome.max_score !== null ||
+          (outcome.pending_manual_review ?? 0) < 1)) {
+        throw new Error("Invalid pending manual grading result");
+      }
+      if (!pending && (!Number.isInteger(outcome.score) ||
+          !Number.isInteger(outcome.max_score) ||
+          (outcome.score ?? -1) < 0 ||
+          (outcome.max_score ?? -1) < (outcome.score ?? 0) ||
+          outcome.pending_manual_review !== 0)) {
+        throw new Error("Invalid atomic final grading result");
+      }
+      return reply({
+        success: true,
+        score: pending ? null : outcome.score,
+        maxScore: pending ? null : outcome.max_score,
+        percentage: pending ? null : (outcome.max_score
+          ? (outcome.score! / outcome.max_score) * 100 : null),
+        gradingPending: pending,
+        pendingManualReview: outcome.pending_manual_review,
+        gradingStatus: outcome.status,
+      });
+    }
+
     // Fetch ALL questions to include unanswered ones in the maximum score.
     const [questionResult, answerResult] = await Promise.all([
       db.from("questions").select("id,question_type,points")
