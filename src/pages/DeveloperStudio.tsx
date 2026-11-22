@@ -115,7 +115,7 @@ export default function DeveloperStudio() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white">
+    <div className="min-h-screen bg-background text-white">
       <div className="mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
         <Link to="/explore" className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-cyan-300">
           <ArrowLeft className="h-4 w-4" /> All ecosystem pillars
