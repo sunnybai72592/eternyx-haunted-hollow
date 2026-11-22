@@ -78,6 +78,24 @@ export default function CloudIntegrations() {
         </div>
       </> : <div className="mt-5 rounded-xl border border-dashed border-border px-5 py-8 text-center"><Database className="mx-auto h-8 w-8 text-muted-foreground" /><p className="mt-3 font-medium">No inventory loaded</p><p className="mt-1 text-sm text-muted-foreground">Import an actual operator-generated snapshot to see Docker and Kubernetes state.</p></div>}
     </section>
+    <section className="rounded-2xl border border-border bg-card p-5 sm:p-7" aria-labelledby="docker-local-title">
+      <h2 id="docker-local-title" className="flex items-center gap-2 text-2xl font-semibold"><Container className="h-6 w-6 text-cyan-500" /> Docker operator workbench</h2>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">Run real Docker operations on a trusted workstation from the ETERNYX repository. This is an operator CLI, not live remote browser control.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {[
+          ["Container inventory", "node scripts/docker-operator.mjs list"],
+          ["Local image inventory", "node scripts/docker-operator.mjs images"],
+          ["Container details", "node scripts/docker-operator.mjs inspect FULL_CONTAINER_ID"],
+          ["Resource usage", "node scripts/docker-operator.mjs stats FULL_CONTAINER_ID"],
+          ["Bounded logs", "node scripts/docker-operator.mjs logs FULL_CONTAINER_ID"],
+          ["Guarded lifecycle preview", "node scripts/docker-operator.mjs stop FULL_CONTAINER_ID"],
+        ].map(([label, command]) => <div key={label} className="rounded-lg border border-border bg-muted/30 p-4">
+          <p className="text-sm font-medium">{label}</p>
+          <code className="mt-2 block break-all text-xs text-muted-foreground">{command}</code>
+        </div>)}
+      </div>
+      <p className="mt-4 text-sm text-muted-foreground">Start, stop and restart require an exact full ID, hardened local-workbench labels, explicit confirmation, and a recorded local audit entry. See <code>docs/DOCKER_OPERATOR_RUNBOOK.md</code>. This does not operate on production or remote customer infrastructure.</p>
+    </section>
     <section aria-labelledby="connections-title" className="space-y-4">
       <h2 id="connections-title" className="text-2xl font-semibold">Infrastructure workspaces</h2>
       <div className="grid gap-4 sm:grid-cols-2">
