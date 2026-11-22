@@ -117,7 +117,12 @@ export function localVideoSrt(board) {
     throw new Error("Build a valid v2 video storyboard first.");
   }
   const stamp = frame => {
-    const ms = Math.round(frame * 1000 / LOCAL_VIDEO_LIMITS.fps);
+    // Python renderer uses round-half-to-even; Math.round differs on odd half-ms frames.
+    const ticks = frame * 1000;
+    const whole = Math.floor(ticks / LOCAL_VIDEO_LIMITS.fps);
+    const remainder = ticks % LOCAL_VIDEO_LIMITS.fps;
+    const midpoint = LOCAL_VIDEO_LIMITS.fps / 2;
+    const ms = whole + (remainder > midpoint || (remainder === midpoint && whole % 2 === 1) ? 1 : 0);
     const hours = Math.floor(ms / 3600000);
     const minutes = Math.floor(ms / 60000) % 60;
     const seconds = Math.floor(ms / 1000) % 60;
