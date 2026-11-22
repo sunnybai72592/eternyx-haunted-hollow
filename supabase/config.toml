@@ -380,3 +380,12 @@ verify_jwt = false
 # owner-registered key; platform JWT verification is intentionally disabled here.
 [functions.automation-webhook]
 verify_jwt = false
+
+# Signed-in schedule management; JWT identity validated within handler.
+[functions.automation-schedule-control]
+verify_jwt = true
+
+# Internal scheduler tick: no end-user JWT; high-entropy worker key mandatory.
+# Deployment does not create a cron job or enable scheduler singleton.
+[functions.automation-scheduler-worker]
+verify_jwt = false
