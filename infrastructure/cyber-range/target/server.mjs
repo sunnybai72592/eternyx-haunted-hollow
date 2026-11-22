@@ -94,7 +94,7 @@ export async function startLocalRange({ host = "127.0.0.1", port = 0, lifetimeSe
       const url = new URL(req.url || "/", "http://training.invalid");
       const pathname = url.pathname;
       // Browser DNS-rebinding guard; Docker still MUST publish on 127.0.0.1 only.
-      if (!/^(127\.0\.0\.1|localhost):\d{1,5}$/.test(req.headers.host || "")) {
+      if (!/^(127\.0\.0\.1|localhost|http-range):\d{1,5}$/.test(req.headers.host || "")) {
         return reply(res, 421, { error: "Loopback Host required" });
       }
       if (req.method === "GET" && pathname === "/healthz") return reply(res, 200, { ok: true });
