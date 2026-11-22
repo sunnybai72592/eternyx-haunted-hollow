@@ -375,3 +375,8 @@ verify_jwt = true
 
 [functions.ctf-range-access-check]
 verify_jwt = false
+
+# Signed public inbound webhook: handler authenticates HMAC against an encrypted,
+# owner-registered key; platform JWT verification is intentionally disabled here.
+[functions.automation-webhook]
+verify_jwt = false
