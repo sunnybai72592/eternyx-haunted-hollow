@@ -1,9 +1,10 @@
 import BlindVideoReview from "./BlindVideoReview";
 import StoryboardMovie from "./StoryboardMovie";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clapperboard, Download } from "lucide-react";
 import { Link } from "react-router-dom";
 import { saveCopy } from "@/lib/workspaceNotes.mjs";
+import { clearStoryboardDraft, readStoryboardDraft, saveStoryboardDraft } from "@/lib/ai/storyboardDraft.mjs";
 import { Button } from "@/components/ui/button";
 import { buildStoryboard, readStoryboard, storyboardCsv, storyboardShotCaptionsSrt, frameFormats, shotDurations, timecode } from "@/lib/ai/storyboard.mjs";
 
@@ -27,12 +28,58 @@ function downloadText(value: string, filename: string, mime: string) {
 
 export default function VideoStoryboard() {
   const [text, setText] = useState("");
+  const [recoverable, setRecoverable] = useState<ReturnType<typeof readStoryboardDraft> | null>(() => {
+    try { return readStoryboardDraft(localStorage); } catch { return null; }
+  });
+  const [hasEdited, setHasEdited] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [savingDraft, setSavingDraft] = useState(false);
   const [seconds, setSeconds] = useState(5);
   const [format, setFormat] = useState("16:9");
   const [selection, setSelection] = useState(0);
   const [pending, setPending] = useState<ReturnType<typeof readStoryboard> | null>(null);
   const [importError, setImportError] = useState("");
   const version = useRef(0);
+
+  // Autosave only after a real edit: mounting must never erase a recoverable draft.
+  useEffect(() => {
+    if (!hasEdited) return;
+    setSavingDraft(true);
+    const timer = window.setTimeout(() => {
+      try {
+        const result = saveStoryboardDraft(localStorage, { text, seconds, format });
+        setDraftMessage(result ? "Draft saved in this browser." : "Empty storyboard cleared from this browser.");
+        setRecoverable(null);
+      } catch {
+        setDraftMessage("Local draft could not be saved. Download JSON to keep a copy.");
+      } finally {
+        setSavingDraft(false);
+      }
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [text, seconds, format, hasEdited]);
+
+  function restoreDraft() {
+    if (!recoverable) return;
+    setText(recoverable.text);
+    setSeconds(recoverable.seconds);
+    setFormat(recoverable.format);
+    setSelection(0);
+    setPending(null);
+    setRecoverable(null);
+    setHasEdited(true);
+    setDraftMessage("Recovered the local storyboard draft.");
+  }
+
+  function dismissDraft() {
+    try {
+      clearStoryboardDraft(localStorage);
+      setRecoverable(null);
+      setDraftMessage("Saved browser draft discarded. The open editor is unchanged.");
+    } catch {
+      setDraftMessage("Browser storage could not be cleared.");
+    }
+  }
   async function previewFile(file?: File) {
     const attempt = ++version.current;
     setPending(null);
@@ -50,6 +97,7 @@ export default function VideoStoryboard() {
   function applyImport() {
     if (!pending) return;
     setText(pending.text);
+    setHasEdited(true);
     setSeconds(pending.seconds);
     setFormat(pending.format);
     setSelection(0);
@@ -88,7 +136,15 @@ export default function VideoStoryboard() {
 
   return <section aria-labelledby="storyboard-title" className="space-y-5 rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6">
     <h2 id="storyboard-title" className="flex items-center gap-2 text-2xl font-semibold"><Clapperboard aria-hidden="true" className="size-5 text-violet-300" />Storyboard planner</h2>
-    <p className="text-sm text-slate-300">Write one shot per line to plan a sequence locally. Download your plan before leaving.</p>
+    <p className="text-sm text-slate-300">Write one shot per line to plan a sequence locally. Drafts are autosaved to this browser after editing; download JSON for a portable backup.</p>
+    {recoverable && <div role="region" aria-label="Recover saved storyboard" className="space-y-2 rounded-lg border border-primary/30 bg-primary/10 p-3">
+      <p className="text-sm text-foreground">A storyboard draft is saved in this browser. Restore it before editing a new plan, or discard the saved copy.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={restoreDraft}>Restore saved storyboard</Button>
+        <Button variant="ghost" onClick={dismissDraft}>Discard saved draft</Button>
+      </div>
+    </div>}
+    {hasEdited && <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{savingDraft ? "Saving storyboard draft…" : draftMessage}</p>}
     <div className="space-y-2 rounded-lg border border-slate-800 p-3">
       <label htmlFor="storyboard-file" className="block text-sm font-medium">Open exported storyboard (.json)</label>
       <input type="file" id="storyboard-file" accept=".json,application/json" className="block w-full text-sm file:mr-2 file:min-h-11" onChange={event => {
@@ -105,15 +161,15 @@ export default function VideoStoryboard() {
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="min-w-0 space-y-3">
         <label htmlFor="shot-list">Shot descriptions</label>
-        <textarea id="shot-list" rows={7} maxLength={12000} value={text} onChange={e => setText(e.target.value)}
+        <textarea id="shot-list" rows={7} maxLength={12000} value={text} onChange={e => { setHasEdited(true); setText(e.target.value); }}
           placeholder="Wide shot of the workshop at dawn" className="w-full rounded-md border border-slate-700 bg-slate-950 p-3" />
         <div className="flex flex-wrap gap-4">
           <div><label htmlFor="shot-duration" className="block text-sm">Seconds per shot</label>
-            <select id="shot-duration" className="min-h-11 rounded border border-slate-700 bg-slate-950 px-2" value={seconds} onChange={e => setSeconds(Number(e.target.value))}>
+            <select id="shot-duration" className="min-h-11 rounded border border-slate-700 bg-slate-950 px-2" value={seconds} onChange={e => { setHasEdited(true); setSeconds(Number(e.target.value)); }}>
               {shotDurations.map(n => <option key={n}>{n}</option>)}
             </select></div>
           <div><label htmlFor="shot-format" className="block text-sm">Frame format</label>
-            <select id="shot-format" className="min-h-11 rounded border border-slate-700 bg-slate-950 px-2" value={format} onChange={e => setFormat(e.target.value)}>
+            <select id="shot-format" className="min-h-11 rounded border border-slate-700 bg-slate-950 px-2" value={format} onChange={e => { setHasEdited(true); setFormat(e.target.value); }}>
               {frameFormats.map(ratio => <option key={ratio}>{ratio}</option>)}
             </select></div>
         </div>
