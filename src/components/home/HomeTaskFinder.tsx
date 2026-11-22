@@ -22,7 +22,7 @@ function findChoices(input: string): Choice[] {
     const name = tool.name.toLowerCase().split(/[^a-z0-9]+/);
     return {tool, score: terms.filter(term => name.includes(term)).length};
   }).filter(row => row.score > 0).sort((a,b) => b.score - a.score);
-  return ranked.filter(row => row.score === ranked[0].score).slice(0,4).map(({tool}) => ({
+  return ranked.length ? ranked.filter(row => row.score === ranked[0].score).slice(0,4).map(({tool}) => ({
     name: tool.name, route: tool.route, detail: tool.description + " " + tool.access + ".",
   }));
 }
@@ -37,20 +37,23 @@ export default function HomeTaskFinder() {
     if (found.length === 1 && !found[0].detail) navigate(found[0].route);
     else setChoices(found);
   }
+  const resultCount = choices?.length ?? 0;
   return <div className="mt-6">
     <form onSubmit={event => { event.preventDefault(); if (query.trim()) submit(query.trim()); }}>
-      <label htmlFor="home-task" className="block text-xl font-semibold text-cyan-100">What would you like to do?</label>
-      <div className="mt-3 flex gap-2 rounded-xl border border-cyan-200/30 bg-slate-950 p-2 focus-within:border-cyan-200">
-        <input id="home-task" value={query} onChange={event => {setQuery(event.target.value); setChoices(null);}} maxLength={240} placeholder="Describe a task…" className="min-w-0 flex-1 bg-transparent px-2 text-base text-white" />
-        <button disabled={!query.trim()} className="min-h-11 rounded-lg bg-cyan-200 px-4 font-semibold text-slate-950 disabled:opacity-50">Find tool</button>
+      <label htmlFor="home-task" className="block text-xl font-semibold text-foreground">What would you like to do?</label>
+      <div className="mt-3 flex flex-col gap-2 rounded-xl border border-primary/30 bg-card p-2 focus-within:border-primary sm:flex-row">
+        <input id="home-task" type="search" autoComplete="off" aria-describedby="home-task-hint" aria-controls="home-task-results" value={query} onChange={event => {setQuery(event.target.value); setChoices(null);}} maxLength={240} placeholder="Describe a task…" className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+        <button type="submit" disabled={!query.trim()} className="min-h-11 rounded-lg bg-primary px-4 font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50">Find tool</button>
       </div>
     </form>
-    <div className="mt-2 flex flex-wrap gap-x-3">{examples.map(example => <button key={example} type="button" onClick={() => submit(example)} className="min-h-11 text-sm text-cyan-200 hover:underline">{example}</button>)}</div>
-    <div aria-live="polite">{choices && <div className="mt-3 space-y-3 rounded-xl border border-white/15 bg-slate-950 p-4">
+    <p id="home-task-hint" className="mt-2 text-xs text-muted-foreground">Search by task or try a quick example. Results are suggestions, not executed tools.</p>
+    <div className="mt-2 flex flex-wrap gap-x-3">{examples.map(example => <button key={example} type="button" onClick={() => submit(example)} className="min-h-11 rounded-md px-1 text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{example}</button>)}</div>
+    <div id="home-task-results" aria-live="polite" aria-atomic="true">{choices && <div className="mt-3 space-y-3 rounded-xl border border-border bg-card p-4">
+      <p className="text-xs font-medium text-muted-foreground">{resultCount ? `${resultCount} suggested ${resultCount === 1 ? "tool" : "tools"}` : "No suggestions found"}</p>
       {choices.length ? choices.map(choice => <div key={choice.name}>
-        {choice.detail && <p className="mb-1 text-sm text-slate-300">{choice.detail}</p>}
-        <Link className="inline-flex min-h-11 items-center font-semibold text-cyan-200 underline" to={choice.route}>{choice.name}</Link>
-      </div>) : <><p>No matching tool found. Try a shorter description or browse the directory.</p><Link to="/explore" className="inline-flex min-h-11 items-center text-cyan-200 underline">Browse tools</Link></>}
+        {choice.detail && <p className="mb-1 text-sm text-muted-foreground">{choice.detail}</p>}
+        <Link className="inline-flex min-h-11 items-center rounded-md font-semibold text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" to={choice.route}>{choice.name}</Link>
+      </div>) : <><p className="text-sm text-foreground">No matching tool found. Try a shorter description or browse the directory.</p><Link to="/explore" className="inline-flex min-h-11 items-center rounded-md text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Browse tools</Link></>}
     </div>}</div>
   </div>;
 }
