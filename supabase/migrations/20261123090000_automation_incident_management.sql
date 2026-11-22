@@ -57,9 +57,9 @@ CREATE TABLE public.automation_recovery_reviews (
   note text NOT NULL CHECK(char_length(btrim(note)) BETWEEN 12 AND 500),
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(user_id,request_key),
-  UNIQUE(user_id,quarantine_request_key),
-  FOREIGN KEY(user_id,quarantine_request_key)
-    REFERENCES public.automation_schedule_quarantines(user_id,request_key)
+  -- Intentionally retain the independently verified review after the original
+  -- quarantine receipt is pruned by Phase 2L's seven-day owner cleanup.
+  UNIQUE(user_id,quarantine_request_key)
 );
 CREATE INDEX automation_recovery_reviews_owner_time
   ON public.automation_recovery_reviews(user_id,created_at DESC);
