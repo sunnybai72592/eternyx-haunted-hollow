@@ -33,10 +33,10 @@ function parsePublicKey(key) {
   requireSafe(payload && payload.role === "anon", "only an anonymous client key is permitted");
   return key;
 }
-export function validateStagingRlsConfig(env) {
+// Shared guardrail for strictly read-only manual acceptance. It never
+// grants permission to run the separately authorized write/cleanup workflow.
+export function validateStagingRlsReadOnlyConfig(env) {
   requireSafe(env && typeof env === "object", "missing environment");
-  requireSafe(env.ETERNYX_RLS_STAGING_APPROVAL === STAGING_RLS_APPROVAL,
-    "explicit owner approval is required");
   const ref = env.ETERNYX_RLS_STAGING_REF;
   const productionRef = env.ETERNYX_RLS_PRODUCTION_REF;
   requireSafe(typeof ref === "string" && REF.test(ref) &&
@@ -58,6 +58,14 @@ export function validateStagingRlsConfig(env) {
   requireSafe(accounts[0].email.toLowerCase() !== accounts[1].email.toLowerCase(),
     "test accounts must be distinct");
   return Object.freeze({ url, projectRef: ref, publishableKey: key, accounts });
+}
+
+// Preserve the explicit write approval contract for all existing callers.
+export function validateStagingRlsConfig(env) {
+  requireSafe(env && typeof env === "object", "missing environment");
+  requireSafe(env.ETERNYX_RLS_STAGING_APPROVAL === STAGING_RLS_APPROVAL,
+    "explicit owner approval is required");
+  return validateStagingRlsReadOnlyConfig(env);
 }
 
 export const ISOLATION_SCENARIOS = Object.freeze([

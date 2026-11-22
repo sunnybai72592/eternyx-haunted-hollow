@@ -1,0 +1,75 @@
+name: ETERNYX Education hosted read-only staging acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      approve_education_read_only:
+        description: "I approve READ-ONLY Education checks on a separate, pre-provisioned Supabase staging project"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-education-hosted-staging-reads
+  cancel-in-progress: false
+
+jobs:
+  verify-education-hosted-read-only:
+    name: Two-student real-JWT and PostgREST authorization acceptance
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 12
+    env:
+      ETERNYX_EDU_STAGING_READ_APPROVAL: ${{ inputs.approve_education_read_only && 'I_APPROVE_EDUCATION_STAGING_READ_ONLY' || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_EDU_STAGING_TEST_ID: ${{ vars.ETERNYX_EDU_STAGING_TEST_ID }}
+      ETERNYX_EDU_STAGING_QUESTION_ID: ${{ vars.ETERNYX_EDU_STAGING_QUESTION_ID }}
+      ETERNYX_EDU_STAGING_OPTION_ID: ${{ vars.ETERNYX_EDU_STAGING_OPTION_ID }}
+      ETERNYX_EDU_STAGING_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_STAGING_ATTEMPT_ID }}
+      ETERNYX_EDU_STAGING_ANSWER_ID: ${{ vars.ETERNYX_EDU_STAGING_ANSWER_ID }}
+    steps:
+      - name: Checkout source for read-only verification
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Explicitly reject unapproved or unsafe staging configuration
+        run: |
+          node --input-type=module -e '
+            import { validateEducationReadOnlyConfig } from "./scripts/staging/educationHostedReadOnlyConfig.mjs";
+            try {
+              validateEducationReadOnlyConfig(process.env);
+              process.stdout.write("Education isolated staging configuration approved for read-only checks.\n");
+            } catch {
+              process.stderr.write("Education staging checks refused: approval, host, key, accounts or fixture validation failed.\n");
+              process.exitCode = 1;
+            }
+          '
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Query real staging Auth and Data API with two test identities
+        timeout-minutes: 7
+        run: node scripts/staging/verifyEducationHostedReadOnly.mjs
+      - name: Verify sanitized evidence contains all required passing cases
+        if: always()
+        run: node scripts/staging/verifyEducationHostedEvidence.mjs
+      - name: Upload sanitized staging-only verification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-hosted-staging-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-readonly.json
+          if-no-files-found: warn
+          retention-days: 7
