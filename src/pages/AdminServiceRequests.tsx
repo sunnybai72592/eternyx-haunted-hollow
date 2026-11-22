@@ -375,7 +375,7 @@ export default function AdminServiceRequests() {
               <span className="rounded-full border border-border px-3 py-1">Priority: {item.priority}</span>
               <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
               {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
-              {item.needs_my_check && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">Not checked by you since latest customer activity</span>}
+              {item.needs_my_check && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">{item.last_checked_at ? 'New customer activity since your check' : 'Needs your first check'}</span>}
               <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1"><CalendarClock className="h-3 w-3" />{serviceReviewBucketLabels[item.review_bucket] ?? 'Not scheduled'}{item.next_review_on ? ': ' + item.next_review_on : ''}</span>
               <span className="rounded-full border border-border px-3 py-1">Next: {serviceNextActionLabels[item.next_action_kind] ?? 'Not planned'}</span>
               {item.last_customer_activity_at && <span>Customer activity: {new Date(item.last_customer_activity_at).toLocaleString()}</span>}
