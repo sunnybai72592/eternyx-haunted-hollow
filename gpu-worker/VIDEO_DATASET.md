@@ -15,6 +15,14 @@ courtyard-pan.mp4,courtyard-evening,eval,Camera pans left as a bicycle crosses t
 4. Run `python gpu-worker/prepare_video_dataset.py /path/to/clips annotations.csv dataset-v1.json`. Choose a new output filename for each reviewed version. A successful manifest includes the split, caption, rights reference, evaluation question, SHA-256, frame dimensions and duration of each clip.
 5. Review clips with a video player for motion, blur, personal information and caption accuracy. ffprobe checks stream metadata. For a later experiment, train only on entries marked `train`. Keep the `eval` clips and their questions for a blind comparison. Two clips exercise the workflow; they are not a sufficient training set.
 
+## Inspect the opening windows before encoding
+
+```sh
+python gpu-worker/review_training_footage.py ./clips dataset-v1.json footage-review.html
+```
+
+Open the HTML locally to see the first, middle and last decoded frames, captions, review questions and permission references for each split. The identical-frame count compares every adjacent RGB pair in the opening window. A static shot can legitimately have repeated frames. The file embeds source thumbnails and permission references, so keep it with the local footage. The CPU command uses FFmpeg, NumPy and Pillow.
+
 ## Estimate a pilot's training time
 
 Once a trainer is available, time several full optimizer updates after warm-up on the intended hardware, including data loading and all gradient-accumulation microsteps. Keep the clip length, resolution, batch size and training settings representative. Inference render timings measure a different workload.

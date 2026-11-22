@@ -146,6 +146,20 @@ def run_fixture(root, output):
     encoder.save_pretrained(root / "text_encoder")
     manifest_path = root / "manifest.json"
     manifest_path.write_text(json.dumps(manifest))
+    footage_review = (output or root) / "footage-review.html"
+    review_command = [sys.executable, str(Path(__file__).with_name("review_training_footage.py")),
+                      str(root), str(manifest_path), str(footage_review)]
+    subprocess.run(review_command, check=True)
+    page = footage_review.read_text()
+    assert page.count("data:image/png;base64,") == 9
+    assert "Training (1)" in page and "Evaluation (2)" in page
+    cards = page.split("<article>")[1:]
+    for card, clip in zip(cards, [window, *held_out.values()], strict=True):
+        frames = clip["frames"]
+        repeats = sum((a == b).all() for a, b in zip(frames, frames[1:]))
+        assert f"Identical adjacent frames: {repeats} of {len(frames) - 1}" in card
+    assert all(row["sha256"] in page for row in rows)
+    assert fingerprint(manifest_path) in page
     dataset = root / "windows"
     worker_dir = Path(__file__).parent
     encode_command = [sys.executable, str(worker_dir / "encode_training_manifest.py"), str(root),
