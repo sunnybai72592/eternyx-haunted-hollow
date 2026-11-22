@@ -398,3 +398,7 @@ verify_jwt = true
 # Authenticated owner-issued writes only, with encrypted fine-grained PAT.
 [functions.automation-github-issues]
 verify_jwt = true
+
+# Agent-initiated Ed25519-authenticated Docker heartbeat (no user JWT)
+[functions.docker-heartbeat]
+verify_jwt = false

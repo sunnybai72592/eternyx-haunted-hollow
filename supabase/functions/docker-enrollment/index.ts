@@ -30,12 +30,15 @@ serve(async (req:Request)=>{
   const owner=user.id;
   try{
     if(request.action==="list"){
-      const [a,b]=await Promise.all([
+      const [a,b,c]=await Promise.all([
         supabase.from("docker_identity_workspaces").select("id,name,created_at").eq("owner_id",owner).order("created_at",{ascending:false}).limit(3),
         supabase.from("docker_agent_registrations").select("id,workspace_id,display_name,status,created_at,key_verified_at,revoked_at").eq("owner_id",owner).order("created_at",{ascending:false}).limit(25),
+        supabase.from("docker_agent_reports")
+          .select("agent_id,last_signed_at,last_received_at,engine_available,engine_version,container_count,accepted_count")
+          .eq("owner_id",owner).limit(25),
       ]);
-      if(a.error||b.error)return dbFailure(a.error||b.error);
-      return reply({workspaces:a.data??[],agents:b.data??[],remoteConnectivityEnabled:false,
+      if(a.error||b.error||c.error)return dbFailure(a.error||b.error||c.error);
+      return reply({workspaces:a.data??[],agents:b.data??[],reports:c.data??[],remoteConnectivityEnabled:false,
         note:"Key verification proves private-key possession, not server ownership or live Docker reachability."});
     }
     if(request.action==="create_workspace"){
