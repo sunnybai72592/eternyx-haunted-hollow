@@ -91,3 +91,23 @@ test("token file enforces owner, mode, size and rejects symlinks",()=>{
     }
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test("valid SSH-forwarded loopback Host permits a different tunnel port, never a non-loopback Host", async()=>{
+  const { request } = await import("node:http");
+  await fixture(async({url})=>{
+    const status = (host) => new Promise((resolve,reject)=>{
+      const req=request(url+"/v1/health",{headers:{Host:host,Authorization:"Bearer "+TOKEN}},res=>{
+        res.resume();
+        res.on("end",()=>resolve(res.statusCode));
+      });
+      req.once("error",reject);
+      req.end();
+    });
+    assert.equal(await status("127.0.0.1:43872"),200);
+    assert.equal(await status("127.0.0.1:43873"),200);
+    for(const bad of ["localhost:43872","evil.example:43872","127.0.0.1:65536","127.0.0.1:80","0.0.0.0:43872","127.0.0.1:43872.evil"]){
+      assert.equal(await status(bad),403);
+    }
+  });
+});

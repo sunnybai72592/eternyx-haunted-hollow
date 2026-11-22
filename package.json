@@ -20,6 +20,7 @@
     "docker:operator": "node scripts/docker-operator.mjs",
     "docker:agent": "node scripts/docker-readonly-agent.mjs",
     "docker:agent:client": "node scripts/docker-agent-client.mjs",
+    "docker:connections": "node scripts/docker-connections.mjs",
     "range:microvm:preflight": "node scripts/cyber-range-microvm-preflight.mjs"
   },
   "dependencies": {
