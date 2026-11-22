@@ -189,8 +189,8 @@ test("managed Compose services are labeled and runtime does not inherit Supabase
   const runtime=await read("infrastructure/cyber-range/provider/docker-runtime.mjs");
   const cli=await read("scripts/cyber-range-watchdog.mjs");
   const pkg=JSON.parse(await read("package.json"));
-  assert.equal((compose.match(/org\.eternyx\.range\.managed: "v1"/g)||[]).length,2);
-  assert.equal((compose.match(/org\.eternyx\.range\.ttl_seconds: "900"/g)||[]).length,2);
+  assert.equal((compose.match(/org\.eternyx\.range\.managed: "v1"/g)||[]).length,3);
+  assert.equal((compose.match(/org\.eternyx\.range\.ttl_seconds: "900"/g)||[]).length,3);
   assert.match(runtime,/listVerifiedManagedProjects/);
   assert.match(runtime,/assertLocalLaunchAllowed/);
   assert.match(runtime,/--filter","label=/);

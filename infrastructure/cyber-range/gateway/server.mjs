@@ -37,7 +37,8 @@ const fail = (res, status, message) => {
 
 const gateway = createServer(async (req, res) => {
   const host = req.headers.host || "";
-  if (!/^(127\.0\.0\.1|localhost):\d{1,5}$/.test(host)) {
+  if (!/^(127\.0\.0\.1|localhost):\d{1,5}$/.test(host) &&
+      !(managedMode && host === "gateway:8081")) {
     return fail(res, 421, "Localhost Host required");
   }
   if (!checkManagedToken(req.headers.authorization)) return fail(res, 401, "Managed session credential required");

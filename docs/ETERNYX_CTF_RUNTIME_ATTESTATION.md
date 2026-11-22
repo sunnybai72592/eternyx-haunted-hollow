@@ -2,6 +2,8 @@
 
 **Status: trusted-operator local/staging Docker hardening. No public multi-tenant workload approval.**
 
+> **Architecture update (PR #370):** This document describes the original two-service attestation milestone. The current managed range uses three services (target + authenticated gateway + localhost relay), two internal Docker bridges and one publishable relay bridge. For the current topology, security checks and limits, see [Three-Zone Network Segmentation](./ETERNYX_CTF_THREE_ZONE_NETWORKS.md). The current per-host ceiling is three labs / 672 MiB / 2.25 vCPU. The original two-service figures below are historical.
+
 ## Why this milestone matters
 
 Earlier PRs added worker fencing, daily 15-minute reservation limits and a separate cleanup watchdog. The next failure mode is Docker configuration drift: a Compose file can be secure while a running container is unexpectedly privileged, exposes a target port, has no resource limits, or attaches to an unapproved network.

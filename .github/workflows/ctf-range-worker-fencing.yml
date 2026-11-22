@@ -28,11 +28,21 @@ jobs:
           ephemeral_password="$(openssl rand -hex 32)"
           docker run --detach --rm --network none --name eternyx-fenced-pg-ci -e POSTGRES_PASSWORD="$ephemeral_password" postgres:17-alpine
           unset ephemeral_password
-          for i in $(seq 1 30); do
-            if docker exec eternyx-fenced-pg-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+          # Postgres initdb may briefly start a temporary server and
+          # restart it. Require two successful SQL queries, separated by
+          # time, before attempting the real acceptance suite.
+          stable=false
+          for i in $(seq 1 45); do
+            if docker exec eternyx-fenced-pg-ci psql -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+              sleep 2
+              if docker exec eternyx-fenced-pg-ci psql -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+                stable=true
+                break
+              fi
+            fi
             sleep 1
           done
-          docker exec eternyx-fenced-pg-ci pg_isready -U postgres
+          test "$stable" = true
       - name: Bootstrap synthetic auth and roles
         run: docker exec -i eternyx-fenced-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
       - name: Apply original range control migration

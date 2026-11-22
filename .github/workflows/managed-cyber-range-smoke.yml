@@ -35,8 +35,8 @@ jobs:
           env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml ps
       - name: Verify authenticated local ingress, per-instance flags and network boundaries
         run: |
-          port_a="$(env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml port gateway 8081)"
-          port_b="$(env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml port gateway 8081)"
+          port_a="$(env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml port ingress 8081)"
+          port_b="$(env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml port ingress 8081)"
           [[ "$port_a" =~ ^127\.0\.0\.1:[0-9]{4,5}$ ]]
           [[ "$port_b" =~ ^127\.0\.0\.1:[0-9]{4,5}$ ]]
           [[ "$port_a" != "$port_b" ]]
@@ -75,6 +75,13 @@ jobs:
         run: |
           env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml exec -T http-range node -e "fetch('https://example.com',{signal:AbortSignal.timeout(1300)}).then(()=>process.exit(1),()=>process.exit(0))"
           env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml exec -T http-range node -e "fetch('https://example.com',{signal:AbortSignal.timeout(1300)}).then(()=>process.exit(1),()=>process.exit(0))"
+      - name: Verify gateway has no Internet or metadata endpoint egress
+        run: |
+          for project in eternyx-mng-a eternyx-mng-b; do
+            for destination in https://example.com http://169.254.169.254/latest/meta-data/; do
+              ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p "$project" -f infrastructure/cyber-range/compose.managed.yaml exec -T gateway node -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(1400)}).then(()=>process.exit(1),()=>process.exit(0))' "$destination"
+            done
+          done
       - name: Remove all vulnerable managed test instances and networks
         if: always()
         run: |

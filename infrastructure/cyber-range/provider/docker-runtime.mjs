@@ -100,7 +100,7 @@ export class LocalDockerRangeRuntime {
       await assertLocalLaunchAllowed();
       executeDocker(composeArgs(sessionId, ["up", "--detach", "--build", "--force-recreate"]), token);
       launched = true;
-      const portLine = executeDocker(composeArgs(sessionId, ["port", "gateway", "8081"]), token);
+      const portLine = executeDocker(composeArgs(sessionId, ["port", "ingress", "8081"]), token);
       const match = /^127\.0\.0\.1:(\d{1,5})$/.exec(portLine);
       const port = match ? Number(match[1]) : NaN;
       if (!Number.isInteger(port) || port < 1024 || port > 65535) {
@@ -205,7 +205,7 @@ export class LocalDockerRangeRuntime {
     const containers = all.filter(item=>
       item.Config.Labels["com.docker.compose.project"] === project);
     const networks = [];
-    for (const name of [project + "_local_target_only",project + "_localhost_ingress"]) {
+    for (const name of [project + "_local_target_only",project + "_gateway_ingress_only",project + "_localhost_ingress"]) {
       const raw = executeDocker(["network","inspect","--format","{{json .}}",name]);
       let data;
       try { data = JSON.parse(raw); }
@@ -219,7 +219,7 @@ export class LocalDockerRangeRuntime {
   async exists(sessionId) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
-    const listed = executeDocker(composeArgs(sessionId, ["ps", "--status", "running", "-q", "gateway"]));
+    const listed = executeDocker(composeArgs(sessionId, ["ps", "--status", "running", "-q", "ingress"]));
     if (!listed.length) return false;
     await this.attest(sessionId);
     return true;
