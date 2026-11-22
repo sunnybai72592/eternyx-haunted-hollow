@@ -43,8 +43,8 @@ export const BackButton: React.FC<BackButtonProps> = ({ className }) => {
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: prefersReducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-[#09111f]/85 p-1.5 pr-3 shadow-[0_10px_35px_rgba(0,0,0,.28)] backdrop-blur-xl",
-        "supports-[backdrop-filter]:bg-[#09111f]/70",
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-card/85 p-1.5 pr-3 shadow-[0_10px_35px_rgba(0,0,0,.28)] backdrop-blur-xl",
+        "supports-[backdrop-filter]:bg-card/70",
         className
       )}
     >
