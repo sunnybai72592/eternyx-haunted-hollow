@@ -10,7 +10,7 @@ from transformers import AutoTokenizer, UMT5EncoderModel
 
 from encode_training_window import encode
 from prepare_training_frames import prepare_evaluation_frames
-from wan_adapter_bundle import fingerprint, load_for_inference
+from wan_adapter_bundle import load_for_inference
 
 
 NOISE_LEVELS = (0.25, 0.5, 0.75)
@@ -41,7 +41,11 @@ def evaluate(snapshot, adapter, clips, manifest_bytes, seeds):
         raise ValueError("Provide distinct unsigned 32-bit seeds")
     options = {"local_files_only": True, "use_safetensors": True}
     model = WanTransformer3DModel.from_pretrained(snapshot / "transformer", **options)
-    load_for_inference(model, snapshot, adapter.resolve(strict=True))
+    metadata = load_for_inference(model, snapshot, adapter.resolve(strict=True))
+    manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
+    dataset = metadata.get("training_dataset")
+    if dataset is not None and dataset["manifest_sha256"] != manifest_digest:
+        raise ValueError("Evaluation manifest differs from the recorded training manifest")
     vae = AutoencoderKLWan.from_pretrained(snapshot / "vae", **options)
     tokenizer = AutoTokenizer.from_pretrained(snapshot / "tokenizer", local_files_only=True)
     encoder = UMT5EncoderModel.from_pretrained(snapshot / "text_encoder", **options)
@@ -59,8 +63,9 @@ def evaluate(snapshot, adapter, clips, manifest_bytes, seeds):
             cases.append({"scene": window["scene"], "source_sha256": window["sha256"], "seed": seed,
                           "baseline_flow_mse": baseline, "adapter_flow_mse": candidate, "mean_mse_delta": delta})
     return {"version": 1, "metric": "flow velocity mean squared error", "noise_levels": NOISE_LEVELS,
-            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
-            "adapter_sha256": fingerprint(adapter / "adapter.safetensors"), "cases": cases}
+            "manifest_sha256": manifest_digest, "training_dataset": dataset,
+            "training_step": metadata.get("training_step"),
+            "adapter_sha256": metadata["sha256"], "cases": cases}
 
 
 def main():

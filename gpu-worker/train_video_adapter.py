@@ -18,7 +18,8 @@ from wan_adapter_step import attach_adapter, train_step
 
 
 def read_dataset(index_path, manifest_path):
-    index = json.loads(index_path.read_bytes())
+    index_bytes = index_path.read_bytes()
+    index = json.loads(index_bytes)
     raw = manifest_path.read_bytes()
     if index["version"] != 1 or hashlib.sha256(raw).hexdigest() != index["manifest_sha256"]:
         raise ValueError("Dataset index does not match the reviewed manifest")
@@ -44,10 +45,13 @@ def read_dataset(index_path, manifest_path):
             raise ValueError("Window annotations differ from the manifest")
         windows.append(path)
         digests.append(entry["window_sha256"])
-    return windows, digests
+    dataset = {"manifest_sha256": index["manifest_sha256"], "index_sha256": hashlib.sha256(index_bytes).hexdigest(),
+               "window_count": len(windows)}
+    return windows, digests, dataset
 
 
-def run(model, base_identity, windows, output, steps, resume=False, seed=17, rank=2, interval=10, expected_digests=None):
+def run(model, base_identity, windows, output, steps, resume=False, seed=17, rank=2, interval=10, expected_digests=None,
+        dataset=None):
     if min(steps, interval, rank) < 1 or not windows:
         raise ValueError("Provide encoded windows and positive steps, rank and checkpoint interval")
     digests = [fingerprint(path) for path in windows]
@@ -75,6 +79,11 @@ def run(model, base_identity, windows, output, steps, resume=False, seed=17, ran
             state = torch.load(latest / "training.pt", map_location="cpu", weights_only=True)
             if state["identity"] != identity:
                 raise ValueError("Checkpoint base, ordered windows or training configuration changed")
+            previous_dataset = state.get("training_dataset")
+            if previous_dataset is not None:
+                if dataset is not None and dataset != previous_dataset:
+                    raise ValueError("Checkpoint training dataset changed")
+                dataset = previous_dataset
             completed = state["completed"]
             if completed != int(latest.name[5:]) or steps < completed:
                 raise ValueError("Invalid checkpoint step or requested total")
@@ -93,8 +102,8 @@ def run(model, base_identity, windows, output, steps, resume=False, seed=17, ran
                 stage = Path(temp) / "checkpoint"
                 stage.mkdir()
                 save_file(get_peft_model_state_dict(model), str(stage / "adapter.safetensors"))
-                write_metadata(stage, base_identity, rank)
-                torch.save({"identity": identity, "completed": completed, "loss": loss,
+                write_metadata(stage, base_identity, rank, dataset=dataset, step=completed)
+                torch.save({"training_dataset": dataset, "identity": identity, "completed": completed, "loss": loss,
                             "optimizer": optimizer.state_dict(), "noise_rng": generator.get_state(),
                             "torch_rng": torch.get_rng_state()}, stage / "training.pt")
                 stage.rename(target)
@@ -115,9 +124,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if bool(args.dataset_index) != bool(args.manifest) or bool(args.windows) == bool(args.dataset_index):
         parser.error("Supply ordered windows or both --dataset-index and --manifest")
-    windows, digests = read_dataset(args.dataset_index, args.manifest) if args.dataset_index else (args.windows, None)
+    windows, digests, dataset = read_dataset(args.dataset_index, args.manifest) if args.dataset_index else (args.windows, None, None)
     root = args.snapshot.resolve(strict=True) / "transformer"
     base = transformer_identity(root)
     model = WanTransformer3DModel.from_pretrained(root, local_files_only=True, use_safetensors=True)
     run(model, base, windows, args.output, args.steps, args.resume,
-        interval=args.checkpoint_every, expected_digests=digests)
+        interval=args.checkpoint_every, expected_digests=digests, dataset=dataset)

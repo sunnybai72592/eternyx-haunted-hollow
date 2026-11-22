@@ -160,7 +160,10 @@ def run_fixture(root, output):
                      str(root / "manifest-training"), "--dataset-index", str(dataset / "index.json"),
                      "--manifest", str(manifest_path), "--steps", "1"]
     subprocess.run(train_command, check=True)
-    assert (root / "manifest-training" / "step-1" / "adapter.json").is_file()
+    indexed_checkpoint = root / "manifest-training" / "step-1"
+    expected_dataset = {"manifest_sha256": fingerprint(manifest_path), "index_sha256": fingerprint(dataset / "index.json"),
+                        "window_count": 1}
+    assert json.loads((indexed_checkpoint / "adapter.json").read_text())["training_dataset"] == expected_dataset
     index = json.loads((dataset / "index.json").read_text())
     index["windows"][0]["window_sha256"] = "0" * 64
     (dataset / "index.json").write_text(json.dumps(index))
@@ -168,12 +171,18 @@ def run_fixture(root, output):
     assert rejected.returncode and "checksum differs" in rejected.stderr
     report = root / "evaluation.json"
     command = [sys.executable, str(Path(__file__).with_name("evaluate_video_adapter.py")),
-               str(root), str(checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
+               str(root), str(indexed_checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
     subprocess.run(command, check=True)
     result = json.loads(report.read_text())
     assert [case["scene"] for case in result["cases"]] == ["smptebars", "testsrc"]
     assert all(case["seed"] == 7 for case in result["cases"])
-    assert result["adapter_sha256"] == fingerprint(checkpoint / "adapter.safetensors")
+    assert result["training_dataset"] == expected_dataset and result["training_step"] == 1
+    assert result["adapter_sha256"] == fingerprint(indexed_checkpoint / "adapter.safetensors")
+    report.unlink()
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    mismatch = subprocess.run(command, capture_output=True, text=True)
+    assert mismatch.returncode and "differs from the recorded training manifest" in mismatch.stderr
+    assert not report.exists()
 
 
 if __name__ == "__main__":
