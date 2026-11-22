@@ -119,7 +119,7 @@ export default function AdminSecurityMonitoring() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (authLoading || checking) return <main className="mx-auto flex min-h-[55vh] items-center justify-center px-4 text-sm text-slate-400">Verifying administrator access…</main>;
-  if (!user || !isAdmin) return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-[#0a1221] p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">Security operations are restricted to authorized ETERNYX administrators.</p></Card></main>;
+  if (!user || !isAdmin) return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-card p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">Security operations are restricted to authorized ETERNYX administrators.</p></Card></main>;
 
   const metrics = [
     { label: 'Critical events', value: critical, icon: ShieldAlert, tone: 'text-rose-200' },
@@ -142,13 +142,13 @@ export default function AdminSecurityMonitoring() {
       <AdminWorkspaceNav />
 
       <section aria-label="Threat monitoring metrics" className="mb-7 grid gap-3 sm:grid-cols-3">
-        {metrics.map(({ label, value, icon: Icon, tone }) => <Card key={label} className="border-white/[0.09] bg-[#0a1322]/90 p-5">
+        {metrics.map(({ label, value, icon: Icon, tone }) => <Card key={label} className="border-white/[0.09] bg-card/90 p-5">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">{label}</span><Icon className="h-4 w-4" /></div>
           <p className={`mt-4 text-3xl font-semibold tabular-nums ${tone}`}>{value === null ? '—' : value.toLocaleString()}</p>
         </Card>)}
       </section>
 
-      <section className="mb-5 rounded-2xl border border-white/[0.09] bg-[#0a1221]/85 p-4 sm:p-5">
+      <section className="mb-5 rounded-2xl border border-white/[0.09] bg-card/85 p-4 sm:p-5">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
           <div>
             <label htmlFor="threat-event-search" className="mb-2 block text-xs font-semibold text-slate-300">Search event types</label>
@@ -156,7 +156,7 @@ export default function AdminSecurityMonitoring() {
           </div>
           <div>
             <label htmlFor="threat-severity-filter" className="mb-2 block text-xs font-semibold text-slate-300">Severity</label>
-            <select id="threat-severity-filter" value={severity} onChange={(event) => updateSeverity(event.target.value)} className="h-11 w-full rounded-md border border-white/10 bg-[#101b2b] px-3 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
+            <select id="threat-severity-filter" value={severity} onChange={(event) => updateSeverity(event.target.value)} className="h-11 w-full rounded-md border border-white/10 bg-muted px-3 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
               <option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
             </select>
           </div>
@@ -166,11 +166,11 @@ export default function AdminSecurityMonitoring() {
       {error && <div role="alert" className="mb-5 flex items-start gap-2 rounded-xl border border-rose-300/15 bg-rose-300/[0.05] p-4 text-sm text-rose-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
 
       {loading && events.length === 0 ? <div className="flex min-h-48 items-center justify-center gap-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />Loading threat events…</div>
-        : events.length === 0 ? <Card className="border-white/[0.09] bg-[#0a1221]/85 p-10 text-center"><Activity className="mx-auto mb-3 h-8 w-8 text-slate-500" /><h2 className="text-lg font-semibold text-white">{error ? 'Monitoring data unavailable' : 'No matching threat events'}</h2><p className="mt-2 text-sm text-slate-500">{error ? 'Verify that the threat monitoring table and administrator read policy are available.' : 'Try another event type or severity filter.'}</p>{error && <Button variant="outline" onClick={() => void load()} className="mt-5 border-white/15 text-slate-200">Retry</Button>}</Card>
+        : events.length === 0 ? <Card className="border-white/[0.09] bg-card/85 p-10 text-center"><Activity className="mx-auto mb-3 h-8 w-8 text-slate-500" /><h2 className="text-lg font-semibold text-white">{error ? 'Monitoring data unavailable' : 'No matching threat events'}</h2><p className="mt-2 text-sm text-slate-500">{error ? 'Verify that the threat monitoring table and administrator read policy are available.' : 'Try another event type or severity filter.'}</p>{error && <Button variant="outline" onClick={() => void load()} className="mt-5 border-white/15 text-slate-200">Retry</Button>}</Card>
         : <>
           <div className="mb-4 flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Showing <span className="font-semibold text-slate-300">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)}</span> of {total.toLocaleString()} matching events</p>{loading && <span className="text-xs text-cyan-200">Refreshing…</span>}</div>
           <div className="space-y-3">
-            {events.map((event) => <Card key={event.id} className="border-white/[0.09] bg-[#0a1221]/90 p-5">
+            {events.map((event) => <Card key={event.id} className="border-white/[0.09] bg-card/90 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold text-white">{event.event_type}</h2><span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${severityClass(event.severity)}`}>{event.severity}</span>{event.is_false_positive && <span className="rounded-full border border-amber-200/15 bg-amber-200/[0.05] px-2.5 py-1 text-[10px] font-semibold text-amber-100">Marked false positive</span>}</div>
