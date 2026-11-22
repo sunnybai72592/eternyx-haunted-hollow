@@ -1,0 +1,41 @@
+name: CPU learned video texture generation
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/learn_cpu_video_texture.py"
+      - "gpu-worker/tests/test_learn_cpu_video_texture.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-learned-video-texture.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/learn_cpu_video_texture.py"
+      - "gpu-worker/tests/test_learn_cpu_video_texture.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-learned-video-texture.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-learned-video:
+    name: Train actual local video model and sample real MP4s on CPU
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check local CPU FFmpeg and H264 codec
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Train offline categorical temporal model and verify genuinely sampled videos
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_learn_cpu_video_texture.py' -v
