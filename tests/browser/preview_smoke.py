@@ -572,6 +572,12 @@ def home_task_finder(page):
     expect(page.get_by_role("link", name="Browse tools", exact=True)).to_be_visible()
     expect(page.locator("#pillars h3")).to_have_count(6)
     page.get_by_role("button", name="Learn something").click()
+    # A quick example now offers an explicit navigable suggestion, rather
+    # than unexpectedly redirecting before the user chooses a destination.
+    expect(page).to_have_url(ORIGIN + "/")
+    education_link = page.get_by_role("link", name="Explore education")
+    expect(education_link).to_have_attribute("href", "/education")
+    education_link.click()
     expect(page).to_have_url(ORIGIN + "/education")
 
 
