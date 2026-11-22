@@ -29,6 +29,8 @@ const rpcStatus: Record<string, number> = {
   preview_limit: 429, template_copy_deleted: 409, unknown_template:404,
   daily_export_limit:429,daily_quarantine_limit:429,
   incident_daily_limit:429,incident_open_limit:429,incident_event_limit:429,
+  incident_evidence_limit:429,daily_evidence_limit:429,
+  already_captured:409,unrelated_evidence:403,
   recovery_review_limit:429,already_reported:409,
   evidence_not_found:404,evidence_not_ready:409,invalid_transition:409,
   stale_incident:409,already_reviewed:409,schedule_missing:404,
@@ -101,6 +103,44 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="incidentCaptureEvidence"){
+      const {data,error}=await supabase.rpc("automation_capture_incident_evidence",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+        p_evidence_kind:request.evidenceKind,
+        p_source_id:request.sourceId,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"evidence_capture_failed");
+      return reply({...data,source:"authenticated_server",
+        executed:false,externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentEvidence"){
+      const {data,error}=await supabase.rpc("automation_incident_evidence_list",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"evidence_history_unavailable");
+      return reply({...data,source:"authenticated_server",executed:false});
+    }
+    if(request.action==="incidentReport"){
+      const {data,error}=await supabase.rpc("automation_incident_operational_report",{
+        p_user_id:user.id,p_days:request.days,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_report_unavailable");
+      return reply({...data,reportSource:data.source,
+        source:"authenticated_server",executed:false,
+        rawInputsIncluded:false,rawOutputsIncluded:false});
+    }
+    if(request.action==="incidentRecoveryCheck"){
+      const {data,error}=await supabase.rpc("automation_incident_recovery_check",{
+        p_user_id:user.id,p_quarantine_key:request.quarantineKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"recovery_check_unavailable");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false,automaticRestore:false});
+    }
     if(request.action==="incidentInbox"){
       const {data,error}=await supabase.rpc("automation_incident_inbox",{
         p_user_id:user.id,p_status:request.status,

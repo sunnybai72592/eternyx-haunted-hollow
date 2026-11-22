@@ -29,6 +29,10 @@ const fields = {
   incidentTimeline: ["action","incidentId"],
   recoveryReviewInbox: ["action"],
   recoveryReview: ["action","quarantineKey","decision","note","requestKey"],
+  incidentCaptureEvidence: ["action","incidentId","evidenceKind","sourceId","requestKey"],
+  incidentEvidence: ["action","incidentId"],
+  incidentReport: ["action","days"],
+  incidentRecoveryCheck: ["action","quarantineKey"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -103,6 +107,35 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="incidentCaptureEvidence"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
+       !["incident_origin","completed_run","schedule_state","quarantine_receipt"].includes(value.evidenceKind)||
+       typeof value.sourceId!=="string"||!UUID_RE.test(value.sourceId)||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_evidence"};
+    }
+    return {ok:true,action,incidentId:value.incidentId,
+      evidenceKind:value.evidenceKind,sourceId:value.sourceId,
+      requestKey:value.requestKey};
+  }
+  if(action==="incidentEvidence"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
+      return {ok:false,reason:"invalid_incident_id"};
+    }
+    return {ok:true,action,incidentId:value.incidentId};
+  }
+  if(action==="incidentReport"){
+    if(![7,30].includes(value.days)){
+      return {ok:false,reason:"invalid_report_period"};
+    }
+    return {ok:true,action,days:value.days};
+  }
+  if(action==="incidentRecoveryCheck"){
+    if(typeof value.quarantineKey!=="string"||!UUID_RE.test(value.quarantineKey)){
+      return {ok:false,reason:"invalid_quarantine_key"};
+    }
+    return {ok:true,action,quarantineKey:value.quarantineKey};
   }
   if(action==="incidentInbox"){
     if(value.status!==undefined &&
