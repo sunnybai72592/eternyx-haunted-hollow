@@ -7,7 +7,7 @@
  * an upstream URL/address from learners. A verified Docker gateway address is
  * checked against its internal Docker network before each request.
  */
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { validSessionId } from "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
@@ -57,7 +57,54 @@ export function verifyInternalGatewayAddress({ip,subnet,network,project,containe
   return {ip,network,containerId};
 }
 
-export function createHostRangeRelay({sessionId,token,verifyUpstream,requestFetch=fetch}={}){
+/**
+ * Node fetch deliberately rewrites Host to the numeric IP. The gateway
+ * rejects arbitrary numeric-IP Host values (HTTP 421). A narrowly-scoped,
+ * no-redirect core HTTP request preserves the FIXED approved Host header.
+ * It does not resolve a hostname or accept an external URL from the client.
+ */
+export function requestFixedInternalGateway(url,options){
+  const ip=url instanceof URL?bytes(url.hostname):null;
+  if(!(url instanceof URL)||url.protocol!=="http:"||url.port!=="8081"||
+     !ip||!privateAddress(ip)||
+     !["GET","POST"].includes(options?.method)||
+     options?.headers?.host!=="gateway:8081"){
+    return Promise.reject(Error("Untrusted private HTTP request"));
+  }
+  return new Promise((resolve,reject)=>{
+    const req=httpRequest({
+      hostname:url.hostname,port:8081,path:url.pathname+url.search,
+      method:options.method,headers:options.headers,agent:false,timeout:3500,
+      signal:options.signal,
+    },res=>{
+      const chunks=[];let count=0;
+      res.on("data",chunk=>{
+        count+=chunk.length;
+        if(count>32768){
+          req.destroy(Error("Private response exceeds bound"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on("error",reject);
+      res.on("end",()=>{
+        const data=Buffer.concat(chunks);
+        resolve({
+          status:res.statusCode,
+          headers:{get:(name)=>name==="content-type"?
+            res.headers["content-type"]??null:null},
+          arrayBuffer:async()=>data,
+        });
+      });
+    });
+    req.on("timeout",()=>req.destroy(Error("Private request timed out")));
+    req.on("error",reject);
+    if(options.body)req.end(options.body);
+    else req.end();
+  });
+}
+
+export function createHostRangeRelay({sessionId,token,verifyUpstream,requestFetch=requestFixedInternalGateway}={}){
   if(!validSessionId(sessionId) ||
      typeof token!=="string"||!/^[0-9a-f]{64}$/.test(token) ||
      typeof verifyUpstream!=="function"||typeof requestFetch!=="function"){
