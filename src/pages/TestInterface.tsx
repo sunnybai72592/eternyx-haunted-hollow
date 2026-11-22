@@ -182,6 +182,8 @@ export default function TestInterface() {
 
       // Legacy path is retained only while the coordinated server rollout is
       // disabled; it is not an atomic or production-secure submission workflow.
+      // This path must be enforced by an atomic server-side submission service
+      // before any high-stakes deployment.
       for (const answer of answers.values()) {
         const { error } = await supabase.from("user_answers").upsert({
           attempt_id: attemptId,
