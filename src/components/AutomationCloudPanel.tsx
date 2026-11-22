@@ -6,6 +6,7 @@ import AutomationGitHubIssuesPanel from "@/components/AutomationGitHubIssuesPane
 import AutomationWorkflowPolicyPanel from "@/components/AutomationWorkflowPolicyPanel";
 import AutomationOperationsPanel from "@/components/AutomationOperationsPanel";
 import AutomationAuditRecoveryPanel from "@/components/AutomationAuditRecoveryPanel";
+import AutomationIncidentCenter from "@/components/AutomationIncidentCenter";
 import AutomationTemplateGallery from "@/components/AutomationTemplateGallery";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2, FlaskConical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -285,6 +286,10 @@ export default function AutomationCloudPanel({
           }))}
           refresh={refresh}/>}
         {loaded&&<AutomationAuditRecoveryPanel key={userId}
+          disabled={busy} workflows={workflows.map(w=>({
+            id:w.id,name:w.name,revision:w.revision,active:w.active,
+          }))}/>}
+        {loaded&&<AutomationIncidentCenter key={userId}
           disabled={busy} workflows={workflows.map(w=>({
             id:w.id,name:w.name,revision:w.revision,active:w.active,
           }))}/>}
