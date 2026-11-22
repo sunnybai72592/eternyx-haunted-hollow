@@ -44,6 +44,14 @@ BEGIN
   END IF;
   SELECT public.automation_claim_github_issue(bob,d1,v) INTO r;
   IF r->>'reason'<>'not_found' THEN RAISE EXCEPTION 'Bob claimed Alice draft'; END IF;
+  SELECT public.automation_claim_github_issue(alice,d1,v) INTO r;
+  IF r->>'reason'<>'not_reviewed' THEN
+    RAISE EXCEPTION 'unpreviewed draft was allowed to invoke GitHub';
+  END IF;
+  SELECT public.automation_mark_github_issue_previewed(bob,d1,v) INTO r;
+  IF r->>'reason'<>'not_pending' THEN RAISE EXCEPTION 'Bob previewed Alice draft'; END IF;
+  SELECT public.automation_mark_github_issue_previewed(alice,d1,v) INTO r;
+  IF r->>'ok'<>'true' THEN RAISE EXCEPTION 'real owner could not mark preview'; END IF;
   SELECT public.automation_claim_github_issue(alice,d1,v+1) INTO r;
   IF r->>'reason'<>'connection_changed' THEN RAISE EXCEPTION 'wrong version allowed write'; END IF;
 
@@ -54,6 +62,8 @@ BEGIN
     alice,gen_random_uuid(),repeat('d',64),repeat('f',100),repeat('c',24)) INTO r;
   d3:=(r->>'draft_id')::uuid;
   IF d2 IS NULL OR d3 IS NULL THEN RAISE EXCEPTION 'pending setup failed'; END IF;
+  PERFORM public.automation_mark_github_issue_previewed(alice,d2,v);
+  PERFORM public.automation_mark_github_issue_previewed(alice,d3,v);
   SELECT public.automation_prepare_github_issue(
     alice,gen_random_uuid(),repeat('e',64),repeat('f',100),repeat('c',24)) INTO r;
   IF r->>'reason'<>'pending_limit' THEN RAISE EXCEPTION '3-pending limit bypassed: %',r; END IF;
@@ -99,6 +109,7 @@ BEGIN
   SELECT public.automation_prepare_github_issue(
     alice,gen_random_uuid(),repeat('e',64),repeat('f',100),repeat('c',24)) INTO r;
   d4:=(r->>'draft_id')::uuid;
+  PERFORM public.automation_mark_github_issue_previewed(alice,d4,v);
   SELECT public.automation_claim_github_issue(alice,d4,v) INTO r;
   IF r->>'reason'<>'write_limit' THEN
     RAISE EXCEPTION '3/day external write budget bypassed: %',r;
@@ -142,6 +153,10 @@ BEGIN
      WHERE id=stale AND (status<>'expired' OR payload_ciphertext IS NOT NULL)) THEN
     RAISE EXCEPTION 'expired draft retained private input';
   END IF;
+  SELECT public.automation_prepare_github_issue(
+    alice,gen_random_uuid(),repeat('f',64),repeat('f',100),repeat('c',24)) INTO r;
+  d5:=(r->>'draft_id')::uuid;
+  IF d5 IS NULL THEN RAISE EXCEPTION 'pending disconnect fixture failed'; END IF;
   SELECT public.automation_disconnect_github_issues(bob) INTO r;
   IF r->>'disconnected'<>'false' THEN RAISE EXCEPTION 'Bob disconnected Alice'; END IF;
   SELECT public.automation_disconnect_github_issues(alice) INTO r;
@@ -149,6 +164,21 @@ BEGIN
     EXISTS(SELECT 1 FROM public.automation_github_issue_connections WHERE user_id=alice) THEN
     RAISE EXCEPTION 'owner token not erased on disconnect';
   END IF;
+  IF (SELECT status FROM public.automation_github_issue_drafts WHERE id=d5)<>'rejected' OR
+     EXISTS(SELECT 1 FROM public.automation_github_issue_drafts
+       WHERE id=d5 AND payload_ciphertext IS NOT NULL) THEN
+    RAISE EXCEPTION 'pending draft survived credential disconnect';
+  END IF;
+  -- Reconnect could restart the connection version at 1. Stale draft must
+  -- remain one-way rejected even if new connection points to the same repo.
+  SELECT public.automation_connect_github_issues(
+    alice,'octocat','Hello-World','octocat',repeat('a',200),repeat('b',24)) INTO r;
+  PERFORM public.automation_toggle_github_issues(alice,true);
+  SELECT public.automation_claim_github_issue(alice,d5,(r->>'version')::int) INTO r;
+  IF r->>'reason'<>'not_pending' THEN
+    RAISE EXCEPTION 'stale draft reauthorized across disconnect/reconnect';
+  END IF;
+  PERFORM public.automation_disconnect_github_issues(alice);
   -- Previous approved attempts must survive disconnect for owner audit.
   IF (SELECT count(*) FROM public.automation_github_issue_drafts
       WHERE user_id=alice AND status IN ('succeeded','failed','uncertain'))<>3 THEN
