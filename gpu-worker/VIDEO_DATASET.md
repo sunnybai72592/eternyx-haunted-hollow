@@ -333,3 +333,18 @@ The **AI Video Studio** page now includes a **Local CPU video editor handoff** s
 6. Keep a local backup of the downloaded JSON. The browser editor deliberately keeps selected File objects and object URLs in temporary memory, not in localStorage, Supabase or cloud storage. Reloading clears the media selection. The Python renderer independently validates 16 FPS, real frame counts, hashes, dimensions and codecs; the website cannot assert those properties just by reading a browser File object.
 
 This is a free/offline pathway for owners of suitable local equipment. It is **not** text-to-video synthesis or a remotely connected GPU worker. No paid GPU, AI API or subscription is activated.
+
+
+
+## Verify and review an actual completed CPU-rendered MP4 in AI Video Studio
+
+The Studio local CPU editor now has a **rendered-output verification and review** workspace alongside its project exporter. After successfully running `render_video_timeline.py` with your own footage, open **AI Video Studio**, then use **Inspect your actual rendered MP4**.
+
+1. Select the generated `eternyx-video-output/video.mp4` and `eternyx-video-output/manifest.json`. Optionally select `captions.srt` from the same output directory. The MP4 is hashed entirely **inside the browser**, not uploaded. Hard limits: MP4 ≤64 MiB, receipt ≤64 KiB, optional SRT ≤32 KiB.
+2. Click **Verify and preview render**. The app verifies SHA-256 and exact file byte count against the Python renderer's self-reported receipt. It also validates the receipt's v2 format, frame count, duration, 16 FPS claim, size preset, shot index ordering, source digests, recorded rights, cuts, fades and soundtrack identity.
+3. If the original Studio project is still prepared, the verifier independently SHA-256 hashes the exact exported JSON bytes and compares the renderer's storyboard hash, shot definitions, optional soundtrack and selected profile/quality to the on-screen project. If the project has been cleared, the verifier performs **receipt/file integrity only** and states that it did not match the current Studio project.
+4. If an unedited `captions.srt` sidecar is selected, the verifier compares its text/timecodes to the expected 16-FPS shot captions. Manually edited subtitles can intentionally differ; reverify without that optional sidecar to review the video independently.
+5. Play the **actual imported rendered MP4** in a browser video player. If an original source is still selected, compare it with the result in a separate independent player. Browser-reported width, height and duration provide another advisory check but are not full codec/frame-count verification.
+6. Select a **human** outcome (approved for local use, needs revision, undecided), enter observations, and download `eternyx-local-video-human-review.json`. It records the exact rendered MP4 hash, project hash, whether the current project matched, review timestamp, and human notes; it does **not** invent motion realism, aesthetic or prompt-fidelity scores.
+
+**Important boundaries:** An MP4 and manifest with matching SHA-256 values show only **local file/receipt consistency**; hashes alone are not a trusted digital signature and a forged matching pair is possible. Independently assess footage licensing, audio, timing and visual quality. All original and rendered files remain on your device unless you deliberately share them. No paid GPU, external AI API, model download, hosted rendering or subscription feature is enabled.
