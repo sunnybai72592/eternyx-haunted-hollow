@@ -69,6 +69,10 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-final-grading.sql
       - name: Exercise three real concurrent trusted finalization and review races
         run: node scripts/staging/verifyEducationFinalGradingRaces.mjs
+      - name: Apply staged owner-only verified-result reader to disposable database
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-owned-verified-results.sql
+      - name: Assert ten student result authorization and official-ledger read gates
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-verified-results.sql
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true
