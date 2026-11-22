@@ -97,11 +97,15 @@ INSERT INTO public.user_attempts(user_id,test_id,status)
 VALUES ('00000000-0000-4000-8000-000000000012'::uuid,
  (SELECT id FROM public.tests WHERE title='Secondary Instructor Bank'),
  'in_progress');
+-- Synthetic database owner resolves the ID before role switching. The
+-- service role intentionally has no direct user_attempts SELECT grant.
+SELECT pg_catalog.set_config('eternyx.final_running_attempt',
+ (SELECT id::text FROM public.user_attempts
+  WHERE user_id='00000000-0000-4000-8000-000000000012'::uuid),false);
 SET ROLE service_role;
 SELECT public.education_ci_expect_invalid(
  $sql$SELECT public.education_finalize_cbt_grade(
- (SELECT id FROM public.user_attempts
-  WHERE user_id='00000000-0000-4000-8000-000000000012'::uuid))$sql$);
+ pg_catalog.current_setting('eternyx.final_running_attempt')::uuid)$sql$);
 RESET ROLE;
 
 -- 4) Reject a selected objective option from a different question/exam
