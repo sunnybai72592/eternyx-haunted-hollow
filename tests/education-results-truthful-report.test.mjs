@@ -48,7 +48,8 @@ test("7: ungraded report never claims a fail",()=>{
 test("8: sensitive attempt reads are scoped to logged-in user and cached per user",()=>{
   assert.match(source,/queryKey: \["education-attempt", user\?\.id, attemptId\]/);
   assert.match(source,/\.eq\("id", attemptId!\)\.eq\("user_id", user!\.id\)/);
-  assert.match(source,/enabled: !authLoading && isAuthenticated && !!user\?\.id && validAttemptId/);
+  assert.match(source,/const enabled = !authLoading && isAuthenticated && !!user\?\.id && validAttemptId/);
+  assert.match(source,/queryKey: \["education-attempt", user\?\.id, attemptId\],[\s\S]*?enabled,/);
   assert.match(source,/summary\.completed/);
 });
 test("9: reports are local downloads not alerts, PDFs or fake results",()=>{
