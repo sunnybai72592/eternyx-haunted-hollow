@@ -11,6 +11,7 @@ on:
       - "gpu-worker/select_footage_windows.py"
       - "gpu-worker/test_window_encoding_cpu.py"
       - "gpu-worker/run_video_pilot.py"
+      - "gpu-worker/export_video_adapter.py"
       - "gpu-worker/train_video_adapter.py"
       - "gpu-worker/wan_adapter_bundle.py"
       - "gpu-worker/wan21_infer.py"

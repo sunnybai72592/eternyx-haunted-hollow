@@ -113,3 +113,11 @@ python gpu-worker/estimate_training_time.py --pilot ./pilot-01/pilot.json --step
 ```
 
 The projection drops the first update as warm-up and uses the remaining samples to report mean-based, fastest and slowest time estimates. By default these cover optimizer updates only. Supply `--overhead-minutes` to include anticipated startup, checkpoint and evaluation time. A miniature CI run verifies the calculation. Benchmark the full-size model separately.
+
+## Export the evaluated adapter for inference
+
+```sh
+python gpu-worker/export_video_adapter.py ./pilot-01 ./inference-adapter
+```
+
+The exporter checks the copied weights against the checkpoint metadata, completion receipt and evaluation report. It also compares the training step and dataset provenance before publishing the two inference files in a new directory. Keep the pilot directory for future training or inspection. Set `ETERNYX_WAN_ADAPTER_DIR` to the absolute export directory on a renderer with the matching local Wan snapshot. Exporting runs locally and does not start a render.
