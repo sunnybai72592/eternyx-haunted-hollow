@@ -140,12 +140,38 @@
 .lamp-auth-page[data-light='off'] .lamp-auth-scene { filter: brightness(.32) saturate(.45); }
 .lamp-auth-page[data-light='on'] .lamp-auth-scene { filter: brightness(1.07) saturate(1.1); }
 .lamp-auth-page .lamp-auth-scene { transition: filter .65s ease; }
-.lamp-auth-page[data-light='off'] .lamp-auth-form { filter: brightness(.86); }
+/* The pull-cord illuminates the entire right-side form, not only its glow.
+   Off is intentionally dramatic; fields remain accessible on focus/hover. */
+.lamp-auth-page .lamp-auth-form {
+  opacity: 1;
+  filter: brightness(1);
+  transition: opacity .7s ease, filter .7s ease, text-shadow .7s ease;
+  will-change: opacity, filter;
+}
+.lamp-auth-page[data-light='off'] .lamp-auth-form {
+  opacity: .48;
+  filter: brightness(.54) saturate(.55);
+  text-shadow: none;
+}
 .lamp-auth-page[data-light='on'] .lamp-auth-form {
-  filter: brightness(1.08);
+  opacity: 1;
+  filter: brightness(1.08) saturate(1.08);
   text-shadow: 0 0 22px hsl(var(--primary) / .055);
 }
-.lamp-auth-page .lamp-auth-form { transition: filter .65s ease, text-shadow .65s ease; }
+/* Don't obscure a focused input or button, especially for keyboard users. */
+.lamp-auth-page[data-light='off'] .lamp-auth-form:focus-within {
+  opacity: .86;
+  filter: brightness(.92) saturate(.85);
+}
+/* The off-state is not disabled: provide visible feedback when users reach
+   for the form, while preserving the lamp's dramatic off/on distinction. */
+@media (hover: hover) and (pointer: fine) {
+  .lamp-auth-page[data-light='off'] .lamp-auth-form:hover {
+    opacity: .7;
+    filter: brightness(.76) saturate(.7);
+  }
+}
+
 .lamp-auth-page[data-light='off'] .auth-primary-submit { box-shadow: none; }
 .lamp-auth-page[data-light='on'] .auth-form-shell input {
   border-color: hsl(var(--border) / .9);
