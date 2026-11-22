@@ -1,0 +1,38 @@
+name: CPU video frame audit
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/audit_video_render.py"
+      - "gpu-worker/tests/test_audit_video_render.py"
+      - ".github/workflows/cpu-video-frame-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/audit_video_render.py"
+      - "gpu-worker/tests/test_audit_video_render.py"
+      - ".github/workflows/cpu-video-frame-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-real-mp4:
+    name: Inspect real local MP4 fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ensure local FFmpeg decode tools exist
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+      - name: Run actual CPU MP4 decode and report regressions
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          CUDA_VISIBLE_DEVICES: ""
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_audit_video_render.py' -v

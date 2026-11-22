@@ -1,0 +1,57 @@
+name: CTF Hosted Atomic Spend Reservation SQL
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123041000_ctf_hosted_spend_reservations.sql'
+      - 'tests/sql/ctf-hosted-spend-reservations-smoke.sql'
+      - 'tests/ctf-hosted-quote-reservation.test.mjs'
+      - 'infrastructure/cyber-range/provider/hosted-quote-reservation.mjs'
+      - '.github/workflows/ctf-hosted-spend-sql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-spend-ledger:
+    name: Assert atomic fenced quote reservations and no browser privileges
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Launch disposable networkless PostgreSQL
+        run: |
+          ephemeral_password="$(openssl rand -hex 32)"
+          docker run --detach --rm --network none --name eternyx-hosted-pg-ci -e POSTGRES_PASSWORD="$ephemeral_password" postgres:17-alpine
+          unset ephemeral_password
+          stable=false
+          for i in $(seq 1 45); do
+            if docker exec eternyx-hosted-pg-ci psql -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+              sleep 2
+              if docker exec eternyx-hosted-pg-ci psql -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+                stable=true
+                break
+              fi
+            fi
+            sleep 1
+          done
+          test "$stable" = true
+      - name: Bootstrap minimum synthetic Supabase roles and auth
+        run: docker exec -i eternyx-hosted-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Install existing session schema
+        run: docker exec -i eternyx-hosted-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122180000_ctf_range_session_control.sql
+      - name: Install existing fenced worker limits
+        run: docker exec -i eternyx-hosted-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122200000_ctf_worker_fencing_budget.sql
+      - name: Install new default-off hosted USD reservation ledger
+        run: docker exec -i eternyx-hosted-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123041000_ctf_hosted_spend_reservations.sql
+      - name: Exercise SQL budget, nonce replay, worker lease and privilege checks
+        run: docker exec -i eternyx-hosted-pg-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-hosted-spend-reservations-smoke.sql
+      - name: Exercise signed quote-to-reservation Node boundary
+        run: node --test tests/ctf-hosted-quote-reservation.test.mjs
+      - name: Remove disposable test database
+        if: always()
+        run: docker rm -f eternyx-hosted-pg-ci || true

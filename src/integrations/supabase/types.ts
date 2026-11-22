@@ -338,6 +338,158 @@ export type Database = {
         }
         Relationships: []
       }
+      service_request_activity: {
+        Row: {
+          id: string
+          request_id: string
+          actor_id: string | null
+          event_type: string
+          body: string | null
+          from_status: string | null
+          to_status: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          request_id: string
+          actor_id?: string | null
+          event_type: string
+          body?: string | null
+          from_status?: string | null
+          to_status?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          request_id?: string
+          actor_id?: string | null
+          event_type?: string
+          body?: string | null
+          from_status?: string | null
+          to_status?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_request_activity_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_request_triage: {
+        Row: {
+          request_id: string
+          priority: string
+          assigned_admin_id: string | null
+          internal_note: string
+          updated_at: string
+        }
+        Insert: {
+          request_id: string
+          priority?: string
+          assigned_admin_id?: string | null
+          internal_note?: string
+          updated_at?: string
+        }
+        Update: {
+          request_id?: string
+          priority?: string
+          assigned_admin_id?: string | null
+          internal_note?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_request_triage_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      service_scope_reviews: {
+        Row: {
+          id: string
+          request_id: string
+          author_id: string
+          scope_summary: string
+          deliverables: string
+          exclusions: string
+          assumptions: string
+          next_steps: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          request_id: string
+          author_id: string
+          scope_summary: string
+          deliverables: string
+          exclusions: string
+          assumptions: string
+          next_steps: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          request_id?: string
+          author_id?: string
+          scope_summary?: string
+          deliverables?: string
+          exclusions?: string
+          assumptions?: string
+          next_steps?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_scope_reviews_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      service_scope_responses: {
+        Row: {
+          id: string
+          review_id: string
+          user_id: string
+          kind: string
+          note: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          review_id: string
+          user_id: string
+          kind: string
+          note: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          review_id?: string
+          user_id?: string
+          kind?: string
+          note?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_scope_responses_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "service_scope_reviews"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       service_requests: {
         Row: {
           id: string
@@ -351,6 +503,10 @@ export type Database = {
           client_update: string | null
           created_at: string
           updated_at: string
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          authorization_understood: boolean
         }
         Insert: {
           id?: string
@@ -364,6 +520,10 @@ export type Database = {
           client_update?: string | null
           created_at?: string
           updated_at?: string
+          expected_outcome?: string | null
+          timeframe?: string | null
+          constraints?: string | null
+          authorization_understood?: boolean
         }
         Update: {
           id?: string
@@ -377,6 +537,10 @@ export type Database = {
           client_update?: string | null
           created_at?: string
           updated_at?: string
+          expected_outcome?: string | null
+          timeframe?: string | null
+          constraints?: string | null
+          authorization_understood?: boolean
         }
         Relationships: []
       }

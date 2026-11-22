@@ -181,3 +181,79 @@ The tool implements five practical capabilities:
 5. **Private, create-only evidence:** A new output directory contains `summary.json`, `pairs.csv` and an escaped, offline `review.html`. Existing directories are never replaced. Keep raw JSON evaluation reports and rendered video inspections alongside the results outside the repository.
 
 **Interpretation:** Lower held-out flow-prediction MSE does not establish realistic movement, recognizable images, prompt adherence or high-quality output. The tool compares *already evaluated* adapters only, never trains them. All models and footage remain local; no subscription or paid compute is activated. If you changed the dataset, baseline model, evaluation cases or noise levels, run a separate experiment series rather than forcing a comparison.
+
+
+## Inspect actual rendered MP4 frames without a GPU
+
+The previous steps benchmark **optimizer timings and held-out flow-prediction errors**. Neither number demonstrates that the output video looks good. For locally saved short MP4 outputs, use this separate offline CPU auditor to inspect the decoded images directly:
+
+```sh
+python gpu-worker/audit_video_render.py \
+  --reference ./tiny-render-before.mp4 \
+  --candidate ./tiny-render-after.mp4 \
+  --output ./video-frame-audit-01 \
+  --max-dark-frames 1 --max-identical-transitions 2 \
+  --fail-on-flags
+```
+
+Omit `--candidate` to inspect one MP4. The CLI uses **local FFprobe and FFmpeg only**; it does not generate or train video, contact an AI API, rent compute, or need PyTorch. Keep input videos and the output folder outside the repository.
+
+Five improvements in this milestone:
+
+1. **Bounded real MP4 decoding:** Checks that the input is a local regular MP4 (not a symlink), at most 32 MiB, with one video stream, fixed frame rate from 1 to 60 fps, no more than 64 decoded frames and no more than 512 × 512 pixels. FFmpeg decodes actual frames into CPU RGB data; an empty or mismatched decode fails.
+2. **Frame-level diagnostics:** Calculates mean RGB intensity, proportion of near-black pixels, dark-frame count, exact repeats, near-static transitions, and mean RGB difference between consecutive frames. This flags potentially frozen or dark renders without pretending all low-motion/low-light videos are bad.
+3. **Paired render comparison:** Requires identical width, height, frame rate and frame count, then measures exact matching frames and per-frame absolute RGB differences. Larger differences do **not** indicate a better video.
+4. **Private visual review:** Embeds actual first, middle and last decoded frames as PNG thumbnails in a portable local HTML report. Exports all per-frame metrics as CSV and a JSON summary with source file SHA-256 hashes.
+5. **Optional reproducible checks:** Choose upper limits for dark frames or identical transitions. With `--fail-on-flags`, the CLI saves the audit **before** exiting with status 2 if a limit is exceeded. Existing output directories are never overwritten.
+
+The dedicated `CPU video frame audit` GitHub workflow exercises these paths using real FFmpeg-generated test MP4s with motion, static scenes and mismatched frame counts. These fixtures validate decoding and diagnostics; **they are not evidence of a trained high-quality video generator**. Subject realism, motion coherence, caption alignment and overall quality still require separately reviewed rendered clips. Input video thumbnails may contain sensitive imagery, so keep the generated local reports private.
+
+
+## Assemble a real CPU-only short video from reviewed clips
+
+You can now **create a playable MP4**, without a GPU, from clips you own or have the right to use. This is a local timeline renderer, not a trained text-to-video generator. Use Python 3.11+, FFmpeg/FFprobe with libx264, and the `gpu-worker/assemble_video_storyboard.py` CLI.
+
+Create a private `storyboard.json` with exact source-file SHA-256 values (from `sha256sum clips/name.mp4` on Linux, or your preferred SHA-256 utility):
+
+```json
+{
+  "version": 1,
+  "shots": [
+    {
+      "file": "motion.mp4",
+      "source_sha256": "REPLACE_WITH_THE_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+      "start_frame": 4,
+      "frames": 8,
+      "caption": "A moving subject enters the frame",
+      "rights_ref": "original-footage-log-001"
+    },
+    {
+      "file": "ending.mp4",
+      "source_sha256": "REPLACE_WITH_THE_ACTUAL_64_CHARACTER_LOWERCASE_SHA256",
+      "start_frame": 0,
+      "frames": 8,
+      "caption": "The scene fades into darkness",
+      "rights_ref": "original-footage-log-002"
+    }
+  ]
+}
+```
+
+Replace the example digests before use. Source MP4s must have **fixed 16 FPS**, be no larger than 512 × 512 pixels or 32 MiB each, and have no more than 64 decoded frames. Choose 1–8 shots totaling no more than 64 frames (4 seconds); this intentionally stays within the existing short CPU audit boundary.
+
+```sh
+python gpu-worker/assemble_video_storyboard.py \
+  --storyboard ./storyboard.json --clips ./clips \
+  --output ./assembled-01 --width 128 --height 72
+```
+
+Six real capabilities in one milestone:
+
+1. **Reviewed shot manifests:** Every cut carries a relative local MP4 path, source SHA-256, starting frame, length, human caption and rights reference. Invalid paths, symlinks, corrupted checksums, unsafe text, oversized manifests and unsupported frame rates fail closed.
+2. **Real frame-accurate assembly:** FFmpeg decodes the selected source intervals, letterboxes them to a common even output size, concatenates the timeline and encodes a new H.264 MP4 at 16 FPS. It does not reuse or label test footage as AI-generated footage.
+3. **Subtitles as an editable sidecar:** The tool exports `captions.srt`, with captions placed on exact shot boundaries. The subtitles are deliberately **not burned into the MP4** and can be edited or switched off in compatible players.
+4. **Verified private output:** The compiler decodes the assembled MP4 again, confirms pixel dimensions, frame rate and total frame count, then records the rendered MP4 SHA-256 and all original source hashes in `manifest.json`. Original footage is never changed.
+5. **Actual visual review:** Local `preview.html` embeds an image taken from the rendered middle frame of each shot, alongside timeline frame positions, captions and rights references. Escaped HTML prevents captions from being interpreted as markup.
+6. **Create-only delivery and tests:** Outputs are packaged in a new directory with `video.mp4`, `captions.srt`, `manifest.json` and `preview.html`. Existing output directories are never intentionally overwritten. Dedicated CPU-only CI tests encode real sample videos with FFmpeg and verify cuts, rights/digests, the render, preview and failure behavior.
+
+**Scope:** The 4-second limit is intentional for short local experiments. This milestone does not synthesize new imagery, run a model, introduce audio, use external APIs or provision GPUs. Source clips may contain sensitive information: retain the outputs locally and review actual source rights independently.

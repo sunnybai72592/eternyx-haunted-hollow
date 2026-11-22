@@ -641,7 +641,7 @@ export default function DigitalWorkspace() {
       </>}
     </section>}
 
-    <details className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+    <details open className="rounded-2xl border border-border bg-card p-4 sm:p-6">
       <summary className="cursor-pointer text-lg font-semibold">Device scratchpad (browser-only)</summary>
       <p className="my-3 text-sm text-muted-foreground">
         Your existing local drafts and copies remain available here. They are not private cloud files and do not sync across devices.

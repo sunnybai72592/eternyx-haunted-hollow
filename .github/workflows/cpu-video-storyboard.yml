@@ -1,0 +1,41 @@
+name: CPU video storyboard assembly
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/audit_video_render.py"
+      - "gpu-worker/assemble_video_storyboard.py"
+      - "gpu-worker/tests/test_assemble_video_storyboard.py"
+      - ".github/workflows/cpu-video-storyboard.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/audit_video_render.py"
+      - "gpu-worker/assemble_video_storyboard.py"
+      - "gpu-worker/tests/test_assemble_video_storyboard.py"
+      - ".github/workflows/cpu-video-storyboard.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  assemble:
+    name: Render and verify real local MP4 storyboards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify local FFmpeg with libx264
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Render actual CPU-encoded shot sequences, captions, and review evidence
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          CUDA_VISIBLE_DEVICES: ""
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_assemble_video_storyboard.py' -v
