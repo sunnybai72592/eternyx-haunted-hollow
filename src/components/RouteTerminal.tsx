@@ -32,7 +32,7 @@ export default function RouteTerminal() {
   const destination = /^[a-z]+(?:-[a-z]+)*$/.test(section) ? section.replace(/-/g, " ") : "page";
   return <section className="mx-auto grid min-h-[50vh] w-full max-w-3xl items-center px-1 py-6">
     <p role="status" className="sr-only">Loading {section ? destination : "home"}</p>
-    {elapsed > 0 && <div aria-hidden="true" className="overflow-hidden rounded-xl border border-emerald-400/25 bg-[#040c08] font-mono text-emerald-200 shadow-xl">
+    {elapsed > 0 && <div aria-hidden="true" className="overflow-hidden rounded-xl border border-emerald-400/25 bg-card font-mono text-emerald-200 shadow-xl">
       <div className="flex items-center justify-between gap-2 border-b border-emerald-300/15 px-4 py-3 text-xs sm:px-6">
         <span className="tracking-widest text-emerald-400">ETERNYX / RUNTIME</span>
         <span className="tabular-nums">{(elapsed / 1000).toFixed(1)} s</span>
