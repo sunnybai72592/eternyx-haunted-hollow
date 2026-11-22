@@ -41,7 +41,14 @@ jobs:
         env:
           HF_HUB_OFFLINE: "1"
           OMP_NUM_THREADS: "1"
-        run: python gpu-worker/test_window_encoding_cpu.py
+        run: python gpu-worker/test_window_encoding_cpu.py --review-dir "$RUNNER_TEMP/wan-comparison"
+      - name: Save synthetic side-by-side CPU render
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiny-wan-baseline-left-adapter-right
+          path: ${{ runner.temp }}/wan-comparison
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify exact multi-window CPU training resume
         env:
           HF_HUB_OFFLINE: "1"
