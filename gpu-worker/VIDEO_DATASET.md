@@ -121,3 +121,11 @@ python gpu-worker/export_video_adapter.py ./pilot-01 ./inference-adapter
 ```
 
 The exporter checks the copied weights against the checkpoint metadata, completion receipt and evaluation report. It also compares the training step and dataset provenance before publishing the two inference files in a new directory. Keep the pilot directory for future training or inspection. Set `ETERNYX_WAN_ADAPTER_DIR` to the absolute export directory on a renderer with the matching local Wan snapshot. Exporting runs locally and does not start a render.
+
+## Compare benchmark plans within a time budget
+
+```sh
+python gpu-worker/estimate_training_time.py --pilot ./pilot-01/pilot.json --steps 100 --also-steps 250 500 --warmup-steps 1 --budget-minutes 60 --overhead-minutes 10
+```
+
+Each scenario uses the retained samples and the same overhead. The time-budget section rounds down the updates that fit at the measured mean and slowest rates. Leave at least two samples after warm-up. New pilot receipts identify the CPU architecture, Python version, configured OpenMP thread setting and transformer file hashes. Older receipts can still produce estimates with unavailable benchmark context shown as null. These projections assume comparable hardware, data and settings.
