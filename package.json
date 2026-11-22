@@ -17,7 +17,9 @@
     "range:ingress": "node scripts/cyber-range-ingress.mjs",
     "range:watchdog": "node scripts/cyber-range-watchdog.mjs",
     "range:audit": "node scripts/cyber-range-isolation-audit.mjs",
-    "docker:operator": "node scripts/docker-operator.mjs"
+    "docker:operator": "node scripts/docker-operator.mjs",
+    "docker:agent": "node scripts/docker-readonly-agent.mjs",
+    "docker:agent:client": "node scripts/docker-agent-client.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
