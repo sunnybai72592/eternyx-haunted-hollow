@@ -71,7 +71,7 @@ class EvaluationComparatorTests(unittest.TestCase):
         html = render_html(summary)
         self.assertIn("&lt;turbine&gt;", html)
         self.assertNotIn("<turbine>", html)
-        self.assertIn("not proof", summary["interpretation"] .replace("not proof", "not proof") if "not proof" in summary["interpretation"] else "not proof")
+        self.assertIn("not proof of video quality", summary["interpretation"])
         self.assertIn("not certify video quality", html)
         destination = self.root / "review"
         save_outputs(destination, summary, rows)
