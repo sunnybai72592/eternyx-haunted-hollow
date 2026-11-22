@@ -161,3 +161,15 @@
   .eternyx-arsenal-hero,
   .eternyx-settings-hero-glow { animation: none; }
 }
+
+/* Accessibility preference is not a decorative hue: preserve legible foreground,
+   background and border contrast while leaving the chosen accent available. */
+html.high-contrast[data-eternyx-palette] {
+  --background: 0 0% 0%;
+  --card: 0 0% 4%;
+  --foreground: 0 0% 100%;
+  --card-foreground: 0 0% 100%;
+  --muted-foreground: 0 0% 85%;
+  --border: 0 0% 68%;
+  --input: 0 0% 68%;
+}
