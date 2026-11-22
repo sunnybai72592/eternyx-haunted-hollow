@@ -228,9 +228,15 @@ def run_fixture(root, output):
     assert receipt["elapsed_seconds"] >= sum(receipt["stage_seconds"].values())
     assert len(receipt["step_seconds"]) == 3 and min(receipt["step_seconds"]) > 0
     projection = subprocess.check_output([sys.executable, str(worker_dir / "estimate_training_time.py"),
-                                          "--steps", "100", "--pilot", str(pilot / "pilot.json")])
+                                          "--steps", "100", "--also-steps", "250", "500", "--budget-minutes", "15",
+                                          "--warmup-steps", "1", "--pilot", str(pilot / "pilot.json")])
     estimate = json.loads(projection)
-    assert estimate["sample_count"] == 2
+    assert estimate["sample_count"] == 2 and estimate["warmup_steps_excluded"] == 1
+    assert estimate["benchmark_context"]["device"] == "cpu" and estimate["benchmark_context"]["base_transformer"]
+    assert [case["optimizer_steps"] for case in estimate["additional_scenarios"]] == [250, 500]
+    assert estimate["time_budget"]["steps_at_mean"] >= estimate["time_budget"]["steps_at_slowest_sample"]
+    if output:
+        (output / "benchmark-plan.json").write_bytes(projection)
     assert estimate["projected_hours"] == round(100 * sum(receipt["step_seconds"][1:]) / 2 / 3600, 4)
     if output:
         (output / "pilot-timing.json").write_bytes((pilot / "pilot.json").read_bytes())

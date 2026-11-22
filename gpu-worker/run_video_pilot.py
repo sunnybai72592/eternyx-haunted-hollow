@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import platform
 from pathlib import Path
 import subprocess
 import sys
@@ -41,8 +42,12 @@ def run_pilot(snapshot, clips, manifest, output, steps, seeds):
         subprocess.run([sys.executable, Path(__file__).with_name(script), *arguments], env=env, check=True)
         stage_seconds[script] = perf_counter() - started
     report = json.loads(evaluation.read_bytes())
+    model_metadata = json.loads((checkpoint / "adapter.json").read_bytes())
     receipt = {"version": 1, "training_step": report["training_step"], "training_dataset": report["training_dataset"],
                "adapter_sha256": report["adapter_sha256"], "evaluation_seeds": seeds, "cases": len(report["cases"]),
+               "benchmark_context": {"device": "cpu", "architecture": platform.machine(),
+                                     "python": platform.python_version(), "omp_num_threads": env.get("OMP_NUM_THREADS"),
+                                     "base_transformer": model_metadata["base"]},
                "elapsed_seconds": perf_counter() - pilot_start, "stage_seconds": stage_seconds,
                "step_seconds": json.loads((output / "step-seconds.json").read_bytes()),
                "checkpoint": str(checkpoint.relative_to(output)), "review": "review.html"}
