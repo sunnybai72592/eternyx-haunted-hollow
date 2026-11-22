@@ -385,6 +385,66 @@ export type Database = {
           },
         ]
       }
+      service_clarification_questions: {
+        Row: {
+          id: string
+          request_id: string
+          author_id: string
+          prompt: string
+          state: "open" | "closed"
+          created_at: string
+          closed_at: string | null
+          closed_by: string | null
+        }
+        Insert: {
+          id?: string
+          request_id: string
+          author_id: string
+          prompt: string
+          state?: "open" | "closed"
+          created_at?: string
+          closed_at?: string | null
+          closed_by?: string | null
+        }
+        Update: {
+          state?: "open" | "closed"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_clarification_questions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      service_clarification_answers: {
+        Row: {
+          id: string
+          question_id: string
+          author_id: string
+          answer: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          question_id: string
+          author_id: string
+          answer: string
+          created_at?: string
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "service_clarification_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: true
+            referencedRelation: "service_clarification_questions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       service_request_checks: {
         Row: {
           request_id: string
@@ -2539,6 +2599,63 @@ export type Database = {
       }
     }
     Views: {
+      service_admin_clarification_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          contact_email: string
+          company: string | null
+          status: string
+          client_update: string | null
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          created_at: string
+          updated_at: string
+          priority: string
+          priority_rank: number
+          assigned_admin_id: string | null
+          triage_updated_at: string | null
+          last_customer_activity_at: string | null
+          last_admin_activity_at: string | null
+          needs_follow_up: boolean
+          next_action_kind: string
+          next_review_on: string | null
+          review_bucket: string
+          last_checked_at: string | null
+          needs_my_check: boolean
+          open_clarification_count: number
+          awaiting_customer_count: number
+          awaiting_admin_review_count: number
+        }
+        Relationships: []
+      }
+      service_customer_clarification_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          status: string
+          client_update: string | null
+          created_at: string
+          updated_at: string
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          last_admin_activity_at: string | null
+          last_checked_at: string | null
+          has_updates_since_check: boolean
+          open_clarification_count: number
+          awaiting_customer_count: number
+          awaiting_admin_review_count: number
+        }
+        Relationships: []
+      }
       service_admin_check_queue: {
         Row: {
           id: string
