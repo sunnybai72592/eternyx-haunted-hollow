@@ -174,14 +174,14 @@ const CybersecurityHub = () => {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-48 top-0 h-[34rem] w-[34rem] rounded-full bg-cyan-500/[0.09] blur-[110px]" />
         <div className="absolute -right-48 top-72 h-[34rem] w-[34rem] rounded-full bg-violet-500/[0.08] blur-[110px]" />
-        <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
+        <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(hsl(var(--primary)/.12)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--primary)/.12)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
       </div>
 
       <div className="relative mx-auto max-w-[1440px] space-y-16 px-4 py-7 sm:px-6 sm:py-10 lg:px-10">
         <section className="grid gap-8 overflow-hidden rounded-[2rem] border border-white/10 bg-card/90 p-6 shadow-2xl shadow-black/30 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)] lg:gap-12 lg:p-12">
           <div className="relative z-10 flex flex-col items-start justify-center">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,.9)]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_12px_hsl(var(--primary)/.9)]" />
               ETERNYX / PILLAR 01
             </div>
             <div className="mb-5 flex items-center gap-3 text-slate-400">
