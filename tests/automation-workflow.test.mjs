@@ -63,6 +63,7 @@ test("empty workflow and invalid step configuration fail closed", () => {
   assert.throws(() => runLocalWorkflow("a", [step("replace", { value: "x" })]), (e) => e.code === "invalid_value");
   assert.throws(() => runLocalWorkflow("a", [step("keep_contains", { value: "" })]), (e) => e.code === "invalid_value");
   assert.throws(() => normalizeWorkflowSteps([step("trim"), step("trim")]), (e) => e.code === "invalid_step");
+  assert.throws(() => normalizeWorkflowSteps([{ id: 12, kind: "trim" }]), (e) => e.code === "invalid_step");
   assert.throws(() => normalizeWorkflowSteps([step("unique", { caseSensitive: "yes" })]), (e) => e.code === "invalid_value");
 });
 
