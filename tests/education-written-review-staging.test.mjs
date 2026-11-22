@@ -52,7 +52,7 @@ test("review duplicate request is idempotent, changed score requires deliberate 
 });
 test("anonymous, students, unapproved instructors and other instructors are rejected",()=>{
   assert.match(fixture,/Anonymous|anon/);
-  assert.match(fixture,/Student|student/);
+  assert.match(fixture,/SET request\.jwt\.claim\.sub='00000000-0000-4000-8000-000000000004'/);
   assert.match(fixture,/unapproved instructor/i);
   assert.match(fixture,/Instructor B/);
   assert.match(fixture,/Revoking a verified instructor removes access immediately/);
