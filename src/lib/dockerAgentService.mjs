@@ -35,10 +35,13 @@ export function createDockerAgentServer({ token, runDocker }) {
   if (typeof runDocker !== "function") throw new TypeError("A verified Docker runner is required.");
   let started = Date.now(), count = 0;
   const server = createServer(async (req, res) => {
-    const port = server.address()?.port;
     const remote = req.socket.remoteAddress;
     if (remote !== "127.0.0.1" && remote !== "::ffff:127.0.0.1") return reply(res, 403, { error: "Loopback clients only." });
-    if (req.headers.host !== "127.0.0.1:" + port || req.headers.origin ||
+    // SSH tunnels often use a different workstation-side port than the agent's listening port.
+    // Allow only a numeric loopback Host, never domain names or non-loopback addresses.
+    const host = /^127\.0\.0\.1:(\d{4,5})$/.exec(req.headers.host || "");
+    const forwardedPort = host ? Number(host[1]) : 0;
+    if (!host || forwardedPort < 1024 || forwardedPort > 65535 || req.headers.origin ||
       req.headers["access-control-request-method"]) return reply(res, 403, { error: "Origin or host is not permitted." });
     if (!equalsToken(req.headers.authorization, token)) return reply(res, 401, { error: "Authentication required." });
     if (req.method !== "GET") return reply(res, 405, { error: "Only read-only GET is supported." });
