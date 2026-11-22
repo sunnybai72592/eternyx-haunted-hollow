@@ -115,14 +115,12 @@ END
 $test$;
 -- 7. Duplicate identical review is truly idempotent (timestamp preserved).
 SELECT pg_catalog.set_config('eternyx.review_time',
- (SELECT reviewed_at::text FROM public.education_written_reviews
- WHERE answer_id=pg_catalog.current_setting('eternyx.review_answer')::uuid),false);
+ (public.education_instructor_written_review_queue()->0->>'reviewed_at'),false);
 DO $test$
 BEGIN
  PERFORM public.education_instructor_review_written_answer(
  pg_catalog.current_setting('eternyx.review_answer')::uuid,1);
- IF (SELECT reviewed_at::text FROM public.education_written_reviews
- WHERE answer_id=pg_catalog.current_setting('eternyx.review_answer')::uuid)
+ IF (public.education_instructor_written_review_queue()->0->>'reviewed_at')
  IS DISTINCT FROM pg_catalog.current_setting('eternyx.review_time')
  THEN RAISE EXCEPTION 'Identical review updated audit timestamp'; END IF;
 END
