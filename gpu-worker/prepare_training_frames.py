@@ -26,6 +26,9 @@ def _prepare_split(root, manifest, name, split):
     if len(matches) != 1 or matches[0]["split"] != split:
         raise ValueError(f"Select one {split}-split clip by its exact manifest path")
     row = matches[0]
+    start = row.get("start_frame", 0)
+    if type(start) is not int or not 0 <= start <= 2**31 - 1:
+        raise ValueError("Invalid start_frame")
     scene = row["scene"].strip().casefold()
     if not scene or not row["caption"].strip() or row["rights"] not in ("original", "licensed") or not row["rights_ref"].strip():
         raise ValueError("Missing training annotation or rights reference")
@@ -45,7 +48,8 @@ def _prepare_split(root, manifest, name, split):
     decoded = subprocess.run([
         "ffmpeg", "-nostdin", "-v", "error", "-protocol_whitelist", "file", "-f", "mov",
         "-i", str(path), "-map", "0:v:0", "-an", "-sn", "-dn", "-vf",
-        f"fps={FPS},scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,"
+        f"fps={FPS},trim=start_frame={start}:end_frame={start + FRAMES},setpts=PTS-STARTPTS,"
+        f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,"
         f"pad={WIDTH}:{HEIGHT}:(ow-iw)/2:(oh-ih)/2,setsar=1",
         "-frames:v", str(FRAMES), "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1",
     ], capture_output=True, check=True, timeout=60)
@@ -53,7 +57,7 @@ def _prepare_split(root, manifest, name, split):
         raise ValueError("Clip is too short for 17 frames at 16 fps")
     frames = np.frombuffer(decoded.stdout, dtype=np.uint8).reshape(FRAMES, HEIGHT, WIDTH, 3)
     return {"frames": frames, "caption": row["caption"], "scene": row["scene"],
-            "sha256": digest, "fps": FPS, "version": 1}
+            "sha256": digest, "start_frame": start, "fps": FPS, "version": 1}
 
 
 def main():

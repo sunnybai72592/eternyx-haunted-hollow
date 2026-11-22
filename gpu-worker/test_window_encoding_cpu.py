@@ -117,6 +117,8 @@ def run_fixture(root, output):
         rows.append({"file": video.name, "sha256": fingerprint(video), "caption": caption,
                      "scene": source, "split": split, "rights": "original",
                      "rights_ref": "synthetic test generator"})
+    for row in rows:
+        row["start_frame"] = 4
     manifest = {"version": 1, "clips": rows}
     window = prepare_frames(root, manifest, "testsrc2.mp4")
     held_out = {row["scene"]: prepare_evaluation_frames(root, manifest, row["file"])
@@ -151,6 +153,7 @@ def run_fixture(root, output):
                       str(root), str(manifest_path), str(footage_review)]
     subprocess.run(review_command, check=True)
     page = footage_review.read_text()
+    assert "<figcaption>0.25 s</figcaption>" in page
     assert page.count("data:image/png;base64,") == 9
     assert "Training (1)" in page and "Evaluation (2)" in page
     cards = page.split("<article>")[1:]
@@ -169,6 +172,7 @@ def run_fixture(root, output):
     assert [entry["source_file"] for entry in entries] == ["testsrc2.mp4"]
     training_window = dataset / entries[0]["window"]
     assert fingerprint(training_window) == entries[0]["window_sha256"]
+    assert entries[0]["start_frame"] == 4
     assert entries[0]["source_sha256"] == window["sha256"]
     train_command = [sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
                      str(root / "manifest-training"), "--dataset-index", str(dataset / "index.json"),
@@ -191,6 +195,7 @@ def run_fixture(root, output):
                     str((output or root) / "evaluation-review.html")], check=True)
     result = json.loads(report.read_text())
     assert [case["scene"] for case in result["cases"]] == ["smptebars", "testsrc"]
+    assert all(case["start_frame"] == 4 for case in result["cases"])
     assert all(case["seed"] == 7 for case in result["cases"])
     assert result["training_dataset"] == expected_dataset and result["training_step"] == 1
     assert result["adapter_sha256"] == fingerprint(indexed_checkpoint / "adapter.safetensors")

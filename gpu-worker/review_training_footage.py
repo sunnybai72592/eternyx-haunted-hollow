@@ -17,14 +17,15 @@ from prepare_training_frames import FPS, prepare_evaluation_frames, prepare_fram
 
 def clip_card(row, window):
     frames = window["frames"]
+    start = window["start_frame"]
     previews = []
     for index in (0, len(frames) // 2, len(frames) - 1):
         photo = Image.fromarray(frames[index]).resize((192, 112), Image.Resampling.LANCZOS)
         encoded = BytesIO()
         photo.save(encoded, format="PNG")
         data = base64.b64encode(encoded.getvalue()).decode("ascii")
-        previews.append(f'<figure><img width="192" height="112" alt="Frame {index + 1}" '
-                        f'src="data:image/png;base64,{data}"><figcaption>{index / FPS:g} s</figcaption></figure>')
+        previews.append(f'<figure><img width="192" height="112" alt="Frame {start + index + 1}" '
+                        f'src="data:image/png;base64,{data}"><figcaption>{(start + index) / FPS:g} s</figcaption></figure>')
     identical = sum(np.array_equal(a, b) for a, b in zip(frames, frames[1:]))
     question = row.get("quality_check")
     check = f"<p><b>Review question</b> {escape(question)}</p>" if question else ""

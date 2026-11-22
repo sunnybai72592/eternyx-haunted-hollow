@@ -21,10 +21,10 @@ class DatasetTests(unittest.TestCase):
             self.rows.append([name, str(index), split, "A door opens", "original",
                               "Creator log 7", "Does the door open in the same direction?"])
 
-    def run_check(self):
+    def run_check(self, fields=FIELDS):
         sheet = io.StringIO()
         writer = csv.writer(sheet)
-        writer.writerows([FIELDS, *self.rows])
+        writer.writerows([fields, *self.rows])
         sheet.seek(0)
         return prepare(self.root, sheet, inspect=lambda path: {"width": 640})
 
@@ -33,6 +33,17 @@ class DatasetTests(unittest.TestCase):
         self.rows.reverse()
         self.assertEqual(first, self.run_check())
         self.assertEqual(len(first["clips"][0]["sha256"]), 64)
+
+    def test_optional_start_frame(self):
+        fields = (*FIELDS, "start_frame")
+        self.rows[0].append("12")
+        self.rows[1].append("")
+        manifest = self.run_check(fields)
+        self.assertEqual(manifest["clips"][0]["start_frame"], 12)
+        self.assertNotIn("start_frame", manifest["clips"][1])
+        self.rows[0][-1] = "-1"
+        with self.assertRaisesRegex(ValueError, "start_frame"):
+            self.run_check(fields)
 
     def test_scene_leakage(self):
         self.rows[1][1] = self.rows[0][1]

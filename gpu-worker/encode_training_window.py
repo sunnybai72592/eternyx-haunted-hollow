@@ -51,6 +51,7 @@ def main():
             parser.error("Expected a version 1 training window at 16 fps")
         caption = str(window["caption"].item())
         metadata = {key: str(window[key].item()) for key in ("sha256", "scene", "caption")}
+        metadata["start_frame"] = str(window["start_frame"].item()) if "start_frame" in window else "0"
     root = args.snapshot.resolve(strict=True)
     vae, tokenizer, encoder = load_encoders(root)
     data = save(encode(frames, caption, vae, tokenizer, encoder), metadata=metadata)

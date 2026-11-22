@@ -33,8 +33,9 @@ def prepare_dataset(snapshot, clips, manifest_path, output):
             filename = f"window-{index:08d}.safetensors"
             path = staged / filename
             metadata = {key: clip[key] for key in ("scene", "caption", "sha256")}
+            metadata["start_frame"] = str(clip["start_frame"])
             save_file(tensors, str(path), metadata=metadata)
-            windows.append({"window": filename, "source_file": row["file"],
+            windows.append({"window": filename, "start_frame": clip["start_frame"], "source_file": row["file"],
                             "source_sha256": clip["sha256"], "window_sha256": fingerprint(path)})
         index_path = staged / "index.json"
         index_path.write_text(json.dumps({"version": 1, "manifest_sha256": hashlib.sha256(raw).hexdigest(),

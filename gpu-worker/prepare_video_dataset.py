@@ -30,13 +30,18 @@ def prepare(root, sheet, inspect=inspect_clip):
     root = root.resolve(strict=True)
     clips, seen, scenes = [], set(), {}
     reader = csv.DictReader(sheet)
-    if sorted(reader.fieldnames or []) != sorted(FIELDS):
+    if sorted(reader.fieldnames or []) not in (sorted(FIELDS), sorted((*FIELDS, "start_frame"))):
         raise ValueError("CSV headers must be " + ",".join(FIELDS))
     for row in reader:
         try:
             if None in row or any(v is None for v in row.values()):
                 raise ValueError("incorrect number of fields")
             item = {key: value.strip() for key, value in row.items()}
+            offset = item.pop("start_frame", "")
+            if offset:
+                if not offset.isascii() or not offset.isdecimal() or int(offset) > 2**31 - 1:
+                    raise ValueError("start_frame must be a nonnegative 32-bit frame offset")
+                item["start_frame"] = int(offset)
             if any(not item[key] for key in FIELDS):
                 raise ValueError("all fields are required")
             if item["rights"] not in ("original", "licensed"):

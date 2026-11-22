@@ -15,13 +15,17 @@ courtyard-pan.mp4,courtyard-evening,eval,Camera pans left as a bicycle crosses t
 4. Run `python gpu-worker/prepare_video_dataset.py /path/to/clips annotations.csv dataset-v1.json`. Choose a new output filename for each reviewed version. A successful manifest includes the split, caption, rights reference, evaluation question, SHA-256, frame dimensions and duration of each clip.
 5. Review clips with a video player for motion, blur, personal information and caption accuracy. ffprobe checks stream metadata. For a later experiment, train only on entries marked `train`. Keep the `eval` clips and their questions for a blind comparison. Two clips exercise the workflow; they are not a sufficient training set.
 
-## Inspect the opening windows before encoding
+## Choose the action in each clip
+
+Add an optional `start_frame` column to the annotation CSV. Count from zero on the resampled 16 fps timeline. For example, `32` selects the 17 frames from 2.00 through 3.00 seconds. A blank or omitted value selects the opening window. Select a point with 17 real frames remaining and caption the selected action. The contact sheet displays timestamps relative to the clip. Encoded windows and evaluation cases carry the selected offset.
+
+## Inspect the selected windows before encoding
 
 ```sh
 python gpu-worker/review_training_footage.py ./clips dataset-v1.json footage-review.html
 ```
 
-Open the HTML locally to see the first, middle and last decoded frames, captions, review questions and permission references for each split. The identical-frame count compares every adjacent RGB pair in the opening window. A static shot can legitimately have repeated frames. The file embeds source thumbnails and permission references, so keep it with the local footage. The CPU command uses FFmpeg, NumPy and Pillow.
+Open the HTML locally to see the first, middle and last decoded frames, captions, review questions and permission references for each split. The identical-frame count compares every adjacent RGB pair in the selected window. A static shot can legitimately have repeated frames. The file embeds source thumbnails and permission references, so keep it with the local footage. The CPU command uses FFmpeg, NumPy and Pillow.
 
 ## Estimate a pilot's training time
 
@@ -43,7 +47,7 @@ Use a reviewed local manifest, Python 3.11+, NumPy and FFmpeg. For example:
 python gpu-worker/prepare_training_frames.py ./clips dataset-v1.json workshop-wide.mp4 workshop-window.npz
 ```
 
-This CPU step takes the first 17 frames at 16 fps after resampling, fits the picture inside 384 × 224 with black padding, and stores RGB bytes in time × height × width × channels order. Short clips fail instead of receiving invented frames. The archive includes the original caption, scene, frame rate and source digest. Open it with `numpy.load(path, allow_pickle=False)`. Keep clips unchanged while preparing windows, and check that the caption describes the opening window. VAE encoding and caption embedding are still required before these frames can enter the Wan adapter training step.
+This CPU step takes 17 frames from the selected offset (zero by default) at 16 fps after resampling, fits the picture inside 384 × 224 with black padding, and stores RGB bytes in time × height × width × channels order. Short clips fail instead of receiving invented frames. The archive includes the original caption, scene, frame rate and source digest. Open it with `numpy.load(path, allow_pickle=False)`. Keep clips unchanged while preparing windows, and check that the caption describes the opening window. VAE encoding and caption embedding are still required before these frames can enter the Wan adapter training step.
 
 ## Prepare and train from a whole manifest
 
@@ -54,7 +58,7 @@ python gpu-worker/encode_training_manifest.py ./wan-snapshot ./clips dataset-v1.
 python gpu-worker/train_video_adapter.py ./wan-snapshot ./training --dataset-index ./encoded-v1/index.json --manifest dataset-v1.json --steps 100
 ```
 
-The encoder loads the models once, checks each training clip against the manifest and saves its opening window. The numbered filenames follow source-path order. The trainer checks the manifest digest, ordered training sources, window annotations and encoded file digests before updating weights, including on resume. Use an immutable local dataset during training. Evaluation clips stay in the held-out split. The step count above is illustrative.
+The encoder loads the models once, checks each training clip against the manifest and saves its selected window. The numbered filenames follow source-path order. The trainer checks the manifest digest, ordered training sources, window annotations and encoded file digests before updating weights, including on resume. Use an immutable local dataset during training. Evaluation clips stay in the held-out split. The step count above is illustrative.
 
 ## Score an adapter on reviewed footage
 
@@ -64,6 +68,6 @@ Run the evaluator on a CPU machine with FFmpeg, the training dependencies, the l
 python gpu-worker/evaluate_video_adapter.py ./wan-snapshot ./training/step-100 ./clips dataset-v1.json evaluation.json --seeds 1701 1702 1703
 ```
 
-The evaluator encodes the opening window and caption of each evaluation clip. Each paired measurement uses identical noise with the adapter disabled and enabled. The JSON records the clip, manifest and adapter hashes, the seed and the scores at three noise levels. A negative mean delta means lower flow prediction error on that clip and seed. Judge visible motion and prompt fidelity separately using rendered clips.
+The evaluator encodes the selected window and caption of each evaluation clip. Each paired measurement uses identical noise with the adapter disabled and enabled. The JSON records the clip, manifest and adapter hashes, the seed and the scores at three noise levels. A negative mean delta means lower flow prediction error on that clip and seed. Judge visible motion and prompt fidelity separately using rendered clips.
 
 Indexed training checkpoints record the reviewed manifest SHA-256, encoded index SHA-256, number of training windows and completed step. Evaluation copies these fields into the report and requires the original manifest bytes for indexed checkpoints. Keep that manifest alongside the dataset. Older bundles and runs trained from explicit window lists can still be evaluated. Their reports use null for any unavailable training provenance.
