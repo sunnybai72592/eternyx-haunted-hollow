@@ -173,3 +173,15 @@ html.high-contrast[data-eternyx-palette] {
   --border: 0 0% 68%;
   --input: 0 0% 68%;
 }
+
+/* Account hero treatment responds to all five choices, with legible dark
+   surfaces underneath rather than permanent blue/teal RGB gradients. */
+.eternyx-account-hero-glow {
+  background:
+    radial-gradient(ellipse at 80% 9%, hsl(var(--primary) / .14), transparent 35%),
+    linear-gradient(115deg,
+      hsl(var(--card) / .98),
+      hsl(var(--background) / .95) 55%,
+      hsl(var(--accent) / .065));
+  pointer-events: none;
+}

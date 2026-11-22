@@ -26,7 +26,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
         <div className="absolute -top-72 left-[45%] h-[46rem] w-[46rem] -translate-x-1/2 rounded-full bg-cyan-400/[0.13] blur-[130px]" />
         <div className="absolute right-[-18rem] top-[28rem] h-[38rem] w-[38rem] rounded-full bg-violet-600/[0.13] blur-[130px]" />
         <div className="absolute bottom-[-18rem] left-[-15rem] h-[34rem] w-[34rem] rounded-full bg-blue-500/[0.09] blur-[120px]" />
-        <div className="absolute inset-0 opacity-[0.13]" style={{ backgroundImage: "linear-gradient(rgba(148,163,184,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.12) 1px, transparent 1px)", backgroundSize: "72px 72px", maskImage: "linear-gradient(to bottom, black, transparent 88%)" }} />
+        <div className="absolute inset-0 opacity-[0.13]" style={{ backgroundImage: "linear-gradient(hsl(var(--primary)/.12) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)/.12) 1px, transparent 1px)", backgroundSize: "72px 72px", maskImage: "linear-gradient(to bottom, black, transparent 88%)" }} />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-7 sm:px-6 sm:pt-10 lg:px-8">
@@ -78,7 +78,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
               </div>
             ))}
             <div className="absolute left-[17%] top-[12%] h-2 w-2 rounded-full bg-cyan-200 shadow-[0_0_18px_hsl(var(--primary)/.9)]" />
-            <div className="absolute bottom-[12%] right-[18%] h-1.5 w-1.5 rounded-full bg-violet-200 shadow-[0_0_16px_rgba(196,181,253,.9)]" />
+            <div className="absolute bottom-[12%] right-[18%] h-1.5 w-1.5 rounded-full bg-violet-200 shadow-[0_0_16px_hsl(var(--accent)/.9)]" />
           </div>
         </section>
 

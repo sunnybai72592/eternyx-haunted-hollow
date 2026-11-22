@@ -128,8 +128,8 @@ export default function AccountCenter() {
       </div>
 
       <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-card shadow-[0_28px_100px_rgba(0,0,0,.38)]">
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_78%_10%,hsl(var(--primary)/.13),transparent_36%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_55%,rgba(13,20,43,.92))]" />
-        <div aria-hidden="true" className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+        <div aria-hidden="true" className="absolute inset-0 eternyx-account-hero-glow" />
+        <div aria-hidden="true" className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(hsl(var(--primary)/.12)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--primary)/.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center lg:p-10">
           <div className="min-w-0">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/[0.07] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-100">

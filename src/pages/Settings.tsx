@@ -109,7 +109,7 @@ const Settings = () => {
 
       <section className="relative overflow-hidden rounded-[28px] border border-primary/15 bg-card shadow-[0_28px_100px_rgba(0,0,0,.38)]">
         <div aria-hidden="true" className="absolute inset-0 eternyx-settings-hero-glow" />
-        <div aria-hidden="true" className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+        <div aria-hidden="true" className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(hsl(var(--primary)/.12)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--primary)/.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative flex flex-col gap-5 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
           <div className="max-w-2xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.07] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
