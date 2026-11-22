@@ -22,7 +22,7 @@ type EditableProfile = Partial<Pick<UserProfile,
   'company' | 'website' | 'github_url' | 'twitter_url' | 'linkedin_url'
 >>;
 
-const fieldClass = 'h-11 rounded-xl border-white/[0.10] bg-[#070e19]/85 px-3.5 text-sm text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/20 transition focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10';
+const fieldClass = 'h-11 rounded-xl border-white/[0.10] bg-card/85 px-3.5 text-sm text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/20 transition focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10';
 const labelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400';
 
 const Profile = () => {
@@ -89,7 +89,7 @@ const Profile = () => {
   if (authLoading || !isAuthenticated || !user) {
     return (
       <main className="mx-auto flex min-h-[55vh] max-w-6xl items-center justify-center px-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0a1020]/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-card/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
           <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
           Restoring your ETERNYX identity…
         </div>
@@ -114,7 +114,7 @@ const Profile = () => {
         </div>
       </div>
 
-      <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-[#080f1e] shadow-[0_28px_100px_rgba(0,0,0,.38)]">
+      <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-card shadow-[0_28px_100px_rgba(0,0,0,.38)]">
         <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_82%_8%,hsl(var(--primary)/.14),transparent_34%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_58%,rgba(13,20,43,.92))]" />
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:p-10">
@@ -142,7 +142,7 @@ const Profile = () => {
 
       <section className="mt-8">
         <Tabs defaultValue="identity" className="w-full">
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.09] bg-[#09111f]/90 p-1.5 shadow-xl sm:max-w-[520px]">
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.09] bg-card/90 p-1.5 shadow-xl sm:max-w-[520px]">
             <TabsTrigger value="identity" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/.15)] sm:text-xs"><UserRound className="h-4 w-4" /> Identity</TabsTrigger>
             <TabsTrigger value="privacy" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/.15)] sm:text-xs"><ShieldCheck className="h-4 w-4" /> Privacy</TabsTrigger>
             <TabsTrigger value="security" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/.15)] sm:text-xs"><KeyRound className="h-4 w-4" /> Account & data</TabsTrigger>
@@ -150,7 +150,7 @@ const Profile = () => {
 
           <TabsContent value="identity" className="mt-5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
             <div className="grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
-              <Card className="overflow-hidden rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-6">
+              <Card className="overflow-hidden rounded-2xl border-white/[0.09] bg-card/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-6">
                 <div className="mb-5">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Profile image</p>
                   <h2 className="mt-2 text-lg font-semibold text-white">Your presence</h2>
@@ -163,7 +163,7 @@ const Profile = () => {
                 </div>
               </Card>
 
-              <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
+              <Card className="rounded-2xl border-white/[0.09] bg-card/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Personal information</p>
@@ -177,7 +177,7 @@ const Profile = () => {
                   <div className="space-y-2"><Label htmlFor="username" className={labelClass}>Username</Label><div className="relative"><AtSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="username" autoComplete="nickname" value={local.username || ''} onChange={(e) => updateField('username', e.target.value)} placeholder="Your unique handle" className={fieldClass + ' pl-9'} /></div></div>
                   <div className="space-y-2"><Label htmlFor="full_name" className={labelClass}>Full name</Label><div className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="full_name" autoComplete="name" value={local.full_name || ''} onChange={(e) => updateField('full_name', e.target.value)} placeholder="How should we address you?" className={fieldClass + ' pl-9'} /></div></div>
                   <div className="space-y-2 sm:col-span-2"><Label htmlFor="email" className={labelClass}>Email address</Label><div className="relative"><Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="email" value={user.email || ''} readOnly aria-readonly="true" className={fieldClass + ' cursor-not-allowed pl-9 text-slate-400'} /></div><p className="text-[10px] text-slate-600">Your sign-in email is managed by your authentication provider.</p></div>
-                  <div className="space-y-2 sm:col-span-2"><Label htmlFor="bio" className={labelClass}>About you</Label><Textarea id="bio" value={local.bio || ''} onChange={(e) => updateField('bio', e.target.value)} rows={4} maxLength={500} placeholder="A short introduction, what you build, or what you're interested in…" className="min-h-[112px] resize-y rounded-xl border-white/[0.10] bg-[#070e19]/85 px-3.5 py-3 text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10" /><p className="text-right text-[10px] text-slate-600">{(local.bio || '').length}/500</p></div>
+                  <div className="space-y-2 sm:col-span-2"><Label htmlFor="bio" className={labelClass}>About you</Label><Textarea id="bio" value={local.bio || ''} onChange={(e) => updateField('bio', e.target.value)} rows={4} maxLength={500} placeholder="A short introduction, what you build, or what you're interested in…" className="min-h-[112px] resize-y rounded-xl border-white/[0.10] bg-card/85 px-3.5 py-3 text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus-visible:border-cyan-200/40 focus-visible:ring-2 focus-visible:ring-cyan-200/10" /><p className="text-right text-[10px] text-slate-600">{(local.bio || '').length}/500</p></div>
                   <div className="space-y-2"><Label htmlFor="location" className={labelClass}>Location</Label><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="location" autoComplete="address-level2" value={local.location || ''} onChange={(e) => updateField('location', e.target.value)} placeholder="City or region" className={fieldClass + ' pl-9'} /></div></div>
                   <div className="space-y-2"><Label htmlFor="job_title" className={labelClass}>Role / profession</Label><div className="relative"><BriefcaseBusiness className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="job_title" autoComplete="organization-title" value={local.job_title || ''} onChange={(e) => updateField('job_title', e.target.value)} placeholder="Your professional role" className={fieldClass + ' pl-9'} /></div></div>
                   <div className="space-y-2"><Label htmlFor="company" className={labelClass}>Organization</Label><Input id="company" autoComplete="organization" value={local.company || ''} onChange={(e) => updateField('company', e.target.value)} placeholder="Company or organization" className={fieldClass} /></div>
@@ -204,7 +204,7 @@ const Profile = () => {
           </TabsContent>
 
           <TabsContent value="privacy" className="mt-5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
-            <Card className="rounded-2xl border-white/[0.09] bg-[#0a1322]/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
+            <Card className="rounded-2xl border-white/[0.09] bg-card/90 p-5 shadow-[0_20px_60px_rgba(0,0,0,.22)] sm:p-7">
               <div className="mb-6">
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Visibility & consent</p>
                 <h2 className="mt-2 text-xl font-semibold text-white">Your privacy, your call.</h2>
