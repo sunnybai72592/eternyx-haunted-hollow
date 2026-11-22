@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import LocalRenderReview from "@/components/LocalRenderReview";
 import { Clapperboard, Copy, Download, Film, Music2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -353,6 +354,8 @@ export default function LocalVideoEditor() {
             <p className="text-xs text-amber-100">This browser does not execute Python, render a finished MP4, upload your footage or run a remote worker. It exports a validated local project for the real offline renderer.</p>
           </div>
         </section>
+        <LocalRenderReview project={ready} profile={profile} quality={quality}
+          original={chosen ? {name: chosen.name, url: chosen.url} : undefined} />
       </CardContent>
     </Card>
   );
