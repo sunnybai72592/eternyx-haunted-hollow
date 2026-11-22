@@ -1,0 +1,47 @@
+name: CTF Firecracker Jailed Offline Boot Controller
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/provider/firecracker-boot-controller.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-jailer-contract.mjs'
+      - 'scripts/cyber-range-microvm-plan.mjs'
+      - 'tests/ctf-firecracker-boot-controller.test.mjs'
+      - 'package.json'
+      - '.github/workflows/ctf-firecracker-boot-controller.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-unix-protocol:
+    name: Verify real Firecracker Unix API protocol and teardown without KVM or cloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run real Unix-socket protocol and offline VM safety tests
+        run: node --test tests/ctf-firecracker-boot-controller.test.mjs
+      - name: Operator-only plan must refuse missing pinned images
+        run: |
+          if node scripts/cyber-range-microvm-plan.mjs \
+            --session 123e4567-e89b-42d3-a456-426614174001 \
+            --kernel-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --rootfs-sha bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+            --uid 22001 --gid 22001; then
+            echo 'Unverified guest artifacts were accepted' >&2
+            exit 1
+          fi
+      - name: No VM or public network may be started in this workflow
+        run: |
+          if pgrep -x firecracker >/dev/null 2>&1; then
+            echo 'Unapproved Firecracker process detected' >&2
+            exit 1
+          fi
+          if test -e /dev/kvm; then
+            echo 'KVM availability does not permit automated guest boot' 
+          fi
