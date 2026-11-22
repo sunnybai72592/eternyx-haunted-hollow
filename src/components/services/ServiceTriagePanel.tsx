@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ClipboardList, LockKeyhole, RefreshCw, Save, UserRoundCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
@@ -16,6 +16,10 @@ const priorities: readonly Triage['priority'][] = ['low', 'normal', 'high', 'urg
 
 export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: string; onSaved?: () => void }) {
   const currentUser = useAuthStore((s) => s.user);
+  const viewerId = currentUser?.id ?? null;
+  const viewerKey = requestId + ':' + (viewerId ?? 'signed-out');
+  const loadGeneration = useRef(0);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [saved, setSaved] = useState<Triage | null>(null);
   const [priority, setPriority] = useState<Triage['priority']>('normal');
   const [assignedId, setAssignedId] = useState<string | null>(null);
@@ -26,28 +30,61 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    if (!viewerId) {
+      setLoadedKey(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
+    const { data: allowed, error: permissionError } = await supabase.rpc('is_admin');
+    if (generation !== loadGeneration.current) return;
+    if (permissionError || allowed !== true) {
+      setError('Administrator access could not be verified.');
+      setLoadedKey(null);
+      setSaved(null);
+      setLoading(false);
+      return;
+    }
     const { data, error: loadError } = await supabase.from('service_request_triage')
       .select('request_id,priority,assigned_admin_id,internal_note,updated_at')
       .eq('request_id', requestId).maybeSingle();
+    if (generation !== loadGeneration.current) return;
     if (loadError) {
       console.error('Private triage load failed', loadError);
       setError('Could not load internal triage. Check database access and migration.');
+      setLoadedKey(null);
+      setSaved(null);
     } else {
       const record = data as Triage | null;
       setSaved(record);
       setPriority(record?.priority ?? 'normal');
       setAssignedId(record?.assigned_admin_id ?? null);
       setNote(record?.internal_note ?? '');
+      setLoadedKey(viewerKey);
     }
     setLoading(false);
-  }, [requestId]);
+  }, [requestId, viewerId, viewerKey]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    loadGeneration.current += 1;
+    setSaved(null);
+    setLoadedKey(null);
+    setPriority('normal');
+    setAssignedId(null);
+    setNote('');
+    setNotice('');
+    setError('');
+  }, [viewerKey]);
+
+  useEffect(() => {
+    void load();
+    return () => { loadGeneration.current += 1; };
+  }, [load]);
 
   const save = async () => {
-    if (saving || !currentUser || loading) return;
+    if (saving || !currentUser || loading || loadedKey !== viewerKey) return;
     if (note.length > 2000) { setError('Internal note must be 2,000 characters or fewer.'); return; }
     setSaving(true);
     setError('');
@@ -66,6 +103,7 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
       const { data, error: writeError } = await write;
       if (writeError || !data) throw writeError ?? new Error('Triage changed in another session');
       setSaved(data as Triage);
+      setLoadedKey(viewerKey);
       setNotice('Private triage saved for administrators only.');
       onSaved?.();
     } catch (reason) {
@@ -87,7 +125,7 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
       </div>
       {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="mt-3 text-sm text-primary">{notice}</p>}
-      {loading ? <p className="mt-4 text-sm text-muted-foreground">Loading private triage…</p> : (
+      {loading || loadedKey !== viewerKey ? <p className="mt-4 text-sm text-muted-foreground">Verifying private triage…</p> : (
         <div className="mt-5 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div><label htmlFor={'triage-priority-' + requestId} className="mb-2 block text-sm font-semibold">Operator priority</label>
