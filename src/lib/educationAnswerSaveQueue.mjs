@@ -20,11 +20,7 @@ export function createEducationAnswerSaveQueue(save) {
       throw new TypeError("A question identifier is required");
     }
     // Copy fields; future React state changes must not mutate the queued item.
-    pending.set(answer.questionId, {
-      questionId: answer.questionId,
-      selectedOptionId: answer.selectedOptionId,
-      shortAnswer: answer.shortAnswer,
-    });
+    pending.set(answer.questionId, { ...answer });
   }
 
   async function drain() {
