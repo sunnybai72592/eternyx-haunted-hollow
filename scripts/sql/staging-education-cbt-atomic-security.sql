@@ -112,9 +112,28 @@ BEGIN
       RAISE EXCEPTION 'Attempt already completed or expired' USING ERRCODE = '22023';
     END IF;
   ELSE
+    -- Two simultaneous starts can both observe no existing attempt.
+    -- Preserve the first committed attempt; never let the loser create a
+    -- second attempt or surface a raw unique-constraint exception.
     INSERT INTO public.user_attempts (user_id, test_id, status)
     VALUES (v_user, p_test_id, 'in_progress')
+    ON CONFLICT (user_id, test_id) DO NOTHING
     RETURNING * INTO v_attempt;
+    IF NOT FOUND THEN
+      -- READ COMMITTED obtains a fresh snapshot after ON CONFLICT waits for
+      -- the competing transaction. Lock the committed winner before checking
+      -- status and deadline: a completed/expired attempt cannot restart.
+      SELECT a.* INTO v_attempt FROM public.user_attempts AS a
+      WHERE a.user_id = v_user AND a.test_id = p_test_id
+      FOR UPDATE OF a;
+      v_now := clock_timestamp();
+      IF NOT FOUND OR v_attempt.status IS DISTINCT FROM 'in_progress'
+         OR v_attempt.start_time IS NULL
+         OR v_now >= v_attempt.start_time + v_minutes * INTERVAL '1 minute' THEN
+        RAISE EXCEPTION 'Attempt already completed or expired'
+          USING ERRCODE = '22023';
+      END IF;
+    END IF;
   END IF;
   RETURN pg_catalog.jsonb_build_object(
     'id', v_attempt.id, 'start_time', v_attempt.start_time, 'status', v_attempt.status
