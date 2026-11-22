@@ -366,3 +366,12 @@ verify_jwt = true
 # CTF_RANGE_WORKER_ENABLED=true operator setting. Disabled by default.
 [functions.ctf-range-worker]
 verify_jwt = false
+
+# Issuance requires a signed-in JWT plus two independent operator enable flags.
+# The proxy checker uses a dedicated server-only x-range-proxy-token instead.
+# Both are disabled by default in handler code and are NOT deployed by this PR.
+[functions.ctf-range-access]
+verify_jwt = true
+
+[functions.ctf-range-access-check]
+verify_jwt = false

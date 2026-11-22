@@ -1,0 +1,43 @@
+name: CTF Range Access SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261122190000_ctf_range_access_grants.sql'
+      - 'tests/sql/ctf-range-access-db-smoke.sql'
+      - '.github/workflows/ctf-range-access-sql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-postgres:
+    name: Verify access grants and stop revocation in PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Launch networkless disposable PostgreSQL
+        run: |
+          # Generate a fresh credential for each ephemeral, network-disconnected CI container.
+          # No shared or hardcoded database password is committed to the repository.
+          ci_postgres_password="$(openssl rand -hex 32)"
+          docker run --detach --rm --network none --name eternyx-access-grants-ci -e POSTGRES_PASSWORD="$ci_postgres_password" postgres:17-alpine
+          unset ci_postgres_password
+          for i in $(seq 1 30); do
+            if docker exec eternyx-access-grants-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec eternyx-access-grants-ci pg_isready -U postgres
+      - name: Create synthetic Supabase database roles
+        run: docker exec --interactive eternyx-access-grants-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply existing session control migration
+        run: docker exec --interactive eternyx-access-grants-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < supabase/migrations/20261122180000_ctf_range_session_control.sql
+      - name: Apply exact new access grant migration
+        run: docker exec --interactive eternyx-access-grants-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < supabase/migrations/20261122190000_ctf_range_access_grants.sql
+      - name: Test owner isolation, quotas, revocation, kill switch and browser grants
+        run: docker exec --interactive eternyx-access-grants-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < tests/sql/ctf-range-access-db-smoke.sql
+      - name: Destroy temporary PostgreSQL
+        if: always()
+        run: docker rm --force eternyx-access-grants-ci || true
