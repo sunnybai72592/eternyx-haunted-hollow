@@ -65,6 +65,12 @@ test("Edge Function requires signed-in owner and never invokes a Docker executio
   assert.match(source,/authenticateUser\(req\)/);
   assert.match(source,/user\.is_anonymous/);
   assert.match(source,/remoteExecutionEnabled:false/);
-  assert.match(source,/execution_status:"not_executed"/);
+  // Creating or approving a plan never claims local execution.
+  assert.match(source,/executionStatus:"not_executed"/);
+  // Read-only listings now distinguish undispatched plans from agent-reported
+  // outcomes, rather than falsely presenting every plan as not executed.
+  assert.match(source,/execution_status:claim\?claim\.state:"not_dispatched"/);
+  assert.match(source,/dispatch_reported_at:claim\?\.reported_at\?\?null/);
+  assert.doesNotMatch(source,/independentlyVerified:true|execution_verified:true/);
   assert.doesNotMatch(source,/docker\.sock|spawnSync|Deno\.Command|container\s+start|container\s+stop|ssh:\/\//);
 });
