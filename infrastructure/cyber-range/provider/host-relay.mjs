@@ -50,7 +50,9 @@ export function verifyInternalGatewayAddress({ip,subnet,network,project,containe
   const aa=a.reduce((v,n)=>(v<<8)|n,0)>>>0;
   const nn=net.reduce((v,n)=>(v<<8)|n,0)>>>0;
   const m=(0xffffffff<<(32-mask))>>>0;
-  if((aa&m)!==(nn&m)||aa===nn||(aa&m)===((nn&m)|(~m>>>0))>>>0)
+  const networkAddress = (nn&m)>>>0;
+  const broadcast = (networkAddress | (~m>>>0))>>>0;
+  if((aa&m)!==networkAddress || aa===networkAddress || aa===broadcast)
     throw new Error("Gateway IP is outside verified private Docker subnet");
   return {ip,network,containerId};
 }
