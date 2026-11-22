@@ -214,10 +214,14 @@ BEGIN
   IF v_question IS NULL OR v_choice IS NULL THEN
     RAISE EXCEPTION 'Student B cannot see a permitted option';
   END IF;
-  IF public.save_cbt_answer(v_attempt,v_question,v_choice,NULL)->>'status' <> 'saved'
-     OR public.save_cbt_answer(v_attempt,v_question,NULL,NULL)->>'status' <> 'cleared'
-     OR public.save_cbt_answer(v_attempt,v_question,v_choice,NULL)->>'status' <> 'saved' THEN
-    RAISE EXCEPTION 'Valid option save/clear/save lifecycle failed';
+  IF public.save_cbt_answer(v_attempt,v_question,v_choice,NULL)->>'status' <> 'saved' THEN
+    RAISE EXCEPTION 'Initial objective answer save failed';
+  END IF;
+  IF public.save_cbt_answer(v_attempt,v_question,NULL,NULL)->>'status' <> 'cleared' THEN
+    RAISE EXCEPTION 'Objective answer clear failed';
+  END IF;
+  IF public.save_cbt_answer(v_attempt,v_question,v_choice,NULL)->>'status' <> 'saved' THEN
+    RAISE EXCEPTION 'Objective answer re-save failed';
   END IF;
 END
 $edge$;
@@ -239,7 +243,6 @@ WHERE id=pg_catalog.current_setting('eternyx.edge_b_attempt')::uuid
   AND status='in_progress';
 DO $edge$
 BEGIN
-  IF NOT FOUND THEN NULL; END IF;
   IF (SELECT pg_catalog.count(*) FROM public.user_attempts
       WHERE id=pg_catalog.current_setting('eternyx.edge_b_attempt')::uuid
         AND start_time < clock_timestamp()-INTERVAL '20 minutes') <> 1 THEN
