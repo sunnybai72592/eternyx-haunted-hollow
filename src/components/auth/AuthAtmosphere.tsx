@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Check, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { AuthLamp } from './AuthLamp';
+import { useLampSound } from './useLampSound';
 
 const palettes = [
   { id: 'cyan', name: 'Electric cyan' },
@@ -18,6 +19,13 @@ export function AuthAtmosphere({ children }: { children: ReactNode }) {
     catch { return 'cyan'; }
   });
   const [on, setOn] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const playSwitch = useLampSound();
+  const toggleLamp = () => {
+    const next = !on;
+    setOn(next);
+    if (!muted) void playSwitch(next);
+  };
 
   const choose = (id: string) => {
     setPalette(id);
@@ -39,11 +47,11 @@ export function AuthAtmosphere({ children }: { children: ReactNode }) {
       <main className="lamp-auth-main">
         <aside className="lamp-auth-scene">
           <div className="lamp-auth-intro"><span className="lamp-auth-eyebrow">YOUR ETERNYX IDENTITY</span><h1>A light on.<br /><em>A world open.</em></h1><p>A familiar place for your next big idea.</p></div>
-          <AuthLamp on={on} onToggle={() => setOn((value) => !value)} />
+          <AuthLamp on={on} onToggle={toggleLamp} />
         </aside>
         <section className="lamp-auth-form" aria-label="Your account">{children}</section>
       </main>
-      <footer className="lamp-auth-footer"><Link to="/"><ArrowLeft aria-hidden="true" /> Back to home</Link><span>Your world. Your ETERNYX.</span><span className="auth-light-status"><i />{on ? 'Light on' : 'Light off'}</span></footer>
+      <footer className="lamp-auth-footer"><Link to="/"><ArrowLeft aria-hidden="true" /> Back to home</Link><span>Your world. Your ETERNYX.</span><div className="flex items-center gap-3"><Button variant="ghost" size="icon" aria-label={muted ? 'Enable lamp sound' : 'Mute lamp sound'} title={muted ? 'Enable lamp sound' : 'Mute lamp sound'} aria-pressed={muted} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</Button><span className="auth-light-status"><i />{on ? 'Light on' : 'Light off'}</span></div></footer>
     </div>
   );
 }

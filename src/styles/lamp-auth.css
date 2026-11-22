@@ -7,7 +7,7 @@
   --input: var(--border); --secondary: var(--muted); --secondary-foreground: var(--foreground);
   --accent-foreground: var(--primary-foreground); --destructive: 0 85% 74%;
   --lamp-metal-dark: hsl(32 17% 18%); --lamp-metal-light: hsl(36 30% 70%);
-  --lamp-metal-mid: hsl(34 20% 38%); --lamp-shade-light: hsl(190 13% 29%);
+  --lamp-metal-mid: hsl(34 20% 38%); --lamp-shade-light: hsl(var(--primary) / .2);
   --lamp-shade-mid: hsl(190 16% 14%); --lamp-shade-dark: hsl(190 19% 7%);
   --lamp-edge: hsl(var(--primary) / .35); --lamp-bulb-center: hsl(60 30% 95%);
   --lamp-glow: hsl(var(--primary)); --scene-shadow: 0 0% 0%;
@@ -58,7 +58,7 @@
 [data-light='on'] .auth-light-beam { opacity: 1; }
 .auth-pull-cord { position: absolute; z-index: 3; left: 55.8%; top: 39%; width: 44px; height: 106px; padding: 0; display: flex; flex-direction: column; justify-content: flex-start; background: transparent !important; border-radius: 8px; touch-action: none; cursor: grab; transition: transform .3s cubic-bezier(.2,.8,.3,1.5); }
 .is-pulling .auth-pull-cord { transform: translateY(16px); cursor: grabbing; }
-.auth-cord-line { width: 2px; height: 71px; background: hsl(var(--lamp-metal-mid-token, 34 20% 38%)); }
+.auth-cord-line { width: 2px; height: 71px; background: var(--lamp-metal-mid); }
 .auth-cord-bead { width: 13px; height: 19px; border: 2px solid hsl(var(--primary)/.65); background: hsl(var(--card)); border-radius: 50%; box-shadow: 0 0 12px hsl(var(--primary)/.15); }
 [data-light='on'] .auth-cord-bead { background: hsl(var(--primary)); box-shadow: 0 0 18px hsl(var(--primary)/.35); }
 .auth-lamp-caption { display: block; position: absolute; bottom: -5px; width: 100%; text-align: center; font: italic 13px Georgia, serif; color: hsl(var(--muted-foreground)); }
