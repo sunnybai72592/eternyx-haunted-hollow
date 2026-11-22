@@ -26,14 +26,14 @@ test('follow-up signals use confirmed activity, not fabricated or unread claims'
   assert.match(sql, /AS priority_rank/);
   assert.match(sql, /service_request_activity_customer_message_idx/);
   const admin = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin, /Signals are based on saved activity, not unread receipts or response deadlines/);
+  assert.match(admin, /Follow-up signals reflect recorded customer activity/);
   assert.match(admin, /Needs follow-up/);
   assert.match(admin, /new Date\(item\.last_customer_activity_at\)\.toLocaleString\(\)/);
 });
 
 test('admin filters priority, owner assignment, and follow-up on the server', async () => {
   const admin = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin, /from\('service_admin_attention_queue'\)/);
+  assert.match(admin, /from\('service_admin_review_queue'\)/);
   assert.match(admin, /if \(priorityFilter !== 'all'\) query = query\.eq\('priority', priorityFilter\)/);
   assert.match(admin, /query\.eq\('assigned_admin_id', user\.id\)/);
   assert.match(admin, /query\.is\('assigned_admin_id', null\)/);

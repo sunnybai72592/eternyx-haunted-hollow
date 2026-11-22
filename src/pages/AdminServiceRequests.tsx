@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, ClipboardList, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Bell, CalendarClock, ClipboardList, Link2, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
@@ -11,6 +11,8 @@ import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline
 import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceTriagePanel from '@/components/services/ServiceTriagePanel';
 import { Input } from '@/components/ui/input';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
 
 type ServiceRow = {
   id: string; user_id: string; title: string; service_key: string; description: string;
@@ -19,11 +21,14 @@ type ServiceRow = {
   expected_outcome: string | null; timeframe: string | null; constraints: string | null;
   priority: string; priority_rank: number; assigned_admin_id: string | null;
   needs_follow_up: boolean; last_customer_activity_at: string | null; last_admin_activity_at: string | null;
+  next_action_kind: ServiceNextAction; next_review_on: string | null; review_bucket: ServiceReviewBucket;
 };
 type Draft = { status: ServiceRequestStatus; client_update: string };
 
 export default function AdminServiceRequests() {
   const { user, isLoading: authLoading } = useAuthStore();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [authorizedFor, setAuthorizedFor] = useState<string | null>(null);
   const authorized = !!user && authorizedFor === user.id;
   const fetchGeneration = useRef(0);
@@ -39,7 +44,9 @@ export default function AdminServiceRequests() {
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
-  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity'>('newest');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review'>('newest');
+  const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
+  const [actionFilter, setActionFilter] = useState<'all' | ServiceNextAction>('all');
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
@@ -55,8 +62,8 @@ export default function AdminServiceRequests() {
     const generation = ++fetchGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_admin_attention_queue')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at', { count: 'exact' });
+    let query = supabase.from('service_admin_review_queue')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -70,8 +77,11 @@ export default function AdminServiceRequests() {
     if (assignmentFilter === 'mine') query = query.eq('assigned_admin_id', user.id);
     if (assignmentFilter === 'unassigned') query = query.is('assigned_admin_id', null);
     if (attentionOnly) query = query.eq('needs_follow_up', true);
+    if (reviewBucket !== 'all') query = query.eq('review_bucket', reviewBucket);
+    if (actionFilter !== 'all') query = query.eq('next_action_kind', actionFilter);
     if (sortOrder === 'priority') query = query.order('priority_rank', { ascending: false });
     if (sortOrder === 'customer_activity') query = query.order('last_customer_activity_at', { ascending: false, nullsFirst: false });
+    if (sortOrder === 'next_review') query = query.order('next_review_on', { ascending: true, nullsFirst: false });
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -79,15 +89,24 @@ export default function AdminServiceRequests() {
     if (generation !== fetchGeneration.current) return;
     if (error) {
       setLoadError(true);
+      setRows([]);
+      setTotal(0);
+      setDrafts({});
       console.error('Admin service requests query failed:', error);
     } else {
+      if (page > 0 && page * PAGE_SIZE >= (count ?? 0)) {
+        setPage(Math.max(0, Math.ceil((count ?? 0) / PAGE_SIZE) - 1));
+        setRows([]);
+        setLoading(false);
+        return;
+      }
       const next = (data ?? []) as ServiceRow[];
       setRows(next);
       setTotal(count ?? 0);
       setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
     }
     setLoading(false);
-  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder]);
+  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter]);
 
   useEffect(() => {
     let active = true;
@@ -115,6 +134,52 @@ export default function AdminServiceRequests() {
   }, [user?.id, authLoading]);
 
   useEffect(() => { if (authorized) void load(); }, [authorized, load]);
+
+  useEffect(() => {
+    const selected = new URLSearchParams(location.search).get('request');
+    if (!selected) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selected)) {
+      setFeedback('The administrator request link is invalid.');
+      return;
+    }
+    setFilter('all');
+    setPriorityFilter('all');
+    setAssignmentFilter('all');
+    setAttentionOnly(false);
+    setReviewBucket('all');
+    setActionFilter('all');
+    setPage(0);
+    setSearchField('id');
+    setActiveSearchField('id');
+    setSearch(selected);
+    setActiveSearch(selected);
+  }, [location.search]);
+
+  const clearFilters = () => {
+    setFilter('all');
+    setPriorityFilter('all');
+    setAssignmentFilter('all');
+    setAttentionOnly(false);
+    setReviewBucket('all');
+    setActionFilter('all');
+    setSortOrder('newest');
+    setSearch('');
+    setActiveSearch('');
+    setSearchField('title');
+    setActiveSearchField('title');
+    setPage(0);
+    setFeedback(null);
+    if (location.search) navigate('/admin/service-requests', { replace: true });
+  };
+
+  const copyAdminLink = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(window.location.origin + '/admin/service-requests?request=' + encodeURIComponent(id));
+      setFeedback('Private administrator link copied. Access still requires a verified administrator session.');
+    } catch {
+      setFeedback('Could not copy the link. Use the request reference instead.');
+    }
+  };
 
   const filtered = rows;
   const applySearch = () => {
@@ -202,14 +267,29 @@ export default function AdminServiceRequests() {
         <div>
           <label htmlFor="service-sort-order" className="mb-1 block text-xs font-semibold">Sort</label>
           <select id="service-sort-order" value={sortOrder} onChange={(event) => { setPage(0); setSortOrder(event.target.value as typeof sortOrder); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
-            <option value="newest">Newest requests</option><option value="priority">Highest priority</option><option value="customer_activity">Recent customer activity</option>
+            <option value="newest">Newest requests</option><option value="priority">Highest priority</option><option value="customer_activity">Recent customer activity</option><option value="next_review">Next scheduled review</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="service-review-bucket" className="mb-1 block text-xs font-semibold">Internal review schedule</label>
+          <select id="service-review-bucket" value={reviewBucket} onChange={(event) => { setPage(0); setReviewBucket(event.target.value as typeof reviewBucket); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="all">All review dates</option>
+            {Object.entries(serviceReviewBucketLabels).map(([value, title]) => <option value={value} key={value}>{title}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="service-next-action-filter" className="mb-1 block text-xs font-semibold">Next internal action</label>
+          <select id="service-next-action-filter" value={actionFilter} onChange={(event) => { setPage(0); setActionFilter(event.target.value as typeof actionFilter); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="all">All next actions</option>
+            {Object.entries(serviceNextActionLabels).map(([value, title]) => <option value={value} key={value}>{title}</option>)}
           </select>
         </div>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={attentionOnly} onChange={(event) => { setPage(0); setAttentionOnly(event.target.checked); }} />Needs follow-up</label>
-        <span className="text-xs text-muted-foreground">Signals are based on saved activity, not unread receipts or response deadlines.</span>
+        <Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
+        <span className="text-xs text-muted-foreground">Follow-up signals reflect recorded customer activity. Review dates are internal UTC targets, not response guarantees.</span>
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
-      <p className="mb-4 text-xs text-muted-foreground">Search and status filters are applied by the database. No first-250 cutoff or invented totals.</p>
+      <p className="mb-4 text-xs text-muted-foreground">All queue filters, review targets and page totals come from the database. Internal UTC review dates are not customer commitments.</p>
       {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The migration may not yet be deployed, or access was denied.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading service requests…</Card>
         : filtered.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-3 h-8 w-8 text-primary" /><p>No requests in this view.</p></Card>
@@ -221,6 +301,8 @@ export default function AdminServiceRequests() {
               <span className="rounded-full border border-border px-3 py-1">Priority: {item.priority}</span>
               <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
               {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
+              <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1"><CalendarClock className="h-3 w-3" />{serviceReviewBucketLabels[item.review_bucket] ?? 'Not scheduled'}{item.next_review_on ? ': ' + item.next_review_on : ''}</span>
+              <span className="rounded-full border border-border px-3 py-1">Next: {serviceNextActionLabels[item.next_action_kind] ?? 'Not planned'}</span>
               {item.last_customer_activity_at && <span>Customer activity: {new Date(item.last_customer_activity_at).toLocaleString()}</span>}
             </div>
             <div className="mt-5 grid gap-4 rounded-xl border border-border p-4 text-sm md:grid-cols-2"><div><p className="font-semibold">Contact</p><p className="mt-2 break-all text-muted-foreground">{item.contact_email}</p>{item.company && <p className="mt-1 text-muted-foreground">{item.company}</p>}</div><div><p className="font-semibold">Project brief</p><p className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-muted-foreground">{item.description}</p></div></div>
@@ -235,6 +317,7 @@ export default function AdminServiceRequests() {
               <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-update-' + item.id}>Client-visible update</label><Textarea id={'request-update-' + item.id} rows={3} maxLength={1000} value={draft.client_update} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, client_update: e.target.value } }))} placeholder="Provide actual next steps. Do not include internal notes or secrets." /><p className="mt-1 text-right text-xs text-muted-foreground">{draft.client_update.length}/1,000</p></div>
             </div>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => void copyAdminLink(item.id)}><Link2 className="mr-2 h-4 w-4" />Copy admin link</Button>
               <Button type="button" variant="outline" aria-expanded={openConversation === item.id} onClick={() => setOpenConversation((current) => current === item.id ? null : item.id)}>
                 <MessageCircle className="mr-2 h-4 w-4" />{openConversation === item.id ? 'Close conversation' : 'Customer conversation'}
               </Button>
