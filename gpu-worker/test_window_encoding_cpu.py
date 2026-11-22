@@ -171,7 +171,7 @@ def run_fixture(root, output):
     assert json.loads(manifest_path.read_bytes()) == manifest
     sampled = (output or root) / "sampled-windows.html"
     subprocess.run([sys.executable, str(Path(__file__).with_name("compare_footage_windows.py")),
-                    str(root), str(manifest_path), "testsrc2.mp4", str(sampled), "--samples", "3"], check=True)
+                    str(root), str(manifest_path), "testsrc2.mp4", str(sampled), "--samples", "3", "--playback"], check=True)
     sample_html = sampled.read_text()
     assert "4 of 4 windows complete" in sample_html
     import csv
@@ -179,6 +179,16 @@ def run_fixture(root, output):
     encoded_csv = re.search(r'data:text/csv;base64,([^"]+)', sample_html)[1]
     measurements = list(csv.DictReader(io.StringIO(base64.b64decode(encoded_csv).decode())))
     assert [int(row["start_frame"]) for row in measurements] == [0, 4, 8, 15]
+    from collections import Counter
+    transition_csv = re.search(r'download="frame-changes.csv" href="data:text/csv;base64,([^"]+)', sample_html)[1]
+    transitions = list(csv.DictReader(io.StringIO(base64.b64decode(transition_csv).decode())))
+    assert Counter(int(row["window_start_frame"]) for row in transitions) == {0: 16, 4: 16, 8: 16, 15: 16}
+    videos = re.findall(r'data:video/mp4;base64,([^"]+)', sample_html)
+    assert len(videos) == 4 and "data:video/mp4" not in choices_html
+    for payload in videos:
+        pixels = subprocess.check_output(["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "rawvideo",
+                                          "-pix_fmt", "rgb24", "pipe:1"], input=base64.b64decode(payload))
+        assert len(pixels) == 17 * 224 * 384 * 3
     ranked = sorted(measurements, key=lambda row: (-float(row["mean_adjacent_rgb_change"]), int(row["start_frame"])))
     assert re.findall(r'href="#frame-([0-9]+)"', sample_html) == [row["start_frame"] for row in ranked]
     page = footage_review.read_text()

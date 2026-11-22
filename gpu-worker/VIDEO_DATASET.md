@@ -27,6 +27,8 @@ python gpu-worker/compare_footage_windows.py ./clips dataset-v1.json workshop-wi
 
 To explore without choosing frame numbers, replace `--starts 0 8 32` with `--samples 5`. The tool spaces candidates across the probed duration, includes the current selection and removes duplicate offsets. Actual decoding determines completeness. Open the ranked links to inspect the largest pixel changes, or download the CSV for all candidates. Camera shake and cuts can also produce large changes. Use the caption and previews to select the action.
 
+Add `--playback` to embed a silent MP4 of each complete window. Use the player's controls to play, pause or scrub. Video playback time starts at zero within the window. The peak-change timestamp and frame-by-frame measurements use the clip timeline. The separate frame-change CSV includes every adjacent pair and its source frame numbers. Pixel measurements use the original decoded RGB frames before preview compression.
+
 Open the local HTML to compare timestamps, frames and adjacent-frame pixel changes. An incomplete candidate is marked individually. Save the manifest for the window that matches your caption, then use that file for encoding, training and evaluation. The exported copy changes only the selected clip's start frame. The HTML contains footage previews and downloadable copies of the dataset annotations.
 
 ## Inspect the selected windows before encoding
