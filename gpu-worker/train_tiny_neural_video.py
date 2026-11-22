@@ -309,12 +309,20 @@ def read_model(path):
     return model
 
 
-def sample_frames(model, seconds, seed):
+def sample_frames(model, seconds, seed, stability=45, variation=6):
     if type(seconds) is not int or not 1 <= seconds <= MAX_SAMPLE_SECONDS:
         raise ValueError("Neural sample duration must be 1–8 seconds")
     if type(seed) is not int or not 0 <= seed <= MAX_SEED:
         raise ValueError("Neural sample seed must be a 31-bit nonnegative integer")
+    if type(stability) is not int or not 0 <= stability <= 85:
+        raise ValueError("Neural temporal stability must be an integer from 0 to 85")
+    if type(variation) is not int or not 0 <= variation <= 20:
+        raise ValueError("Neural variation must be an integer from 0 to 20")
     rng = random.Random(seed)
+    blend = stability / 100.0
+    innovation_strength = variation / 100.0
+    # AR(1) latent noise smooths otherwise independent random pixel flicker.
+    innovations = [[0.0] * 3 for _ in range(PIXELS)]
     grid = model["start_grid"]
     states = bytearray(PIXELS)
     for pos in range(PIXELS):
@@ -336,10 +344,19 @@ def sample_frames(model, seconds, seed):
             fraction = step / max(1, seconds * FPS - 1)
             for pos in range(PIXELS):
                 _, prediction = predict(model["weights"], features(moved, pos, fraction))
-                # Bounded seeded innovation avoids a static replay of the mean
-                # regression result. Network still supplies the dominant signal.
-                colors = [max(0.0, min(0.999, value + rng.gauss(0, 0.07)))
-                          for value in prediction]
+                # Neural prediction remains in the blend (minimum 15%).
+                # Causal temporal coherence: use the SAME motion-compensated
+                # previous pixels that the neural features read, not a future frame.
+                old_rgb = rgb(moved[pos])
+                colors = []
+                for channel, value in enumerate(prediction):
+                    previous_innovation = innovations[pos][channel]
+                    innovation = (0.86 * previous_innovation +
+                                  0.51 * rng.gauss(0, 1))
+                    innovations[pos][channel] = innovation
+                    mixed = (1 - blend) * value + blend * old_rgb[channel]
+                    colors.append(max(0.0, min(0.999,
+                        mixed + innovation_strength * innovation)))
                 updated[pos] = encode_state(*colors)
                 for k in range(3):
                     visual[pos * 3 + k] = int(colors[k] * 255)
@@ -354,13 +371,37 @@ def sample_frames(model, seconds, seed):
     return frames
 
 
+def temporal_frame_metrics(frames):
+    """Measured raw RGB diagnostics. Not perception, stability guarantees or quality ranking."""
+    if not frames or any(len(frame) != PIXELS * 3 for frame in frames):
+        raise ValueError("Cannot analyze empty or malformed RGB frames")
+    shifts = []
+    identical = 0
+    for previous, current in zip(frames, frames[1:]):
+        delta = sum(abs(a - b) for a, b in zip(previous, current))
+        shifts.append(delta / len(previous) / 255.0)
+        if delta == 0:
+            identical += 1
+    # Per-channel variation inside the generated first and final frames.
+    channels = [sum(frame) / len(frame) / 255.0 for frame in (frames[0], frames[-1])]
+    return {
+        "measured_frame_count": len(frames),
+        "mean_temporal_absolute_delta": round(sum(shifts) / len(shifts), 8) if shifts else 0.0,
+        "max_temporal_absolute_delta": round(max(shifts), 8) if shifts else 0.0,
+        "identical_adjacent_frame_pairs": identical,
+        "first_frame_mean_brightness": round(channels[0], 8),
+        "last_frame_mean_brightness": round(channels[1], 8),
+        "interpretation": "Raw RGB diagnostics only; lower flicker is not automatically higher visual quality.",
+    }
+
+
 def generate(model_path, destination, seconds=2, seed=42,
-             profile="landscape", quality="standard"):
+             profile="landscape", quality="standard", stability=45, variation=6):
     validate_output_dir(destination)
     if profile not in ("landscape", "portrait", "square") or quality not in ("standard", "high"):
         raise ValueError("Unsupported neural sample output profile or quality")
     model = read_model(model_path)
-    frames = sample_frames(model, seconds, seed)
+    frames = sample_frames(model, seconds, seed, stability=stability, variation=variation)
     if len(frames) != seconds * FPS or any(len(raw) != PIXELS * 3 for raw in frames):
         raise ValueError("Generated neural RGB frame budget incorrect")
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-neural-sample-", dir=destination.parent))
@@ -400,6 +441,9 @@ def generate(model_path, destination, seconds=2, seed=42,
             "model_sha256": sha256(model_path),
             "sample_seed": seed, "seconds": seconds,
             "profile": profile, "quality": quality,
+            "stability_percent": stability, "variation_percent": variation,
+            "temporal_frame_metrics": temporal_frame_metrics(frames),
+            "raw_frames_sha256": hashlib.sha256(b"".join(frames)).hexdigest(),
             "source_clip_sha256": sha256(clip),
             "video_sha256": result["video"]["sha256"],
             "storyboard_sha256": sha256(path),
@@ -434,6 +478,10 @@ def main():
     sample.add_argument("--seed", type=int, default=42)
     sample.add_argument("--profile", choices=("landscape", "portrait", "square"), default="landscape")
     sample.add_argument("--quality", choices=("standard", "high"), default="standard")
+    sample.add_argument("--stability", type=int, default=45,
+                        help="0-85%% blend of motion-compensated previous pixels")
+    sample.add_argument("--variation", type=int, default=6,
+                        help="0-20%% temporally correlated random innovation")
     args = parser.parse_args()
     try:
         if args.command == "train":
@@ -444,7 +492,7 @@ def main():
                               "metrics": result["metrics"]}))
         else:
             result = generate(args.model, args.output, args.seconds, args.seed,
-                              args.profile, args.quality)
+                              args.profile, args.quality, args.stability, args.variation)
             print(json.dumps({"finished_mp4": str(args.output / "render" / "video.mp4"),
                               "video_sha256": result["video_sha256"],
                               "model_sha256": result["model_sha256"]}))

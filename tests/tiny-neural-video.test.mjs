@@ -40,7 +40,7 @@ test("train command requires only safe shell literals and correctly bounded CPU 
 
 test("generation command builds only the actual local CPU H264 pipeline",()=>{
   assert.equal(tinyNeuralGenerateCommand({seconds:3,seed:10,profile:"portrait",quality:"high"}),
-    "python gpu-worker/train_tiny_neural_video.py generate --model ./eternyx-tiny-neural-model/model.json --output ./eternyx-tiny-neural-sample --seconds 3 --seed 10 --profile portrait --quality high");
+    "python gpu-worker/train_tiny_neural_video.py generate --model ./eternyx-tiny-neural-model/model.json --output ./eternyx-tiny-neural-sample --seconds 3 --seed 10 --profile portrait --quality high --stability 45 --variation 6");
   for(const seconds of [0,9,-1,1.2,true,"5"])assert.throws(()=>tinyNeuralGenerateCommand({seconds}),/duration/);
   for(const seed of [-1,2147483648,true,1.2])assert.throws(()=>tinyNeuralGenerateCommand({seed}),/seed/);
   for(const profile of ["large;rm","wide",null])assert.throws(()=>tinyNeuralGenerateCommand({profile}),/profile/);
@@ -121,6 +121,7 @@ test("selected actual local checkpoint bytes must match the self-reported SHA256
     video:"eternyx-tiny-neural-sample/render/video.mp4",
     manifest:"eternyx-tiny-neural-sample/render/manifest.json",
     report:"eternyx-tiny-neural-sample/generation-report.json",
+    audition:"eternyx-tiny-neural-audition/audition-report.json",
   });
 });
 
