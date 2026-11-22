@@ -1,0 +1,95 @@
+name: ETERNYX Education trusted staging final-grade acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "preflight and verify are read-only; finalize makes exactly one official synthetic-grade transition"
+        required: true
+        type: choice
+        options:
+          - preflight
+          - finalize
+          - verify
+        default: preflight
+      approve_one_official_grade:
+        description: "Explicitly approve official grading of one reviewed synthetic staging attempt"
+        type: boolean
+        required: true
+        default: false
+      acknowledge_immutable_grade:
+        description: "I understand official grade finalization is immutable and cannot be reset by this workflow"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-education-trusted-staging-final-grades
+  cancel-in-progress: false
+
+jobs:
+  verify-trusted-final-grade:
+    name: Protected synthetic review, atomic final grade and owned result proof
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 12
+    env:
+      ETERNYX_EDU_FINALIZE_MODE: ${{ inputs.run_mode }}
+      ETERNYX_EDU_FINALIZE_WRITE_APPROVAL: ${{ inputs.run_mode == 'finalize' && inputs.approve_one_official_grade && 'I_APPROVE_ONE_SYNTHETIC_STAGING_FINAL_GRADE' || '' }}
+      ETERNYX_EDU_FINALIZE_IMMUTABLE_ACK: ${{ inputs.run_mode == 'finalize' && inputs.acknowledge_immutable_grade && 'I_ACKNOWLEDGE_OFFICIAL_GRADE_BECOMES_IMMUTABLE' || '' }}
+      ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ inputs.run_mode == 'finalize' && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+      ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+      ETERNYX_EDU_REVIEW_TEST_ID: ${{ vars.ETERNYX_EDU_REVIEW_TEST_ID }}
+      ETERNYX_EDU_REVIEW_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_REVIEW_ATTEMPT_ID }}
+      ETERNYX_EDU_REVIEW_ANSWER_ID: ${{ vars.ETERNYX_EDU_REVIEW_ANSWER_ID }}
+      ETERNYX_EDU_REVIEW_AWARDED_POINTS: ${{ vars.ETERNYX_EDU_REVIEW_AWARDED_POINTS }}
+      ETERNYX_EDU_FINALIZE_EXPECTED_SCORE: ${{ vars.ETERNYX_EDU_FINALIZE_EXPECTED_SCORE }}
+      ETERNYX_EDU_FINALIZE_EXPECTED_MAX: ${{ vars.ETERNYX_EDU_FINALIZE_EXPECTED_MAX }}
+    steps:
+      - name: Checkout controlled staging source
+        uses: actions/checkout@v4
+      - name: Set up Node.js for isolated acceptance
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Reject unsafe project, role, mode or missing irreversible-write approval
+        run: |
+          node --input-type=module -e '
+            import {validateEducationTrustedFinalizerConfig} from "./scripts/staging/educationTrustedFinalizerConfig.mjs";
+            try {
+              const c=validateEducationTrustedFinalizerConfig(process.env);
+              process.stdout.write("Approved Education isolated staging mode: "+c.mode+"\n");
+            } catch {
+              process.stderr.write("Denied unsafe Education official grade acceptance configuration.\n");
+              process.exitCode=1;
+            }
+          '
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Run genuine Supabase staging Auth and reviewed final-grade acceptance
+        timeout-minutes: 8
+        run: node scripts/staging/verifyEducationHostedTrustedFinalization.mjs
+      - name: Validate all sanitized staging result evidence
+        if: always()
+        run: node scripts/staging/verifyEducationTrustedFinalizerEvidence.mjs
+      - name: Upload minimal evidence for staging reviewer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-official-grade-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-trusted-finalization.json
+          if-no-files-found: warn
+          retention-days: 7
