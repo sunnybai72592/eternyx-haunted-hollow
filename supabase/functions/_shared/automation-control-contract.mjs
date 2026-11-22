@@ -23,6 +23,12 @@ const fields = {
   observability: ["action"],
   exportAudit: ["action","workflowId","channel","requestKey"],
   quarantineSchedule: ["action","scheduleId","expectedRevision","reason","requestKey"],
+  incidentInbox: ["action","status","severity","limit"],
+  incidentOpen: ["action","sourceKind","sourceId","title","severity","note","requestKey"],
+  incidentTransition: ["action","incidentId","expectedRevision","nextStatus","note","requestKey"],
+  incidentTimeline: ["action","incidentId"],
+  recoveryReviewInbox: ["action"],
+  recoveryReview: ["action","quarantineKey","decision","note","requestKey"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -97,6 +103,66 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="incidentInbox"){
+    if(value.status!==undefined &&
+       !["open","investigating","resolved"].includes(value.status)||
+       value.severity!==undefined &&
+       !["low","medium","high"].includes(value.severity)||
+       value.limit!==undefined &&
+       (!Number.isInteger(value.limit)||value.limit<1||value.limit>30)){
+      return {ok:false,reason:"invalid_incident_filters"};
+    }
+    return {ok:true,action,status:value.status??null,
+      severity:value.severity??null,limit:value.limit??20};
+  }
+  if(action==="incidentOpen"){
+    if(!["schedule_failed","schedule_expired_lease","schedule_quarantine",
+         "completed_run_review"].includes(value.sourceKind)||
+       typeof value.sourceId!=="string"||!UUID_RE.test(value.sourceId)||
+       typeof value.title!=="string"||value.title.trim().length<8||
+       value.title.trim().length>100||
+       !["low","medium","high"].includes(value.severity)||
+       typeof value.note!=="string"||value.note.trim().length<8||
+       value.note.trim().length>500||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_incident"};
+    }
+    return {ok:true,action,sourceKind:value.sourceKind,sourceId:value.sourceId,
+      title:value.title.trim(),severity:value.severity,note:value.note.trim(),
+      requestKey:value.requestKey};
+  }
+  if(action==="incidentTransition"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
+       !Number.isInteger(value.expectedRevision)||value.expectedRevision<1||
+       value.expectedRevision>2147483646||
+       !["investigating","resolved"].includes(value.nextStatus)||
+       typeof value.note!=="string"||value.note.trim().length<8||
+       value.note.trim().length>500||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_incident_transition"};
+    }
+    return {ok:true,action,incidentId:value.incidentId,
+      expectedRevision:value.expectedRevision,nextStatus:value.nextStatus,
+      note:value.note.trim(),requestKey:value.requestKey};
+  }
+  if(action==="incidentTimeline"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
+      return {ok:false,reason:"invalid_incident_id"};
+    }
+    return {ok:true,action,incidentId:value.incidentId};
+  }
+  if(action==="recoveryReviewInbox")return {ok:true,action};
+  if(action==="recoveryReview"){
+    if(typeof value.quarantineKey!=="string"||!UUID_RE.test(value.quarantineKey)||
+       !["keep_quarantined","reviewed_for_manual_restore"].includes(value.decision)||
+       typeof value.note!=="string"||value.note.trim().length<12||
+       value.note.trim().length>500||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_recovery_review"};
+    }
+    return {ok:true,action,quarantineKey:value.quarantineKey,
+      decision:value.decision,note:value.note.trim(),requestKey:value.requestKey};
   }
   if(action==="observability")return {ok:true,action};
   if(action==="exportAudit"){

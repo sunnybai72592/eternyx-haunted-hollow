@@ -28,6 +28,11 @@ const rpcStatus: Record<string, number> = {
   expired: 410, trigger_run_limit: 429, trigger_submission_limit: 429,
   preview_limit: 429, template_copy_deleted: 409, unknown_template:404,
   daily_export_limit:429,daily_quarantine_limit:429,
+  incident_daily_limit:429,incident_open_limit:429,incident_event_limit:429,
+  recovery_review_limit:429,already_reported:409,
+  evidence_not_found:404,evidence_not_ready:409,invalid_transition:409,
+  stale_incident:409,already_reviewed:409,schedule_missing:404,
+  schedule_not_quarantined:409,
   export_too_large:413,lease_active:409,already_disabled:409,
   stale_schedule:409,revision_exhausted:409,
   daily_bulk_limit:429,stale_workflow:409,duplicate_workflow:400,
@@ -96,6 +101,65 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="incidentInbox"){
+      const {data,error}=await supabase.rpc("automation_incident_inbox",{
+        p_user_id:user.id,p_status:request.status,
+        p_severity:request.severity,p_limit:request.limit,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_inbox_unavailable");
+      return reply({...data,source:"authenticated_server"});
+    }
+    if(request.action==="incidentOpen"){
+      const {data,error}=await supabase.rpc("automation_open_incident",{
+        p_user_id:user.id,p_source_kind:request.sourceKind,
+        p_source_id:request.sourceId,p_title:request.title,
+        p_severity:request.severity,p_note:request.note,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_create_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentTransition"){
+      const {data,error}=await supabase.rpc("automation_transition_incident",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+        p_revision:request.expectedRevision,p_next_status:request.nextStatus,
+        p_note:request.note,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_transition_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentTimeline"){
+      const {data,error}=await supabase.rpc("automation_incident_timeline",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_history_unavailable");
+      return reply({...data,source:"authenticated_server"});
+    }
+    if(request.action==="recoveryReviewInbox"){
+      const {data,error}=await supabase.rpc("automation_recovery_review_inbox",{
+        p_user_id:user.id,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"recovery_inbox_unavailable");
+      return reply({...data,source:"authenticated_server"});
+    }
+    if(request.action==="recoveryReview"){
+      const {data,error}=await supabase.rpc("automation_review_quarantine",{
+        p_user_id:user.id,p_quarantine_key:request.quarantineKey,
+        p_decision:request.decision,p_note:request.note,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"recovery_review_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticRestore:false,externalExecutionTriggered:false});
+    }
     if(request.action==="observability"){
       const {data:pruned,error:pruneError}=await supabase.rpc(
         "automation_prune_audit_recovery",{p_user_id:user.id});
