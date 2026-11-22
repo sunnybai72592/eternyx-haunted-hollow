@@ -1,4 +1,5 @@
 import { validWorkspaceLink } from "./workspaceRules.mjs";
+import { validWorkspacePriority } from "./workspaceTaskFocus.mjs";
 
 export const WORKSPACE_RESTORE_MAX_BYTES = 1024 * 1024;
 export const WORKSPACE_RESTORE_MAX_TASKS = 1000;
@@ -46,9 +47,11 @@ export function parseWorkspaceRestore(raw) {
         !["todo","in_progress","done"].includes(task.status)) {
       throw new Error("Task " + (index + 1) + " has an invalid status");
     }
+    const priority = task.priority === undefined ? "normal" : task.priority;
+    if (!validWorkspacePriority(priority)) throw new Error("Task " + (index + 1) + " has an invalid priority");
     return {
       title: textIn(task.title, 200, "Task " + (index + 1) + " title", 1),
-      status: task.status,
+      status: task.status, priority,
       due_on: isoDate(task.due_on),
     };
   });
