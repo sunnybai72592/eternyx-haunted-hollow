@@ -1,5 +1,6 @@
 /** Parse strictly bounded, authenticated Automation control requests.
- * No triggers, webhooks, schedule expressions, URLs, arbitrary commands, or scripts.
+ * Webhook lifecycle actions are metadata/configuration only. No arbitrary triggers,
+ * schedule expressions, external URLs, code execution or scripts.
  */
 import { normalizeWorkflowSteps } from "../../../src/lib/automationWorkflow.mjs";
 
@@ -13,6 +14,11 @@ const fields = {
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
   delete: ["action", "workflowId"],
+  webhooks: ["action"],
+  createWebhook: ["action", "workflowId"],
+  rotateWebhook: ["action", "triggerId"],
+  toggleWebhook: ["action", "triggerId", "enabled"],
+  deleteWebhook: ["action", "triggerId"],
 };
 
 export function parseAutomationControlRequest(value) {
@@ -25,13 +31,30 @@ export function parseAutomationControlRequest(value) {
     return { ok: false, reason: "unexpected_field" };
   }
   const action = value.action;
-  if (["save", "run", "toggle", "delete"].includes(action) &&
+  if (["save", "run", "toggle", "delete", "createWebhook"].includes(action) &&
       value.workflowId !== undefined &&
       (typeof value.workflowId !== "string" || !UUID_RE.test(value.workflowId))) {
     return { ok: false, reason: "invalid_workflow_id" };
   }
   if (["run", "toggle", "delete"].includes(action) && typeof value.workflowId !== "string") {
     return { ok: false, reason: "missing_workflow_id" };
+  }
+  if (["createWebhook"].includes(action) && typeof value.workflowId !== "string") {
+    return { ok: false, reason: "missing_workflow_id" };
+  }
+  if (["rotateWebhook", "toggleWebhook", "deleteWebhook"].includes(action) &&
+      (typeof value.triggerId !== "string" || !UUID_RE.test(value.triggerId))) {
+    return { ok: false, reason: "invalid_trigger_id" };
+  }
+  if (action === "toggleWebhook" && typeof value.enabled !== "boolean") {
+    return { ok: false, reason: "invalid_enabled" };
+  }
+  if (["webhooks", "createWebhook", "rotateWebhook", "toggleWebhook", "deleteWebhook"].includes(action)) {
+    return { ok: true, action,
+      ...(value.workflowId ? { workflowId: value.workflowId } : {}),
+      ...(value.triggerId ? { triggerId: value.triggerId } : {}),
+      ...(action === "toggleWebhook" ? { enabled: value.enabled } : {}),
+    };
   }
   if (action === "save") {
     if (typeof value.name !== "string" || !value.name.trim() || value.name.trim().length > 80 ||
