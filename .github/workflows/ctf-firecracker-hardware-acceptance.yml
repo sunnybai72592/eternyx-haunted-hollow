@@ -1,0 +1,54 @@
+name: CTF Firecracker Hardware Acceptance Contract
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/provider/firecracker-hardware-acceptance.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-boot-controller.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-systemd-supervisor.mjs'
+      - 'scripts/cyber-range-microvm-hardware-acceptance.mjs'
+      - 'tests/ctf-firecracker-hardware-acceptance.test.mjs'
+      - 'tests/ctf-firecracker-systemd-supervisor.test.mjs'
+      - 'tests/ctf-firecracker-boot-controller.test.mjs'
+      - '.github/workflows/ctf-firecracker-hardware-acceptance.yml'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-vm-security-tests:
+    name: Offline KVM approval, actual jailer namespace and guaranteed cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prove acceptance and existing Firecracker safety boundaries
+        run: |
+          node --test tests/ctf-firecracker-hardware-acceptance.test.mjs \
+            tests/ctf-firecracker-systemd-supervisor.test.mjs \
+            tests/ctf-firecracker-boot-controller.test.mjs
+      - name: No operator approval must refuse live guest boot
+        run: |
+          node scripts/cyber-range-microvm-hardware-acceptance.mjs --help
+          if node scripts/cyber-range-microvm-hardware-acceptance.mjs --run \
+            --confirm-local-kvm \
+            --session 123e4567-e89b-42d3-a456-426614174001 \
+            --uid 22001 --gid 22001 \
+            --kernel-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --rootfs-sha bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+            --jailer-sha cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
+            --firecracker-sha dddddddddddddddddddddddddddddddddddddddddddddddddddddddd; then
+            echo 'UNAPPROVED LIVE KVM BOOT' >&2
+            exit 1
+          fi
+      - name: Ensure no VM, cloud or public lab started
+        run: |
+          if pgrep -x firecracker >/dev/null 2>&1; then
+            echo 'Unexpected Firecracker guest in no-cost CI' >&2
+            exit 1
+          fi
