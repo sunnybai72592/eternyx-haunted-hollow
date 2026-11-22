@@ -30,7 +30,7 @@ jobs:
           docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml up --build -d
           docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml ps
           docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml logs --tail 50
-          if ! curl --fail --silent --show-error --retry 8 --retry-connrefused --retry-delay 1 http://127.0.0.1:8765/healthz; then
+          if ! curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:8765/healthz; then
             docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml ps
             docker compose -p eternyx-ci-range -f infrastructure/cyber-range/compose.yaml logs --tail 100
             exit 1
