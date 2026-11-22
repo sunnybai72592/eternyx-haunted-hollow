@@ -100,12 +100,14 @@ export class LocalDockerRangeRuntime {
 
     const token = randomBytes(32).toString("hex");
     let launched = false;
+    let phase = "compose-start";
     try {
       await assertLocalLaunchAllowed();
       executeDocker(composeArgs(sessionId, ["up", "--detach", "--build", "--force-recreate"]), token);
       launched = true;
       // Only verified live containers on both internal-only Docker bridges
       // can supply a destination to the trusted-host loopback listener.
+      phase="verify-private-upstream";
       const destination = await this.trustedGatewayDestination(sessionId);
       const relay = createHostRangeRelay({
         sessionId, token,
@@ -117,9 +119,11 @@ export class LocalDockerRangeRuntime {
           return latest;
         },
       });
+      phase="bind-host-loopback";
       await relay.listen();
       this.#hostRelays.set(sessionId, relay);
       const port = relay.port;
+      phase="probe-private-gateway";
       for (let attempt = 0; attempt < 20; attempt++) {
         try {
           const response = await fetch("http://127.0.0.1:" + port + "/healthz", {
@@ -140,7 +144,9 @@ export class LocalDockerRangeRuntime {
         try { await this.stop(sessionId); }
         catch { /* Do not report successful cleanup. */ }
       }
-      throw new Error("Managed range start or host-only relay attestation failed");
+      // Error phases are allowlisted internal identifiers, never Docker logs,
+      // gateway bearer values or upstream headers.
+      throw new Error("Managed host-only range startup failed at "+phase);
     }
   }
 
