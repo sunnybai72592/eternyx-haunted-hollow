@@ -310,15 +310,30 @@ export default function DigitalWorkspace() {
     if (!owner || !active || !window.confirm("Remove this saved item" +
       (item.kind === "file" ? " and delete its private file" : "") + "?")) return;
     void mutate(async () => {
-      if (item.kind === "file" && item.storage_path) {
-        const { error: storageError } = await supabase.storage.from(WORKSPACE_BUCKET)
-          .remove([item.storage_path]);
-        if (storageError) throw new Error("Private file removal failed: " + storageError.message);
-      }
+      // Remove the database record first. Previously the file was deleted before
+      // this permission-checked operation, which could leave a broken record if
+      // the database deletion failed. Recover metadata when Storage fails.
       const { data, error: deleteError } = await supabase.from("workspace_items")
         .delete().eq("id", item.id).eq("owner_id", owner).select("id").maybeSingle();
       if (deleteError || !data) throw new Error(
-        "Metadata removal failed. Refresh and retry; " + (deleteError?.message || "the record was not deleted."));
+        "Metadata removal failed; the private file was left untouched. " +
+        (deleteError?.message || "The record was not deleted."));
+      if (item.kind === "file" && item.storage_path) {
+        const { error: storageError } = await supabase.storage.from(WORKSPACE_BUCKET)
+          .remove([item.storage_path]);
+        if (storageError) {
+          // Object remains in private Storage. Re-register it so the owner can
+          // download it or retry deletion, rather than strand its only listing.
+          const { error: restoreError } = await supabase.from("workspace_items").insert({
+            owner_id: owner, project_id: item.project_id, kind: "file",
+            title: item.title, storage_path: item.storage_path,
+            file_size: item.file_size, mime_type: item.mime_type,
+          });
+          throw new Error(restoreError
+            ? "Private file removal failed and its listing could not be restored. Contact support; your file may still be in private Storage. " + storageError.message
+            : "Private file removal failed; the listing was restored so you can retry. " + storageError.message);
+        }
+      }
     }, "Item removed.");
   };
 
