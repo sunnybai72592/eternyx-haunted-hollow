@@ -1,0 +1,55 @@
+name: Automation Incident Management and Recovery Review SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123090000_automation_incident_management.sql'
+      - 'tests/sql/automation-incidents-db-smoke.sql'
+      - '.github/workflows/automation-incidents-sql.yml'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify owner evidence, incident lifecycle, audit timeline and safe recovery review on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable network-isolated PostgreSQL 17
+        run: |
+          docker run --detach --rm --network none --name eternyx-incidents-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-incidents-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-incidents-ci pg_isready -U postgres || { docker logs eternyx-incidents-ci; exit 1; }
+      - name: Bootstrap two independent CI identities
+        run: docker exec --interactive eternyx-incidents-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply prior Automation and incident management migrations
+        run: |
+          for file in \
+            supabase/migrations/20261122220000_automation_manual_control_plane.sql \
+            supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql \
+            supabase/migrations/20261122234500_automation_scheduled_runs.sql \
+            supabase/migrations/20261123000000_automation_webhook_approvals.sql \
+            supabase/migrations/20261123060000_automation_workflow_policies.sql \
+            supabase/migrations/20261123070000_automation_operations.sql \
+            supabase/migrations/20261123080000_automation_observability_recovery.sql \
+            supabase/migrations/20261123090000_automation_incident_management.sql; do
+            docker exec --interactive eternyx-incidents-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+          done
+      - name: Verify factual incident evidence, immutable owner timeline and no-restore safety
+        run: docker exec --interactive eternyx-incidents-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-incidents-db-smoke.sql
+      - name: Remove disposable PostgreSQL
+        if: always()
+        run: docker rm --force eternyx-incidents-ci || true
