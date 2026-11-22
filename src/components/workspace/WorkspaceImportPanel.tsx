@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { FileUp, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { parseWorkspaceRestore, WORKSPACE_RESTORE_MAX_BYTES } from "@/lib/workspaceRestore.mjs";
+import { parseWorkspaceRestore } from "@/lib/workspaceRestore.mjs";
 import { parseWorkspaceFullBackup, WORKSPACE_BACKUP_MAX_DOCUMENT_BYTES } from "@/lib/workspaceFullBackup.mjs";
 import { WORKSPACE_BUCKET, workspaceFileKey } from "@/lib/workspaceRules.mjs";
 
