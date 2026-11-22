@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import unittest
 
-from prepare_training_frames import prepare_frames
+from prepare_training_frames import prepare_evaluation_frames, prepare_frames
 
 
 class FrameWindowTests(unittest.TestCase):
@@ -43,6 +43,10 @@ class FrameWindowTests(unittest.TestCase):
         self.manifest["clips"].append({**self.row, "file": "other.mp4", "split": "eval"})
         with self.assertRaisesRegex(ValueError, "evaluation"):
             prepare_frames(self.root, self.manifest, "scene.mp4")
+        with self.assertRaisesRegex(ValueError, "evaluation"):
+            prepare_evaluation_frames(self.root, self.manifest, "other.mp4")
+        with self.assertRaisesRegex(ValueError, "eval-split"):
+            prepare_evaluation_frames(self.root, self.manifest, "scene.mp4")
         with self.assertRaisesRegex(ValueError, "train-split"):
             prepare_frames(self.root, self.manifest, "other.mp4")
 

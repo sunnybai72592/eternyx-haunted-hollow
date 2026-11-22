@@ -37,7 +37,7 @@ jobs:
         run: |
           if ! command -v ffmpeg >/dev/null; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
           python gpu-worker/test_training_frames_cpu.py
-      - name: Encode video and caption and train one adapter step
+      - name: Train on moving shapes and evaluate on held-out color bars
         env:
           HF_HUB_OFFLINE: "1"
           OMP_NUM_THREADS: "1"
