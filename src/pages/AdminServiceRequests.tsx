@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, CalendarClock, ClipboardList, Link2, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Bell, CalendarClock, CheckCircle2, ClipboardList, Link2, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
@@ -22,6 +22,7 @@ type ServiceRow = {
   priority: string; priority_rank: number; assigned_admin_id: string | null;
   needs_follow_up: boolean; last_customer_activity_at: string | null; last_admin_activity_at: string | null;
   next_action_kind: ServiceNextAction; next_review_on: string | null; review_bucket: ServiceReviewBucket;
+  last_checked_at: string | null; needs_my_check: boolean;
 };
 type Draft = { status: ServiceRequestStatus; client_update: string };
 
@@ -44,6 +45,8 @@ export default function AdminServiceRequests() {
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [mineCheckOnly, setMineCheckOnly] = useState(false);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review'>('newest');
   const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
   const [actionFilter, setActionFilter] = useState<'all' | ServiceNextAction>('all');
@@ -66,8 +69,8 @@ export default function AdminServiceRequests() {
     const generation = ++fetchGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_admin_review_queue')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket', { count: 'exact' });
+    let query = supabase.from('service_admin_check_queue')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -81,6 +84,7 @@ export default function AdminServiceRequests() {
     if (assignmentFilter === 'mine') query = query.eq('assigned_admin_id', user.id);
     if (assignmentFilter === 'unassigned') query = query.is('assigned_admin_id', null);
     if (attentionOnly) query = query.eq('needs_follow_up', true);
+    if (mineCheckOnly) query = query.eq('needs_my_check', true);
     if (reviewBucket !== 'all') query = query.eq('review_bucket', reviewBucket);
     if (actionFilter !== 'all') query = query.eq('next_action_kind', actionFilter);
     if (sortOrder === 'priority') query = query.order('priority_rank', { ascending: false });
@@ -110,7 +114,7 @@ export default function AdminServiceRequests() {
       setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
     }
     setLoading(false);
-  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter]);
+  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter, mineCheckOnly]);
 
   useEffect(() => {
     let active = true;
@@ -119,6 +123,7 @@ export default function AdminServiceRequests() {
     setRows([]);
     setTotal(0);
     setDrafts({});
+    setCheckingId(null);
     if (authLoading) {
       setChecking(true);
       return () => { active = false; };
@@ -175,6 +180,7 @@ export default function AdminServiceRequests() {
     setPriorityFilter('all');
     setAssignmentFilter('all');
     setAttentionOnly(false);
+    setMineCheckOnly(false);
     setReviewBucket('all');
     setActionFilter('all');
     setPage(0);
@@ -189,6 +195,7 @@ export default function AdminServiceRequests() {
     setPriorityFilter('all');
     setAssignmentFilter('all');
     setAttentionOnly(false);
+    setMineCheckOnly(false);
     setReviewBucket('all');
     setActionFilter('all');
     setSortOrder('newest');
@@ -199,6 +206,25 @@ export default function AdminServiceRequests() {
     setPage(0);
     setFeedback(null);
     if (location.search) navigate('/admin/service-requests', { replace: true });
+  };
+
+  const markChecked = async (id: string) => {
+    if (!authorized || !user?.id || checkingId) return;
+    setCheckingId(id);
+    setFeedback(null);
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || auth.user?.id !== user.id) throw new Error('Session expired');
+      const { data, error } = await supabase.rpc('mark_service_request_checked', { p_request_id: id });
+      if (error || !data) throw error ?? new Error('Check-in not confirmed');
+      setFeedback('Your personal check-in was recorded. It does not send a message or claim anyone read one.');
+      void load();
+    } catch (reason) {
+      console.error('Admin check-in failed', reason);
+      setFeedback('Check-in not saved. Verify access and your connection before retrying.');
+    } finally {
+      setCheckingId(null);
+    }
   };
 
   const copyAdminLink = async (id: string) => {
@@ -331,6 +357,7 @@ export default function AdminServiceRequests() {
           </select>
         </div>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={attentionOnly} onChange={(event) => { setPage(0); setAttentionOnly(event.target.checked); }} />Needs follow-up</label>
+        <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={mineCheckOnly} onChange={(event) => { setPage(0); setMineCheckOnly(event.target.checked); }} />Needs my check</label>
         <Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
         <span className="text-xs text-muted-foreground">Follow-up signals reflect recorded customer activity. Review dates are internal UTC targets, not response guarantees.</span>
       </div>
@@ -347,6 +374,7 @@ export default function AdminServiceRequests() {
               <span className="rounded-full border border-border px-3 py-1">Priority: {item.priority}</span>
               <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
               {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
+              {item.needs_my_check && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">Not checked by you since latest customer activity</span>}
               <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1"><CalendarClock className="h-3 w-3" />{serviceReviewBucketLabels[item.review_bucket] ?? 'Not scheduled'}{item.next_review_on ? ': ' + item.next_review_on : ''}</span>
               <span className="rounded-full border border-border px-3 py-1">Next: {serviceNextActionLabels[item.next_action_kind] ?? 'Not planned'}</span>
               {item.last_customer_activity_at && <span>Customer activity: {new Date(item.last_customer_activity_at).toLocaleString()}</span>}
@@ -363,12 +391,16 @@ export default function AdminServiceRequests() {
               <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-update-' + item.id}>Client-visible update</label><Textarea id={'request-update-' + item.id} rows={3} maxLength={1000} value={draft.client_update} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, client_update: e.target.value } }))} placeholder="Provide actual next steps. Do not include internal notes or secrets." /><p className="mt-1 text-right text-xs text-muted-foreground">{draft.client_update.length}/1,000</p></div>
             </div>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={checkingId !== null} onClick={() => void markChecked(item.id)}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />{checkingId === item.id ? 'Recording…' : 'Mark checked'}
+              </Button>
               <Button type="button" variant="outline" onClick={() => void copyAdminLink(item.id)}><Link2 className="mr-2 h-4 w-4" />Copy admin link</Button>
               <Button type="button" variant="outline" aria-expanded={openConversation === item.id} onClick={() => setOpenConversation((current) => current === item.id ? null : item.id)}>
                 <MessageCircle className="mr-2 h-4 w-4" />{openConversation === item.id ? 'Close conversation' : 'Customer conversation'}
               </Button>
               <Button disabled={saving !== null || (draft.status === item.status && draft.client_update.trim() === (item.client_update ?? ''))} onClick={() => void save(item)}>{saving === item.id ? 'Saving…' : 'Save verified update'}</Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">{item.last_checked_at ? 'Your last check: ' + new Date(item.last_checked_at).toLocaleString() : 'You have not checked this request'} · Personal marker, not a read receipt</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" variant="outline" aria-expanded={openTriage === item.id} onClick={() => setOpenTriage((id) => id === item.id ? null : item.id)}>
                 {openTriage === item.id ? 'Close private triage' : 'Private triage'}
