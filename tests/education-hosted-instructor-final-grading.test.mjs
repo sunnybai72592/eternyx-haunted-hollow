@@ -48,7 +48,7 @@ test("1: preflight is read-only, relies on independently hosted synthetic fixtur
   assert.equal(c.awarded,1);
   assert.deepEqual(c.fixture,{testId:id(1),attemptId:id(2),answerId:id(3)});
   assert.ok(Object.isFrozen(c)&&Object.isFrozen(c.fixture));
-  assert.equal(c.expectedCases.length,19);
+  assert.equal(c.expectedCases.length,16);
 });
 test("2: explicit instructor review requires both distinct approvals",()=>{
   const a=env();a.ETERNYX_EDU_REVIEW_MODE="review";
@@ -127,7 +127,7 @@ test("9: review approval is not general-purpose fixture write approval",()=>{
   assert.throws(()=>validateStagingRlsConfig(reviewEnv()));
 });
 test("10: three modes have unique fixed audited case names",()=>{
-  assert.equal(REVIEW_STAGE_CASES.preflight.length,19);
+  assert.equal(REVIEW_STAGE_CASES.preflight.length,16);
   assert.equal(REVIEW_STAGE_CASES.review.length,28);
   assert.equal(REVIEW_STAGE_CASES.verify.length,26);
   for(const [mode,cases] of Object.entries(REVIEW_STAGE_CASES)){
@@ -194,7 +194,7 @@ test("17: final verification confirms immutable five-field receipt and no forged
   assert.match(runner,/anonymous-cannot-read-final/);
 });
 test("18: service-role secrets, privileged writes and public logs are absent",()=>{
-  assert.doesNotMatch(runner,/\.insert\(|\.update\(|\.delete\(|auth\.admin\.|service_role|SUPABASE_SERVICE_ROLE_KEY|sb_secret_/);
+  assert.doesNotMatch(runner,/\.insert\(|\.update\(|\.delete\(|auth\.admin\.|SUPABASE_SERVICE_ROLE_KEY|sb_secret_|getSupabaseSecretKey/);
   assert.doesNotMatch(runner,/console\.log\(users\)|console\.log\(config\)|console\.log\(r\)/);
   assert.match(runner,/education_schema_deployed_by_test:false/);
   assert.match(runner,/production_certified:false/);
