@@ -18,6 +18,12 @@ DECLARE
   v_count bigint;
   v_bytes bigint;
 BEGIN
+  -- Reject forged owner IDs before looking at another account's counts.
+  -- Do not leak quota state across tenants through SECURITY DEFINER errors.
+  IF NEW.owner_id IS DISTINCT FROM (SELECT auth.uid()) THEN
+    RAISE EXCEPTION 'Workspace owner does not match authenticated user'
+      USING ERRCODE = '42501';
+  END IF;
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(NEW.owner_id::text, 20261124)
   );
