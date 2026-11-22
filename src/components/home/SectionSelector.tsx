@@ -38,7 +38,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             <ContinueWork />
             <HomeTaskFinder />
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_rgba(34,211,238,.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
+              <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_hsl(var(--primary)/.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
                 Explore the six pillars <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               {isAuthenticated ? (
@@ -60,7 +60,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             <div className="absolute inset-[8%] rounded-full bg-cyan-300/[0.04] blur-3xl" />
             <div className="absolute h-[72%] w-[72%] rounded-full border border-cyan-100/[0.08] [transform:rotateX(68deg)_rotateZ(-24deg)]" />
             <div className="absolute h-[54%] w-[92%] rounded-full border border-violet-200/[0.12] [transform:rotateX(68deg)_rotateZ(32deg)]" />
-            <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-cyan-100/25 bg-[#0b1b2b]/90 shadow-[0_0_90px_rgba(34,211,238,.20),inset_0_0_40px_rgba(34,211,238,.07)] sm:h-44 sm:w-44">
+            <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-cyan-100/25 bg-[#0b1b2b]/90 shadow-[0_0_90px_hsl(var(--primary)/.20),inset_0_0_40px_hsl(var(--primary)/.07)] sm:h-44 sm:w-44">
               <Zap className="mb-2 h-9 w-9 text-cyan-200 sm:h-11 sm:w-11" />
               <span className="text-lg font-black tracking-[.2em] text-white sm:text-xl">ETERNYX</span>
               <span className="mt-1 text-[9px] font-semibold uppercase tracking-[.25em] text-cyan-100/60">Connected by design</span>
@@ -77,7 +77,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
                 <Icon className="h-3.5 w-3.5" />{label}
               </div>
             ))}
-            <div className="absolute left-[17%] top-[12%] h-2 w-2 rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(103,232,249,.9)]" />
+            <div className="absolute left-[17%] top-[12%] h-2 w-2 rounded-full bg-cyan-200 shadow-[0_0_18px_hsl(var(--primary)/.9)]" />
             <div className="absolute bottom-[12%] right-[18%] h-1.5 w-1.5 rounded-full bg-violet-200 shadow-[0_0_16px_rgba(196,181,253,.9)]" />
           </div>
         </section>
