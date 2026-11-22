@@ -25,6 +25,10 @@ test('customer requests are owner-filtered and paginated by Supabase', async () 
   assert.match(src, /\.range\(page \* 20, \(page \+ 1\) \* 20 - 1\)/);
   assert.match(src, /query\.ilike\('title'/);
   assert.match(src, /new URLSearchParams\(location\.search\)\.get\('request'\)/);
+  assert.match(src, /\.eq\('user_id', user\.id\)/);
+  assert.match(src, /\.eq\('id', selected\)/);
+  assert.match(src, /linkedRequest && !rows\.some/);
+  assert.match(src, /Opened by private link/);
   assert.match(src, /encodeURIComponent\(id\)/);
   assert.match(src, /navigator\.clipboard\.writeText/);
   assert.match(src, /new Blob\(\[text\], \{ type: 'text\/plain;charset=utf-8' \}\)/);
