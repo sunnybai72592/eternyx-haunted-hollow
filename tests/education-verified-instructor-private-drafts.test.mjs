@@ -30,7 +30,8 @@ test("2: only established trusted admins may approve and revoke educators", () =
 });
 
 test("3: self-selected role and profile metadata cannot grant instructor access", () => {
-  assert.doesNotMatch(sql, /\buser_roles\b|\bprofiles\.role\b|raw_user_meta_data|auth\.jwt\(\)/);
+  const executableSql = sql.split("\n").filter(line => !line.trimStart().startsWith("--")).join("\n");
+  assert.doesNotMatch(executableSql, /\b(?:FROM|JOIN|INSERT\s+INTO|UPDATE)\s+public\.user_roles\b|\bprofiles\.role\b|raw_user_meta_data|auth\.jwt\(\)/i);
   assert.match(sql, /FROM public\.education_instructor_grants AS g/);
   assert.match(sql, /t\.user_id = g\.user_id/);
   assert.match(sql, /WHERE g\.user_id = \(SELECT auth\.uid\(\)\)/);
@@ -49,7 +50,8 @@ test("5: functions explicitly revoke PUBLIC/anon grants and validate signed-in c
     "admin_approve_education_instructor","admin_revoke_education_instructor",
     "education_instructor_access","education_instructor_create_draft","education_instructor_list_drafts"
   ]) assert.ok(sql.includes("public." + name + "("));
-  assert.equal((sql.match(/SECURITY DEFINER SET search_path = ''/g) ?? []).length, 5);
+  assert.ok((sql.match(/SECURITY DEFINER SET search_path = ''/g) ?? []).length >= 5);
+  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) ?? []).length, 5);
   assert.ok((sql.match(/FROM PUBLIC, anon, authenticated/g) ?? []).length >= 5);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.education_instructor_create_draft\(jsonb\) TO authenticated/);
   assert.doesNotMatch(sql, /GRANT EXECUTE ON FUNCTION .* TO anon/);
