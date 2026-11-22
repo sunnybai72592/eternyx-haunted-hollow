@@ -105,6 +105,7 @@ export default function ServiceClarifications({ requestId, ownerId, isAdmin = fa
     setLimit(PAGE_SIZE);
     setQuestionDraft('');
     setAnswerDrafts({});
+    setBusy(null);
     setError('');
     setNotice('');
   }, [viewerKey]);
@@ -153,9 +154,16 @@ export default function ServiceClarifications({ requestId, ownerId, isAdmin = fa
       onChanged?.();
     } catch (reason) {
       console.error('Service clarification question insert failed', reason);
-      if (viewerKeyRef.current === viewerKey) setError('Question not saved. Verify your administrator session and retry.');
+      if (viewerKeyRef.current === viewerKey) {
+        const detail = reason && typeof reason === 'object' && 'message' in reason ? String(reason.message) : '';
+        setError(/already submitted recently/i.test(detail)
+          ? 'This question was recently submitted. Refresh the list before trying again.'
+          : /Too many clarification questions/i.test(detail)
+            ? 'Question limit reached for this request. Try again in about a minute.'
+            : 'Question not saved. Verify your administrator session and retry.');
+      }
     } finally {
-      setBusy(null);
+      if (viewerKeyRef.current === viewerKey) setBusy(null);
     }
   };
 
@@ -187,7 +195,7 @@ export default function ServiceClarifications({ requestId, ownerId, isAdmin = fa
       console.error('Service clarification answer insert failed', reason);
       if (viewerKeyRef.current === viewerKey) setError('Answer not saved. Only one answer is allowed per question; refresh to check if it was already recorded.');
     } finally {
-      setBusy(null);
+      if (viewerKeyRef.current === viewerKey) setBusy(null);
     }
   };
 
@@ -213,7 +221,7 @@ export default function ServiceClarifications({ requestId, ownerId, isAdmin = fa
       console.error('Service clarification closure failed', reason);
       if (viewerKeyRef.current === viewerKey) setError('Question not closed. Refresh to confirm it is still open and that administrator access is valid.');
     } finally {
-      setBusy(null);
+      if (viewerKeyRef.current === viewerKey) setBusy(null);
     }
   };
 

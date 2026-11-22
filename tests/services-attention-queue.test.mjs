@@ -26,18 +26,18 @@ test('follow-up signals use confirmed activity, not fabricated or unread claims'
   assert.match(sql, /AS priority_rank/);
   assert.match(sql, /service_request_activity_customer_message_idx/);
   const admin = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin, /Follow-up signals reflect recorded customer activity/);
+  assert.match(admin, /Follow-up includes actual customer messages, scope responses and clarification answers/);
   assert.match(admin, /Needs follow-up/);
   assert.match(admin, /new Date\(item\.last_customer_activity_at\)\.toLocaleString\(\)/);
 });
 
 test('admin filters priority, owner assignment, and follow-up on the server', async () => {
   const admin = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin, /from\('service_admin_clarification_queue'\)/);
+  assert.match(admin, /from\('service_admin_followup_queue'\)/);
   assert.match(admin, /if \(priorityFilter !== 'all'\) query = query\.eq\('priority', priorityFilter\)/);
   assert.match(admin, /query\.eq\('assigned_admin_id', user\.id\)/);
   assert.match(admin, /query\.is\('assigned_admin_id', null\)/);
-  assert.match(admin, /query\.eq\('needs_follow_up', true\)/);
+  assert.match(admin, /query\.eq\('needs_follow_up_extended', true\)/);
   assert.match(admin, /query\.order\('priority_rank', \{ ascending: false \}\)/);
   assert.match(admin, /query\.order\('last_customer_activity_at', \{ ascending: false, nullsFirst: false \}\)/);
   assert.match(admin, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE - 1\)/);

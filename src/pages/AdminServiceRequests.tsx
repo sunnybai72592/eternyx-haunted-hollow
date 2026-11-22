@@ -24,6 +24,8 @@ type ServiceRow = {
   needs_follow_up: boolean; last_customer_activity_at: string | null; last_admin_activity_at: string | null;
   next_action_kind: ServiceNextAction; next_review_on: string | null; review_bucket: ServiceReviewBucket;
   last_checked_at: string | null; needs_my_check: boolean;
+  last_customer_answer_at: string | null; needs_my_check_extended: boolean;
+  needs_follow_up_extended: boolean; customer_answers_since_check: number;
   open_clarification_count: number; awaiting_customer_count: number; awaiting_admin_review_count: number;
 };
 type Draft = { status: ServiceRequestStatus; client_update: string };
@@ -73,8 +75,8 @@ export default function AdminServiceRequests() {
     const generation = ++fetchGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_admin_clarification_queue')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count', { count: 'exact' });
+    let query = supabase.from('service_admin_followup_queue')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_customer_answer_at,needs_my_check_extended,needs_follow_up_extended,customer_answers_since_check', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -87,8 +89,8 @@ export default function AdminServiceRequests() {
     if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter);
     if (assignmentFilter === 'mine') query = query.eq('assigned_admin_id', user.id);
     if (assignmentFilter === 'unassigned') query = query.is('assigned_admin_id', null);
-    if (attentionOnly) query = query.eq('needs_follow_up', true);
-    if (mineCheckOnly) query = query.eq('needs_my_check', true);
+    if (attentionOnly) query = query.eq('needs_follow_up_extended', true);
+    if (mineCheckOnly) query = query.eq('needs_my_check_extended', true);
     if (clarificationFilter === 'awaiting_customer') query = query.gt('awaiting_customer_count', 0);
     if (clarificationFilter === 'needs_review') query = query.gt('awaiting_admin_review_count', 0);
     if (clarificationFilter === 'open') query = query.gt('open_clarification_count', 0);
@@ -235,7 +237,7 @@ export default function AdminServiceRequests() {
       void load();
     } catch (reason) {
       console.error('Admin check-in failed', reason);
-      setFeedback('Check-in not saved. Verify access and your connection before retrying.');
+      if (useAuthStore.getState().user?.id === user.id) setFeedback('Check-in not saved. Verify access and your connection before retrying.');
     } finally {
       setCheckingId(null);
     }
@@ -382,7 +384,7 @@ export default function AdminServiceRequests() {
           </select>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
-        <span className="text-xs text-muted-foreground">Follow-up signals reflect recorded customer activity. Review dates are internal UTC targets, not response guarantees.</span>
+        <span className="text-xs text-muted-foreground">Follow-up includes actual customer messages, scope responses and clarification answers. Check-ins remain personal; review dates are not response guarantees.</span>
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
       <p className="mb-4 text-xs text-muted-foreground">All queue filters, review targets and page totals come from the database. Internal UTC review dates are not customer commitments.</p>
@@ -396,8 +398,9 @@ export default function AdminServiceRequests() {
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-border px-3 py-1">Priority: {item.priority}</span>
               <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
-              {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
-              {item.needs_my_check && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">{item.last_checked_at ? 'New customer activity since your check' : 'Needs your first check'}</span>}
+              {item.needs_follow_up_extended && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
+              {item.needs_my_check_extended && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">{item.last_checked_at ? 'New customer activity since your check' : 'Needs your first check'}</span>}
+              {item.customer_answers_since_check > 0 && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">{item.customer_answers_since_check} customer clarification answer(s) since your check</span>}
               {item.awaiting_customer_count > 0 && <span className="rounded-full border border-border px-3 py-1">Awaiting customer answer: {item.awaiting_customer_count}</span>}
               {item.awaiting_admin_review_count > 0 && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">Clarifications to review: {item.awaiting_admin_review_count}</span>}
               <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1"><CalendarClock className="h-3 w-3" />{serviceReviewBucketLabels[item.review_bucket] ?? 'Not scheduled'}{item.next_review_on ? ': ' + item.next_review_on : ''}</span>

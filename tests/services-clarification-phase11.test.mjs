@@ -108,7 +108,7 @@ test('actions verify authenticated owner/admin and record only confirmed databas
 
 test('owner page uses real clarification counts, filters and linked request workspace', async () => {
   const src = await read('src/pages/MyServiceRequests.tsx');
-  assert.match(src, /from\('service_customer_clarification_queue'\)/);
+  assert.match(src, /from\('service_customer_followup_queue'\)/);
   assert.match(src, /\.eq\('user_id', userId\)/);
   assert.match(src, /if \(answersOnly\) query = query\.gt\('awaiting_customer_count', 0\)/);
   assert.match(src, /setAnswersOnly\(false\)/);
@@ -123,7 +123,7 @@ test('owner page uses real clarification counts, filters and linked request work
 
 test('admin queue filters real owner and reviewer work without fake deadlines', async () => {
   const src = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(src, /from\('service_admin_clarification_queue'\)/);
+  assert.match(src, /from\('service_admin_followup_queue'\)/);
   assert.match(src, /query\.gt\('awaiting_customer_count', 0\)/);
   assert.match(src, /query\.gt\('awaiting_admin_review_count', 0\)/);
   assert.match(src, /query\.gt\('open_clarification_count', 0\)/);
