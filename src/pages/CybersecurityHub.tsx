@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import WorkspaceCaptureLink from "@/components/workspace/WorkspaceCaptureLink";
 import {
   Activity, ArrowRight, BookOpen, Bug, ChevronRight, Cloud, Crosshair, FileCheck2,
   Fingerprint, Globe2, KeyRound, LockKeyhole, Network, Radar, Search,
@@ -179,6 +180,7 @@ const CybersecurityHub = () => {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-slate-100">
+      <div className="relative z-10 mx-auto max-w-7xl px-4 pt-4"><WorkspaceCaptureLink title="Cybersecurity Hub" /></div>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-48 top-0 h-[34rem] w-[34rem] rounded-full bg-cyan-500/[0.09] blur-[110px]" />
         <div className="absolute -right-48 top-72 h-[34rem] w-[34rem] rounded-full bg-violet-500/[0.08] blur-[110px]" />

@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
+import WorkspaceCaptureLink from "@/components/workspace/WorkspaceCaptureLink";
 import {
   Activity, ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound, Gauge,
   Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
@@ -121,6 +122,7 @@ export default function DeveloperStudio() {
           <ArrowLeft className="h-4 w-4" /> All ecosystem pillars
         </Link>
 
+        <WorkspaceCaptureLink title="Developer Studio" />
         <section className="relative overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-950/70 via-slate-950 to-cyan-950/60 p-7 sm:p-10">
           <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-violet-400/10 blur-3xl" />
           <div className="relative max-w-3xl">

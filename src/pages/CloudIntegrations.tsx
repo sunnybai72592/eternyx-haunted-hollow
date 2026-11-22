@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
+import WorkspaceCaptureLink from "@/components/workspace/WorkspaceCaptureLink";
 import { Cloud, Container, Network, ShieldCheck, Upload, Database, Workflow, GitBranch, Server, AlertTriangle, ArrowUpRight } from "lucide-react";
 import { parseCloudSnapshot, MAX_SNAPSHOT_BYTES } from "@/lib/cloudInventoryUtils.mjs";
 
@@ -31,6 +32,7 @@ export default function CloudIntegrations() {
   };
   return <div className="mx-auto max-w-7xl space-y-8 px-4 pb-20 pt-4 text-foreground sm:px-6">
     <Link className="text-sm text-cyan-300 hover:underline" to="/explore">All ETERNYX pillars</Link>
+    <WorkspaceCaptureLink title="Cloud & Integrations" />
     <section className="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-slate-950 via-slate-950 to-cyan-950/60 p-7 text-white sm:p-10">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300"><Cloud className="h-5 w-5" /> ETERNYX infrastructure</div>
       <h1 className="mt-4 text-3xl font-bold sm:text-5xl">Cloud &amp; <span className="text-cyan-300">Integrations</span></h1>
