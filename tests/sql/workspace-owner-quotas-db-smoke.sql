@@ -63,6 +63,14 @@ BEGIN
     RAISE EXCEPTION 'Bob can see Alice pinned projects'; END IF;
 END;
 $check$;
+DO $check$
+BEGIN
+  INSERT INTO public.workspace_projects(owner_id, name)
+  VALUES('11111111-1111-4111-8111-111111111111', 'Bob forged owner');
+  RAISE EXCEPTION 'Forged owner accepted by privileged quota function';
+EXCEPTION WHEN insufficient_privilege THEN NULL;
+END;
+$check$;
 INSERT INTO public.workspace_projects(owner_id, name)
 VALUES('22222222-2222-4222-8222-222222222222', 'Bob workspace');
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
