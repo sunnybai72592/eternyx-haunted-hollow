@@ -17,6 +17,7 @@ type SavedWorkflow = {
 };
 type SavedRun = {
   id: string; workflow_id: string | null; workflow_revision: number; status: "completed";
+  trigger_type?: "manual" | "webhook"; webhook_trigger_id?: string | null;
   input_lines: number; output_lines: number; input_characters: number; output_characters: number;
   trace: Array<{ id: string; kind: string; changed: boolean }>; created_at: string;
 };
@@ -208,7 +209,7 @@ export default function AutomationCloudPanel({
           })}><Archive className="mr-2 size-4" /> Load run history</Button>
           {history.length > 0 && <ol className="space-y-2">
             {history.map((item) => <li key={item.id} className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
-              <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-foreground">Completed · {item.input_lines} → {item.output_lines} lines</span><span>{formatDate(item.created_at)}</span></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-foreground">{item.trigger_type === "webhook" ? "Signed webhook" : "Manual run"} · Completed · {item.input_lines} → {item.output_lines} lines</span><span>{formatDate(item.created_at)}</span></div>
               <span>Run {item.id} · {item.trace.length} recorded steps · No input/output text saved</span>
             </li>)}
           </ol>}
