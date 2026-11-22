@@ -95,7 +95,8 @@ test('admins can filter personal check-ins separately from workflow follow-up', 
   assert.match(src, /useAuthStore\.getState\(\)\.user\?\.id !== user\.id/);
   assert.match(src, /const authorized = !!user && authorizedFor === user\.id/);
   assert.match(src, /Needs my check/);
-  assert.match(src, /Not checked by you since latest customer activity/);
+  assert.match(src, /Needs your first check/);
+  assert.match(src, /New customer activity since your check/);
   assert.match(src, /Personal marker, not a read receipt/);
   assert.match(src, /setMineCheckOnly\(false\)/);
   assert.match(src, /last_checked_at: string \| null/);
