@@ -30,7 +30,7 @@ export const CyberCard: React.FC<CyberCardProps> = ({
   const getVariantClasses = () => {
     const baseClasses = `
       relative overflow-hidden rounded-lg backdrop-blur-md
-      border transition-all duration-300
+      border transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background
     `;
 
     switch (variant) {
@@ -114,6 +114,14 @@ export const CyberCard: React.FC<CyberCardProps> = ({
     <div
       className={cn(getVariantClasses(), className)}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      } : undefined}
       {...props}
     >
       {getGlowEffect()}
