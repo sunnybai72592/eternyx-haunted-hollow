@@ -36,7 +36,7 @@ function failure(reason:unknown){
   const status:Record<string,number>={
     invalid_request:400,disabled:409,not_connected:404,
     draft_limit:429,pending_limit:429,write_limit:429,issue_in_flight:429,
-    not_pending:409,idempotency_conflict:409,connection_changed:409,
+    not_pending:409,not_reviewed:409,idempotency_conflict:409,connection_changed:409,
     not_found:404,expired:410,version_exhausted:409,
   };
   return reply({error:"GitHub issue action could not proceed; check its status and permissions.",
@@ -181,6 +181,12 @@ serve(async(req:Request)=>{
         draft.payload_nonce,ISSUE_PAYLOAD_BYTES);
       const issue=decodeDraft(decrypted);
       if(action.action==="preview"){
+        const {data:reviewed,error:reviewError}=await supabase.rpc(
+          "automation_mark_github_issue_previewed",{
+            p_user_id:user.id,p_draft_id:draft.id,p_version:draft.connection_version,
+          });
+        if(reviewError)throw reviewError;
+        if(reviewed?.ok!==true)return failure(reviewed?.reason);
         return reply({source:"authenticated_owner_preview",draftId:draft.id,
           owner:draft.repo_owner,repo:draft.repo_name,title:issue.title,
           body:issue.body,expiresAt:draft.expires_at,
