@@ -243,7 +243,7 @@ test("unconfirmed cgroup death never reports successful acceptance",async()=>{
   await assert.rejects(runOfflineHardwareAcceptance(runArgs(supervisor)),
     /teardown unproven; immediate operator intervention required/);
   assert.equal(supervisor.active,true);
-  assert.deepEqual(supervisor.events,["launch","attest","kill","dead"]);
+  assert.deepEqual(supervisor.events,["launch","attest","attest","kill","dead"]);
 });
 
 test("operator SIGINT abort during observation still executes shutdown",async()=>{
