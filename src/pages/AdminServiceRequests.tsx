@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ClipboardList, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
@@ -28,6 +28,12 @@ export default function AdminServiceRequests() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [filter, setFilter] = useState<'all' | ServiceRequestStatus>('all');
   const [search, setSearch] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
+  const [searchField, setSearchField] = useState<'title' | 'contact_email' | 'id'>('title');
+  const [activeSearchField, setActiveSearchField] = useState<'title' | 'contact_email' | 'id'>('title');
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
   const [openScope, setOpenScope] = useState<string | null>(null);
   const [openTriage, setOpenTriage] = useState<string | null>(null);
@@ -39,19 +45,34 @@ export default function AdminServiceRequests() {
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
-    const { data, error } = await supabase.from('service_requests')
+    let query = supabase.from('service_requests')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints', { count: 'exact' });
+    if (filter !== 'all') query = query.eq('status', filter);
+    if (activeSearch) {
+      if (activeSearchField === 'id') {
+        query = query.eq('id', activeSearch);
+      } else {
+        const escaped = activeSearch.replace(/[\\%_]/g, '\\    const { data, error } = await supabase.from('service_requests')
       .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints')
-      .order('created_at', { ascending: false }).limit(250);
+      .order('created_at', { ascending: false }).limit(250);');
+        query = query.ilike(activeSearchField, '%' + escaped + '%');
+      }
+    }
+    const { data, error, count } = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (error) {
       setLoadError(true);
       console.error('Admin service requests query failed:', error);
     } else {
       const next = (data ?? []) as ServiceRow[];
       setRows(next);
+      setTotal(count ?? 0);
       setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
     }
     setLoading(false);
-  }, []);
+  }, [page, filter, activeSearch, activeSearchField]);
 
   useEffect(() => {
     let active = true;
@@ -64,24 +85,35 @@ export default function AdminServiceRequests() {
       const allowed = !error && data === true;
       setAuthorized(allowed);
       setChecking(false);
-      if (allowed) void load();
+
     };
     void check();
     return () => { active = false; };
-  }, [user, authLoading, load]);
+  }, [user, authLoading]);
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLocaleLowerCase();
-    return rows.filter((item) =>
-      (filter === 'all' || item.status === filter) &&
-      (!needle || [item.title, item.contact_email, item.company ?? '', item.id, item.service_key]
-        .some((value) => value.toLocaleLowerCase().includes(needle)))
-    );
-  }, [rows, filter, search]);
+  useEffect(() => { if (authorized) void load(); }, [authorized, load]);
+
+  const filtered = rows;
+  const applySearch = () => {
+    const trimmed = search.trim();
+    if (searchField === 'id' && trimmed && !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(trimmed)) {
+      setFeedback('Enter a valid request UUID when searching by reference.');
+      return;
+    }
+    if (trimmed.length > 80) {
+      setFeedback('Search term must be 80 characters or fewer.');
+      return;
+    }
+    setFeedback(null);
+    setPage(0);
+    setActiveSearchField(searchField);
+    setActiveSearch(trimmed);
+  };
 
   const save = async (item: ServiceRow) => {
     const draft = drafts[item.id];
     if (!draft || saving) return;
+    if ((draft.status === 'in_progress' || draft.status === 'completed') && draft.status !== item.status) { setFeedback('Delivery statuses require a separately verified agreement. They are not enabled by this desk.'); return; }
     if (draft.client_update.length > 1000) { setFeedback('Client update must be at most 1,000 characters.'); return; }
     setSaving(item.id);
     setFeedback(null);
@@ -96,6 +128,7 @@ export default function AdminServiceRequests() {
     } else {
       setRows((items) => items.map((row) => row.id === item.id ? { ...row, status: data.status as ServiceRequestStatus, client_update: data.client_update, updated_at: data.updated_at } : row));
       setFeedback('Request ' + item.id + ' updated in the database.');
+      void load();
     }
     setSaving(null);
   };
@@ -112,19 +145,26 @@ export default function AdminServiceRequests() {
       </header>
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <label htmlFor="service-admin-filter" className="text-sm font-semibold">Status</label>
-        <select id="service-admin-filter" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
+        <select id="service-admin-filter" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={filter} onChange={(e) => { setFilter(e.target.value as typeof filter); setPage(0); }}>
           <option value="all">All requests</option>
           {Object.entries(serviceRequestStatuses).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
         </select>
-        <label htmlFor="service-admin-search" className="sr-only">Search requests</label>
-        <div className="relative w-full min-w-0 sm:w-72">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input id="service-admin-search" value={search} onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search title, email or reference" className="pl-9" />
-        </div>
-        <span className="text-xs text-muted-foreground">{filtered.length} shown · most recent 250 loaded</span>
+        <form className="flex w-full flex-wrap items-center gap-2 sm:w-auto" onSubmit={(event) => { event.preventDefault(); applySearch(); }}>
+          <label htmlFor="service-admin-search-field" className="sr-only">Search field</label>
+          <select id="service-admin-search-field" className="h-10 rounded-md border border-input bg-background px-2 text-sm" value={searchField} onChange={(event) => setSearchField(event.target.value as typeof searchField)}>
+            <option value="title">Title</option><option value="contact_email">Contact email</option><option value="id">Request UUID</option>
+          </select>
+          <div className="relative min-w-0 flex-1 sm:w-64">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <label htmlFor="service-admin-search" className="sr-only">Search service requests</label>
+            <Input id="service-admin-search" maxLength={80} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search confirmed requests" className="pl-9" />
+          </div>
+          <Button type="submit" variant="outline" disabled={loading}>Search</Button>
+        </form>
+        <span className="text-xs text-muted-foreground">{filtered.length} of {total} matching requests · page {page + 1}</span>
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
+      <p className="mb-4 text-xs text-muted-foreground">Search and status filters are applied by the database. No first-250 cutoff or invented totals.</p>
       {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The migration may not yet be deployed, or access was denied.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading service requests…</Card>
         : filtered.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-3 h-8 w-8 text-primary" /><p>No requests in this view.</p></Card>
@@ -140,7 +180,7 @@ export default function AdminServiceRequests() {
               <p className="text-xs text-muted-foreground">The customer's preferred timeframe is not a delivery promise.</p>
             </div>
             <div className="mt-5 grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-              <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-status-' + item.id}>Verified status</label><select id={'request-status-' + item.id} value={draft.status} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, status: e.target.value as ServiceRequestStatus } }))} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(serviceRequestStatuses).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}</select></div>
+              <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-status-' + item.id}>Verified status</label><select id={'request-status-' + item.id} value={draft.status} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, status: e.target.value as ServiceRequestStatus } }))} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(serviceRequestStatuses).map(([value, info]) => <option key={value} value={value} disabled={value === 'in_progress' || value === 'completed'}>{info.label}{value === 'in_progress' || value === 'completed' ? ' · requires verified agreement' : ''}</option>)}</select></div>
               <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-update-' + item.id}>Client-visible update</label><Textarea id={'request-update-' + item.id} rows={3} maxLength={1000} value={draft.client_update} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, client_update: e.target.value } }))} placeholder="Provide actual next steps. Do not include internal notes or secrets." /><p className="mt-1 text-right text-xs text-muted-foreground">{draft.client_update.length}/1,000</p></div>
             </div>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -162,6 +202,13 @@ export default function AdminServiceRequests() {
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
           </Card>;
         })}</div>}
+      {!loadError && total > 0 && (
+        <nav aria-label="Service requests pagination" className="mt-6 flex items-center justify-center gap-4">
+          <Button type="button" variant="outline" onClick={() => setPage((n) => Math.max(0, n - 1))} disabled={loading || page === 0}>Previous</Button>
+          <span className="text-xs text-muted-foreground">Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+          <Button type="button" variant="outline" onClick={() => setPage((n) => n + 1)} disabled={loading || (page + 1) * PAGE_SIZE >= total}>Next</Button>
+        </nav>
+      )}
     </main>
   );
 }
