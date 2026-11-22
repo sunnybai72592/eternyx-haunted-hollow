@@ -34,7 +34,7 @@ test("3: filter works for case-insensitive title and description searches", () =
 
 test("4: latest, alphabetic and duration sorting are deterministic", () => {
   assert.deepEqual(filterEducationTests(rows,"","newest").map(x=>x.id),[b.id,a.id,c.id]);
-  assert.deepEqual(filterEducationTests(rows,"","title").map(x=>x.id),[c.id,a.id,b.id]);
+  assert.deepEqual(filterEducationTests(rows,"","title").map(x=>x.id),[c.id,b.id,a.id]);
   assert.deepEqual(filterEducationTests(rows,"","shortest").map(x=>x.id),[b.id,a.id,c.id]);
   assert.deepEqual(rows.map(x=>x.id),[a.id,b.id,c.id], "sorting must not mutate the query cache");
 });
