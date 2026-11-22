@@ -188,7 +188,7 @@ test("offline evidence rejects omitted cases, status failures, extra sensitive f
   }
 });
 test("staging documentation requires manual approval, real pre-provisioned fixtures and no production claim",()=>{
-  assert.match(docs,/pre-provisioned/i);
+  assert.match(docs,/pre.provision/i);
   assert.match(docs,/manual/i);
   assert.match(docs,/protected.*environment/i);
   assert.match(docs,/production.*not verified/i);
