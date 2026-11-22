@@ -139,7 +139,8 @@ BEGIN
     WHEN TG_OP = 'DELETE' THEN OLD.project_id ELSE NEW.project_id END;
   INSERT INTO public.workspace_activity(owner_id, project_id, entity_id, event_type)
     VALUES (v_owner, v_project, v_entity, v_action);
-  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  -- AFTER triggers ignore the return value.
+  RETURN NULL;
 END;
 $$;
 REVOKE ALL ON FUNCTION public.workspace_record_activity() FROM PUBLIC, anon, authenticated;
@@ -171,6 +172,25 @@ VALUES ('workspace-private', 'workspace-private', false, 5242880,
         'text/plain','text/csv','application/json'])
 ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 5242880,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- A file row cannot claim an object that was never uploaded.
+-- This restricted trigger sees the storage catalog but exposes no callable RPC.
+CREATE OR REPLACE FUNCTION public.workspace_verify_file_upload()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $
+BEGIN
+  IF NEW.kind = 'file' AND NOT EXISTS (
+    SELECT 1 FROM storage.objects o
+    WHERE o.bucket_id = 'workspace-private' AND o.name = NEW.storage_path
+  ) THEN
+    RAISE EXCEPTION 'Upload the private file before registering it'
+      USING ERRCODE = '23503';
+  END IF;
+  RETURN NEW;
+END;
+$;
+REVOKE ALL ON FUNCTION public.workspace_verify_file_upload() FROM PUBLIC, anon, authenticated;
+CREATE TRIGGER workspace_items_verify_upload BEFORE INSERT ON public.workspace_items
+  FOR EACH ROW EXECUTE FUNCTION public.workspace_verify_file_upload();
 
 CREATE POLICY workspace_private_read ON storage.objects FOR SELECT TO authenticated
 USING (
