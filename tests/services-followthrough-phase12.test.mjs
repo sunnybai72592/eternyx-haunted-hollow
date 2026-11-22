@@ -56,13 +56,13 @@ test('question burst throttle is serialized, bounded, duplicate-aware and privat
 
 test('owner desk filters persisted activity including new and closed clarifications', async () => {
   const owner = await read('src/pages/MyServiceRequests.tsx');
-  assert.match(owner, /from\('service_customer_followup_queue'\)/);
-  assert.match(owner, /query\.eq\('has_updates_since_check_extended', true\)/);
+  assert.match(owner, /from\('service_customer_amendment_queue'\)/);
+  assert.match(owner, /query\.eq\('has_updates_since_check_complete', true\)/);
   assert.match(owner, /has_updates_since_check_extended: boolean/);
   assert.match(owner, /last_clarification_activity_at: string \| null/);
   assert.match(owner, /clarification_changes_since_check: number/);
-  assert.match(owner, /item\.has_updates_since_check_extended/);
-  assert.match(owner, /visibleLinkedRequest\.has_updates_since_check_extended/);
+  assert.match(owner, /item\.has_updates_since_check_complete/);
+  assert.match(owner, /visibleLinkedRequest\.has_updates_since_check_complete/);
   assert.match(owner, /clarification item\(s\) created or closed since your last check/);
   assert.match(owner, /Activity since my check/);
   assert.match(owner, /supabase\.rpc\('mark_service_request_checked'/);
@@ -73,15 +73,15 @@ test('owner desk filters persisted activity including new and closed clarificati
 
 test('admin desk filters real customer replies in the personal and attention queues', async () => {
   const admin = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin, /from\('service_admin_followup_queue'\)/);
-  assert.match(admin, /if \(attentionOnly\) query = query\.eq\('needs_follow_up_extended', true\)/);
-  assert.match(admin, /if \(mineCheckOnly\) query = query\.eq\('needs_my_check_extended', true\)/);
+  assert.match(admin, /from\('service_admin_amendment_queue'\)/);
+  assert.match(admin, /if \(attentionOnly\) query = query\.eq\('needs_follow_up_complete', true\)/);
+  assert.match(admin, /if \(mineCheckOnly\) query = query\.eq\('needs_my_check_complete', true\)/);
   assert.match(admin, /needs_my_check_extended: boolean/);
   assert.match(admin, /needs_follow_up_extended: boolean/);
   assert.match(admin, /customer_answers_since_check: number/);
   assert.match(admin, /item\.customer_answers_since_check > 0/);
-  assert.match(admin, /item\.needs_follow_up_extended/);
-  assert.match(admin, /item\.needs_my_check_extended/);
+  assert.match(admin, /item\.needs_follow_up_complete/);
+  assert.match(admin, /item\.needs_my_check_complete/);
   assert.match(admin, /customer clarification answer\(s\) since your check/);
   assert.match(admin, /awaiting_admin_review_count > 0/);
   assert.match(admin, /supabase\.rpc\('mark_service_request_checked'/);
