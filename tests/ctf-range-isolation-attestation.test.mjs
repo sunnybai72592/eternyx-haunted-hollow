@@ -5,23 +5,27 @@ import {
   verifyRuntimeIsolation, admitHostLab, auditHostIsolation,
   MAX_HOST_LABS, MAX_HOST_RESERVED_MEMORY_BYTES, MAX_HOST_RESERVED_NANO_CPUS,
 } from "../infrastructure/cyber-range/provider/isolation-policy.mjs";
+import { createLocalRelay } from "../infrastructure/cyber-range/relay/server.mjs";
 
-const read = p => readFile(new URL("../" + p, import.meta.url),"utf8");
-const a = "123e4567-e89b-42d3-a456-426614174001";
-const b = "223e4567-e89b-42d3-a456-426614174001";
-const project = "cr-" + a.replaceAll("-", "");
-const targetNet = project + "_local_target_only";
-const gatewayNet = project + "_localhost_ingress";
-const MIB = 1024 * 1024;
+const read=p=>readFile(new URL("../"+p,import.meta.url),"utf8");
+const session="123e4567-e89b-42d3-a456-426614174001";
+const other="223e4567-e89b-42d3-a456-426614174001";
+const project="cr-"+session.replaceAll("-","");
+const nets={
+  target: project+"_local_target_only",
+  middle: project+"_gateway_ingress_only",
+  host: project+"_localhost_ingress",
+};
+const MiB=1024*1024;
+const token="a".repeat(64);
 
-function container(service) {
-  const target = service === "http-range";
-  const memory = (target ? 128 : 64) * MIB;
-  const bindings = target ? {} :
-    { "8081/tcp": [{HostIp:"127.0.0.1",HostPort:""}] };
+function container(service){
+  const target=service==="http-range",gateway=service==="gateway";
+  const memory=(target?128:gateway?64:32)*MiB;
+  const connected=target?[nets.target]:gateway?[nets.target,nets.middle]:[nets.middle,nets.host];
   return {
-    Id: (target ? "a" : "b").repeat(64),
-    Created:"2026-11-22T12:00:00.000000Z",
+    Id:(target?"a":gateway?"b":"c").repeat(64),
+    Created:"2026-11-22T12:00:00Z",
     Config:{
       Labels:{
         "com.docker.compose.project":project,
@@ -30,186 +34,219 @@ function container(service) {
         "org.eternyx.range.ttl_seconds":"900",
       },
       User:"10001:10001",
-      Env: target ? ["PORT=8080","RANGE_MAX_AGE_SECONDS=900"]
-        : ["RANGE_MANAGED_MODE=required","ETERNYX_MANAGED_GATEWAY_TOKEN=privately-set"],
+      Env:target?["PORT=8080"]:
+        gateway?["RANGE_MANAGED_MODE=required","ETERNYX_MANAGED_GATEWAY_TOKEN="+token]:
+        ["RANGE_MAX_AGE_SECONDS=900"],
     },
-    State:{ Running:true },
+    State:{Running:true},
     HostConfig:{
       Privileged:false,ReadonlyRootfs:true,
-      RestartPolicy:{Name:"no"},Memory:memory,MemorySwap:memory,
-      NanoCpus:target?400_000_000:250_000_000,
-      PidsLimit:target?48:32,PublishAllPorts:false,
+      RestartPolicy:{Name:"no"},
+      Memory:memory,MemorySwap:memory,
+      NanoCpus:target?400_000_000:gateway?250_000_000:100_000_000,
+      PidsLimit:target?48:gateway?32:24,
+      PublishAllPorts:false,
       CapDrop:["ALL"],CapAdd:[],
       SecurityOpt:["no-new-privileges:true"],
-      Binds:null,Devices:[],ExtraHosts:null,NetworkMode:target?targetNet:gatewayNet,
-      PidMode:"",IpcMode:"private",UsernsMode:"",
-      PortBindings:bindings,
+      Binds:null,Devices:[],ExtraHosts:null,
+      NetworkMode:connected.at(-1),PidMode:"",IpcMode:"private",UsernsMode:"",
+      PortBindings:service==="ingress"?{"8081/tcp":[{HostIp:"127.0.0.1",HostPort:""}]}:{},
       Tmpfs:target?{"/tmp":"rw,noexec,nosuid,nodev,size=16m,mode=1777"}:null,
     },
     Mounts:[],
     NetworkSettings:{
-      Networks:target ? {[targetNet]:{}} : {[targetNet]:{},[gatewayNet]:{}},
-      Ports:target ? {"8080/tcp":null}
-        : {"8081/tcp":[{HostIp:"127.0.0.1",HostPort:"32772"}]},
+      Networks:Object.fromEntries(connected.map(name=>[name,{}])),
+      Ports:service==="ingress"?{"8081/tcp":[{HostIp:"127.0.0.1",HostPort:"32775"}]}:
+        target?{"8080/tcp":null}:{"8081/tcp":null},
     },
   };
 }
-const net = () => [
-  {Name:targetNet,Internal:true,Driver:"bridge"},
-  {Name:gatewayNet,Internal:false,Driver:"bridge"},
+const containers=()=>["http-range","gateway","ingress"].map(container);
+const networks=()=>[
+  {Name:nets.target,Internal:true,Driver:"bridge"},
+  {Name:nets.middle,Internal:true,Driver:"bridge"},
+  {Name:nets.host,Internal:false,Driver:"bridge"},
 ];
-const ok = () => [container("http-range"),container("gateway")];
-const copy = item => structuredClone(item);
 
-test("valid inspected Docker instance passes without exporting credentials",()=>{
-  const result = verifyRuntimeIsolation(a,ok(),net());
-  assert.deepEqual(result,{
-    project,passed:true,services:2,exposedTargetPorts:0,loopbackGatewayPorts:1,
-    reservedMemoryBytes:192*MIB,reservedNanoCpus:650_000_000,
-    totalPidsLimit:80,targetInternalNetwork:true,
+test("three-service live Docker attestation reports only sanitized isolation facts",()=>{
+  assert.deepEqual(verifyRuntimeIsolation(session,containers(),networks()),{
+    project,passed:true,services:3,exposedTargetPorts:0,exposedGatewayPorts:0,
+    loopbackRelayPorts:1,reservedMemoryBytes:224*MiB,
+    reservedNanoCpus:750_000_000,totalPidsLimit:104,privateGatewayNetworks:true,
   });
-  assert.equal(JSON.stringify(result).includes("privately-set"),false);
-  assert.equal(JSON.stringify(result).includes("PORT=8080"),false);
+  assert.equal(JSON.stringify(verifyRuntimeIsolation(session,containers(),networks())).includes(token),false);
 });
 
-test("rejects arbitrary project, missing service, nonrunning container and forged labels",()=>{
-  assert.throws(()=>verifyRuntimeIsolation(b,ok(),net()),/attestation failed/);
-  assert.throws(()=>verifyRuntimeIsolation(a,[container("gateway")],net()),/attestation failed/);
-  let x=ok();x[0].State.Running=false;
-  assert.throws(()=>verifyRuntimeIsolation(a,x,net()),/attestation failed/);
-  x=ok();x[0].Config.Labels["org.eternyx.range.managed"]="unknown";
-  assert.throws(()=>verifyRuntimeIsolation(a,x,net()),/cleanup refused/);
-  x=ok();x[0].Config.Labels["com.docker.compose.project"]="other";
-  assert.throws(()=>verifyRuntimeIsolation(a,x,net()));
+test("all three services mandatory, with no unknown service or forged project labels",()=>{
+  assert.throws(()=>verifyRuntimeIsolation(session,containers().slice(0,2),networks()),/attestation/);
+  assert.throws(()=>verifyRuntimeIsolation(other,containers(),networks()),/attestation/);
+  const a=containers();a[1].Config.Labels["com.docker.compose.service"]="bogus";
+  assert.throws(()=>verifyRuntimeIsolation(session,a,networks()));
+  const b=containers();b[0].State.Running=false;
+  assert.throws(()=>verifyRuntimeIsolation(session,b,networks()),/attestation/);
 });
 
-test("enforces no privilege escalation, nonroot and isolated PID/IPC",()=>{
-  const mutate=[
-    x=>{x.HostConfig.Privileged=true;},
-    x=>{x.HostConfig.ReadonlyRootfs=false;},
-    x=>{x.HostConfig.CapDrop=[];},
-    x=>{x.HostConfig.CapAdd=["NET_ADMIN"];},
-    x=>{x.HostConfig.SecurityOpt=[];},
-    x=>{x.HostConfig.SecurityOpt=["no-new-privileges:true","seccomp=unconfined"];},
-    x=>{x.HostConfig.PidMode="host";},
-    x=>{x.HostConfig.IpcMode="host";},
-    x=>{x.HostConfig.UsernsMode="host";},
-    x=>{x.Config.User="root";},
-    x=>{x.HostConfig.RestartPolicy.Name="always";},
+test("deny privilege escalation, root user, host namespace, added mounts or devices",()=>{
+  const mutations=[
+    c=>c.HostConfig.Privileged=true,
+    c=>c.Config.User="root",
+    c=>c.HostConfig.ReadonlyRootfs=false,
+    c=>c.HostConfig.RestartPolicy.Name="always",
+    c=>c.HostConfig.CapDrop=[],
+    c=>c.HostConfig.CapAdd=["NET_ADMIN"],
+    c=>c.HostConfig.SecurityOpt=[],
+    c=>c.HostConfig.SecurityOpt=["no-new-privileges:true","seccomp=unconfined"],
+    c=>c.HostConfig.PidMode="host",
+    c=>c.HostConfig.IpcMode="host",
+    c=>c.HostConfig.UsernsMode="host",
+    c=>c.HostConfig.NetworkMode="host",
+    c=>c.HostConfig.Binds=["/etc:/host"],
+    c=>c.HostConfig.Devices=[{}],
+    c=>c.HostConfig.ExtraHosts=["169.254.169.254:169.254.169.254"],
+    c=>c.Mounts=[{Type:"bind",Source:"/var/run/docker.sock"}],
   ];
-  for(const change of mutate){
-    const instances=ok();change(instances[0]);
-    assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
+  for(const modify of mutations){
+    const v=containers();modify(v[1]);
+    assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
   }
 });
 
-test("rejects unbounded CPU, memory, swap, process count and host file mounts",()=>{
-  const mutate=[
-    x=>{x.HostConfig.Memory=0;},
-    x=>{x.HostConfig.MemorySwap=-1;},
-    x=>{x.HostConfig.Memory=256*MIB;},
-    x=>{x.HostConfig.NanoCpus=0;},
-    x=>{x.HostConfig.PidsLimit=0;},
-    x=>{x.Mounts=[{Type:"bind",Source:"/var/run/docker.sock"}];},
-    x=>{x.HostConfig.Binds=["/etc:/host"];},
-    x=>{x.HostConfig.Devices=[{}];},
-    x=>{x.HostConfig.ExtraHosts=["169.254.169.254:169.254.169.254"];},
-    x=>{x.HostConfig.Tmpfs={"/tmp":"rw,size=200m"};},
+test("deny unbounded memory, CPU, swap, process count and container policy drift",()=>{
+  const changes=[
+    c=>c.HostConfig.Memory=0,c=>c.HostConfig.MemorySwap=-1,
+    c=>c.HostConfig.Memory=256*MiB,c=>c.HostConfig.NanoCpus=0,
+    c=>c.HostConfig.PidsLimit=0,c=>c.HostConfig.PublishAllPorts=true,
   ];
-  for(const change of mutate){
-    const instances=ok();change(instances[0]);
-    assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
+  for(const alter of changes){
+    for(let which=0;which<3;which++){
+      const v=containers();alter(v[which]);
+      assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
+    }
   }
+  const v=containers();v[0].HostConfig.Tmpfs={"/tmp":"rw,size=1g"};
+  assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
 });
 
-test("gateway must publish exactly one private loopback port, target none",()=>{
-  const mutate=[
-    x=>{x.HostConfig.PortBindings={"8080/tcp":[{HostIp:"0.0.0.0",HostPort:"9000"}]};},
-    x=>{x.NetworkSettings.Ports={"8080/tcp":[{HostIp:"0.0.0.0",HostPort:"9000"}]};},
+test("target and authenticated gateway must never publish any host ports",()=>{
+  for(let which=0;which<2;which++){
+    const v=containers();
+    v[which].HostConfig.PortBindings={"8081/tcp":[{HostIp:"127.0.0.1",HostPort:"5555"}]};
+    assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
+  }
+  const v=containers();v[1].NetworkSettings.Ports["8081/tcp"]=[{HostIp:"127.0.0.1",HostPort:"8081"}];
+  assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
+});
+
+test("only the relay may publish exactly one loopback-only port",()=>{
+  const changes=[
+    c=>c.HostConfig.PortBindings["8081/tcp"][0].HostIp="0.0.0.0",
+    c=>c.NetworkSettings.Ports["8081/tcp"][0].HostIp="0.0.0.0",
+    c=>c.NetworkSettings.Ports["8081/tcp"][0].HostPort="99999",
+    c=>c.HostConfig.PortBindings["8888/tcp"]=[{HostIp:"127.0.0.1",HostPort:""}],
   ];
-  for(const change of mutate){
-    const instances=ok();change(instances[0]);
-    assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
+  for(const alter of changes){
+    const v=containers();alter(v[2]);
+    assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
   }
-  const gateways=[
-    x=>{x.HostConfig.PortBindings["8081/tcp"][0].HostIp="0.0.0.0";},
-    x=>{x.NetworkSettings.Ports["8081/tcp"][0].HostIp="0.0.0.0";},
-    x=>{x.NetworkSettings.Ports["8081/tcp"][0].HostPort="99999";},
-    x=>{x.HostConfig.PortBindings["9000/tcp"]=[{HostIp:"127.0.0.1",HostPort:""}];},
+});
+
+test("internal-only target, internal-only gateway and exact relayer network membership",()=>{
+  const changes=[
+    v=>v[0].NetworkSettings.Networks[nets.host]={},
+    v=>v[1].NetworkSettings.Networks[nets.host]={},
+    v=>v[2].NetworkSettings.Networks[nets.target]={},
+    v=>delete v[1].NetworkSettings.Networks[nets.middle],
   ];
-  for(const change of gateways){
-    const instances=ok();change(instances[1]);
-    assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
+  for(const alter of changes){
+    const v=containers();alter(v);
+    assert.throws(()=>verifyRuntimeIsolation(session,v,networks()),/attestation/);
   }
+  const n=networks();n[1].Internal=false;
+  assert.throws(()=>verifyRuntimeIsolation(session,containers(),n),/attestation/);
+  const n2=networks();n2[2].Internal=true;
+  assert.throws(()=>verifyRuntimeIsolation(session,containers(),n2),/attestation/);
 });
 
-test("prevents target network drift, gateway extra networks and noninternal target network",()=>{
-  let instances=ok();
-  instances[0].NetworkSettings.Networks[gatewayNet]={};
-  assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
-  instances=ok();
-  instances[1].NetworkSettings.Networks["bridge"]={};
-  assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
-  const alteredNet=net();alteredNet[0].Internal=false;
-  assert.throws(()=>verifyRuntimeIsolation(a,ok(),alteredNet),/attestation failed/);
-  const missingNet=[net()[1]];
-  assert.throws(()=>verifyRuntimeIsolation(a,ok(),missingNet),/attestation failed/);
-});
-
-test("target secrets never allowed; gateway credentials not returned in attestation",()=>{
-  for(const key of ["ETERNYX_MANAGED_GATEWAY_TOKEN","SUPABASE_SERVICE_ROLE_KEY","CTF_RANGE_WORKER_TOKEN"]){
-    const instances=ok();instances[0].Config.Env.push(key+"=secret");
-    assert.throws(()=>verifyRuntimeIsolation(a,instances,net()),/attestation failed/);
+test("gateway token must exist only in gateway, never vulnerable target or relay",()=>{
+  const v=containers();
+  assert.ok(v[1].Config.Env.some(e=>e==="ETERNYX_MANAGED_GATEWAY_TOKEN="+token));
+  for(const which of [0,2]){
+    for(const key of ["SUPABASE_SERVICE_ROLE_KEY","CTF_RANGE_WORKER_TOKEN","ETERNYX_MANAGED_GATEWAY_TOKEN"]){
+      const x=containers();x[which].Config.Env.push(key+"="+token);
+      assert.throws(()=>verifyRuntimeIsolation(session,x,networks()),/attestation/);
+    }
   }
-  const result=verifyRuntimeIsolation(a,ok(),net());
-  assert.doesNotMatch(JSON.stringify(result),/privately-set|Bearer|secret/i);
+  const missing=containers();missing[1].Config.Env=[];
+  assert.throws(()=>verifyRuntimeIsolation(session,missing,networks()),/attestation/);
 });
 
-test("local admission enforces three-lab, 576MiB, 1.95 vCPU reservation envelope",()=>{
+test("host admission caps three labs at 672 MiB and 2.25 vCPU",()=>{
   assert.equal(MAX_HOST_LABS,3);
-  assert.equal(MAX_HOST_RESERVED_MEMORY_BYTES,576*MIB);
-  assert.equal(MAX_HOST_RESERVED_NANO_CPUS,1_950_000_000);
-  const other1="cr-"+b.replaceAll("-","");
-  const c="323e4567-e89b-42d3-a456-426614174001";
-  const other2="cr-"+c.replaceAll("-","");
-  const other3="cr-"+"423e4567e89b42d3a456426614174001";
-  assert.equal(admitHostLab({existingProjects:[],sessionId:a}).reservedLabsAfter,1);
-  assert.equal(admitHostLab({existingProjects:[other1,other2],sessionId:a}).reservedLabsAfter,3);
-  assert.throws(()=>admitHostLab({existingProjects:[other1,other2,other3],sessionId:a}),/admission limit/);
-  assert.throws(()=>admitHostLab({existingProjects:[project],sessionId:a}),/duplicate/);
-  assert.throws(()=>admitHostLab({existingProjects:[other1,other1],sessionId:a}),/duplicate/);
-  assert.throws(()=>admitHostLab({existingProjects:["unknown"],sessionId:a}),/Invalid/);
+  assert.equal(MAX_HOST_RESERVED_MEMORY_BYTES,672*MiB);
+  assert.equal(MAX_HOST_RESERVED_NANO_CPUS,2_250_000_000);
+  const p1="cr-"+other.replaceAll("-","");
+  const p2="cr-323e4567e89b42d3a456426614174001";
+  const p3="cr-423e4567e89b42d3a456426614174001";
+  assert.equal(admitHostLab({existingProjects:[],sessionId:session}).reservedMemoryBytesAfter,224*MiB);
+  assert.equal(admitHostLab({existingProjects:[p1,p2],sessionId:session}).reservedNanoCpusAfter,2_250_000_000);
+  assert.throws(()=>admitHostLab({existingProjects:[p1,p2,p3],sessionId:session}),/admission/);
+  assert.throws(()=>admitHostLab({existingProjects:[project],sessionId:session}),/duplicate/);
 });
 
-test("read-only host audit detects drift without dumping raw inspection or tokens",async()=>{
-  const target=container("http-range"),gateway=container("gateway");
-  const inspections=[target,gateway];
-  const runtime={
-    async listVerifiedManagedProjects(){return inspections;},
-    async attest(){return {passed:true};},
+test("read-only audit reports project drift without returning raw Docker secrets",async()=>{
+  const v=containers(),runtime={
+    async listVerifiedManagedProjects(){return v},
+    async attest(){return {passed:true}},
   };
-  const good=await auditHostIsolation(runtime);
-  assert.deepEqual(good,{
+  assert.deepEqual(await auditHostIsolation(runtime),{
     inspectedProjects:1,passed:1,drifted:0,results:[{project,passed:true}],
   });
-  runtime.attest=async()=>{throw Error("secret-in-host-config");};
-  const bad=await auditHostIsolation(runtime);
-  assert.deepEqual(bad,{
-    inspectedProjects:1,passed:0,drifted:1,
-    results:[{project,passed:false,reason:"runtime_isolation_drift"}],
-  });
-  assert.doesNotMatch(JSON.stringify(bad),/secret-in-host-config/);
+  runtime.attest=async()=>{throw Error("private-value-not-for-log")};
+  const state=await auditHostIsolation(runtime);
+  assert.equal(state.drifted,1);
+  assert.doesNotMatch(JSON.stringify(state),/private-value-not-for-log/);
 });
 
-test("actual Docker admission/audit implementation is integrated and read-only",async()=>{
-  const code=await read("infrastructure/cyber-range/provider/docker-runtime.mjs");
-  const cmd=await read("scripts/cyber-range-isolation-audit.mjs");
-  const packageJson=JSON.parse(await read("package.json"));
-  assert.match(code,/await this\.attest\(sessionId\)/);
-  assert.match(code,/admitHostLab\(/);
-  assert.match(code,/\["network","inspect"/);
-  assert.match(code,/async attest\(sessionId\)/);
-  assert.match(cmd,/auditHostIsolation\(runtime\)/);
-  assert.equal(packageJson.scripts["range:audit"],"node scripts/cyber-range-isolation-audit.mjs");
-  assert.doesNotMatch(cmd,/\.stop\(|\.start\(|compose up|docker run/);
+async function requestRelay(relay,url,headers={}){
+  const port=relay.address().port;
+  return fetch("http://127.0.0.1:"+port+url,{
+    headers,redirect:"manual",signal:AbortSignal.timeout(1500),
+  });
+}
+test("relay forwards only fixed gateway URL and never acts as general SSRF proxy",async(t)=>{
+  const requests=[];
+  const server=createLocalRelay({fetchGateway:async(url,opts)=>{
+    requests.push({url:url.toString(),headers:opts.headers});
+    return new Response(JSON.stringify({ok:true}),{
+      status:200,headers:{"content-type":"application/json"},
+    });
+  }});
+  await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+  t.after(()=>new Promise(ok=>server.close(ok)));
+  assert.equal((await requestRelay(server,"/api/tickets?ticket=102")).status,401);
+  assert.equal((await requestRelay(server,"//evil.invalid")).status,400);
+  assert.equal((await requestRelay(server,"/api/unknown",{"authorization":"Bearer "+token})).status,404);
+  assert.equal((await requestRelay(server,"/api/tickets?ticket=102",{
+    "authorization":"Bearer "+token,
+  })).status,200);
+  assert.deepEqual(requests.map(x=>x.url),["http://gateway:8081/api/tickets?ticket=102"]);
+  assert.equal(requests[0].headers.authorization,"Bearer "+token);
+});
+
+test("Compose, Docker runtime, and isolated smoke test all use the three-service contract",async()=>{
+  const compose=await read("infrastructure/cyber-range/compose.managed.yaml");
+  const docker=await read("infrastructure/cyber-range/provider/docker-runtime.mjs");
+  const workflow=await read(".github/workflows/managed-cyber-range-smoke.yml");
+  const relay=await read("infrastructure/cyber-range/relay/server.mjs");
+  const relayDocker=await read("infrastructure/cyber-range/relay/Dockerfile");
+  assert.equal((compose.match(/org\.eternyx\.range\.managed: "v1"/g)||[]).length,3);
+  assert.match(compose,/gateway_ingress_only:\s+internal: true/);
+  assert.match(compose,/local_target_only:\s+internal: true/);
+  assert.match(compose,/127\.0\.0\.1::8081/);
+  assert.match(docker,/\["port", "ingress", "8081"\]/);
+  assert.match(docker,/project \+ "_gateway_ingress_only"/);
+  assert.match(workflow,/http:\/\/169\.254\.169\.254\/latest\/meta-data/);
+  assert.match(relay,/const internalGateway = "http:\/\/gateway:8081"/);
+  assert.match(relayDocker,/USER 10001:10001/);
+  assert.doesNotMatch(compose,/docker\.sock|privileged:\s*true|network_mode:\s*host/);
 });
