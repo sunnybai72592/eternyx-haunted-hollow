@@ -27,7 +27,9 @@
     "range:microvm:supervisor": "node scripts/cyber-range-microvm-supervisor.mjs",
     "docker:lab:recovery": "node scripts/docker-lab-recovery.mjs",
     "docker:lab:audit": "node scripts/docker-lab-audit.mjs",
-    "range:microvm:hardware": "node scripts/cyber-range-microvm-hardware-acceptance.mjs"
+    "range:microvm:hardware": "node scripts/cyber-range-microvm-hardware-acceptance.mjs",
+    "docker:lab:drill": "node scripts/docker-lab-assurance.mjs drill",
+    "docker:lab:preflight": "node scripts/docker-lab-assurance.mjs preflight"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
