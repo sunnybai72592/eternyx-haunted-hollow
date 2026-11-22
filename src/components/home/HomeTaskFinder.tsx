@@ -16,6 +16,7 @@ export default function HomeTaskFinder() {
   }
   const resultCount = choices?.length ?? 0;
   const canSearch = query.trim().length > 0;
+  const clearSearch = () => { setQuery(""); setChoices(null); };
   return <div className="mt-6">
     <form onSubmit={event => { event.preventDefault(); if (canSearch) submit(query.trim()); }}>
       <label htmlFor="home-task" className="block text-xl font-semibold text-foreground">What would you like to do?</label>
@@ -24,11 +25,16 @@ export default function HomeTaskFinder() {
         <button type="submit" disabled={!canSearch} className="min-h-11 rounded-lg bg-primary px-4 font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50">Find tool</button>
       </div>
     </form>
+    {(query || choices !== null) && (
+      <button type="button" onClick={clearSearch} className="mt-2 inline-flex min-h-9 items-center rounded-md px-2 text-xs font-semibold text-muted-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Clear task search and suggestions">
+        Clear search
+      </button>
+    )}
     <p id="home-task-hint" className="mt-2 text-xs text-muted-foreground">Search by task or try a quick example. Results are suggestions, not executed tools.</p>
     <div className="mt-2 flex flex-wrap gap-x-3">{examples.map(example => <button key={example} type="button" onClick={() => submit(example)} className="min-h-11 rounded-md px-1 text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{example}</button>)}</div>
-    <div id="home-task-results" aria-live="polite" aria-atomic="true">{choices && <div className="mt-3 space-y-3 rounded-xl border border-border bg-card p-4">
+    <div id="home-task-results" role="status" aria-live="polite" aria-atomic="true">{choices && <div className="mt-3 space-y-3 rounded-xl border border-border bg-card p-4">
       <p className="text-xs font-medium text-muted-foreground">{resultCount ? `${resultCount} suggested ${resultCount === 1 ? "tool" : "tools"}` : "No suggestions found"}</p>
-      {choices.length ? choices.map(choice => <div key={choice.name}>
+      {choices.length ? choices.map(choice => <div key={choice.route}>
         {choice.detail && <p className="mb-1 text-sm text-muted-foreground">{choice.detail}</p>}
         <Link className="inline-flex min-h-11 items-center rounded-md font-semibold text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" to={choice.route}>{choice.name}</Link>
       </div>) : <><p className="text-sm text-foreground">No matching tool found. Try a shorter description or browse the directory.</p><Link to="/explore" className="inline-flex min-h-11 items-center rounded-md text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Browse tools</Link></>}
