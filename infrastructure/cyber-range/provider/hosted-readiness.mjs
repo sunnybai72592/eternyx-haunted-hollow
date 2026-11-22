@@ -176,7 +176,8 @@ export function evaluateHostedSpend({
 }
 
 export function assertNoUnverifiedHostedRuntime(env=process.env) {
-  const requested=env.ETERNYX_RANGE_RUNTIME??"local-docker";
+  const requested=Object.prototype.hasOwnProperty.call(env,"ETERNYX_RANGE_RUNTIME")
+    ? env.ETERNYX_RANGE_RUNTIME : "local-docker";
   if(requested!=="local-docker")
     throw Error("Hosted microVM runtime is not deployed or approved");
   return "local-docker";
