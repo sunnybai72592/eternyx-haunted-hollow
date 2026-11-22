@@ -300,3 +300,124 @@ npm run build
 
 The tests generate disposable in-memory/test-directory signing keys to
 exercise rejection cases; **no operator signing key is generated in CI**.
+
+## Stacked follow-up — independently pinned second-person file review
+
+This follow-up adds a separate **offline reviewer workstation** workflow.
+Its purpose is to verify that a real operator signed one specific v2 test
+result and that a human reviewer examined a fixed collection of source files.
+It does **not** claim TPM attestation, actual hardware-trust measurements,
+real systemd provenance, or acceptance of a public multi-tenant cyber range.
+A second signature proves who endorsed the evidence, not that its sources
+are independently authentic.
+
+### 1. Prepare a separate trusted reviewer machine
+
+Use a dedicated, offline reviewer workstation, separate from the Linux/KVM
+host, running Node.js 22+ and OpenSSL. Transfer source material by an
+independently controlled channel. The reviewer manually creates:
+
+```text
+/var/lib/eternyx-reviewer/cases/<UUID>/
+  operator-report.json
+  operator-public.pem
+  host-preflight.json
+  image-provenance.json
+  supervisor-journal.txt
+  cgroup-death.txt
+  guest-challenge.txt          # required when mode includes guest-vsock
+  timeout-result.txt           # required when mode includes watchdog-900
+```
+
+Each case and its parent directory must be owned by root and mode `0700`.
+All source files must be root-owned, regular, single-link, mode `0600`,
+with no symlinks and sizes at most 128 KiB per artifact. The operator
+report and public PEM must also be private files. No raw artifact is
+uploaded, published, or returned to the web app.
+
+**Required source files:** host preflight, approved pinned-image provenance,
+the restricted systemd unit journal, and positive final cgroup-death proof.
+The guest challenge transcript is additionally required when the signed
+operator mode includes `guest-vsock`. The independent systemd timeout record
+is additionally required for `watchdog-900`. The reviewer must gather and
+critically inspect these materials; neither file names nor hashes alone
+establish origin authenticity.
+
+### 2. Create an independent reviewer Ed25519 identity
+
+Generate a new key on the review workstation, not on the KVM host:
+
+```bash
+sudo install -d -o root -g root -m 0700 /etc/eternyx-reviewer
+sudo openssl genpkey -algorithm ED25519 -out /etc/eternyx-reviewer/reviewer-ed25519-private.pem
+sudo chmod 0600 /etc/eternyx-reviewer/reviewer-ed25519-private.pem
+sudo openssl pkey -in /etc/eternyx-reviewer/reviewer-ed25519-private.pem -pubout \
+  -out /etc/eternyx-reviewer/reviewer-ed25519-public.pem
+sudo chmod 0600 /etc/eternyx-reviewer/reviewer-ed25519-public.pem
+sudo openssl pkey -pubin -in /etc/eternyx-reviewer/reviewer-ed25519-public.pem \
+  -outform DER | sha256sum
+```
+
+Store the **reviewer SPKI DER SHA-256** and the previously recorded **operator
+SPKI DER SHA-256** through independently trusted channels. They must differ.
+Do not trust a public-key fingerprint fetched solely from the packet being
+reviewed. The private reviewer key must never be committed or sent to the
+guest, the operator, Supabase, or GitHub.
+
+### 3. Inspect, endorse and verify (fully offline)
+
+Inspect the fixed, private case files without signing anything:
+
+```bash
+sudo node scripts/cyber-range-independent-review.mjs --inspect \
+  --session UUID --operator-sha OPERATOR_SPKI_SHA256 \
+  --reviewer-sha REVIEWER_SPKI_SHA256
+```
+
+Only after personally checking the independent source files and relevant
+real-host logs, explicitly authorize a second-person endorsement:
+
+```bash
+export ETERNYX_INDEPENDENT_REVIEW_ACK=I_REVIEWED_INDEPENDENT_SOURCE_FILES
+sudo --preserve-env=ETERNYX_INDEPENDENT_REVIEW_ACK \
+  node scripts/cyber-range-independent-review.mjs --endorse \
+  --confirm-independent-review --session UUID \
+  --operator-sha OPERATOR_SPKI_SHA256 --reviewer-sha REVIEWER_SPKI_SHA256
+```
+
+The endorsement signs the exact session, operator v2 receipt SHA-256,
+mode, reviewer and operator public-key fingerprints, and strictly enumerated
+source-file digests. The program writes `review-verdict.json` as a new
+private, single-write file only. It refuses replacement, unsigned source
+proofs, mismatched sessions, modified contents, missing files, or use of the
+operator key as the reviewer key.
+
+Any reviewer can subsequently check the already signed file **without
+loading the reviewer private key** or launching a VM:
+
+```bash
+sudo node scripts/cyber-range-independent-review.mjs --verify \
+  --session UUID --operator-sha OPERATOR_SPKI_SHA256 \
+  --reviewer-sha REVIEWER_SPKI_SHA256
+```
+
+This checker verifies the two signatures, exact baseline and session binding,
+all required local file hashes, and the reviewer verdict. Its output
+explicitly includes `physicalHostAttested:false`,
+`independentSourceAuthenticityVerified:false`, and
+`productionReady:false`. A passing review is procedural evidence,
+**not** proof that the source host or guest was uncompromised.
+
+### CI and availability restrictions
+
+```bash
+node --test tests/ctf-firecracker-independent-review.test.mjs
+npm test
+npm run build
+```
+
+CI creates only in-memory test keypairs and fabricated local fixture text.
+It never signs a real operator record, runs KVM, opens public ports, downloads
+VMs, invokes AI APIs or starts paid infrastructure. Public ETERNYX Labs
+remain disabled until separate image, host, billing, authorization and
+multi-tenant security assessments succeed.
