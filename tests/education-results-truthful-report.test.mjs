@@ -54,14 +54,15 @@ test("8: sensitive attempt reads are scoped to logged-in user and cached per use
 });
 test("9: reports are local downloads not alerts, PDFs or fake results",()=>{
   assert.match(source,/new Blob\(\[text\]/);
-  assert.match(source,/downloadReport\(text, attemptQuery\.data\.id\)/);
+  assert.match(source,/downloadReport\(annotateEducationTextReport\(text, provenance\), attemptQuery\.data\.id\)/);
   assert.match(source,/Download report \(\.txt\)/);
   assert.doesNotMatch(source,/coming soon|alert\(/);
 });
 test("10: non-final results do not expose question breakdown and retake isn't falsely promised",()=>{
   assert.match(source,/\{summary\.completed && \(/);
   assert.match(source,/Retakes depend on the exam service/);
-  assert.match(source,/is_correct === null \? "Grading pending"/);
+  assert.match(source,/educationAnswerReviewLabel\(answer, gradeRevealed\)/);
+  assert.match(source,/const effectiveFilter = gradeRevealed \? answerFilter/);
 });
 test("11: test results page parses as TSX",()=>{
   const ast=ts.createSourceFile("TestResults.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
