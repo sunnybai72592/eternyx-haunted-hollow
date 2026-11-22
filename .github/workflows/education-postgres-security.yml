@@ -62,6 +62,10 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-written-review.sql
       - name: Verify ten written-review authorization and unfinalized-grade cases
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-written-review.sql
+      - name: Apply staged trusted atomic grading to disposable PostgreSQL ONLY
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-atomic-final-grading.sql
+      - name: Verify ten atomic objective and reviewed-written grade boundaries
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-final-grading.sql
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true
