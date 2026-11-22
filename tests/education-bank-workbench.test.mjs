@@ -254,3 +254,20 @@ test("39 no automatic upload, local persistent answer-key storage or new feature
   assert.match(guide,/NOT DEPLOYED/);
   assert.match(guide,/production/i);
 });
+
+test("40 stale account draft fetch never restores an earlier user's answer key",()=>{
+ assert.match(page,/const generation = accountGenerationRef\.current;[\s\S]*const draft = await loadInstructorDraft\(draftId\);[\s\S]*if \(generation !== accountGenerationRef\.current\) return;[\s\S]*resetEditor\(draft\.bank as Bank\)/);
+});
+test("41 stale account JSON import never restores earlier answer keys",()=>{
+ assert.match(page,/const parsed = parseQuestionBankJson\(await file\.text\(\)\) as Bank;\s+if \(generation !== accountGenerationRef\.current\) return;\s+resetEditor\(parsed\)/);
+});
+test("42 account changes increment generation and clear all undo snapshots before paint",()=>{
+ assert.match(page,/accountGenerationRef\.current \+= 1;\s+resetEditor\(emptyQuestionBank\(\) as Bank\)/);
+ assert.match(page,/useLayoutEffect/);
+});
+test("43 stale remote draft save cannot attach an old account's draft ID",()=>{
+ assert.match(page,/const created = await createInstructorDraft\(bank\);\s+if \(generation !== accountGenerationRef\.current\) return;/);
+});
+test("44 stale publication confirmation cannot surface in a newly signed-in account",()=>{
+ assert.match(page,/await requestEducationPublication\(draftId\);\s+if \(generation !== accountGenerationRef\.current\) return;/);
+});
