@@ -1,7 +1,13 @@
 import { useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Download, FileUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/authStore";
+import {
+  createInstructorDraft, instructorRpcEnabled,
+  readInstructorAccess, readInstructorDrafts,
+} from "@/lib/educationInstructorRpc";
 import {
   emptyQuestionBank, exportQuestionBankJson, learnerQuestionPreview,
   newQuestion, parseQuestionBankJson, QUESTION_BANK_LIMITS,
@@ -33,6 +39,21 @@ export default function EducationInstructorStudio() {
   const [message, setMessage] = useState("");
   const [importing, setImporting] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
+  const [serverSaving, setServerSaving] = useState(false);
+  const { user, isAuthenticated } = useAuthStore();
+  const queryClient = useQueryClient();
+  const accessQuery = useQuery({
+    queryKey: ["education-instructor-access", user?.id],
+    enabled: instructorRpcEnabled && isAuthenticated && !!user?.id,
+    queryFn: readInstructorAccess,
+    retry: 1,
+  });
+  const draftsQuery = useQuery({
+    queryKey: ["education-instructor-private-drafts", user?.id],
+    enabled: instructorRpcEnabled && isAuthenticated && !!user?.id && accessQuery.data?.approved === true,
+    queryFn: readInstructorDrafts,
+    retry: 1,
+  });
   const readiness = useMemo(() => validateQuestionBank(bank), [bank]);
   const draftCheck = useMemo(() => validateQuestionBankDraft(bank), [bank]);
   const summary = useMemo(() => questionBankSummary(bank), [bank]);
@@ -117,6 +138,24 @@ export default function EducationInstructorStudio() {
       setMessage(error instanceof Error ? error.message : "Cannot export this bank.");
     }
   };
+  const handlePrivateDraftSave = async () => {
+    if (!instructorRpcEnabled || !accessQuery.data?.approved || !readiness.valid || serverSaving) return;
+    setServerSaving(true);
+    setMessage("");
+    try {
+      const created = await createInstructorDraft(bank);
+      if (created.question_count !== bank.questions.length) {
+        throw new Error("The server returned an unexpected question count; inspect your draft list.");
+      }
+      setMessage("Private draft saved to your approved instructor account. This assessment is inactive and unpublished.");
+      toast.success("Unpublished instructor draft saved.");
+      await queryClient.invalidateQueries({ queryKey: ["education-instructor-private-drafts", user?.id] });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The instructor draft could not be saved.");
+    } finally {
+      setServerSaving(false);
+    }
+  };
   const handleImport = async (file?: File) => {
     if (!file) return;
     if (file.size > QUESTION_BANK_LIMITS.fileBytes) {
@@ -151,8 +190,8 @@ export default function EducationInstructorStudio() {
           <h1 className="mt-3 text-3xl font-bold sm:text-4xl">Local Question Bank Studio</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
             Prepare real assessment questions, check answer keys, preview what learners would see,
-            and export portable JSON. All editing stays in this browser tab. No questions, answer keys,
-            or student data are uploaded, and nothing is automatically saved.
+            and export portable JSON. All editing stays in this browser tab and nothing is automatically saved.
+            Uploading a private draft is optional and available only to approved instructors in a configured environment.
           </p>
         </header>
 
@@ -163,6 +202,44 @@ export default function EducationInstructorStudio() {
             server authorization before activation.
           </AlertDescription>
         </Alert>
+
+        {instructorRpcEnabled && (
+          <section aria-label="Verified instructor private drafts" className="space-y-3 rounded-2xl border border-primary/25 bg-card p-5">
+            <h2 className="text-lg font-semibold">Verified instructor workspace</h2>
+            {accessQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Checking instructor approval…</p>}
+            {accessQuery.error && <div className="flex flex-wrap items-center gap-3 text-sm">
+              <p role="alert">Instructor verification could not be completed. No draft was uploaded.</p>
+              <Button variant="outline" onClick={() => void accessQuery.refetch()}>Retry verification</Button>
+            </div>}
+            {accessQuery.data?.approved === false && (
+              <p className="text-sm text-muted-foreground">Your account is not approved for server-side instructor authoring. You can still use local JSON files.</p>
+            )}
+            {accessQuery.data?.approved === true && <>
+              <p className="text-sm text-muted-foreground">
+                Approved instructor access verified. You may explicitly save a validated bank as an inactive, unpublished server draft.
+                An answer-key file must not be shared with students.
+              </p>
+              <Button disabled={!readiness.valid || serverSaving} onClick={() => void handlePrivateDraftSave()}>
+                {serverSaving ? "Saving private draft…" : "Save as private server draft"}
+              </Button>
+              {draftsQuery.isPending && <p role="status" className="text-sm">Loading your private drafts…</p>}
+              {draftsQuery.error && <div className="flex flex-wrap items-center gap-3 text-sm">
+                <p role="alert">Could not load your private draft list.</p>
+                <Button variant="outline" onClick={() => void draftsQuery.refetch()}>Retry drafts</Button>
+              </div>}
+              {draftsQuery.data && <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Your private drafts ({draftsQuery.data.length})</h3>
+                {draftsQuery.data.length === 0 && <p className="text-sm text-muted-foreground">No server drafts have been returned for this account.</p>}
+                <ul className="space-y-2">
+                  {draftsQuery.data.map(draft => <li key={draft.id} className="rounded-lg border border-border bg-background p-3 text-sm">
+                    <span className="font-medium">{draft.title}</span>
+                    <span className="ml-2 text-muted-foreground">{draft.duration_minutes} min · Unpublished</span>
+                  </li>)}
+                </ul>
+              </div>}
+            </>}
+          </section>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => importRef.current?.click()} disabled={importing}>

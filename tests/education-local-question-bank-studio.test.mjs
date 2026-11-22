@@ -173,13 +173,14 @@ test("14: local studio includes functional choice editing, reorder and deletion 
   assert.match(component, /window\.confirm\(/);
 });
 
-test("15: imports and downloads use local files, without API writes or fabricated roles", () => {
+test("15: local files work without direct table access; staged RPCs are separately gated", () => {
   assert.match(component, /await file\.text\(\)/);
   assert.match(component, /file\.size > QUESTION_BANK_LIMITS\.fileBytes/);
   assert.match(component, /new Blob\(\[content\]/);
   assert.match(component, /nothing is automatically saved/);
   assert.match(component, /does not grant an instructor role/);
-  assert.doesNotMatch(component, /\.from\(["'](?:options|questions|tests|user_roles)["']\)|supabase\.rpc|fetch\(/);
+  assert.doesNotMatch(component, /\.from\(["'](?:options|questions|tests|user_roles)["']\)|supabase\.rpc|\bfetch\(/);
+  assert.match(component, /instructorRpcEnabled/);
 });
 
 test("16: Education lists local authoring as a separate activity, behind authentication", () => {
