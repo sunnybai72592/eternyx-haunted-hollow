@@ -62,8 +62,8 @@ test("check real renderer-style exact SRT timing and captions", () => {
   assert.deepEqual(checkRenderedSubtitles(original, receipt), {cues:2,matchesRenderer:true});
   assert.deepEqual(checkRenderedSubtitles(original.replace(/\n/g,"\r\n"),receipt),
                    {cues:2,matchesRenderer:true});
-  for (const wrong of (original.replace("Workshop opening","Different text"),
-                       original.replace("00:00:01,000","00:00:00,000"), "1\nunexpected\n")) {
+  for (const wrong of [original.replace("Workshop opening","Different text"),
+                       original.replace("00:00:01,000","00:00:00,000"), "1\nunexpected\n"]) {
     assert.throws(() => checkRenderedSubtitles(wrong,receipt), /differs/);
   }
   assert.throws(() => checkRenderedSubtitles("x".repeat(32769),receipt),/32 KiB/);
@@ -84,24 +84,24 @@ test("16fps subtitle rounding exactly matches Python half-even millisecond seman
 
 test("reject mismatched, corrupt, tampered, renamed or overlarge rendered MP4", () => {
   const receipt = makeReceipt();
-  for (const changed of (
+  for (const changed of [
     {...video,name:"wrong.mp4"},
     {...video,sha256:"0".repeat(64)},
     {...video,sha256:"Z".repeat(64)},
     {...video,size:video.size-1},
     {...video,size:MAX_RENDER_BYTES+1},
     {...video,size:0},
-  )) assert.throws(() => verifyLocalRenderReceipt(receipt,changed),/SHA-256|match|video.mp4|bytes/);
+  ]) assert.throws(() => verifyLocalRenderReceipt(receipt,changed),/SHA-256|match|video.mp4|bytes/);
 });
 
 test("reject malformed schema, generation claims, invalid receipt bytes and output identity", () => {
-  for(const bad of (
+  for(const bad of [
     null, "{}", "{",
     JSON.stringify({...makeReceipt(),model_generation:true}),
     JSON.stringify({...makeReceipt(),type:"AI video generation"}),
     JSON.stringify({...makeReceipt(),version:1}),
     " ".repeat(MAX_RECEIPT_BYTES+1),
-  )) assert.throws(() => readLocalRenderReceipt(bad));
+  ]) assert.throws(() => readLocalRenderReceipt(bad));
   const unsupported = makeReceipt();
   unsupported.video.sha256 = "invalid";
   assert.throws(() => readLocalRenderReceipt(JSON.stringify(unsupported)),/SHA-256/);
