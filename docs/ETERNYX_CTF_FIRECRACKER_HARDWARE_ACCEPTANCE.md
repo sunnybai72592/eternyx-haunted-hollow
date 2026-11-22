@@ -75,3 +75,57 @@ npm run build
 ```
 
 GitHub Action: **CTF Firecracker Hardware Acceptance Contract**. This tests the exact no-auto-launch boundary on `ubuntu-latest`, without using `/dev/kvm`.
+
+## PR next milestone — protected operator hardware evidence receipts
+
+A passing mocked CI run is never evidence of a real KVM host. The optional
+recording mode is invoked only after a manually approved **real** acceptance
+run has booted, observed, and positively torn down a guest. It creates a
+single private, session-specific JSON receipt using exclusive, no-symlink
+creation and flushes it to disk.
+
+Provision the private directory **manually on the dedicated host** before
+the run. Do not grant this directory to the web server or hosted app:
+
+```bash
+sudo install -d -o root -g root -m 0700 /var/lib/eternyx-firecracker/evidence
+```
+
+With the **three approval environment variables already set**, execute
+the exact approved offline test as documented above, adding
+`--save-evidence` immediately after `--confirm-local-kvm`:
+
+```bash
+sudo --preserve-env=ETERNYX_FIRECRACKER_HOST_EXECUTION,ETERNYX_RANGE_OPERATOR_ACK,ETERNYX_FIRECRACKER_HARDWARE_ACCEPTANCE   npm run range:microvm:hardware -- --run --confirm-local-kvm --save-evidence   --session 123e4567-e89b-42d3-a456-426614174001   --uid 22001 --gid 22001   --kernel-sha KERNEL_SHA256 --rootfs-sha ROOTFS_SHA256   --jailer-sha JAILER_SHA256 --firecracker-sha FIRECRACKER_SHA256
+```
+
+Use **real 64-character lowercase SHA-256 digests**, not the placeholders
+shown. If the receipt path already exists, recording fails; the operator
+must not overwrite a previous report or silently turn it into a new
+acceptance. A failed KVM run, failed teardown, or invalid receipt cannot be
+recorded through this path.
+
+To check the stored report **without booting anything**:
+
+```bash
+sudo npm run range:microvm:hardware -- --verify-evidence   --session 123e4567-e89b-42d3-a456-426614174001
+```
+
+The read-only verifier checks the exact expected session, SHA-256 checksum,
+pinned host and guest image digests, root-only file permissions, unit identity,
+resource limits, no-network policy, and verified teardown fields.
+
+**Crucial limits:** This receipt is an **operator self-report with an
+unkeyed integrity checksum**, not an independently signed attestation.
+Someone allowed to rewrite the receipt can calculate a fresh checksum.
+It does **not** validate real guest service functionality, prove the full
+900-second expiry and kill drill, independently prove image origins, attest
+host integrity, enforce a cloud-provider billing cap, or authorize
+multi-tenant/public labs. No customer-facing execution or cloud provisioning
+has been enabled.
+
+For physical acceptance, an independent reviewer must gather real host
+logs, trusted image provenance, separate expiry/cgroup teardown records,
+and a guest functional vsock challenge/response before claiming those
+remaining milestones are complete. GitHub CI exercises only file/receipt
+contracts and faked VM state, never actual KVM.
