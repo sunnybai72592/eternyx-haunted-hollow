@@ -173,7 +173,7 @@ CREATE OR REPLACE FUNCTION public.automation_transition_incident(
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $trans$
 DECLARE inc public.automation_incidents%ROWTYPE;
   past public.automation_incident_events%ROWTYPE;
-  used integer;
+  used integer;previous_status text;
 BEGIN
  IF p_user_id IS NULL OR p_incident_id IS NULL OR p_request_key IS NULL OR
     p_revision IS NULL OR p_revision NOT BETWEEN 1 AND 2147483646 OR
@@ -210,16 +210,14 @@ BEGIN
  SELECT count(*) INTO used FROM public.automation_incident_events
    WHERE incident_id=inc.id;
  IF used>=30 THEN RETURN jsonb_build_object('ok',false,'reason','incident_event_limit'); END IF;
+ previous_status:=inc.status;
  UPDATE public.automation_incidents SET status=p_next_status,
    revision=revision+1,updated_at=pg_catalog.statement_timestamp()
    WHERE id=inc.id AND user_id=p_user_id RETURNING * INTO inc;
  INSERT INTO public.automation_incident_events(
    user_id,incident_id,request_key,kind,from_status,to_status,note)
  VALUES(p_user_id,inc.id,p_request_key,'transition',
-   CASE WHEN p_next_status='investigating' AND inc.revision=2 THEN 'open'
-        WHEN p_next_status='investigating' THEN 'resolved'
-        ELSE 'investigating' END,
-   p_next_status,btrim(p_note));
+   previous_status,p_next_status,btrim(p_note));
  RETURN jsonb_build_object('ok',true,'replayed',false,
    'incidentId',inc.id,'status',inc.status,'revision',inc.revision);
 END;
@@ -382,8 +380,8 @@ BEGIN
    SELECT q.request_key AS quarantine_key,q.schedule_id,q.reason,
      q.new_revision,q.created_at AS quarantined_at,
      s.enabled AS current_enabled,s.revision AS current_revision,
-     (s.lease_token IS NOT NULL AND
-      s.lease_expires_at>pg_catalog.statement_timestamp()) AS lease_active,
+     COALESCE((s.lease_token IS NOT NULL AND
+      s.lease_expires_at>pg_catalog.statement_timestamp()),false) AS lease_active,
      r.id AS review_id,r.decision AS review_decision,r.created_at AS reviewed_at
    FROM public.automation_schedule_quarantines q
    LEFT JOIN public.automation_schedules s ON s.id=q.schedule_id AND s.user_id=q.user_id
