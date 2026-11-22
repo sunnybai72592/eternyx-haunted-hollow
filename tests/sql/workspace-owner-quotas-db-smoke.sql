@@ -50,6 +50,34 @@ SELECT owner_id, id, 'file', 'accurate.txt',
   owner_id::text || '/' || id::text || '/accurate.txt', 'text/plain', 1234
 FROM public.workspace_projects WHERE name='Alice workspace';
 
+-- Fill the real registered-byte ceiling and prove a 5 MiB addition is
+-- rejected, even with legitimate Storage metadata and remaining item slots.
+INSERT INTO storage.objects(bucket_id, name, metadata)
+SELECT 'workspace-private', p.owner_id::text || '/' || p.id::text ||
+  '/quota-' || n::text || '.txt',
+  '{"size":5242880,"mimetype":"text/plain"}'::jsonb
+FROM public.workspace_projects p CROSS JOIN generate_series(1, 20) n
+WHERE p.name='Alice workspace';
+
+INSERT INTO public.workspace_items(owner_id, project_id, kind, title, file_size, mime_type, storage_path)
+SELECT p.owner_id, p.id, 'file', 'quota-' || n::text || '.txt',
+  5242880, 'text/plain',
+  p.owner_id::text || '/' || p.id::text || '/quota-' || n::text || '.txt'
+FROM public.workspace_projects p CROSS JOIN generate_series(1, 19) n
+WHERE p.name='Alice workspace';
+
+DO $check$
+BEGIN
+  INSERT INTO public.workspace_items(owner_id, project_id, kind, title, file_size, mime_type, storage_path)
+  SELECT p.owner_id, p.id, 'file', 'overflow.txt',
+    5242880, 'text/plain',
+    p.owner_id::text || '/' || p.id::text || '/quota-20.txt'
+  FROM public.workspace_projects p WHERE p.name='Alice workspace';
+  RAISE EXCEPTION 'Registered 100 MiB file-byte ceiling was bypassed';
+EXCEPTION WHEN check_violation THEN NULL;
+END;
+$check$;
+
 -- Cross-owner pinned update cannot target Alice records.
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '22222222-2222-4222-8222-222222222222', false);
@@ -111,7 +139,7 @@ WHERE p.name = 'Alice workspace';
 INSERT INTO public.workspace_items(owner_id, project_id, kind, title, note_text)
 SELECT '11111111-1111-4111-8111-111111111111'::uuid, p.id,
   'note', 'fixture note ' || g.n, 'test'
-FROM public.workspace_projects p CROSS JOIN generate_series(1, 4997) g(n)
+FROM public.workspace_projects p CROSS JOIN generate_series(1, 4978) g(n)
 WHERE p.name = 'Alice workspace';
 ALTER TABLE public.workspace_tasks ENABLE TRIGGER workspace_tasks_limits_before_insert;
 ALTER TABLE public.workspace_items ENABLE TRIGGER workspace_items_limits_before_insert;
