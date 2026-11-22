@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline';
 import ServiceScopeReview from '@/components/services/ServiceScopeReview';
+import ServiceClarifications from '@/components/services/ServiceClarifications';
 
 type RequestRow = {
   id: string; service_key: string; title: string; description: string;
@@ -17,6 +18,7 @@ type RequestRow = {
   expected_outcome: string | null; timeframe: string | null; constraints: string | null;
   last_admin_activity_at: string | null; last_checked_at: string | null;
   has_updates_since_check: boolean;
+  open_clarification_count: number; awaiting_customer_count: number; awaiting_admin_review_count: number;
 };
 
 export default function MyServiceRequests() {
@@ -35,6 +37,7 @@ export default function MyServiceRequests() {
   const [search, setSearch] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [updatesOnly, setUpdatesOnly] = useState(false);
+  const [answersOnly, setAnswersOnly] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [linkedRequest, setLinkedRequest] = useState<RequestRow | null>(null);
@@ -43,16 +46,18 @@ export default function MyServiceRequests() {
   const [linkedError, setLinkedError] = useState('');
   const [openConversation, setOpenConversation] = useState<string | null>(new URLSearchParams(location.search).get('request'));
   const [openScope, setOpenScope] = useState<string | null>(null);
+  const [openClarifications, setOpenClarifications] = useState<string | null>(null);
   const load = useCallback(async () => {
     if (!userId) return;
     const generation = ++requestGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_customer_check_queue')
-      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check', { count: 'exact' })
+    let query = supabase.from('service_customer_clarification_queue')
+      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count', { count: 'exact' })
       .eq('user_id', userId);
     if (filter !== 'all') query = query.eq('status', filter);
     if (updatesOnly) query = query.eq('has_updates_since_check', true);
+    if (answersOnly) query = query.gt('awaiting_customer_count', 0);
     if (activeSearch) {
       const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
       query = query.ilike('title', '%' + escaped + '%');
@@ -74,7 +79,7 @@ export default function MyServiceRequests() {
       setTotal(size);
     }
     setLoading(false);
-  }, [userId, page, filter, activeSearch, updatesOnly]);
+  }, [userId, page, filter, activeSearch, updatesOnly, answersOnly]);
 
   useEffect(() => {
     requestGeneration.current += 1;
@@ -86,9 +91,11 @@ export default function MyServiceRequests() {
     setSearch('');
     setActiveSearch('');
     setUpdatesOnly(false);
+    setAnswersOnly(false);
     setCheckingId(null);
     setOpenConversation(null);
     setOpenScope(null);
+    setOpenClarifications(null);
     setLinkedRequest(null);
     setLinkedOwner(null);
     setLinkedLoading(false);
@@ -116,8 +123,8 @@ export default function MyServiceRequests() {
     let active = true;
     setLinkedLoading(true);
     void (async () => {
-      const { data, error } = await supabase.from('service_customer_check_queue')
-        .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check')
+      const { data, error } = await supabase.from('service_customer_clarification_queue')
+        .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count')
         .eq('user_id', userId)
         .eq('id', selected)
         .maybeSingle();
@@ -222,6 +229,7 @@ export default function MyServiceRequests() {
             placeholder="Search your own requests" />
         </div>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={updatesOnly} onChange={(event) => { setPage(0); setUpdatesOnly(event.target.checked); }} />Updates since my check</label>
+        <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={answersOnly} onChange={(event) => { setPage(0); setAnswersOnly(event.target.checked); }} />Questions awaiting my answer</label>
         <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
         <span className="text-xs text-muted-foreground">{visibleRows.length} of {total} matching requests</span>
       </form>
@@ -245,16 +253,19 @@ export default function MyServiceRequests() {
           </div>
           <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />
           <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />
+          <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />
         </Card>
       )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The service desk may require its database migration to be deployed. No results are being simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
-        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly ? 'Try changing the status, search or check-in filter.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
+        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
         : <div className="space-y-4">{visibleRows.map((item) => {
           const status = serviceRequestStatuses[item.status] ?? serviceRequestStatuses.submitted;
           return <Card key={item.id} className="border-border/70 p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-primary">{getServiceOffering(item.service_key)?.title ?? 'Service enquiry'}</p><h2 className="mt-1 break-words text-xl font-semibold">{item.title}</h2><p className="mt-2 text-xs text-muted-foreground">Submitted {new Date(item.created_at).toLocaleString()}</p></div><span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{status.label}</span></div>
             {item.has_updates_since_check && <p className="mt-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 text-sm font-medium text-primary">New administrator activity since your last check</p>}
+            {item.awaiting_customer_count > 0 && <p className="mt-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 text-sm font-medium text-primary">{item.awaiting_customer_count} clarification question(s) awaiting your answer</p>}
+            {item.awaiting_admin_review_count > 0 && <p className="mt-2 text-xs text-muted-foreground">{item.awaiting_admin_review_count} clarification answer(s) awaiting administrator review</p>}
             {createdId === item.id && <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] p-3 text-sm text-emerald-300">Your request was saved successfully.</p>}
             <p className="mt-5 text-sm text-muted-foreground">{status.description}</p>
             {item.client_update && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/[0.04] p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" />Client update</div><p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">{item.client_update}</p></div>}
@@ -283,6 +294,11 @@ export default function MyServiceRequests() {
               {openScope === item.id ? 'Close scope reviews' : 'View scope reviews'}
             </Button>
             {openScope === item.id && user && <ServiceScopeReview requestId={item.id} ownerId={user.id} />}
+            <Button type="button" variant="outline" className="mt-4 mr-2" aria-expanded={openClarifications === item.id}
+              onClick={() => setOpenClarifications((current) => current === item.id ? null : item.id)}>
+              <ClipboardList className="mr-2 h-4 w-4" />{openClarifications === item.id ? 'Close clarifications' : 'Clarification questions (' + item.open_clarification_count + ' open)'}
+            </Button>
+            {openClarifications === item.id && user && <ServiceClarifications requestId={item.id} ownerId={user.id} onChanged={() => void load()} />}
             <Button
               type="button"
               variant="outline"
