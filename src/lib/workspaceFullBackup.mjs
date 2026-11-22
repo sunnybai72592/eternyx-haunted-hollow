@@ -125,7 +125,8 @@ export async function parseWorkspaceFullBackup(raw) {
     items: document.items.map((item) => item.kind === "file" ?
       { kind: "file", title: item.title } : item),
   });
-  const restored = parseWorkspaceRestore(textVersion);
+  const restored = parseWorkspaceRestore(textVersion,
+    { maxBytes: WORKSPACE_BACKUP_MAX_DOCUMENT_BYTES });
   const files = [];
   let totalBytes = 0;
   for (const item of manifests) {

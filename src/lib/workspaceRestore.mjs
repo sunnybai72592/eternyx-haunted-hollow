@@ -23,9 +23,12 @@ const isoDate = (value) => {
   return value;
 };
 
-export function parseWorkspaceRestore(raw) {
-  if (typeof raw !== "string" || new TextEncoder().encode(raw).length > WORKSPACE_RESTORE_MAX_BYTES) {
-    throw new Error("Import must be a UTF-8 JSON file no larger than 1 MiB");
+export function parseWorkspaceRestore(raw, options = {}) {
+  const maxBytes = options.maxBytes === 24 * 1024 * 1024
+    ? options.maxBytes : WORKSPACE_RESTORE_MAX_BYTES;
+  if (typeof raw !== "string" || new TextEncoder().encode(raw).length > maxBytes) {
+    throw new Error("Import must be UTF-8 JSON no larger than " +
+      (maxBytes === WORKSPACE_RESTORE_MAX_BYTES ? "1 MiB" : "24 MiB"));
   }
   let document;
   try { document = JSON.parse(raw); }
