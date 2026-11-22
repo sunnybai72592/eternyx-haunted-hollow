@@ -180,7 +180,10 @@ sudo --preserve-env=ETERNYX_FIRECRACKER_HOST_EXECUTION,ETERNYX_RANGE_OPERATOR_AC
 The observer verifies the VM is alive and isolated near 840 seconds after
 launch, checks actual cgroup death around the configured deadline, and
 requires `systemctl show ... -pResult` to report `Result=timeout`.
-If a collected unit has lost that result, it **refuses to call it proven**.
+The explicitly authorized drill launches without systemd `--collect` so
+its timed-out unit result remains queryable until the independent observer
+reads it. Normal short tests still use `--collect`. If systemd nonetheless
+cannot report that result, the drill **refuses to call it proven**.
 The original runner still performs an independent termination and no-descendant
 check on completion or failure. Cancellation is fail-closed. A host crash
 requires the existing separate `--verify-stopped` operator audit.
