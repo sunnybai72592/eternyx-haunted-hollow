@@ -35,27 +35,55 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [totalCount, setTotalCount] = useState(0);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const PAGE_SIZE = 50;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const { data, error: queryError } = await supabase
+    const { data, error: queryError, count } = await supabase
       .from('service_request_activity')
-      .select('id,actor_id,event_type,body,from_status,to_status,created_at')
+      .select('id,actor_id,event_type,body,from_status,to_status,created_at', { count: 'exact' })
       .eq('request_id', requestId)
       .order('created_at', { ascending: false }).order('id', { ascending: false })
-      .limit(200);
+      .range(0, PAGE_SIZE - 1);
     if (queryError) {
       console.error('Service request activity query failed:', queryError);
       setActivity([]);
       setError('Could not load the conversation. Verify that the service desk migration is active.');
     } else {
       setActivity(((data ?? []) as ActivityRow[]).reverse());
+      setTotalCount(count ?? 0);
     }
     setLoading(false);
   }, [requestId]);
 
   useEffect(() => { void load(); }, [load, refreshToken]);
+
+  const loadOlder = async () => {
+    if (olderLoading || loading || activity.length >= totalCount) return;
+    setOlderLoading(true);
+    setError('');
+    const { data, error: fetchError, count } = await supabase.from('service_request_activity')
+      .select('id,actor_id,event_type,body,from_status,to_status,created_at', { count: 'exact' })
+      .eq('request_id', requestId)
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(activity.length, activity.length + PAGE_SIZE - 1);
+    if (fetchError) {
+      setError('Older request activity could not be retrieved. Please retry.');
+    } else {
+      const older = ((data ?? []) as ActivityRow[]).reverse();
+      setActivity((existing) => {
+        const unique = new Map([...older, ...existing].map((event) => [event.id, event]));
+        return [...unique.values()].sort((a, b) =>
+          Date.parse(a.created_at) - Date.parse(b.created_at) || a.id.localeCompare(b.id)
+        );
+      });
+      setTotalCount(count ?? totalCount);
+    }
+    setOlderLoading(false);
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -124,7 +152,14 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
               </article>
             );
           })}
-        {activity.length === 200 && <p className="text-xs text-muted-foreground">Showing the latest 200 events. Older activity requires a separate history export.</p>}
+        {activity.length < totalCount && (
+          <div className="py-3 text-center">
+            <Button type="button" variant="outline" size="sm" disabled={olderLoading} onClick={() => void loadOlder()}>
+              {olderLoading ? 'Loading older activity…' : 'Load older events (' + (totalCount - activity.length) + ' remaining)'}
+            </Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">{activity.length} of {totalCount} saved events loaded. Showing the latest 200 events is no longer a hard limit.</p>
       </div>
       <form onSubmit={(event) => void submit(event)} className="mt-5 space-y-3 border-t border-border pt-4">
         <label htmlFor={'service-request-message-' + requestId} className="block text-sm font-semibold">Send a follow-up</label>
