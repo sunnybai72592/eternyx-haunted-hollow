@@ -7,7 +7,6 @@ DECLARE
   wa uuid;wb uuid;wc uuid;sa uuid;sb uuid;
   export_key uuid:=gen_random_uuid();quarantine_key uuid:=gen_random_uuid();
   observation jsonb;result jsonb;first jsonb;next_rev integer;
-  changed uuid;request_key uuid;
   i integer;
   trace jsonb:='[{"id":"s1","kind":"trim","beforeLines":1,"afterLines":1,"beforeChars":4,"afterChars":4,"changed":false}]'::jsonb;
 BEGIN
