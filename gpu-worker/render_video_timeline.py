@@ -5,7 +5,6 @@ through FFmpeg, without loading every RGB frame into process memory.
 It is not an AI image/video generator.
 """
 import argparse
-import base64
 from fractions import Fraction
 import hashlib
 from html import escape
@@ -277,10 +276,9 @@ def preview_frames(path, shots):
     frame_bytes = 160 * 90 * 3
     if len(raw) != frame_bytes * len(selected):
         raise ValueError("Could not verify each rendered shot preview frame")
-    return [base64.b64encode(
-        # PNG conversion stays offline and is bounded to one 160x90 preview per shot.
-        __import__("base64").b64decode(png(raw[i*frame_bytes:(i+1)*frame_bytes], 160, 90))
-    ).decode("ascii") for i in range(len(selected))]
+    # PNG conversion stays offline and is bounded to one 160x90 preview per shot.
+    return [png(raw[i * frame_bytes:(i + 1) * frame_bytes], 160, 90)
+            for i in range(len(selected))]
 
 
 def html(shots, previews, video):
