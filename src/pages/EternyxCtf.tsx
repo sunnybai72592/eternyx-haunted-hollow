@@ -108,6 +108,20 @@ export default function EternyxCtf() {
           </div>
         </section>
 
+        <section className="flex flex-col gap-4 rounded-2xl border border-primary/25 bg-primary/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Next level · Authenticated missions</p>
+            <h2 className="mt-2 text-xl font-bold">Server-verified CTF casefiles</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Discover user-specific flags in forensic artifacts, with progress recorded against your account by the server.
+              These challenges need backend configuration; they are not live vulnerable web servers.
+            </p>
+          </div>
+          <Link to="/labs/verified" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+            Open verified missions <ArrowRight className="h-4 w-4" />
+          </Link>
+        </section>
+
         <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="space-y-3 rounded-2xl border border-border/70 bg-card/70 p-3">
             <div className="flex items-center justify-between gap-2 px-2 pt-2">
