@@ -35,7 +35,7 @@ const ResetPassword = () => {
 
   return (
     <main className="mx-auto flex min-h-[65vh] max-w-lg items-center justify-center px-4 py-12">
-      <section className="w-full rounded-3xl border border-cyan-400/20 bg-[#08111f] p-7 text-white shadow-2xl shadow-cyan-950/30 sm:p-9">
+      <section className="w-full rounded-3xl border border-cyan-400/20 bg-card p-7 text-white shadow-2xl shadow-cyan-950/30 sm:p-9">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-300"><ShieldCheck className="h-6 w-6" /></div>
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">ETERNYX ACCOUNT SECURITY</p>
         <h1 className="mt-3 text-2xl font-semibold">Choose a new password</h1>
