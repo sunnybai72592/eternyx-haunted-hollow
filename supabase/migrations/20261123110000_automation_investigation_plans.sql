@@ -24,6 +24,7 @@ CREATE TABLE public.automation_investigation_events (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   plan_id uuid NOT NULL REFERENCES public.automation_investigation_plans(id) ON DELETE CASCADE,
   request_key uuid NOT NULL,
+  expected_revision integer NOT NULL CHECK(expected_revision BETWEEN 1 AND 2147483646),
   kind text NOT NULL CHECK(kind IN ('step_acknowledged','reviewed','closed')),
   step_kind text CHECK(step_kind IS NULL OR step_kind IN
     ('review_evidence','inspect_run_history','inspect_workflow_policy',
@@ -135,7 +136,8 @@ BEGIN
  IF FOUND THEN
    IF past.plan_id IS DISTINCT FROM p_plan_id OR
       past.kind<>'step_acknowledged' OR past.step_kind IS DISTINCT FROM p_step_kind OR
-      past.note IS DISTINCT FROM btrim(p_note) THEN
+      past.note IS DISTINCT FROM btrim(p_note) OR
+      past.expected_revision IS DISTINCT FROM p_expected_revision THEN
      RETURN jsonb_build_object('ok',false,'reason','idempotency_conflict');
    END IF;
    SELECT * INTO plan FROM public.automation_investigation_plans
@@ -167,8 +169,9 @@ BEGIN
    RETURN jsonb_build_object('ok',false,'reason','already_acknowledged');
  END IF;
  INSERT INTO public.automation_investigation_events(
-   user_id,plan_id,request_key,kind,step_kind,note
- ) VALUES(p_user_id,p_plan_id,p_request_key,'step_acknowledged',p_step_kind,btrim(p_note));
+   user_id,plan_id,request_key,expected_revision,kind,step_kind,note
+ ) VALUES(p_user_id,p_plan_id,p_request_key,p_expected_revision,
+     'step_acknowledged',p_step_kind,btrim(p_note));
  UPDATE public.automation_investigation_plans
    SET revision=revision+1,updated_at=pg_catalog.statement_timestamp()
    WHERE id=p_plan_id AND user_id=p_user_id RETURNING * INTO plan;
@@ -204,7 +207,8 @@ BEGIN
  IF FOUND THEN
    IF past.plan_id IS DISTINCT FROM p_plan_id OR
       past.kind IS DISTINCT FROM p_next_stage OR
-      past.note IS DISTINCT FROM btrim(p_note) THEN
+      past.note IS DISTINCT FROM btrim(p_note) OR
+      past.expected_revision IS DISTINCT FROM p_expected_revision THEN
      RETURN jsonb_build_object('ok',false,'reason','idempotency_conflict');
    END IF;
    SELECT * INTO plan FROM public.automation_investigation_plans
@@ -236,8 +240,9 @@ BEGIN
    END IF;
  END IF;
  INSERT INTO public.automation_investigation_events(
-   user_id,plan_id,request_key,kind,step_kind,note
- ) VALUES(p_user_id,p_plan_id,p_request_key,p_next_stage,NULL,btrim(p_note));
+   user_id,plan_id,request_key,expected_revision,kind,step_kind,note
+ ) VALUES(p_user_id,p_plan_id,p_request_key,p_expected_revision,
+    p_next_stage,NULL,btrim(p_note));
  UPDATE public.automation_investigation_plans
    SET stage=p_next_stage,revision=revision+1,
        updated_at=pg_catalog.statement_timestamp()
