@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import AutomationWebhookPanel from "@/components/AutomationWebhookPanel";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
@@ -212,6 +213,7 @@ export default function AutomationCloudPanel({
             </li>)}
           </ol>}
         </div>
+        <AutomationWebhookPanel selectedWorkflowId={selectedId} />
         {error && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive"><CloudOff className="mr-2 inline size-4" /> {error}</p>}
         {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
       </>}
