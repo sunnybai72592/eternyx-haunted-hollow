@@ -5,10 +5,19 @@ import { Clapperboard, Download } from "lucide-react";
 import { Link } from "react-router-dom";
 import { saveCopy } from "@/lib/workspaceNotes.mjs";
 import { Button } from "@/components/ui/button";
-import { buildStoryboard, readStoryboard, frameFormats, shotDurations, timecode } from "@/lib/ai/storyboard.mjs";
+import { buildStoryboard, readStoryboard, storyboardCsv, storyboardShotCaptionsSrt, frameFormats, shotDurations, timecode } from "@/lib/ai/storyboard.mjs";
 
 function downloadJson(value: unknown, filename: string) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadText(value: string, filename: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([value], { type: mime }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
@@ -129,7 +138,12 @@ export default function VideoStoryboard() {
           <span className="min-w-0 break-words">{shot.description}</span>
         </button></li>)}
       </ol>
-      <Button onClick={() => downloadJson(board, "eternyx-storyboard.json")}><Download aria-hidden="true" className="mr-2 size-4" />Download shot list (.json)</Button>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Export storyboard timeline">
+        <Button onClick={() => downloadJson(board, "eternyx-storyboard.json")}><Download aria-hidden="true" className="mr-2 size-4" />Download storyboard JSON</Button>
+        <Button variant="outline" onClick={() => downloadText(storyboardCsv(board), "eternyx-shot-timeline.csv", "text/csv;charset=utf-8")}><Download aria-hidden="true" className="mr-2 size-4" />Export shot timeline CSV</Button>
+        <Button variant="outline" onClick={() => downloadText(storyboardShotCaptionsSrt(board), "eternyx-shot-captions.srt", "application/x-subrip;charset=utf-8")}><Download aria-hidden="true" className="mr-2 size-4" />Export shot captions SRT</Button>
+      </div>
+      <p className="text-xs text-muted-foreground">CSV lists shot timings for editors. SRT contains timed <strong>shot descriptions</strong>, not speech transcripts or AI-generated subtitles. Both exports stay on your device.</p>
       <StoryboardMovie key={JSON.stringify([text, seconds, format])} shots={shots} seconds={seconds} format={format} />
       <div className="space-y-3 border-t border-slate-700 pt-4">
         <h3 className="font-semibold">Selected shot {active.number}</h3>
