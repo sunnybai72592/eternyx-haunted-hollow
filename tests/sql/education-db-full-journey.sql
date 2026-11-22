@@ -219,7 +219,7 @@ SET request.jwt.claim.sub='00000000-0000-4000-8000-000000000002';
 DO $journey$
 DECLARE
  v_attempt uuid:=pg_catalog.current_setting('eternyx.journey_attempt')::uuid;
- v_review jsonb;
+ v_review text;
  v_answer uuid;
 BEGIN
  SELECT e.item->>'answer_id' INTO v_review
@@ -229,7 +229,7 @@ BEGIN
  -- without direct private-table SELECT privileges.
  IF v_review IS NULL THEN
    RAISE EXCEPTION 'E2E owner did not receive written review item'; END IF;
- v_answer:=(v_review#>>'{}')::uuid;
+ v_answer:=v_review::uuid;
  IF (public.education_instructor_review_written_answer(v_answer,1)->>'status')
    <>'review_recorded' THEN
    RAISE EXCEPTION 'E2E authorized human mark was not recorded'; END IF;
