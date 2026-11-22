@@ -85,7 +85,7 @@ test("8: no authentic matching ledger means no numerical score",()=>{
 test("9: read-only receipt cannot change attempts, review records or grade ledger",()=>{
   assert.doesNotMatch(sql,/\bINSERT INTO\b|\bUPDATE public\b|\bDELETE FROM\b/i);
   assert.match(sql,/LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''/);
-  assert.match(sql,/No.*correctness keys/);
+  assert.match(sql,/publishes no correctness keys/);
 });
 test("10: client checks receipt identity, bounded scores and rejects malformed pending",()=>{
   assert.match(client,/record\.attempt_id !== attemptId/);
