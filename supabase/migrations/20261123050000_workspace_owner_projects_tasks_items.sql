@@ -176,7 +176,7 @@ ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 5242880,
 -- A file row cannot claim an object that was never uploaded.
 -- This restricted trigger sees the storage catalog but exposes no callable RPC.
 CREATE OR REPLACE FUNCTION public.workspace_verify_file_upload()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $workspace_verify$
 BEGIN
   IF NEW.kind = 'file' AND NOT EXISTS (
     SELECT 1 FROM storage.objects o
@@ -187,7 +187,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$workspace_verify$;
 REVOKE ALL ON FUNCTION public.workspace_verify_file_upload() FROM PUBLIC, anon, authenticated;
 CREATE TRIGGER workspace_items_verify_upload BEFORE INSERT ON public.workspace_items
   FOR EACH ROW EXECUTE FUNCTION public.workspace_verify_file_upload();
