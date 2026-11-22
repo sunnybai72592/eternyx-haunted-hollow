@@ -1,0 +1,234 @@
+/*
+ * ETERNYX Eternal Constellation V3.
+ * Infinite, asynchronous rhythms; central identity stays motionless.
+ * All visible lighting derives from the five-color root palette tokens.
+ */
+.eternyx-constellation {
+  isolation: isolate;
+  color: hsl(var(--primary));
+  contain: layout paint;
+}
+.eternyx-constellation__scene {
+  position: absolute;
+  inset: 0;
+}
+.eternyx-constellation__ambient {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, hsl(var(--primary) / .09), transparent 64%);
+  filter: blur(23px);
+  pointer-events: none;
+}
+.eternyx-constellation__aura {
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+  background: radial-gradient(circle, hsl(var(--primary) / .12), transparent 69%);
+  filter: blur(20px);
+  animation: eternyx-resonance-glow 19s ease-in-out infinite;
+}
+.eternyx-constellation__ring,
+.eternyx-constellation__ellipse {
+  position: absolute;
+  border: 1px solid hsl(var(--primary) / .18);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.eternyx-constellation__ring {
+  animation: eternyx-resonance-tide 23s ease-in-out infinite;
+}
+.eternyx-constellation__ring--outer { inset: 5%; }
+.eternyx-constellation__ring--dashed {
+  inset: 15%;
+  border-style: dashed;
+  opacity: .65;
+  animation-duration: 34s;
+  animation-delay: -8s;
+  animation-direction: reverse;
+}
+.eternyx-constellation__ring--inner {
+  inset: 27%;
+  opacity: .58;
+  animation-duration: 27s;
+  animation-delay: -12s;
+}
+.eternyx-constellation__ellipse {
+  left: 50%;
+  top: 50%;
+  width: 94%;
+  height: 27%;
+  margin-left: -47%;
+  margin-top: -13.5%;
+  border-color: hsl(var(--accent) / .19);
+  animation: eternyx-resonance-tilt 30s ease-in-out infinite;
+}
+.eternyx-constellation__ellipse--back {
+  width: 88%;
+  height: 31%;
+  margin-left: -44%;
+  margin-top: -15.5%;
+  opacity: .58;
+  animation: eternyx-resonance-countertilt 39s ease-in-out infinite;
+}
+.eternyx-constellation__track {
+  position: absolute;
+  inset: 5%;
+  border-radius: 50%;
+  animation: eternyx-resonance-orbit 74s linear infinite;
+  pointer-events: none;
+}
+.eternyx-constellation__track--inner {
+  inset: 15%;
+  animation-duration: 97s;
+  animation-direction: reverse;
+}
+.eternyx-constellation__particle {
+  position: absolute;
+  top: 13%;
+  left: 13%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 19px 4px hsl(var(--primary) / .38);
+}
+.eternyx-constellation__track--inner .eternyx-constellation__particle {
+  top: 79%;
+  left: 84%;
+  width: 5px;
+  height: 5px;
+  background: hsl(var(--accent));
+  box-shadow: 0 0 17px 3px hsl(var(--accent) / .32);
+}
+.eternyx-constellation__core {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: 37%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid hsl(var(--primary) / .33);
+  border-radius: 21%;
+  background: linear-gradient(145deg, hsl(var(--card) / .96), hsl(var(--background) / .99));
+  box-shadow: 0 0 65px hsl(var(--primary) / .08), inset 0 1px hsl(var(--foreground) / .08);
+  text-align: center;
+}
+.eternyx-constellation__core::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border: 1px solid hsl(var(--primary) / .075);
+  border-radius: 23%;
+  animation: eternyx-resonance-glow 19s ease-in-out infinite;
+  pointer-events: none;
+}
+.eternyx-constellation__mark {
+  width: 27%;
+  height: 27%;
+  color: hsl(var(--primary));
+  filter: drop-shadow(0 0 12px hsl(var(--primary) / .24));
+}
+.eternyx-constellation__wordmark {
+  margin-top: 7%;
+  font-weight: 900;
+  font-size: clamp(.8rem, 2.15vw, 1.25rem);
+  letter-spacing: .2em;
+  line-height: 1.2;
+  color: hsl(var(--foreground));
+}
+.eternyx-constellation__tagline {
+  margin-top: 5%;
+  font-size: clamp(5px, .8vw, 9px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .19em;
+  color: hsl(var(--primary) / .68);
+  white-space: nowrap;
+}
+.eternyx-constellation__node {
+  position: absolute;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .65rem .75rem;
+  border: 1px solid hsl(var(--primary) / .25);
+  border-radius: 15px;
+  background: hsl(var(--card) / .93);
+  box-shadow: 0 10px 30px hsl(0 0% 0% / .2);
+  backdrop-filter: blur(13px);
+  color: hsl(var(--foreground));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  white-space: nowrap;
+  animation: eternyx-resonance-drift 16s ease-in-out infinite;
+}
+.eternyx-constellation__node-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: hsl(var(--primary));
+}
+.eternyx-constellation__node--security { top: 23%; left: 4%; animation-delay: -4s; }
+.eternyx-constellation__node--develop { top: 28%; right: 1%; animation-delay: -10s; }
+.eternyx-constellation__node--ai { right: 8%; bottom: 17%; animation-delay: -13s; }
+.eternyx-constellation__node--workspace { left: 0; bottom: 22%; animation-delay: -6s; }
+.eternyx-constellation__node--cloud {
+  top: 0;
+  left: 38%;
+  animation-delay: -2s;
+}
+.eternyx-constellation__node--automate {
+  right: 34%;
+  bottom: 0;
+  animation-delay: -8s;
+}
+@keyframes eternyx-resonance-tide {
+  0%, 100% { transform: scale(.975) rotate(-2deg); opacity: .53; }
+  50% { transform: scale(1.035) rotate(2deg); opacity: .98; }
+}
+@keyframes eternyx-resonance-tilt {
+  0%, 100% { transform: rotate(-21deg) scaleX(.95); }
+  50% { transform: rotate(17deg) scaleX(1.04); }
+}
+@keyframes eternyx-resonance-countertilt {
+  0%, 100% { transform: rotate(19deg); }
+  50% { transform: rotate(-17deg); }
+}
+@keyframes eternyx-resonance-orbit { to { transform: rotate(360deg); } }
+@keyframes eternyx-resonance-glow {
+  0%, 100% { opacity: .35; transform: scale(.97); }
+  50% { opacity: .95; transform: scale(1.07); }
+}
+@keyframes eternyx-resonance-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+@media (max-width: 639px) {
+  .eternyx-constellation__node {
+    padding: .44rem .5rem;
+    gap: .32rem;
+    border-radius: 11px;
+    font-size: clamp(6px, 1.7vw, 9px);
+    letter-spacing: .09em;
+  }
+  .eternyx-constellation__node-icon { width: 14px; height: 14px; }
+  .eternyx-constellation__wordmark { font-size: clamp(10px, 3vw, 16px); }
+  .eternyx-constellation__tagline { font-size: clamp(4px, 1.25vw, 7px); }
+  .eternyx-constellation__particle { width: 5px; height: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eternyx-constellation__aura,
+  .eternyx-constellation__ring,
+  .eternyx-constellation__ellipse,
+  .eternyx-constellation__track,
+  .eternyx-constellation__core::before,
+  .eternyx-constellation__node { animation: none !important; }
+}
