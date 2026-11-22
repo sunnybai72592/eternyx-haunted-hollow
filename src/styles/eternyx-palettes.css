@@ -102,3 +102,20 @@
 @media (prefers-reduced-motion: reduce) {
   .auth-liquid-swatch { transition: none; }
 }
+
+/* The mounted site navigation still has some legacy cyan utility classes;
+   bind its principal highlights to the user's active swatch too. */
+:root[data-eternyx-palette] nav[aria-label='Main navigation'] [class*='text-cyan-'] {
+  color: hsl(var(--primary));
+}
+:root[data-eternyx-palette] nav[aria-label='Main navigation'] [class*='border-cyan-'] {
+  border-color: hsl(var(--primary) / .27);
+}
+:root[data-eternyx-palette] nav[aria-label='Main navigation'] [class*='bg-cyan-'] {
+  background-color: hsl(var(--primary) / .09);
+}
+/* Shared links and buttons using design tokens inherit the palette without
+   overriding semantic destructive, success or warning status colors. */
+:root[data-eternyx-palette] :where(a, button, input):focus-visible {
+  outline-color: hsl(var(--ring));
+}
