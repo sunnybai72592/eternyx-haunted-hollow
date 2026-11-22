@@ -90,6 +90,8 @@ test("report sanitizer fails closed for invented success rates, missing counters
 });
 test("safe CSV quotes values and does not leak user-authored incident notes",()=>{
   const csv=incidentReportCsv(report);
+  const fromSanitized=incidentReportCsv(checkedIncidentReport(report));
+  assert.equal(fromSanitized,csv,"UI-exported already-validated report must serialize");
   assert.ok(csv.startsWith("\ufeff"));
   assert.ok(csv.includes('"case_counts","currentOpen","1"'));
   assert.ok(csv.includes(id));
