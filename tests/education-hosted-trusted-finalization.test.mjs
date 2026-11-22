@@ -101,7 +101,7 @@ test("6. Role-secret policy rejects anon, wrong ref and publishable keys",()=>{
   "not-a-real-role-key",jwt("anon",stagingRef),
   jwt("service_role","c".repeat(20)),
   base().ETERNYX_RLS_STAGING_PUBLISHABLE_KEY,
-  "sb_secret_bad","sb_secret_bad!"; // deliberately malformed secret
+  "sb_secret_bad","sb_secret_bad!" // deliberately malformed secret
  ]){
   const c=write();c.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY=secret;
   assert.throws(()=>validateEducationTrustedFinalizerConfig(c));
@@ -154,7 +154,7 @@ test("11. Three real Auth accounts and fresh getUser checks precede privileged c
 });
 test("12. Staging preflight verifies instructor review and actual written response ownership",()=>{
  assert.match(runner,/exact-instructor-review-remains-recorded/);
- assert.match(runner,/student-a-owns/); // uses owned and accountA controls
+ assert.match(runner,/submitted-attempt-owned-by-a/);
  assert.match(runner,/short_answer/);
  assert.match(runner,/r\.reviewed_points===config\.awarded/);
  assert.match(runner,/pending-student-receipt-hides-scores/);
