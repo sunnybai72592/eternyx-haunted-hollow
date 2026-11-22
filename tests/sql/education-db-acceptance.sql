@@ -191,6 +191,9 @@ BEGIN
   IF pg_catalog.jsonb_array_length(public.education_student_enrolled_catalog()) <> 0 THEN
     RAISE EXCEPTION 'Unenrolled student saw someone else test';
   END IF;
+  IF (SELECT pg_catalog.count(*) FROM public.tests) <> 0 THEN
+    RAISE EXCEPTION 'Unenrolled student can enumerate active test metadata directly';
+  END IF;
 END;
 $fn$;
 SELECT public.education_ci_expect_denied(
@@ -210,6 +213,9 @@ DECLARE
 BEGIN
   IF pg_catalog.jsonb_array_length(public.education_student_enrolled_catalog()) <> 1 THEN
     RAISE EXCEPTION 'Student did not see their enrolled exam';
+  END IF;
+  IF (SELECT pg_catalog.count(*) FROM public.tests) <> 1 THEN
+    RAISE EXCEPTION 'Enrolled student cannot read their one permitted active test';
   END IF;
   SELECT public.start_cbt_attempt(v_id) INTO v_attempt;
   IF v_attempt->>'status' <> 'in_progress' THEN
