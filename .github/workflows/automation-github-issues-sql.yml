@@ -1,0 +1,47 @@
+name: Automation Approved GitHub Issues PostgreSQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123030000_automation_github_issue_approvals.sql'
+      - 'tests/sql/automation-github-issues-db-smoke.sql'
+      - '.github/workflows/automation-github-issues-sql.yml'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify approved GitHub issue writes, one-way claims, quotas and owner isolation on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable network-isolated PostgreSQL 17
+        run: |
+          docker run --detach --rm --network none --name eternyx-gh-issue-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-gh-issue-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-gh-issue-ci pg_isready -U postgres || {
+            docker logs eternyx-gh-issue-ci
+            exit 1
+          }
+      - name: Bootstrap two isolated user identities
+        run: docker exec --interactive eternyx-gh-issue-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply approved issue write migration
+        run: docker exec --interactive eternyx-gh-issue-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123030000_automation_github_issue_approvals.sql
+      - name: Verify one-way claims, cross-tenant revocation, quotas, payload erasure and expiry
+        run: docker exec --interactive eternyx-gh-issue-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-github-issues-db-smoke.sql
+      - name: Clean up isolated fixture
+        if: always()
+        run: docker rm --force eternyx-gh-issue-ci || true
