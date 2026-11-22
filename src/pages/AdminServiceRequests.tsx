@@ -10,6 +10,7 @@ import AdminWorkspaceNav from '@/components/admin/AdminWorkspaceNav';
 import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline';
 import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceTriagePanel from '@/components/services/ServiceTriagePanel';
+import ServiceClarifications from '@/components/services/ServiceClarifications';
 import { Input } from '@/components/ui/input';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
@@ -23,6 +24,7 @@ type ServiceRow = {
   needs_follow_up: boolean; last_customer_activity_at: string | null; last_admin_activity_at: string | null;
   next_action_kind: ServiceNextAction; next_review_on: string | null; review_bucket: ServiceReviewBucket;
   last_checked_at: string | null; needs_my_check: boolean;
+  open_clarification_count: number; awaiting_customer_count: number; awaiting_admin_review_count: number;
 };
 type Draft = { status: ServiceRequestStatus; client_update: string };
 
@@ -46,6 +48,7 @@ export default function AdminServiceRequests() {
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [mineCheckOnly, setMineCheckOnly] = useState(false);
+  const [clarificationFilter, setClarificationFilter] = useState<'all' | 'awaiting_customer' | 'needs_review' | 'open'>('all');
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review'>('newest');
   const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
@@ -59,6 +62,7 @@ export default function AdminServiceRequests() {
   const [openConversation, setOpenConversation] = useState<string | null>(null);
   const [openScope, setOpenScope] = useState<string | null>(null);
   const [openTriage, setOpenTriage] = useState<string | null>(null);
+  const [openClarifications, setOpenClarifications] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
@@ -69,8 +73,8 @@ export default function AdminServiceRequests() {
     const generation = ++fetchGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_admin_check_queue')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check', { count: 'exact' });
+    let query = supabase.from('service_admin_clarification_queue')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -85,6 +89,9 @@ export default function AdminServiceRequests() {
     if (assignmentFilter === 'unassigned') query = query.is('assigned_admin_id', null);
     if (attentionOnly) query = query.eq('needs_follow_up', true);
     if (mineCheckOnly) query = query.eq('needs_my_check', true);
+    if (clarificationFilter === 'awaiting_customer') query = query.gt('awaiting_customer_count', 0);
+    if (clarificationFilter === 'needs_review') query = query.gt('awaiting_admin_review_count', 0);
+    if (clarificationFilter === 'open') query = query.gt('open_clarification_count', 0);
     if (reviewBucket !== 'all') query = query.eq('review_bucket', reviewBucket);
     if (actionFilter !== 'all') query = query.eq('next_action_kind', actionFilter);
     if (sortOrder === 'priority') query = query.order('priority_rank', { ascending: false });
@@ -114,7 +121,7 @@ export default function AdminServiceRequests() {
       setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
     }
     setLoading(false);
-  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter, mineCheckOnly]);
+  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter, mineCheckOnly, clarificationFilter]);
 
   useEffect(() => {
     let active = true;
@@ -124,6 +131,10 @@ export default function AdminServiceRequests() {
     setTotal(0);
     setDrafts({});
     setCheckingId(null);
+    setOpenConversation(null);
+    setOpenScope(null);
+    setOpenTriage(null);
+    setOpenClarifications(null);
     if (authLoading) {
       setChecking(true);
       return () => { active = false; };
@@ -181,6 +192,7 @@ export default function AdminServiceRequests() {
     setAssignmentFilter('all');
     setAttentionOnly(false);
     setMineCheckOnly(false);
+    setClarificationFilter('all');
     setReviewBucket('all');
     setActionFilter('all');
     setPage(0);
@@ -196,6 +208,7 @@ export default function AdminServiceRequests() {
     setAssignmentFilter('all');
     setAttentionOnly(false);
     setMineCheckOnly(false);
+    setClarificationFilter('all');
     setReviewBucket('all');
     setActionFilter('all');
     setSortOrder('newest');
@@ -359,6 +372,15 @@ export default function AdminServiceRequests() {
         </div>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={attentionOnly} onChange={(event) => { setPage(0); setAttentionOnly(event.target.checked); }} />Needs follow-up</label>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={mineCheckOnly} onChange={(event) => { setPage(0); setMineCheckOnly(event.target.checked); }} />Needs my check</label>
+        <div>
+          <label htmlFor="service-clarification-filter" className="mb-1 block text-xs font-semibold">Clarifications</label>
+          <select id="service-clarification-filter" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={clarificationFilter} onChange={(event) => { setPage(0); setClarificationFilter(event.target.value as typeof clarificationFilter); }}>
+            <option value="all">All clarification states</option>
+            <option value="awaiting_customer">Awaiting customer answer</option>
+            <option value="needs_review">Answered · needs admin review</option>
+            <option value="open">Any open question</option>
+          </select>
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
         <span className="text-xs text-muted-foreground">Follow-up signals reflect recorded customer activity. Review dates are internal UTC targets, not response guarantees.</span>
       </div>
@@ -376,6 +398,8 @@ export default function AdminServiceRequests() {
               <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
               {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
               {item.needs_my_check && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">{item.last_checked_at ? 'New customer activity since your check' : 'Needs your first check'}</span>}
+              {item.awaiting_customer_count > 0 && <span className="rounded-full border border-border px-3 py-1">Awaiting customer answer: {item.awaiting_customer_count}</span>}
+              {item.awaiting_admin_review_count > 0 && <span className="rounded-full border border-primary/40 px-3 py-1 text-primary">Clarifications to review: {item.awaiting_admin_review_count}</span>}
               <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1"><CalendarClock className="h-3 w-3" />{serviceReviewBucketLabels[item.review_bucket] ?? 'Not scheduled'}{item.next_review_on ? ': ' + item.next_review_on : ''}</span>
               <span className="rounded-full border border-border px-3 py-1">Next: {serviceNextActionLabels[item.next_action_kind] ?? 'Not planned'}</span>
               {item.last_customer_activity_at && <span>Customer activity: {new Date(item.last_customer_activity_at).toLocaleString()}</span>}
@@ -406,6 +430,9 @@ export default function AdminServiceRequests() {
               <Button type="button" variant="outline" aria-expanded={openTriage === item.id} onClick={() => setOpenTriage((id) => id === item.id ? null : item.id)}>
                 {openTriage === item.id ? 'Close private triage' : 'Private triage'}
               </Button>
+              <Button type="button" variant="outline" aria-expanded={openClarifications === item.id} onClick={() => setOpenClarifications((id) => id === item.id ? null : item.id)}>
+                <ClipboardList className="mr-2 h-4 w-4" />{openClarifications === item.id ? 'Close clarifications' : 'Clarifications (' + item.open_clarification_count + ' open)'}
+              </Button>
               <Button type="button" variant="outline" aria-expanded={openScope === item.id} onClick={() => setOpenScope((id) => id === item.id ? null : item.id)}>
                 {openScope === item.id ? 'Close scope reviews' : 'Scope review & publish'}
               </Button>
@@ -413,6 +440,7 @@ export default function AdminServiceRequests() {
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
             {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
+            {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
           </Card>;
         })}</div>}
       {!loadError && total > 0 && (
