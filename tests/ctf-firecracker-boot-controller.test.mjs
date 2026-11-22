@@ -137,12 +137,12 @@ test("real Unix socket transport issues only allowlisted bounded Firecracker PUT
   t.after(()=>new Promise(resolve=>server.close(resolve)));
   const out=await sendFirecrackerRequest({
     socketPath:socket,path:"/machine-config",
-    body:{vcpu_count:1,mem_size_mib:256,smt:false},
+    body:{vcpu_count:1,mem_size_mib:256,smt:false,track_dirty_pages:false},
   });
   assert.deepEqual(out,{applied:true,path:"/machine-config",status:204});
   assert.deepEqual(calls,[{
     url:"/machine-config",method:"PUT",
-    json:{vcpu_count:1,mem_size_mib:256,smt:false},
+    json:{vcpu_count:1,mem_size_mib:256,smt:false,track_dirty_pages:false},
   }]);
   for(const url of ["https://evil","/network-interfaces/net1","/mmds","/snapshot/create","/version","/actions?x=1"]){
     await assert.rejects(sendFirecrackerRequest({
@@ -151,7 +151,17 @@ test("real Unix socket transport issues only allowlisted bounded Firecracker PUT
   }
   await assert.rejects(sendFirecrackerRequest({
     socketPath:socket,path:"/actions",body:{arbitrary:"x".repeat(3000)},
-  }),/Oversized/);
+  }),/Invalid Firecracker|Oversized/);
+  for(const invalid of [
+    {path:"/actions",body:{action_type:"SendCtrlAltDel"}},
+    {path:"/actions",body:{action_type:"InstanceStart",extra:true}},
+    {path:"/machine-config",body:{vcpu_count:8,mem_size_mib:4096,
+      smt:false,track_dirty_pages:false}},
+    {path:"/drives/rootfs",body:{drive_id:"rootfs",
+      path_on_host:"/rootfs.ext4",is_root_device:true,is_read_only:false}},
+  ])await assert.rejects(sendFirecrackerRequest({
+    socketPath:socket,...invalid,
+  }),/Invalid Firecracker/);
   assert.equal(calls.length,1);
 });
 
