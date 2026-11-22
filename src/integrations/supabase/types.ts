@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      workspace_projects: {
+        Row: { id: string; owner_id: string; name: string; description: string; status: string; created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; name: string; description?: string; status?: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; owner_id?: string; name?: string; description?: string; status?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      workspace_tasks: {
+        Row: { id: string; owner_id: string; project_id: string; title: string; status: string; due_on: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; project_id: string; title: string; status?: string; due_on?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; owner_id?: string; project_id?: string; title?: string; status?: string; due_on?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      workspace_items: {
+        Row: { id: string; owner_id: string; project_id: string; kind: string; title: string; note_text: string | null; target_url: string | null; storage_path: string | null; file_size: number | null; mime_type: string | null; created_at: string }
+        Insert: { id?: string; owner_id: string; project_id: string; kind: string; title: string; note_text?: string | null; target_url?: string | null; storage_path?: string | null; file_size?: number | null; mime_type?: string | null; created_at?: string }
+        Update: { id?: string; owner_id?: string; project_id?: string; kind?: string; title?: string; note_text?: string | null; target_url?: string | null; storage_path?: string | null; file_size?: number | null; mime_type?: string | null; created_at?: string }
+        Relationships: []
+      }
+      workspace_activity: {
+        Row: { id: number; owner_id: string; project_id: string; entity_id: string; event_type: string; created_at: string }
+        Insert: { id?: number; owner_id: string; project_id: string; entity_id: string; event_type: string; created_at?: string }
+        Update: { id?: number; owner_id?: string; project_id?: string; entity_id?: string; event_type?: string; created_at?: string }
+        Relationships: []
+      }
       admin_users: {
         Row: {
           created_at: string
