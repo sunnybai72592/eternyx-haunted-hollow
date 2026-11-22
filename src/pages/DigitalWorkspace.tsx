@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import DeviceNote from "@/components/DeviceNote";
 import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
+import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
+import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +21,8 @@ import {
 } from "@/lib/workspaceRules.mjs";
 import type { Database } from "@/integrations/supabase/types";
 import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, workspaceExportFileName } from "@/lib/workspaceLibrary.mjs";
+import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
+import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
 
 type Project = Database["public"]["Tables"]["workspace_projects"]["Row"];
 type Task = Database["public"]["Tables"]["workspace_tasks"]["Row"];
@@ -70,6 +74,7 @@ export default function DigitalWorkspace() {
   const [newTask, setNewTask] = useState("");
   const [taskDue, setTaskDue] = useState("");
   const [taskFilter, setTaskFilter] = useState("all");
+  const [scheduleFilter, setScheduleFilter] = useState("all");
   const [taskQuery, setTaskQuery] = useState("");
   const [itemFilter, setItemFilter] = useState("all");
   const [itemQuery, setItemQuery] = useState("");
@@ -83,20 +88,19 @@ export default function DigitalWorkspace() {
     setLoading(true);
     try {
       // RLS is authoritative; these explicit filters also avoid accidental data mixing in UI.
-      const [projectResult, taskResult, itemResult, eventResult] = await Promise.all([
-        supabase.from("workspace_projects").select("*").eq("owner_id", userId).order("updated_at", { ascending: false }).limit(100),
-        supabase.from("workspace_tasks").select("*").eq("owner_id", userId).order("created_at", { ascending: false }).limit(1000),
-        supabase.from("workspace_items").select("*").eq("owner_id", userId).order("created_at", { ascending: false }).limit(1000),
-        supabase.from("workspace_activity").select("*").eq("owner_id", userId).order("created_at", { ascending: false }).limit(30),
+      const [projectRows, taskRows, itemRows, eventResult] = await Promise.all([
+        fetchWorkspaceRows(supabase, "workspace_projects", userId, "updated_at"),
+        fetchWorkspaceRows(supabase, "workspace_tasks", userId),
+        fetchWorkspaceRows(supabase, "workspace_items", userId),
+        supabase.from("workspace_activity").select("*").eq("owner_id", userId)
+          .order("created_at", { ascending: false }).limit(30),
       ]);
-      for (const response of [projectResult, taskResult, itemResult, eventResult]) {
-        if (response.error) throw new Error(response.error.message);
-      }
+      if (eventResult.error) throw new Error(eventResult.error.message);
       if (currentOwner.current !== userId) return;
-      const nextProjects = (projectResult.data ?? []) as Project[];
+      const nextProjects = projectRows as Project[];
       setProjects(nextProjects);
-      setTasks((taskResult.data ?? []) as Task[]);
-      setItems((itemResult.data ?? []) as Item[]);
+      setTasks(taskRows as Task[]);
+      setItems(itemRows as Item[]);
       setActivity((eventResult.data ?? []) as Activity[]);
       setProjectId((previous) => nextProjects.some((project) => project.id === previous)
         ? previous : nextProjects[0]?.id ?? null);
@@ -138,7 +142,7 @@ export default function DigitalWorkspace() {
   const selected = projects.find((project) => project.id === projectId) ?? null;
   const projectTasks = tasks.filter((task) => task.project_id === projectId);
   const projectItems = items.filter((item) => item.project_id === projectId);
-  const shownTasks = filterWorkspaceTasks(projectTasks, taskFilter, taskQuery);
+  const shownTasks = filterScheduledTasks(filterWorkspaceTasks(projectTasks, taskFilter, taskQuery), scheduleFilter, localCalendarDate());
   const shownItems = filterWorkspaceItems(projectItems, itemFilter, itemQuery);
   const active = selected?.status === "active";
   const visibleProjects = projects.filter((project) =>
@@ -438,9 +442,9 @@ export default function DigitalWorkspace() {
       {notice && <p role="status" className="rounded-lg border border-border p-3 text-sm text-cyan-300">{notice}</p>}
       {ownedDataVisible && <>
         <div className="grid gap-3 sm:grid-cols-3" aria-label="Actual workspace totals">
-          <Summary title="Loaded projects" value={projects.length} subtitle="Showing up to 100 projects" />
-          <Summary title="Loaded open tasks" value={openTaskCount} subtitle="Within 1,000 loaded tasks" />
-          <Summary title="Loaded private files" value={fileCount} subtitle="Within 1,000 loaded items" />
+          <Summary title="Owned projects" value={projects.length} subtitle="From your authenticated Workspace" />
+          <Summary title="Open tasks" value={openTaskCount} subtitle="Across your loaded projects" />
+          <Summary title="Private files" value={fileCount} subtitle="Registered project uploads" />
         </div>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(250px,320px)_minmax(0,1fr)]">
@@ -457,6 +461,14 @@ export default function DigitalWorkspace() {
                 <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Create project
               </Button>
             </form>
+            <WorkspaceImportPanel owner={owner} disabled={busy || loading}
+              onImported={(id, message, failed) => {
+                setProjectId(id);
+                void load(owner).then(() => {
+                  if (failed) setError(message);
+                  else setNotice(message);
+                });
+              }} />
             <div className="space-y-3 border-t border-border pt-4">
               <label htmlFor="workspace-project-search" className="text-sm font-medium">Find a project</label>
               <div className="relative">
@@ -552,6 +564,13 @@ export default function DigitalWorkspace() {
                   <select id="workspace-task-filter" value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)} className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
                     <option value="all">All</option><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option>
                   </select>
+                  <label htmlFor="workspace-task-schedule" className="text-sm">Due</label>
+                  <select id="workspace-task-schedule" value={scheduleFilter} onChange={(event) => setScheduleFilter(event.target.value)}
+                    className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
+                    <option value="all">Any date</option><option value="overdue">Overdue</option>
+                    <option value="today">Due today</option><option value="upcoming">Upcoming</option>
+                    <option value="unscheduled">No due date</option>
+                  </select>
                   <label htmlFor="workspace-task-search" className="sr-only">Find a task</label>
                   <Input id="workspace-task-search" placeholder="Search task names / due dates" value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} className="min-w-[180px] flex-1" />
                 </div>
@@ -560,7 +579,9 @@ export default function DigitalWorkspace() {
                     <span className="min-w-0 flex-1">
                       <span className={"block break-words text-sm font-medium " +
                         (task.status === "done" ? "text-muted-foreground line-through" : "")}>{task.title}</span>
-                      <span className="text-xs text-muted-foreground">{task.due_on ? "Due " + task.due_on : "No due date"}</span>
+                      <span className={"text-xs " + (task.due_on && task.due_on < localCalendarDate() && task.status !== "done" ? "text-amber-400" : "text-muted-foreground")}>
+                        {task.due_on ? task.due_on + " · " + (task.status === "done" ? "Completed" : scheduleLabel(task.due_on, localCalendarDate())) : "No due date"}
+                      </span>
                     </span>
                     <label className="sr-only" htmlFor={"workspace-task-status-" + task.id}>Task status for {task.title}</label>
                     <select id={"workspace-task-status-" + task.id} value={task.status} disabled={!active || busy}
@@ -568,6 +589,8 @@ export default function DigitalWorkspace() {
                       className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
                       <option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option>
                     </select>
+                    {active && <WorkspaceTaskEditor task={task} owner={owner} disabled={busy}
+                      onRun={(action, message) => void mutate(action, message)} />}
                     {active && <Button size="icon" variant="ghost" disabled={busy}
                       aria-label={"Delete task " + task.title} onClick={() => deleteTask(task)}>
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
