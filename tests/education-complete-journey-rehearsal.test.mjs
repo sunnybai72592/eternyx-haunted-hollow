@@ -149,7 +149,7 @@ test("18. New journey runs after current grade, privacy and concurrency acceptan
 });
 test("19. Release docs distinguish disposable rehearsal from unexecuted hosted validation",()=>{
   assert.match(guide,/NOT DEPLOYED/);
-  assert.match(guide,/real Supabase Auth/i);
+  assert.match(guide,/real\s+Supabase Auth/i);
   assert.match(guide,/manual/i);
   assert.match(guide,/production/i);
 });
