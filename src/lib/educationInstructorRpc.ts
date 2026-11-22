@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { exportQuestionBankJson } from "@/lib/educationQuestionBank.mjs";
+import { exportQuestionBankJson, parseQuestionBankJson } from "@/lib/educationQuestionBank.mjs";
 import { atomicCbtEnabled } from "@/lib/educationCbtRpc";
 
 type RpcResult<T> = { data: T | null; error: { message: string } | null };
@@ -58,4 +58,28 @@ export async function createInstructorDraft(bank: unknown): Promise<CreatedInstr
     throw new Error("The instructor server did not confirm a private draft.");
   }
   return data as CreatedInstructorDraft;
+}
+
+export type LoadedInstructorDraft = {
+  id: string; status: "private_draft";
+  bank: ReturnType<typeof parseQuestionBankJson>;
+};
+
+/**
+ * Fetch private answer-key material only by an explicit instructor action.
+ * An approved server role + ownership check is mandatory on every request.
+ */
+export async function loadInstructorDraft(draftId: string): Promise<LoadedInstructorDraft> {
+  if (!instructorRpcEnabled) throw new Error("Verified instructor draft recovery is not enabled.");
+  if (!uuid.test(draftId)) throw new Error("Invalid private draft ID.");
+  const data = await rpc<unknown>("education_instructor_load_draft", { p_test_id: draftId });
+  if (!data || typeof data !== "object" ||
+      !("id" in data) || data.id !== draftId ||
+      !("status" in data) || data.status !== "private_draft" ||
+      !("bank" in data)) {
+    throw new Error("The instructor service returned an invalid private draft.");
+  }
+  // Round-trip through strict versioned schema validation before touching UI.
+  const bank = parseQuestionBankJson(JSON.stringify(data.bank));
+  return { id: draftId, status: "private_draft", bank };
 }

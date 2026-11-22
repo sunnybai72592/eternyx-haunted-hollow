@@ -127,7 +127,7 @@ BEGIN
   v_description := COALESCE(p_bank->>'description', '');
   IF v_title IS NULL OR pg_catalog.char_length(v_title) NOT BETWEEN 3 AND 160
      OR pg_catalog.char_length(v_description) > 1500
-     OR COALESCE(p_bank->>'duration_minutes', '') !~ '^[0-9]{1,4} THEN
+     OR COALESCE(p_bank->>'duration_minutes', '') !~ '^[0-9]{1,4}$' THEN
     RAISE EXCEPTION 'Invalid question-bank metadata' USING ERRCODE = '22023';
   END IF;
   v_duration := (p_bank->>'duration_minutes')::integer;
@@ -154,7 +154,7 @@ BEGIN
        OR v_q_id = ANY(v_ids)
        OR COALESCE(v_type, '') NOT IN ('multiple_choice','true_false','short_answer')
        OR v_text IS NULL OR pg_catalog.char_length(v_text) NOT BETWEEN 3 AND 2000
-       OR COALESCE(v_question->>'points', '') !~ '^[0-9]{1,4}
+       OR COALESCE(v_question->>'points', '') !~ '^[0-9]{1,4}$'
        OR COALESCE(pg_catalog.jsonb_typeof(v_question->'options'), '') <> 'array' THEN
       RAISE EXCEPTION 'Invalid question %', v_index USING ERRCODE = '22023';
     END IF;
@@ -286,7 +286,3 @@ GRANT EXECUTE ON FUNCTION public.education_instructor_create_draft(jsonb) TO aut
 GRANT EXECUTE ON FUNCTION public.education_instructor_list_drafts() TO authenticated;
 
 COMMIT;
-
--- Staging only: direct table authoring has been revoked for browser roles.
--- Execute only after the atomic CBT answer-key isolation migration and
--- legacy teacher client replacement pass PostgreSQL/RLS acceptance tests.
