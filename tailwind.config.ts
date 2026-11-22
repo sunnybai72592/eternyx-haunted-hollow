@@ -1,5 +1,26 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * Route-wide adaptive decorative color scales.
+ * Every existing Tailwind text/bg/border/ring/gradient/hover variant using
+ * these hue families now receives the selected ETERNYX auth palette, not
+ * its original fixed blue/violet/pink pigment.
+ *
+ * Semantic success/error/warning palettes (emerald, green, rose, red, amber,
+ * yellow, orange) remain untouched, as do vendor logos and image pixels.
+ */
+const paletteLightness = {
+  50: 97, 100: 93, 200: 86, 300: 77, 400: 67, 500: 56,
+  600: 47, 700: 38, 800: 29, 900: 19, 950: 11,
+} as const;
+
+const paletteScale = (hueShift = 0) =>
+  Object.fromEntries(Object.entries(paletteLightness).map(([shade, light]) =>
+    [shade, `hsl(calc(var(--eternyx-color-hue, 181) + ${hueShift}) var(--eternyx-color-saturation, 79%) ${light}% / <alpha-value>)`]
+  ));
+
+
+
 export default {
 	darkMode: ["class"],
 	content: [
@@ -47,6 +68,17 @@ export default {
 				'screen-safe': 'calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))',
 			},
 			colors: {
+                // Native Tailwind utility overrides: every page and state variant
+                // picks up the global five-color swatch without page-specific CSS.
+                cyan: paletteScale(0),
+                sky: paletteScale(3),
+                blue: paletteScale(6),
+                indigo: paletteScale(10),
+                violet: paletteScale(13),
+                purple: paletteScale(16),
+                fuchsia: paletteScale(20),
+                pink: paletteScale(24),
+                teal: paletteScale(-8),
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
@@ -90,16 +122,16 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				'cyber-green': 'hsl(145 80% 45%)',
-				'cyber-cyan': 'hsl(180 80% 50%)',
-				'cyber-pink': 'hsl(330 80% 60%)',
+				'cyber-green': 'hsl(var(--cyber-green) / <alpha-value>)',
+				'cyber-cyan': 'hsl(var(--cyber-cyan) / <alpha-value>)',
+				'cyber-pink': 'hsl(var(--cyber-pink) / <alpha-value>)',
 				'cyber-orange': 'hsl(30 80% 55%)',
-				'cyber-purple': 'hsl(270 70% 50%)',
+				'cyber-purple': 'hsl(var(--cyber-purple) / <alpha-value>)',
 				'cyber-red': 'hsl(0 70% 50%)',
-				'neon-blue': 'hsl(220 90% 60%)',
-				'neon-green': 'hsl(140 90% 60%)',
-				'neon-pink': 'hsl(330 90% 70%)',
-				'neon-purple': 'hsl(270 80% 65%)',
+				'neon-blue': 'hsl(var(--neon-blue) / <alpha-value>)',
+				'neon-green': 'hsl(var(--neon-green) / <alpha-value>)',
+				'neon-pink': 'hsl(var(--cyber-pink) / <alpha-value>)',
+				'neon-purple': 'hsl(var(--neon-purple) / <alpha-value>)',
 				'neon-yellow': 'hsl(50 90% 60%)',
 			},
 			fontSize: {

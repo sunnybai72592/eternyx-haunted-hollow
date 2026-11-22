@@ -101,8 +101,8 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModal
     <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[#030712]/85 p-4 backdrop-blur-xl" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !isLoading) onClose();
     }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="eternyx-auth-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-3xl border border-cyan-400/20 bg-[#08111f] text-white shadow-[0_24px_100px_rgba(6,182,212,0.16)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.13),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(139,92,246,0.12),transparent_38%)]" />
+      <section role="dialog" aria-modal="true" aria-labelledby="eternyx-auth-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-3xl border border-cyan-400/20 bg-[#08111f] text-white shadow-[0_24px_100px_hsl(var(--primary)/0.16)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.13),transparent_42%),radial-gradient(circle_at_bottom_left,hsl(var(--accent)/0.12),transparent_38%)]" />
         <div className="relative border-b border-white/10 px-7 pb-6 pt-7">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3">

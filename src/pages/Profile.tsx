@@ -115,7 +115,7 @@ const Profile = () => {
       </div>
 
       <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-[#080f1e] shadow-[0_28px_100px_rgba(0,0,0,.38)]">
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_82%_8%,rgba(34,211,238,.14),transparent_34%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_58%,rgba(13,20,43,.92))]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_82%_8%,hsl(var(--primary)/.14),transparent_34%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_58%,rgba(13,20,43,.92))]" />
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:p-10">
           <div className="max-w-2xl">
@@ -143,9 +143,9 @@ const Profile = () => {
       <section className="mt-8">
         <Tabs defaultValue="identity" className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.09] bg-[#09111f]/90 p-1.5 shadow-xl sm:max-w-[520px]">
-            <TabsTrigger value="identity" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><UserRound className="h-4 w-4" /> Identity</TabsTrigger>
-            <TabsTrigger value="privacy" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><ShieldCheck className="h-4 w-4" /> Privacy</TabsTrigger>
-            <TabsTrigger value="security" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(103,232,249,.15)] sm:text-xs"><KeyRound className="h-4 w-4" /> Account & data</TabsTrigger>
+            <TabsTrigger value="identity" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/.15)] sm:text-xs"><UserRound className="h-4 w-4" /> Identity</TabsTrigger>
+            <TabsTrigger value="privacy" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/.15)] sm:text-xs"><ShieldCheck className="h-4 w-4" /> Privacy</TabsTrigger>
+            <TabsTrigger value="security" className="min-h-11 gap-2 rounded-xl px-2 text-[10px] font-bold tracking-[0.12em] text-slate-400 transition data-[state=active]:bg-cyan-200/[0.10] data-[state=active]:text-cyan-100 data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/.15)] sm:text-xs"><KeyRound className="h-4 w-4" /> Account & data</TabsTrigger>
           </TabsList>
 
           <TabsContent value="identity" className="mt-5 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
@@ -194,7 +194,7 @@ const Profile = () => {
 
                 <div className="mt-7 flex flex-col-reverse gap-3 border-t border-white/[0.08] pt-5 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-[10px] text-slate-500">Changes are saved to your signed-in profile.</p>
-                  <Button onClick={handleSave} disabled={saving} className="h-11 rounded-xl bg-cyan-200 px-5 font-semibold text-slate-950 shadow-[0_8px_30px_rgba(103,232,249,.12)] hover:bg-cyan-100">
+                  <Button onClick={handleSave} disabled={saving} className="h-11 rounded-xl bg-cyan-200 px-5 font-semibold text-slate-950 shadow-[0_8px_30px_hsl(var(--primary)/.12)] hover:bg-cyan-100">
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     {saving ? 'Saving identity…' : 'Save profile changes'}
                   </Button>

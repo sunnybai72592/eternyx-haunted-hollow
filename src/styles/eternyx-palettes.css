@@ -2,6 +2,8 @@
    Palette variables are semantic. Account environment (dark/matrix/cyberpunk)
    remains a separate existing preference. */
 :root[data-eternyx-palette] {
+  --eternyx-color-hue: 181;
+  --eternyx-color-saturation: 79%;
   --swatch-cyan: 181 79% 64%;
   --swatch-violet: 270 73% 73%;
   --swatch-emerald: 157 54% 61%;
@@ -10,30 +12,40 @@
   --scene-shadow: 0 0% 0%;
 }
 :root[data-eternyx-palette='cyan'] {
+  --eternyx-color-hue: 181;
+  --eternyx-color-saturation: 79%;
   --primary: 181 79% 64%; --accent: 192 70% 51%; --ring: var(--primary);
   --cyber-cyan: 181 79% 64%; --cyber-pink: 286 68% 73%; --cyber-green: 157 54% 61%;
   --neon-blue: 181 79% 64%; --neon-green: 157 54% 61%; --neon-purple: 270 73% 73%;
   --border: 190 15% 24%; --primary-foreground: 190 35% 7%;
 }
 :root[data-eternyx-palette='violet'] {
+  --eternyx-color-hue: 270;
+  --eternyx-color-saturation: 73%;
   --primary: 270 73% 73%; --accent: 286 61% 62%; --ring: var(--primary);
   --cyber-cyan: 270 73% 73%; --cyber-pink: 324 66% 71%; --cyber-green: 225 66% 71%;
   --neon-blue: 270 73% 73%; --neon-green: 225 66% 71%; --neon-purple: 286 61% 62%;
   --border: 270 14% 24%; --primary-foreground: 270 32% 8%;
 }
 :root[data-eternyx-palette='emerald'] {
+  --eternyx-color-hue: 157;
+  --eternyx-color-saturation: 54%;
   --primary: 157 54% 61%; --accent: 179 49% 47%; --ring: var(--primary);
   --cyber-cyan: 157 54% 61%; --cyber-pink: 182 51% 62%; --cyber-green: 157 54% 61%;
   --neon-blue: 179 49% 47%; --neon-green: 157 54% 61%; --neon-purple: 183 55% 67%;
   --border: 160 15% 23%; --primary-foreground: 160 35% 7%;
 }
 :root[data-eternyx-palette='bronze'] {
+  --eternyx-color-hue: 28;
+  --eternyx-color-saturation: 58%;
   --primary: 28 58% 65%; --accent: 36 63% 53%; --ring: var(--primary);
   --cyber-cyan: 28 58% 65%; --cyber-pink: 12 56% 62%; --cyber-green: 43 65% 60%;
   --neon-blue: 28 58% 65%; --neon-green: 43 65% 60%; --neon-purple: 12 56% 62%;
   --border: 25 15% 24%; --primary-foreground: 25 35% 7%;
 }
 :root[data-eternyx-palette='rose'] {
+  --eternyx-color-hue: 336;
+  --eternyx-color-saturation: 74%;
   --primary: 336 74% 74%; --accent: 352 65% 60%; --ring: var(--primary);
   --cyber-cyan: 336 74% 74%; --cyber-pink: 336 74% 74%; --cyber-green: 270 64% 72%;
   --neon-blue: 336 74% 74%; --neon-green: 270 64% 72%; --neon-purple: 315 62% 69%;
@@ -55,6 +67,16 @@
   --secondary: 220 16% 14%;
   --gradient-cyber: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
   --gradient-hologram: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--cyber-pink)));
+  /* shadcn sidebars and panels also honor the selected swatch */
+  --sidebar-background: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --accent-foreground: var(--primary-foreground);
   color-scheme: dark;
 }
 /* Account modes still affect surface tone, independently of accent palette. */
@@ -138,4 +160,16 @@
 @media (prefers-reduced-motion: reduce) {
   .eternyx-arsenal-hero,
   .eternyx-settings-hero-glow { animation: none; }
+}
+
+/* Accessibility preference is not a decorative hue: preserve legible foreground,
+   background and border contrast while leaving the chosen accent available. */
+html.high-contrast[data-eternyx-palette] {
+  --background: 0 0% 0%;
+  --card: 0 0% 4%;
+  --foreground: 0 0% 100%;
+  --card-foreground: 0 0% 100%;
+  --muted-foreground: 0 0% 85%;
+  --border: 0 0% 68%;
+  --input: 0 0% 68%;
 }
