@@ -115,7 +115,7 @@ serve(async (req: Request) => {
       if (!queued || queued.ok !== true) {
         const code = typeof queued?.reason === "string" ? queued.reason : "unavailable";
         return reply({ error: "Signed approval request could not be queued", code },
-          code === "pending_limit" || code === "daily_approval_limit" ? 429 :
+          code === "pending_limit" || code === "daily_approval_limit" || code === "trigger_submission_limit" ? 429 :
           code === "idempotency_conflict" ? 409 :
           code === "trigger_revoked" || code === "stale_workflow" ? 404 : 400);
       }
@@ -152,7 +152,7 @@ serve(async (req: Request) => {
     if (recordError) throw recordError;
     if (!recorded || recorded.ok !== true) {
       const code = typeof recorded?.reason === "string" ? recorded.reason : "unavailable";
-      const status = code === "daily_run_limit" ? 429 :
+      const status = code === "daily_run_limit" || code === "trigger_run_limit" ? 429 :
         code === "idempotency_conflict" || code === "stale_workflow" ? 409 :
         code === "trigger_revoked" || code === "not_found_or_paused" ? 404 : 400;
       return reply({ error: "Webhook run was not accepted", code }, status);
