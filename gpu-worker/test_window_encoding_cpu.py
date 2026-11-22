@@ -266,6 +266,20 @@ def run_fixture(root, output):
     assert all(case["seed"] == 7 for case in result["cases"])
     assert result["training_dataset"] == expected_dataset and result["training_step"] == 3
     assert result["adapter_sha256"] == fingerprint(indexed_checkpoint / "adapter.safetensors")
+    exported = root / "exported-adapter"
+    export_command = [sys.executable, str(worker_dir / "export_video_adapter.py"), str(pilot)]
+    subprocess.run([*export_command, str(exported)], check=True)
+    assert sorted(p.name for p in exported.iterdir()) == ["adapter.json", "adapter.safetensors"]
+    exported_report = root / "exported-evaluation.json"
+    subprocess.run([str(exported) if arg == str(indexed_checkpoint) else
+                    str(exported_report) if arg == str(report) else arg for arg in command], check=True)
+    assert json.loads(exported_report.read_bytes()) == result
+    receipt["adapter_sha256"] = "0" * 64
+    (pilot / "pilot.json").write_text(json.dumps(receipt))
+    refused = root / "mismatched-export"
+    rejected = subprocess.run([*export_command, str(refused)], capture_output=True, text=True)
+    assert rejected.returncode and "differ from the evaluated adapter" in rejected.stderr
+    assert not refused.exists()
     report.unlink()
     manifest_path.write_text(json.dumps(manifest, indent=2))
     mismatch = subprocess.run(command, capture_output=True, text=True)
