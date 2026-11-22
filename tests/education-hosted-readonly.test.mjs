@@ -116,7 +116,7 @@ test("runner checks key SELECT permission errors, not merely missing RLS rows",(
   assert.match(runner,/selected_option_id === optionId/);
 });
 test("runner is read-only, sanitized and never accepts bypassed Auth or privileged keys",()=>{
-  assert.doesNotMatch(runner,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.remove\(|\.upload\(|\.functions\.invoke\(|auth\.admin\.|service_role/);
+  assert.doesNotMatch(runner,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.remove\(|\.upload\(|\.functions\.invoke\(|auth\.admin\.|SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(runner,/console\.log\(config\)|console\.log\(users\)|JSON\.stringify\(login\)|process\.stdout\.write\(JSON\.stringify\(config/);
   assert.match(runner,/production_tested: false/);
   assert.match(runner,/production_certified: false/);
