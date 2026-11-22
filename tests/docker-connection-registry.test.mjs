@@ -86,7 +86,7 @@ test("authenticated agent probes return real health, inventory and imports",asyn
     const images=await queryConnection(entry,"images");
     assert.equal(images.images[0].repository,"node");
     assert.throws(()=>makeConnectionSnapshot({}),/Invalid/);
-    assert.throws(()=>queryConnection(entry,"logs"),/Unsupported read-only/);
+    await assert.rejects(()=>queryConnection(entry,"logs"),/Unsupported read-only/);
     writeFileSync(tokenPath,OTHER_TOKEN+"\n",{mode:0o600});
     await assert.rejects(()=>queryConnection(entry),/HTTP 401/);
   }finally{
