@@ -80,7 +80,7 @@ test('customers can filter actual updates and explicitly check their own request
   assert.match(src, /useAuthStore\.getState\(\)\.user\?\.id !== userId/);
   assert.match(src, /Mark checked/);
   assert.match(src, /Activity since my check/);
-  assert.match(src, /New administrator activity since your last check/);
+  assert.match(src, /New ETERNYX activity since your last check/);
   assert.match(src, /setUpdatesOnly\(false\)/);
   assert.match(src, /visibleLinkedRequest\.last_checked_at/);
   assert.doesNotMatch(src, /localStorage\.setItem\(/);
