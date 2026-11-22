@@ -1,0 +1,46 @@
+name: Education CBT PostgreSQL Security Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/sql/staging-education-*.sql'
+      - 'tests/sql/education-db-*.sql'
+      - 'supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql'
+      - '.github/workflows/education-postgres-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  education-db-security:
+    name: Isolated Postgres 17 — Education authorization and exam security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable PostgreSQL without network access
+        run: |
+          docker run --detach --rm --network none --name eternyx-education-db-ci -e POSTGRES_PASSWORD=ci_synthetic_only postgres:17-alpine
+          for i in $(seq 1 35); do
+            if docker exec eternyx-education-db-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec eternyx-education-db-ci pg_isready -U postgres
+      - name: Bootstrap only synthetic Supabase-like users and schema
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-bootstrap.sql
+      - name: Apply historical CBT access policies
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql
+      - name: Apply exact staged atomic CBT SQL (disposable DB only)
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-cbt-atomic-security.sql
+      - name: Apply exact staged instructor approval and private drafting SQL
+        run: |
+          docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-verified-instructors.sql
+          docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-instructor-draft-recovery.sql
+      - name: Apply exact staged publication and enrollment SQL
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-publication-enrollment.sql
+      - name: Execute real role-specific authorization and CBT lifecycle checks
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-acceptance.sql
+      - name: Destroy temporary database
+        if: always()
+        run: docker rm --force eternyx-education-db-ci || true
