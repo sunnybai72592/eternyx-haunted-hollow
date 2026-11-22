@@ -155,7 +155,7 @@ REVOKE ALL ON FUNCTION public.automation_record_webhook_run(
   uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,integer
 ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.automation_record_webhook_run(
-  uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,timestamptz
+  uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,integer
 ) TO service_role;
 
 COMMENT ON TABLE public.automation_webhook_triggers IS
