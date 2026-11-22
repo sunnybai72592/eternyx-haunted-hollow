@@ -51,6 +51,7 @@ export function parseWorkspaceRestore(raw) {
     if (!validWorkspacePriority(priority)) throw new Error("Task " + (index + 1) + " has an invalid priority");
     return {
       title: textIn(task.title, 200, "Task " + (index + 1) + " title", 1),
+      details: textIn(task.details ?? "", 4000, "Task details"),
       status: task.status, priority,
       due_on: isoDate(task.due_on),
     };
