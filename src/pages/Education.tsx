@@ -106,6 +106,21 @@ export default function Education() {
               </Link>
             </Button>
           </section>
+
+          <section aria-label="Your assessment history" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="font-semibold text-foreground">My assessments</h2>
+              <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+                View your recorded attempts, resume unfinished exams and reopen submitted results.
+                Only your own attempts are shown, with no unverified scores.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="min-h-11 shrink-0">
+              <Link to="/education/history">Open my assessments
+                <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </section>
         )}
 
         {!authLoading && !isAuthenticated && (
