@@ -158,11 +158,14 @@ test("19: new TypeScript client and exam page parse", () => {
   }
 });
 
-test("20: deadline timestamps are captured only after locking each attempt", () => {
-  assert.equal((sql.match(/v_now := clock_timestamp\(\);/g) ?? []).length, 3);
+test("20: deadline reads follow attempt locks including the conflicting first-start path", () => {
+  // Three RPC-local clocks and a fourth read after the duplicate-start
+  // ON CONFLICT loser acquires the committed winner's row lock.
+  assert.equal((sql.match(/v_now := clock_timestamp\(\);/g) ?? []).length, 4);
   assert.equal((sql.match(/v_now timestamptz;/g) ?? []).length, 3);
   assert.doesNotMatch(sql, /v_now timestamptz := clock_timestamp\(\)/);
   assert.match(sql, /FOR UPDATE OF a;[\s\S]{0,350}v_now := clock_timestamp\(\)/);
+  assert.match(sql, /ON CONFLICT \(user_id, test_id\) DO NOTHING[\s\S]*?FOR UPDATE OF a;\s*v_now := clock_timestamp\(\)/);
 });
 
 test("21: staging admission excludes unpublished and unverified password-protected exams", () => {
