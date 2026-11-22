@@ -305,6 +305,35 @@ REVOKE ALL ON FUNCTION public.automation_fail_scheduled_run(uuid,uuid,integer)
 GRANT EXECUTE ON FUNCTION public.automation_fail_scheduled_run(uuid,uuid,integer)
   TO service_role;
 
+-- Quota exhaustion is not a worker failure. Keep the schedule enabled and
+-- postpone its next eligible slot without using the three-error retry budget.
+CREATE OR REPLACE FUNCTION public.automation_defer_scheduled_run(
+  p_schedule_id uuid,p_lease_token uuid,p_schedule_revision integer
+)
+RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $
+DECLARE s public.automation_schedules%ROWTYPE;
+BEGIN
+  IF p_schedule_id IS NULL OR p_lease_token IS NULL OR p_schedule_revision IS NULL THEN
+    RETURN jsonb_build_object('ok',false,'reason','invalid_request');
+  END IF;
+  SELECT * INTO s FROM public.automation_schedules WHERE id=p_schedule_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reason','not_found'); END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(20261122,pg_catalog.hashtext(s.user_id::text));
+  UPDATE public.automation_schedules
+  SET lease_token=NULL,lease_expires_at=NULL,attempt_count=0,
+    next_run_at=pg_catalog.statement_timestamp()+interval '1 hour',
+    last_status='retrying',updated_at=pg_catalog.statement_timestamp()
+  WHERE id=p_schedule_id AND enabled=true AND revision=p_schedule_revision
+    AND lease_token=p_lease_token RETURNING * INTO s;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reason','stale_lease'); END IF;
+  RETURN jsonb_build_object('ok',true,'deferred',true,'next_run_at',s.next_run_at);
+END;
+$;
+REVOKE ALL ON FUNCTION public.automation_defer_scheduled_run(uuid,uuid,integer)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.automation_defer_scheduled_run(uuid,uuid,integer)
+  TO service_role;
+
 CREATE OR REPLACE FUNCTION public.automation_prune_schedule_outputs()
 RETURNS integer LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 DECLARE n integer;
