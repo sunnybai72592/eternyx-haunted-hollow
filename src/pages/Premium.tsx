@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 /** Legacy premium marketing route. Prices and purchase actions are intentionally unavailable. */
 const Premium = () => (
-  <div className="min-h-screen bg-[#070b14] text-white">
+  <div className="min-h-screen bg-background text-white">
     <div className="mx-auto max-w-5xl space-y-7 px-4 pb-16 pt-5 sm:px-6 lg:px-8">
       <Button asChild variant="ghost" className="text-slate-300">
         <Link to="/explore"><ArrowLeft className="mr-2 h-4 w-4" />Explore ETERNYX</Link>
