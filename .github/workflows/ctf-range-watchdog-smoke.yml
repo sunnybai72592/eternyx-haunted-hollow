@@ -1,0 +1,62 @@
+name: CTF Watchdog Local Docker Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/**'
+      - 'scripts/cyber-range-watchdog.mjs'
+      - 'tests/ctf-range-watchdog.test.mjs'
+      - '.github/workflows/ctf-range-watchdog-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-watchdog:
+    name: Verify scoped emergency teardown without touching unrelated Docker containers
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create random isolated test project and ephemeral gateway key
+        run: |
+          project_suffix="$(node -p "require('node:crypto').randomUUID().replaceAll('-','')")"
+          echo "ETERNYX_PROJECT=cr-$project_suffix" >> "$GITHUB_ENV"
+          echo "ETERNYX_GATEWAY_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Start one managed lab and one unrelated Docker container
+        run: |
+          docker compose -p "$ETERNYX_PROJECT" -f infrastructure/cyber-range/compose.managed.yaml up --build --detach
+          docker run --detach --name eternyx-watchdog-unrelated --network none alpine:3.20 sleep 120
+          test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 2
+          docker ps --filter name=eternyx-watchdog-unrelated --format '{{.ID}}' | grep -q .
+      - name: Verify non-destructive default preview and refuse unapproved apply
+        run: |
+          node scripts/cyber-range-watchdog.mjs --dry-run > /tmp/eternyx-watchdog-ci-preview.jsonl
+          grep -q '"scannedProjects":1' /tmp/eternyx-watchdog-ci-preview.jsonl
+          grep -q '"eligible":0' /tmp/eternyx-watchdog-ci-preview.jsonl
+          if node scripts/cyber-range-watchdog.mjs --apply; then
+            echo 'Unexpected unapproved destructive watchdog access' >&2
+            exit 1
+          fi
+          test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 2
+      - name: Invoke explicitly approved local emergency stop
+        run: |
+          ETERNYX_RANGE_WATCHDOG_ACK=LOCAL_OPERATOR_ONLY node scripts/cyber-range-watchdog.mjs --emergency-stop --apply
+          test -f "$HOME/.eternyx-range-launches-halted"
+          test -z "$(docker ps -a -q --filter label=org.eternyx.range.managed=v1)"
+          docker ps --filter name=eternyx-watchdog-unrelated --format '{{.ID}}' | grep -q .
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {assertLocalLaunchAllowed} from './infrastructure/cyber-range/provider/local-kill-switch.mjs';
+          await assert.rejects(assertLocalLaunchAllowed(), /emergency stop active/);
+          NODE
+      - name: Clean up ephemeral test-only artifacts
+        if: always()
+        run: |
+          docker compose -p "$ETERNYX_PROJECT" -f infrastructure/cyber-range/compose.managed.yaml down --volumes --remove-orphans || true
+          docker rm --force eternyx-watchdog-unrelated || true
+          rm -f "$HOME/.eternyx-range-launches-halted" "$HOME/.eternyx-range-watchdog.lock" /tmp/eternyx-watchdog-ci-preview.jsonl

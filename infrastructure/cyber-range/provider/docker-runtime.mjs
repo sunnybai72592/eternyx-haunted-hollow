@@ -8,6 +8,8 @@ import { randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectForSession, validSessionId } from "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
+import { sessionFromProject, verifyManagedContainer } from "./orphan-watchdog.mjs";
+import { assertLocalLaunchAllowed } from "./local-kill-switch.mjs";
 
 const composeFile = resolve(dirname(fileURLToPath(import.meta.url)), "../compose.managed.yaml");
 const managedPlaceholder = "0".repeat(64);
@@ -78,10 +80,12 @@ export class LocalDockerRangeRuntime {
       throw new Error("Local provider execution requires explicit operator opt-in");
     }
     this.#requireHost();
+    await assertLocalLaunchAllowed();
 
     const token = randomBytes(32).toString("hex");
     let launched = false;
     try {
+      await assertLocalLaunchAllowed();
       executeDocker(composeArgs(sessionId, ["up", "--detach", "--build", "--force-recreate"]), token);
       launched = true;
       const portLine = executeDocker(composeArgs(sessionId, ["port", "gateway", "8081"]), token);
@@ -114,6 +118,66 @@ export class LocalDockerRangeRuntime {
       }
       throw error;
     }
+  }
+
+  /**
+   * Discover all ETERNYX-labelled projects and verify EVERY member of each
+   * Docker Compose project, including members missing our managed labels.
+   * A project with any unexpected service/label is unsafe to mutate.
+   */
+  async listVerifiedManagedProjects() {
+    this.#requireHost();
+    const listIds = (args) => {
+      const out = executeDocker(["ps", "--all", "--no-trunc", "--quiet", ...args]);
+      const ids = out ? out.split(/\r?\n/).filter(Boolean) : [];
+      if (ids.length > 100 || ids.some(x=>!/^[0-9a-f]{64}$/.test(x))) {
+        throw new Error("Untrusted Docker ID inventory; cleanup refused");
+      }
+      return ids;
+    };
+    const inspect = (id) => {
+      const raw = executeDocker(["inspect", "--format", "{{json .}}", id]);
+      try {
+        const data = JSON.parse(raw);
+        if (data?.Id !== id) throw new Error("Container ID changed");
+        return data;
+      } catch {
+        throw new Error("Malformed Docker inspection; cleanup refused");
+      }
+    };
+
+    const managedIds = listIds(["--filter","label=org.eternyx.range.managed=v1"]);
+    if (!managedIds.length) return [];
+    const managed = managedIds.map(inspect);
+    const projects = new Set();
+    for (const item of managed) {
+      const verified = verifyManagedContainer(item);
+      projects.add(verified.project);
+    }
+
+    const all = [];
+    const seen = new Set();
+    for (const project of projects) {
+      if (!sessionFromProject(project)) {
+        throw new Error("Unexpected managed project identifier; cleanup refused");
+      }
+      const projectIds = listIds(["--filter","label=com.docker.compose.project=" + project]);
+      if (!projectIds.length) throw new Error("Managed project disappeared during inspection");
+      for (const id of projectIds) {
+        if (seen.has(id)) throw new Error("Container duplicated across projects");
+        seen.add(id);
+        const inspected = inspect(id);
+        if (verifyManagedContainer(inspected).project !== project) {
+          throw new Error("Docker project membership changed during inspection");
+        }
+        all.push(inspected);
+      }
+    }
+    if (all.length !== managedIds.length ||
+        managedIds.some(id=>!seen.has(id))) {
+      throw new Error("Docker project contains an unexpected container; cleanup refused");
+    }
+    return all;
   }
 
   async exists(sessionId) {
