@@ -389,3 +389,8 @@ verify_jwt = true
 # Deployment does not create a cron job or enable scheduler singleton.
 [functions.automation-scheduler-worker]
 verify_jwt = false
+
+# Public GitHub metadata only. Requires a verified signed-in Supabase user.
+# No external provider OAuth token, secret or service caller is accepted.
+[functions.automation-github-public]
+verify_jwt = true
