@@ -20,6 +20,9 @@ const fields = {
   bulkToggle: ["action","items","active","requestKey"],
   bulkUsage: ["action"],
   triggerDiagnostics: ["action","workflowId"],
+  observability: ["action"],
+  exportAudit: ["action","workflowId","channel","requestKey"],
+  quarantineSchedule: ["action","scheduleId","expectedRevision","reason","requestKey"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -94,6 +97,30 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="observability")return {ok:true,action};
+  if(action==="exportAudit"){
+    if(value.workflowId!==undefined &&
+      (typeof value.workflowId!=="string"||!UUID_RE.test(value.workflowId))||
+       value.channel!==undefined &&
+       !["manual","webhook","scheduled"].includes(value.channel)||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_export"};
+    }
+    return {ok:true,action,workflowId:value.workflowId??null,
+      channel:value.channel??null,requestKey:value.requestKey};
+  }
+  if(action==="quarantineSchedule"){
+    if(typeof value.scheduleId!=="string"||!UUID_RE.test(value.scheduleId)||
+      !Number.isInteger(value.expectedRevision)||
+      value.expectedRevision<1||value.expectedRevision>2147483647||
+      !["stale_lease","unexpected_behavior","manual_safety_hold"].includes(value.reason)||
+      typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_quarantine"};
+    }
+    return {ok:true,action,scheduleId:value.scheduleId,
+      expectedRevision:value.expectedRevision,reason:value.reason,
+      requestKey:value.requestKey};
   }
   if (action==="bulkToggle") {
     if(typeof value.active!=="boolean"||
