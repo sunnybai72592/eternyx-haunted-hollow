@@ -19,6 +19,7 @@ import {validateMicrovmManifest} from "./hosted-readiness.mjs";
 const API=[
   "/machine-config","/boot-source","/drives/rootfs","/vsock","/actions"
 ];
+const BOOT_ARGS="root=/dev/vda ro init=/sbin/init panic=1 reboot=k quiet 8250.nr_uarts=0";
 const MiB=1024*1024;
 const CHROOT_FILES={
   kernel:{name:"vmlinux.bin",maxBytes:64*MiB,hash:"kernelSha256"},
@@ -44,7 +45,7 @@ export function firecrackerBootPlan(sessionId,manifest){
       }},
       {path:"/boot-source",body:{
         kernel_image_path:"/vmlinux.bin",
-        boot_args:"root=/dev/vda ro init=/sbin/init panic=1 reboot=k quiet 8250.nr_uarts=0",
+        boot_args:BOOT_ARGS,
       }},
       {path:"/drives/rootfs",body:{
         drive_id:"rootfs",path_on_host:"/rootfs.ext4",
@@ -111,6 +112,34 @@ export function firecrackerApiSocket(jailBase,sessionId){
   return join(jailedRootPath(jailBase,sessionId),"run","firecracker.socket");
 }
 
+function exactObject(v,keys){
+  return v!==null&&typeof v==="object"&&!Array.isArray(v)&&
+    Object.keys(v).sort().join("\0")===keys.sort().join("\0");
+}
+function allowedFirecrackerBody(path,body){
+  switch(path){
+    case "/machine-config":
+      return exactObject(body,["vcpu_count","mem_size_mib","smt","track_dirty_pages"]) &&
+        body.vcpu_count===1&&body.mem_size_mib===256&&
+        body.smt===false&&body.track_dirty_pages===false;
+    case "/boot-source":
+      return exactObject(body,["kernel_image_path","boot_args"])&&
+        body.kernel_image_path==="/vmlinux.bin"&&body.boot_args===BOOT_ARGS;
+    case "/drives/rootfs":
+      return exactObject(body,["drive_id","path_on_host","is_root_device","is_read_only"])&&
+        body.drive_id==="rootfs"&&body.path_on_host==="/rootfs.ext4"&&
+        body.is_root_device===true&&body.is_read_only===true;
+    case "/vsock":
+      return exactObject(body,["guest_cid","uds_path"])&&
+        Number.isSafeInteger(body.guest_cid)&&body.guest_cid>=3&&
+        body.guest_cid<=2147483647&&body.uds_path==="/v.sock";
+    case "/actions":
+      return exactObject(body,["action_type"])&&
+        body.action_type==="InstanceStart";
+    default:return false;
+  }
+}
+
 /** Strict Firecracker API Unix-socket transport; no TCP or DNS fallback. */
 export async function sendFirecrackerRequest({
   socketPath,path,body,timeoutMs=2500,
@@ -118,7 +147,8 @@ export async function sendFirecrackerRequest({
   if(typeof socketPath!=="string" || !isAbsolute(socketPath) ||
      !socketPath.endsWith("/run/firecracker.socket") ||
      socketPath.includes("\0") ||
-     !API.includes(path) || !Number.isSafeInteger(timeoutMs) ||
+     !API.includes(path) || !allowedFirecrackerBody(path,body) ||
+     !Number.isSafeInteger(timeoutMs) ||
      timeoutMs<100 || timeoutMs>5000 || !body ||
      typeof body!=="object" || Array.isArray(body)){
     throw Error("Invalid Firecracker operator API request");
