@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Archive, ArrowUpRight, CheckCircle2, ClipboardList, CloudUpload, Download,
   FileText, FolderKanban, History, Link2, Loader2, Plus, RefreshCw,
@@ -44,6 +44,9 @@ export default function DigitalWorkspace() {
   const user = useAuthStore((state) => state.user);
   const authLoading = useAuthStore((state) => state.isLoading);
   const owner = user?.id ?? null;
+  const [searchParams] = useSearchParams();
+  const capturePath = searchParams.get("save") ?? "";
+  const captureLabel = searchParams.get("label") ?? "Saved ETERNYX page";
   const currentOwner = useRef<string | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const [loadedOwner, setLoadedOwner] = useState<string | null>(null);
@@ -116,6 +119,15 @@ export default function DigitalWorkspace() {
     setLoading(Boolean(owner));
     if (owner) void load(owner);
   }, [owner, load]);
+
+  // A pillar handoff prepares a link; it never silently writes an item.
+  useEffect(() => {
+    if (!capturePath || !validWorkspaceLink(capturePath)) return;
+    setItemMode("link");
+    setItemName(captureLabel.slice(0, 160));
+    setItemBody(capturePath);
+    setNotice("Choose an active project, then confirm Save link to keep this page.");
+  }, [capturePath, captureLabel]);
 
   const selected = projects.find((project) => project.id === projectId) ?? null;
   const projectTasks = tasks.filter((task) => task.project_id === projectId);
