@@ -70,7 +70,7 @@ test('admin view retains independent follow-up and personal check-in signals', a
 
 test('customers can filter actual updates and explicitly check their own request', async () => {
   const src = await read('src/pages/MyServiceRequests.tsx');
-  assert.match(src, /from\('service_customer_check_queue'\)/);
+  assert.match(src, /from\('service_customer_clarification_queue'\)/);
   assert.match(src, /\.eq\('user_id', userId\)/);
   assert.match(src, /query\.eq\('has_updates_since_check', true\)/);
   assert.match(src, /has_updates_since_check: boolean/);
@@ -88,7 +88,7 @@ test('customers can filter actual updates and explicitly check their own request
 
 test('admins can filter personal check-ins separately from workflow follow-up', async () => {
   const src = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(src, /from\('service_admin_check_queue'\)/);
+  assert.match(src, /from\('service_admin_clarification_queue'\)/);
   assert.match(src, /if \(mineCheckOnly\) query = query\.eq\('needs_my_check', true\)/);
   assert.match(src, /if \(attentionOnly\) query = query\.eq\('needs_follow_up', true\)/);
   assert.match(src, /supabase\.rpc\('mark_service_request_checked', \{ p_request_id: id \}\)/);
