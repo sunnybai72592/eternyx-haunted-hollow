@@ -21,6 +21,7 @@ import {
 } from "@/lib/workspaceRules.mjs";
 import type { Database } from "@/integrations/supabase/types";
 import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, workspaceExportFileName } from "@/lib/workspaceLibrary.mjs";
+import { createWorkspaceFullBackup } from "@/lib/workspaceFullBackup.mjs";
 import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
 import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
 
@@ -366,9 +367,11 @@ export default function DigitalWorkspace() {
     }, "Selected device note imported. The original local copy was not changed.");
   };
 
-  const exportProject = () => {
+  const exportProject = (includeFiles: boolean) => {
     if (!owner || !selected) return;
-    if (!window.confirm("Download a local JSON export of this project? Notes and saved links contain private data. File contents are not included.")) return;
+    if (!window.confirm(includeFiles
+      ? "Download a COMPLETE local backup containing your private file contents? It may contain sensitive data. Keep this file secure. Up to 8 files / 12 MiB of file bytes; historical revisions are not included."
+      : "Download a local JSON export of this project? Notes and saved links contain private data. File contents are not included.")) return;
     void mutate(async () => {
       // Fetch ALL rows for this project, not just the dashboard's initial 1000.
       // An incomplete export is an error, never represented as a full backup.
@@ -401,15 +404,26 @@ export default function DigitalWorkspace() {
         return result;
       };
       const [allTasks, allItems] = await Promise.all([pullTasks(), pullItems()]);
-      const snapshot = buildWorkspaceExport(selected, allTasks, allItems);
-      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+      const content = includeFiles
+        ? await createWorkspaceFullBackup(selected, allTasks, allItems, async (path: string) => {
+          const { data, error: storageError } = await supabase.storage.from(WORKSPACE_BUCKET).download(path);
+          if (storageError || !data) throw new Error("Private backup download failed: " +
+            (storageError?.message ?? "file unavailable"));
+          return data;
+        })
+        : JSON.stringify(buildWorkspaceExport(selected, allTasks, allItems), null, 2);
+      const blob = new Blob([content], { type: "application/json" });
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.href = url;
-      link.download = workspaceExportFileName(selected.name);
+      link.download = includeFiles
+        ? workspaceExportFileName(selected.name).replace(/\.json$/, "-complete.json")
+        : workspaceExportFileName(selected.name);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 30000);
-    }, "Export prepared. Private file bytes and revision history are not included.");
+    }, includeFiles
+      ? "Complete backup download started. It includes private file bytes but not revision history."
+      : "Export prepared. Private file bytes and revision history are not included.");
   };
 
   const ownedDataVisible = Boolean(owner && loadedOwner === owner);
@@ -529,7 +543,9 @@ export default function DigitalWorkspace() {
                     <h2 className="mt-1 break-words text-2xl font-semibold">{selected.name}</h2>
                   </div>
                   <Button type="button" variant="outline" disabled={busy}
-                    onClick={exportProject}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export JSON</Button>
+                    onClick={() => exportProject(false)}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export JSON</Button>
+                  <Button type="button" variant="outline" disabled={busy}
+                    onClick={() => exportProject(true)}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Backup with files</Button>
                   <Button type="button" variant="outline" disabled={busy}
                     onClick={() => setArchive(active)}>
                     {active ? <Archive className="mr-2 h-4 w-4" aria-hidden="true" /> :
