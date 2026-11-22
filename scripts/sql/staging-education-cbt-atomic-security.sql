@@ -72,6 +72,17 @@ BEGIN
   IF v_user IS NULL OR p_test_id IS NULL THEN
     RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
   END IF;
+  -- Share-lock enrollment before creating the attempt. Revocation takes an
+  -- UPDATE lock on the same row, eliminating the revoke-vs-start race.
+  PERFORM 1 FROM public.education_test_enrollments AS e
+  JOIN public.education_publication_requests AS r ON r.test_id = e.test_id
+  WHERE e.test_id = p_test_id AND e.user_id = v_user
+    AND r.status = 'approved'
+  FOR SHARE OF e;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Student is not enrolled in an approved test'
+      USING ERRCODE = '42501';
+  END IF;
   SELECT t.duration_minutes INTO v_minutes
   FROM public.tests AS t
   WHERE t.id = p_test_id AND t.is_active IS TRUE
