@@ -226,8 +226,13 @@ export async function runOfflineHardwareAcceptance({
       independentDeadlineSeconds:900,
       localKvmGuestObserved:true,publicLabsEnabled:false,
       cloudProvisioningAllowed:false,providerHardLimitVerified:false,
-      ...(guestProbeEnabled?{guestServiceFunctional:true}:{}),
-      ...(expiryDrill?{full900SecondExpiryObserved:true}:{}),
+      ...(guestProbeEnabled?{
+        guestServiceFunctional:true,guestChallengeResponseVerified:true,
+      }:{}),
+      ...(expiryDrill?{
+        full900SecondExpiryObserved:true,systemdTimeoutResultVerified:true,
+        noCgroupDescendants:true,
+      }:{}),
     };
   }catch(e){
     error=e;
