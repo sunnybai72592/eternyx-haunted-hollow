@@ -77,6 +77,8 @@ const AIPoweredSecurity = lazy(() => import("./pages/AIPoweredSecurity"));
 const EliteDevelopmentTeam = lazy(() => import("./pages/EliteDevelopmentTeam"));
 const ThreatMonitoring = lazy(() => import("./pages/ThreatMonitoring"));
 const ServicesHub = lazy(() => import("./pages/ServicesHub"));
+const ServiceRequestPage = lazy(() => import("./pages/ServiceRequestPage"));
+const MyServiceRequests = lazy(() => import("./pages/MyServiceRequests"));
 const ServicesPage = lazy(() => import("./pages/ServicesPage"));
 const ServiceDetailPage = lazy(() => import("./pages/ServiceDetailPage")); // <-- NEW IMPORT
 const Development = lazy(() => import("./pages/Development"));
@@ -90,6 +92,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const AdminBugReports = lazy(() => import("./pages/AdminBugReports"));
 const AdminOverview = lazy(() => import("./pages/AdminOverview"));
 const AdminContactSubmissions = lazy(() => import("./pages/AdminContactSubmissions"));
+const AdminServiceRequests = lazy(() => import("./pages/AdminServiceRequests"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const AdminSecurityMonitoring = lazy(() => import("./pages/AdminSecurityMonitoring"));
 const Contact = lazy(() => import("./pages/Contact"));
@@ -280,6 +283,8 @@ const AppContent = () => {
                         <Route path="/threat-monitoring" element={<ThreatMonitoring />} />
                         <Route path="/services-hub" element={<ServicesHub />} />
                         <Route path="/services" element={<ServicesPage />} />
+                        <Route path="/services/request" element={<RequireAuth><ServiceRequestPage /></RequireAuth>} />
+                        <Route path="/services/requests" element={<RequireAuth><MyServiceRequests /></RequireAuth>} />
                         <Route path="/services/:serviceId" element={<ServiceDetailPage />} />
                         <Route path="/development" element={<Development />} />
                         <Route path="/innovation" element={<Innovation />} />
@@ -294,6 +299,7 @@ const AppContent = () => {
                         <Route path="/admin" element={<AdminOverview />} />
                         <Route path="/admin/bug-reports" element={<AdminBugReports />} />
                         <Route path="/admin/enquiries" element={<AdminContactSubmissions />} />
+                        <Route path="/admin/service-requests" element={<AdminServiceRequests />} />
                         <Route path="/admin/users" element={<AdminUsers />} />
                         <Route path="/admin/security" element={<AdminSecurityMonitoring />} />
                         <Route path="/admin/education" element={<RequireAuth><EducationPublicationAdmin /></RequireAuth>} />
