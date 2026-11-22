@@ -173,9 +173,13 @@ export async function saveHardwareEvidence(report,{
   const handle=await open(file,constants.O_WRONLY|constants.O_CREAT|
     constants.O_EXCL|constants.O_NOFOLLOW,0o600);
   try{
-    privateFile(await handle.stat(),expectedUid);
+    const created=await handle.stat();
+    if(!created.isFile()||created.uid!==expectedUid||
+       created.nlink!==1||(created.mode&0o077)!==0||created.size!==0)
+      throw Error("Unsafe newly created evidence file");
     await handle.writeFile(body,"utf8");
     await handle.sync();
+    privateFile(await handle.stat(),expectedUid);
   }finally{await handle.close();}
   return Object.freeze({sessionId:check.sessionId,checksum:check.checksum,
     recorded:true,localOnly:true});
