@@ -394,3 +394,7 @@ verify_jwt = false
 # No external provider OAuth token, secret or service caller is accepted.
 [functions.automation-github-public]
 verify_jwt = true
+
+# Authenticated owner-issued writes only, with encrypted fine-grained PAT.
+[functions.automation-github-issues]
+verify_jwt = true
