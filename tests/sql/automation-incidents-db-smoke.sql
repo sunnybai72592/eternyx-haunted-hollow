@@ -8,8 +8,8 @@ DECLARE
   wa uuid;wb uuid;ra uuid;rb uuid;sa uuid;qkey uuid:=gen_random_uuid();
   inc uuid;creation uuid:=gen_random_uuid();nextkey uuid:=gen_random_uuid();
   transition_key uuid:=gen_random_uuid();review_key uuid:=gen_random_uuid();
-  status_snapshot jsonb;output jsonb;history jsonb;timeline jsonb;
-  schedrev integer;oldrev integer;count_before integer;
+  output jsonb;history jsonb;timeline jsonb;
+  schedrev integer;oldrev integer;count_before integer;count_after integer;
   trace jsonb:='[{"id":"s1","kind":"trim","beforeLines":1,"afterLines":1,"beforeChars":3,"afterChars":3,"changed":false}]'::jsonb;
   i integer;
 BEGIN
@@ -228,8 +228,8 @@ BEGIN
   IF history->'rows'->0->>'review_decision'<>'reviewed_for_manual_restore' THEN
     RAISE EXCEPTION 'Stored recovery decision invisible in factual inbox';
   END IF;
-  SELECT count(*) INTO status_snapshot FROM public.automation_runs WHERE user_id=alice;
-  IF status_snapshot<>count_before THEN
+  SELECT count(*) INTO count_after FROM public.automation_runs WHERE user_id=alice;
+  IF count_after<>count_before THEN
     RAISE EXCEPTION 'Incident/recovery actions fabricated execution receipts';
   END IF;
   RAISE NOTICE 'Owner evidence, true incident timelines, no-side-effect recovery review passed';
