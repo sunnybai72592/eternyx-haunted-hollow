@@ -52,9 +52,7 @@ export default function AdminServiceRequests() {
       if (activeSearchField === 'id') {
         query = query.eq('id', activeSearch);
       } else {
-        const escaped = activeSearch.replace(/[\\%_]/g, '\\    const { data, error } = await supabase.from('service_requests')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints')
-      .order('created_at', { ascending: false }).limit(250);');
+        const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
         query = query.ilike(activeSearchField, '%' + escaped + '%');
       }
     }
