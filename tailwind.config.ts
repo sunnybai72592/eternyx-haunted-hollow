@@ -19,6 +19,23 @@ const paletteScale = (hueShift = 0) =>
     [shade, `hsl(calc(var(--eternyx-color-hue, 181) + ${hueShift}) var(--eternyx-color-saturation, 79%) ${light}% / <alpha-value>)`]
   ));
 
+/**
+ * Shared neutral surface/text scale. A restrained color tint maintains the
+ * original light-to-dark tonal hierarchy and foreground contrast without
+ * forcing every background to be a saturated accent.
+ *
+ * This catches legacy slate/gray/zinc/neutral/stone classes across all routes,
+ * including tabs, forms, cards, borders, menus, overlays and gradient stops.
+ */
+const neutralLightness = {
+  50: 98, 100: 96, 200: 90, 300: 82, 400: 66, 500: 48,
+  600: 38, 700: 27, 800: 17, 900: 10, 950: 5,
+} as const;
+const neutralScale = (offset = 0, saturation = 9) =>
+  Object.fromEntries(Object.entries(neutralLightness).map(([shade, light]) =>
+    [shade, `hsl(calc(var(--eternyx-color-hue, 181) + ${offset}) ${saturation}% ${light}% / <alpha-value>)`]
+  ));
+
 
 
 export default {
@@ -70,6 +87,13 @@ export default {
 			colors: {
                 // Native Tailwind utility overrides: every page and state variant
                 // picks up the global five-color swatch without page-specific CSS.
+                // All common neutral utility surfaces receive a subtle tint
+                // with stable grayscale-like contrast and opacity support.
+                slate: neutralScale(0, 11),
+                gray: neutralScale(0, 7),
+                zinc: neutralScale(0, 6),
+                neutral: neutralScale(0, 4),
+                stone: neutralScale(-8, 8),
                 cyan: paletteScale(0),
                 sky: paletteScale(3),
                 blue: paletteScale(6),
