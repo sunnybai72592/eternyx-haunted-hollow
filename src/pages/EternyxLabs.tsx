@@ -113,6 +113,22 @@ export default function EternyxLabs() {
           <Link to="/labs/verified" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-primary/30 px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10">Explore verified missions <ArrowRight className="ml-2 h-4 w-4" /></Link>
         </section>
 
+        <section className="flex flex-col gap-4 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/[0.10] to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">New milestone · Local network-backed range</p>
+            <h2 className="mt-2 text-xl font-bold">ETERNYX HTTP Cyber Range</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Three actual HTTP security challenges in a disposable, resource-limited Docker container:
+              broken ticket authorization, path traversal, and spoofed role headers. Starts locally on your machine,
+              not on ETERNYX hosting or Supabase.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">Docker Desktop / local Docker required · no public deployment · 30-minute session</p>
+          </div>
+          <Link to="/labs/range" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90">
+            Explore local cyber range <ArrowRight className="h-4 w-4" />
+          </Link>
+        </section>
+
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(245px,290px)_minmax(0,1fr)]">
           <nav aria-label="Choose a practical lab" className="rounded-2xl border border-border/70 bg-card/70 p-3">
             <p className="px-3 pb-3 pt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Practical workstations</p>
