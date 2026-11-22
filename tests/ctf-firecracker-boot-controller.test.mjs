@@ -10,6 +10,7 @@ import {
   verifyJailedBootImages,sendFirecrackerRequest,bootJailedMicrovm,
   terminateJailedMicrovm,
 } from "../infrastructure/cyber-range/provider/firecracker-boot-controller.mjs";
+import {buildHardenedJailerCommand} from "../infrastructure/cyber-range/provider/firecracker-jailer-contract.mjs";
 
 const session="123e4567-e89b-42d3-a456-426614174001";
 const project="cr-"+session.replaceAll("-","");
@@ -274,4 +275,36 @@ test("controller has no cloud SDK, public HTTP listener or auto-spawn",async()=>
   assert.match(content,/createHash/);
   assert.doesNotMatch(content,/spawnSync|child_process|createServer|listen\(|aws-sdk|https?:\/\/|\/network-interfaces|\/mmds/);
   assert.doesNotMatch(content,/cloudProvisioningAllowed:true|readyForPublicHostedLabs:true/);
+});
+
+
+test("jailer launch argument plan requires independent pre-created namespace and cgroup",()=>{
+  const plan=buildHardenedJailerCommand({
+    sessionId:session,manifest:manifest(),uid:22001,gid:22001,
+  });
+  assert.equal(plan.binary,"/usr/local/bin/jailer");
+  assert.ok(plan.args.includes("--new-pid-ns"));
+  assert.ok(plan.args.includes("memory.max=402653184"));
+  assert.ok(plan.args.includes("pids.max=64"));
+  assert.ok(plan.args.includes("cpu.max=100000 100000"));
+  assert.ok(plan.args.includes("/run/netns/eternyx-"+project));
+  assert.ok(plan.args.includes("/run/firecracker.socket"));
+  assert.ok(!plan.args.includes("--daemonize"));
+  assert.ok(!plan.args.includes("--no-seccomp"));
+  assert.ok(!plan.args.includes("--network-interface"));
+  assert.equal(plan.spawnsProcess,false);
+  assert.equal(plan.cloudProvisioningAllowed,false);
+});
+
+test("jailer plans reject root IDs, unreviewed binary, arbitrary chroot and extra resources",()=>{
+  for(const bad of [
+    {uid:0},{gid:0},{uid:1},{uid:60001},{gid:60001},
+    {binary:"/tmp/jailer"},{firecracker:"/tmp/firecracker"},
+    {jailBase:"/tmp/other"},{uid:"22001"},
+    {manifest:{...manifest(),networkIngress:"host-tcp"}},
+  ]){
+    assert.throws(()=>buildHardenedJailerCommand({
+      sessionId:session,manifest:manifest(),uid:22001,gid:22001,...bad,
+    }),/contract|not approved/);
+  }
 });
