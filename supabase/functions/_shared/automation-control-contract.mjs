@@ -24,6 +24,8 @@ const fields = {
   previewApproval: ["action", "approvalId"],
   approveWebhook: ["action", "approvalId"],
   rejectWebhook: ["action", "approvalId"],
+  setWebhookLimits: ["action", "triggerId", "dailyExecutions", "dailySubmissions"],
+  clearResolvedApprovals: ["action"],
 };
 
 export function parseAutomationControlRequest(value) {
@@ -47,13 +49,19 @@ export function parseAutomationControlRequest(value) {
   if (["createWebhook"].includes(action) && typeof value.workflowId !== "string") {
     return { ok: false, reason: "missing_workflow_id" };
   }
-  if (["rotateWebhook", "toggleWebhook", "deleteWebhook", "setWebhookApproval"].includes(action) &&
+  if (["rotateWebhook", "toggleWebhook", "deleteWebhook", "setWebhookApproval", "setWebhookLimits"].includes(action) &&
       (typeof value.triggerId !== "string" || !UUID_RE.test(value.triggerId))) {
     return { ok: false, reason: "invalid_trigger_id" };
   }
   if (["previewApproval", "approveWebhook", "rejectWebhook"].includes(action) &&
       (typeof value.approvalId !== "string" || !UUID_RE.test(value.approvalId))) {
     return { ok: false, reason: "invalid_approval_id" };
+  }
+  if (action === "setWebhookLimits" &&
+      (!Number.isInteger(value.dailyExecutions) || value.dailyExecutions < 1 ||
+       value.dailyExecutions > 30 || !Number.isInteger(value.dailySubmissions) ||
+       value.dailySubmissions < 1 || value.dailySubmissions > 40)) {
+    return { ok: false, reason: "invalid_limits" };
   }
   if (action === "setWebhookApproval" && typeof value.required !== "boolean") {
     return { ok: false, reason: "invalid_required" };
@@ -62,12 +70,17 @@ export function parseAutomationControlRequest(value) {
     return { ok: false, reason: "invalid_enabled" };
   }
   if (["webhooks", "createWebhook", "rotateWebhook", "toggleWebhook", "deleteWebhook", "setWebhookApproval",
-       "approvalInbox", "previewApproval", "approveWebhook", "rejectWebhook"].includes(action)) {
+       "approvalInbox", "previewApproval", "approveWebhook", "rejectWebhook",
+       "setWebhookLimits", "clearResolvedApprovals"].includes(action)) {
     return { ok: true, action,
       ...(value.workflowId ? { workflowId: value.workflowId } : {}),
       ...(value.triggerId ? { triggerId: value.triggerId } : {}),
       ...(action === "toggleWebhook" ? { enabled: value.enabled } : {}),
       ...(action === "setWebhookApproval" ? { required: value.required } : {}),
+      ...(action === "setWebhookLimits" ? {
+        dailyExecutions: value.dailyExecutions,
+        dailySubmissions: value.dailySubmissions,
+      } : {}),
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
