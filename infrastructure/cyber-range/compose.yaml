@@ -1,0 +1,39 @@
+# ETERNYX local cyber range proof-of-concept.
+# WARNING: deliberately vulnerable; never deploy publicly or connect to production.
+services:
+  http-range:
+    build:
+      context: ./target
+      dockerfile: Dockerfile
+    restart: "no"
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 48
+    cpus: 0.40
+    mem_limit: 128m
+    memswap_limit: 128m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    environment:
+      PORT: "8080"
+      RANGE_MAX_AGE_SECONDS: "1800"
+    ports:
+      - "127.0.0.1:8765:8080"
+    networks:
+      - local_target_only
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  local_target_only:
+    internal: true
+    driver: bridge
