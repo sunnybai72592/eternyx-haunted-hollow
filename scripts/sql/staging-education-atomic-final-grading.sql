@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.education_final_grades (
   CHECK (max_score <= 100000)
 );
 ALTER TABLE public.education_final_grades ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.education_final_grades FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.education_final_grades FROM PUBLIC, anon, authenticated, service_role;
 -- No student-facing RLS policy: only a dedicated service-role RPC can insert.
 -- These rows form an immutable finalization marker for retry/idempotency.
 
