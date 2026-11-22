@@ -97,11 +97,11 @@ BEGIN
   IF EXISTS(SELECT 1 FROM public.docker_command_claims
     WHERE agent_id=p_agent_id AND state='claimed' AND expires_at>v_now)
     THEN RETURN jsonb_build_object('ok',true,'job',NULL); END IF;
-  SELECT * INTO v_request FROM public.docker_control_requests
-    WHERE agent_id=p_agent_id AND owner_id=v_owner AND state='approved'
-      AND expires_at>v_now AND approved_at IS NOT NULL
-      AND NOT EXISTS(SELECT 1 FROM public.docker_command_claims d WHERE d.request_id=id)
-    ORDER BY approved_at,id FOR UPDATE SKIP LOCKED LIMIT 1;
+  SELECT r.* INTO v_request FROM public.docker_control_requests AS r
+    WHERE r.agent_id=p_agent_id AND r.owner_id=v_owner AND r.state='approved'
+      AND r.expires_at>v_now AND r.approved_at IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM public.docker_command_claims d WHERE d.request_id=r.id)
+    ORDER BY r.approved_at,r.id FOR UPDATE OF r SKIP LOCKED LIMIT 1;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok',true,'job',NULL); END IF;
   v_deadline:=LEAST(v_request.expires_at,v_now+interval '45 seconds');
   INSERT INTO public.docker_command_claims(request_id,agent_id,owner_id,claimed_at,expires_at)
