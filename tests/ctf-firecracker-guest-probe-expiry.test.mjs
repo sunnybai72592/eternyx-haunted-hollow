@@ -14,7 +14,7 @@ import {
 } from "../infrastructure/cyber-range/provider/firecracker-expiry-drill.mjs";
 import {runOfflineHardwareAcceptance,approvedHardwareManifest} from
   "../infrastructure/cyber-range/provider/firecracker-hardware-acceptance.mjs";
-import {supervisedVmUnit} from
+import {supervisedVmUnit,supervisedUnitSpec} from
   "../infrastructure/cyber-range/provider/firecracker-systemd-supervisor.mjs";
 
 const sessionId="123e4567-e89b-42d3-a456-426614174001";
@@ -170,6 +170,21 @@ test("unsafe guardian or non-socket refuses probe before dialing",async()=>{
     dial:()=>{dialed++;throw Error("should not dial");},
   }),/Expected pinned local/);
   assert.equal(dialed,0);
+});
+
+test("normal systemd smoke collects units, deliberate expiry retains Result only",()=>{
+  const normal=supervisedUnitSpec(sessionId,config.manifest,config.uid,config.gid);
+  const expiry=supervisedUnitSpec(sessionId,config.manifest,config.uid,config.gid,{
+    retainTimeoutResult:true,
+  });
+  assert.ok(normal.argv.includes("--collect"));
+  assert.ok(!expiry.argv.includes("--collect"));
+  assert.ok(expiry.argv.includes("--property=RuntimeMaxSec=900s"));
+  assert.ok(expiry.argv.includes("--property=KillMode=control-group"));
+  assert.throws(()=>supervisedUnitSpec(
+    sessionId,config.manifest,config.uid,config.gid,
+    {retainTimeoutResult:"yes"},
+  ));
 });
 
 test("900s test requires separate explicit root/operator approval",()=>{
