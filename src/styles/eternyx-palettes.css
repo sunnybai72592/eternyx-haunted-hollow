@@ -119,3 +119,23 @@
 :root[data-eternyx-palette] :where(a, button, input):focus-visible {
   outline-color: hsl(var(--ring));
 }
+
+/* Core pillar surfaces use the same accent as the global swatch dock.
+   Avoid static cyan/fuchsia gradients that ignore the selected palette. */
+.eternyx-arsenal-hero {
+  background:
+    radial-gradient(circle at 93% 9%, hsl(var(--primary) / .14), transparent 42%),
+    linear-gradient(135deg, hsl(var(--primary) / .08), hsl(var(--background)) 65%, hsl(var(--accent) / .06));
+}
+.eternyx-settings-hero-glow {
+  background:
+    radial-gradient(ellipse at 80% 5%, hsl(var(--primary) / .14), transparent 35%),
+    linear-gradient(115deg, rgba(7,15,30,.98), rgba(9,18,34,.94) 58%, rgba(13,20,43,.92));
+}
+.eternyx-theme-gradient {
+  background-image: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--primary)));
+}
+@media (prefers-reduced-motion: reduce) {
+  .eternyx-arsenal-hero,
+  .eternyx-settings-hero-glow { animation: none; }
+}
