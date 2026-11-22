@@ -96,6 +96,23 @@ export default function CloudIntegrations() {
       </div>
       <p className="mt-4 text-sm text-muted-foreground">Start, stop and restart require an exact full ID, hardened local-workbench labels, explicit confirmation, and a recorded local audit entry. See <code>docs/DOCKER_OPERATOR_RUNBOOK.md</code>. This does not operate on production or remote customer infrastructure.</p>
     </section>
+    <section className="rounded-2xl border border-border bg-card p-5 sm:p-7" aria-labelledby="remote-docker-title">
+      <div className="flex items-center gap-3"><Server className="h-6 w-6 text-cyan-500" /><h2 id="remote-docker-title" className="text-2xl font-semibold">Remote Docker inventory via SSH tunnel</h2></div>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">Connect to a trusted server using a loopback-only Docker read-only agent and an authenticated SSH tunnel. No Docker socket is made public, no application logs are exposed, and the website never receives connection credentials.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <p className="text-sm font-semibold">Trusted server · agent</p>
+          <code className="mt-2 block break-all text-xs text-muted-foreground">node scripts/docker-readonly-agent.mjs</code>
+          <p className="mt-2 text-xs text-muted-foreground">A private 0600 token file is required. Local 127.0.0.1 binding only.</p>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <p className="text-sm font-semibold">Trusted workstation · snapshot</p>
+          <code className="mt-2 block break-all text-xs text-muted-foreground">node scripts/docker-agent-client.mjs snapshot &gt; cloud-snapshot.json</code>
+          <p className="mt-2 text-xs text-muted-foreground">Uses your authenticated SSH tunnel; import the JSON above. No live browser session.</p>
+        </div>
+      </div>
+      <p className="mt-4 text-sm text-muted-foreground">See <code>docs/DOCKER_AGENT_TUNNEL.md</code> for SSH, token setup, read-only endpoints, and security restrictions. This is an operator-only bridge, not yet a multi-tenant ETERNYX service.</p>
+    </section>
     <section aria-labelledby="connections-title" className="space-y-4">
       <h2 id="connections-title" className="text-2xl font-semibold">Infrastructure workspaces</h2>
       <div className="grid gap-4 sm:grid-cols-2">
