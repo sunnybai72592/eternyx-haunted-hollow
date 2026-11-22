@@ -1,7 +1,6 @@
 """Train on local encoded windows and resume from completed CPU checkpoints (Linux)."""
 import argparse
 import fcntl
-import hashlib
 from pathlib import Path
 import tempfile
 
@@ -10,12 +9,8 @@ from diffusers import WanTransformer3DModel
 from peft import get_peft_model_state_dict, set_peft_model_state_dict
 from safetensors.torch import load_file, save_file
 
+from wan_adapter_bundle import fingerprint, transformer_identity, write_metadata
 from wan_adapter_step import attach_adapter, train_step
-
-
-def fingerprint(path):
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def run(model, base_identity, windows, output, steps, resume=False, seed=17, rank=2, interval=10):
@@ -62,6 +57,7 @@ def run(model, base_identity, windows, output, steps, resume=False, seed=17, ran
                 stage = Path(temp) / "checkpoint"
                 stage.mkdir()
                 save_file(get_peft_model_state_dict(model), str(stage / "adapter.safetensors"))
+                write_metadata(stage, base_identity, rank)
                 torch.save({"identity": identity, "completed": completed, "loss": loss,
                             "optimizer": optimizer.state_dict(), "noise_rng": generator.get_state(),
                             "torch_rng": torch.get_rng_state()}, stage / "training.pt")
@@ -80,7 +76,6 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     root = args.snapshot.resolve(strict=True) / "transformer"
-    base = {p.name: fingerprint(p) for p in sorted(root.iterdir())
-            if p.is_file() and p.suffix in (".json", ".safetensors")}
+    base = transformer_identity(root)
     model = WanTransformer3DModel.from_pretrained(root, local_files_only=True, use_safetensors=True)
     run(model, base, args.windows, args.output, args.steps, args.resume, interval=args.checkpoint_every)
