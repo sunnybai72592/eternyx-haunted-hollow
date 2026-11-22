@@ -32,6 +32,13 @@ def encode(frames, caption, vae, tokenizer, encoder, length=512):
     return {"latents": latent.contiguous(), "text_embeddings": text.contiguous()}
 
 
+def load_encoders(root):
+    vae = AutoencoderKLWan.from_pretrained(root / "vae", local_files_only=True, use_safetensors=True)
+    tokenizer = AutoTokenizer.from_pretrained(root / "tokenizer", local_files_only=True)
+    encoder = UMT5EncoderModel.from_pretrained(root / "text_encoder", local_files_only=True, use_safetensors=True)
+    return vae, tokenizer, encoder
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("snapshot", type=Path, help="Reviewed local Wan 2.1 Diffusers directory")
@@ -45,9 +52,7 @@ def main():
         caption = str(window["caption"].item())
         metadata = {key: str(window[key].item()) for key in ("sha256", "scene", "caption")}
     root = args.snapshot.resolve(strict=True)
-    vae = AutoencoderKLWan.from_pretrained(root / "vae", local_files_only=True, use_safetensors=True)
-    tokenizer = AutoTokenizer.from_pretrained(root / "tokenizer", local_files_only=True)
-    encoder = UMT5EncoderModel.from_pretrained(root / "text_encoder", local_files_only=True, use_safetensors=True)
+    vae, tokenizer, encoder = load_encoders(root)
     data = save(encode(frames, caption, vae, tokenizer, encoder), metadata=metadata)
     with args.output.open("xb") as stream:
         try:

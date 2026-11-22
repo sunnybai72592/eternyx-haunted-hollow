@@ -37,6 +37,17 @@ python gpu-worker/prepare_training_frames.py ./clips dataset-v1.json workshop-wi
 
 This CPU step takes the first 17 frames at 16 fps after resampling, fits the picture inside 384 × 224 with black padding, and stores RGB bytes in time × height × width × channels order. Short clips fail instead of receiving invented frames. The archive includes the original caption, scene, frame rate and source digest. Open it with `numpy.load(path, allow_pickle=False)`. Keep clips unchanged while preparing windows, and check that the caption describes the opening window. VAE encoding and caption embedding are still required before these frames can enter the Wan adapter training step.
 
+## Prepare and train from a whole manifest
+
+With a reviewed manifest and a local Wan snapshot, run these commands in Bash on a CPU machine with FFmpeg and the training dependencies. Choose a new output directory for the encoded dataset.
+
+```sh
+python gpu-worker/encode_training_manifest.py ./wan-snapshot ./clips dataset-v1.json ./encoded-v1
+python gpu-worker/train_video_adapter.py ./wan-snapshot ./training ./encoded-v1/window-*.safetensors --steps 100
+```
+
+The encoder loads the models once, checks each training clip against the manifest and saves its opening window. The numbered filenames follow source-path order. The index records the manifest, source and encoded file digests. Evaluation clips stay in the held-out split. The step count above is illustrative.
+
 ## Score an adapter on reviewed footage
 
 Run the evaluator on a CPU machine with FFmpeg, the training dependencies, the local Wan snapshot and the trained adapter bundle. The full snapshot and encoders must fit in RAM. The evaluation rows should describe footage held out from adapter training. Use the same reviewed manifest that defined the training split.

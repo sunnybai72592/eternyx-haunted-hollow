@@ -146,6 +146,19 @@ def run_fixture(root, output):
     encoder.save_pretrained(root / "text_encoder")
     manifest_path = root / "manifest.json"
     manifest_path.write_text(json.dumps(manifest))
+    dataset = root / "windows"
+    worker_dir = Path(__file__).parent
+    encode_command = [sys.executable, str(worker_dir / "encode_training_manifest.py"), str(root),
+                      str(root), str(manifest_path), str(dataset)]
+    subprocess.run(encode_command, check=True)
+    entries = json.loads((dataset / "index.json").read_text())["windows"]
+    assert [entry["source_file"] for entry in entries] == ["testsrc2.mp4"]
+    training_window = dataset / entries[0]["window"]
+    assert fingerprint(training_window) == entries[0]["window_sha256"]
+    assert entries[0]["source_sha256"] == window["sha256"]
+    subprocess.run([sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
+                    str(root / "manifest-training"), str(training_window), "--steps", "1"], check=True)
+    assert (root / "manifest-training" / "step-1" / "adapter.json").is_file()
     report = root / "evaluation.json"
     command = [sys.executable, str(Path(__file__).with_name("evaluate_video_adapter.py")),
                str(root), str(checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
