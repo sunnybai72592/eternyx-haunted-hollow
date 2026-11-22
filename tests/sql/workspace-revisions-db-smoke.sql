@@ -16,8 +16,9 @@ SELECT owner_id, id, 'note', 'Original title', 'Original body'
 FROM public.workspace_projects WHERE name = 'Alice workspace';
 
 -- Create a private Storage object and register the file under the owned project.
-INSERT INTO storage.objects(bucket_id, name)
-SELECT 'workspace-private', owner_id::text || '/' || id::text || '/proof.txt'
+INSERT INTO storage.objects(bucket_id, name, metadata)
+SELECT 'workspace-private', owner_id::text || '/' || id::text || '/proof.txt',
+  '{"size":12,"mimetype":"text/plain"}'::jsonb
 FROM public.workspace_projects WHERE name = 'Alice workspace';
 
 INSERT INTO public.workspace_items(
