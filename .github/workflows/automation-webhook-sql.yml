@@ -1,0 +1,41 @@
+name: Automation Signed Webhook SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261122220000_automation_manual_control_plane.sql'
+      - 'supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql'
+      - 'tests/sql/automation-webhook-db-smoke.sql'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+      - '.github/workflows/automation-webhook-sql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify signed webhook tenants, rotation and replay on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable Postgres with networking disabled
+        run: |
+          docker run --detach --rm --network none --name eternyx-webhook-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          for i in $(seq 1 30); do
+            if docker exec eternyx-webhook-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec eternyx-webhook-ci pg_isready -U postgres
+      - name: Build limited Supabase Auth fixtures
+        run: docker exec --interactive eternyx-webhook-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply exact manual Automation dependency
+        run: docker exec --interactive eternyx-webhook-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122220000_automation_manual_control_plane.sql
+      - name: Apply signed webhook migration
+        run: docker exec --interactive eternyx-webhook-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql
+      - name: Verify owner, disabled-default, rotation and replay boundaries
+        run: docker exec --interactive eternyx-webhook-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-webhook-db-smoke.sql
+      - name: Remove disposable instance
+        if: always()
+        run: docker rm --force eternyx-webhook-ci || true
