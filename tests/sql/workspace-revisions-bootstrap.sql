@@ -10,6 +10,7 @@ CREATE TABLE storage.objects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   bucket_id text NOT NULL,
   name text NOT NULL,
+  metadata jsonb,
   UNIQUE (bucket_id, name)
 );
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
