@@ -12,7 +12,8 @@
     "test": "node --test tests/*.test.mjs",
     "audit:tools": "node scripts/audit-tool-registry.mjs",
     "audit:supabase:security": "node scripts/review-supabase-security.mjs",
-    "range": "node scripts/cyber-range.mjs"
+    "range": "node scripts/cyber-range.mjs",
+    "range:provider": "node scripts/cyber-range-provider.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
