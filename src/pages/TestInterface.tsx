@@ -34,6 +34,7 @@ export default function TestInterface() {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const submittingRef = useRef(false);
+  const expirySubmitRequested = useRef(false);
   const submitRef = useRef<(expired: boolean) => Promise<void>>(async () => {});
   const [visibilityNotice, setVisibilityNotice] = useState(false);
 
@@ -129,10 +130,14 @@ export default function TestInterface() {
 
   useEffect(() => {
     if (deadline === null || !attemptQuery.data) return;
+    expirySubmitRequested.current = false;
     const tick = () => {
       const left = examSecondsRemaining(deadline);
       setRemaining(left);
-      if (left === 0 && !submittingRef.current) void submitRef.current(true);
+      if (left === 0 && !expirySubmitRequested.current && !submittingRef.current) {
+        expirySubmitRequested.current = true;
+        void submitRef.current(true);
+      }
     };
     tick();
     const interval = window.setInterval(tick, 1000);
