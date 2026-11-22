@@ -164,7 +164,7 @@ test("13. Submission, retry, written response and post-submission rejection are 
 });
 test("14. Official results must remain ungraded, matching exact five-field receipt",()=>{
   assert.match(runner,/grade_status===status/);
-  assert.match(runner,/r\.score===null && r\.max_score===null && r\.finalized_at===null/);
+  assert.match(runner,/data\.score===null && data\.max_score===null && data\.finalized_at===null/);
   assert.match(runner,/student-a-has-pending-unverified-result/);
   assert.match(runner,/r\.score===null&&r\.max_score===null/);
 });
