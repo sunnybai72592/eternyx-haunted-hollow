@@ -6,6 +6,7 @@ import { createPrivateKey,createPublicKey,randomBytes,sign,verify } from "node:c
 import { readFileSync,lstatSync,mkdirSync,openSync,writeSync,closeSync,constants } from "node:fs";
 import { join,isAbsolute } from "node:path";
 import { homedir } from "node:os";
+import {lockLabAgent,reserveLabClaim,appendLabEvent,readLabClaim,labPostcondition} from "../src/lib/dockerLabRecovery.mjs";
 import { isLocalEndpoint,verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
 import { parseAgentAction,agentActionMessage,parseLabPermit,labPermitMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
@@ -63,8 +64,10 @@ function createAction(kind,agentId,claimId,outcome,key){
   return raw;
 }
 async function main(){
-  if(process.argv.length!==6||process.argv[5]!=="--execute-lab"||!UUID.test(process.argv[2]))
-    throw new Error(HELP);
+  const retryReceipt=process.argv.length===7&&process.argv[5]==="--resend-receipt"&&UUID.test(process.argv[6]||"");
+  const executeLab=process.argv.length===6&&process.argv[5]==="--execute-lab";
+  if((!executeLab&&!retryReceipt)||!UUID.test(process.argv[2]))
+    throw new Error(HELP+" OR --resend-receipt CLAIM_UUID");
   if(process.env.ETERNYX_REMOTE_LAB_ENABLED!=="true")
     throw new Error("Operator lab execution is disabled by default. Set ETERNYX_REMOTE_LAB_ENABLED=true explicitly.");
   const host=new URL(process.env.ETERNYX_SUPABASE_URL||"");
@@ -75,7 +78,9 @@ async function main(){
   const key=createPrivateKey(privateFile(process.argv[3]));
   if(key.asymmetricKeyType!=="ed25519")throw new Error("Ed25519 agent key required.");
   const pinned=pubFile(process.argv[4]);
-  const context=localContext(); // validate BEFORE polling or claiming a server job
+  const unlock=lockLabAgent(agentId);
+  try {
+    const context=executeLab?localContext():null; // Receipt-only recovery never touches Docker
   const endpoint=host.origin+"/functions/v1/docker-command-dispatch";
   const send=async(kind,claimId=null,outcome=null)=>{
     const report=createAction(kind,agentId,claimId,outcome,key);
@@ -88,6 +93,19 @@ async function main(){
     if(!result||typeof result!=="object")throw new Error("Invalid dispatch response.");
     return result;
   };
+  if(retryReceipt){
+    const journal=readLabClaim(process.argv[6]);
+    if(journal.agentId!==agentId||!journal.outcome)throw Error("No finished receipt exists for this agent; inspect the local journal.");
+    if(journal.acknowledged){
+      process.stdout.write(JSON.stringify({claimId:journal.claimId,alreadyAcknowledged:true})+"\n");
+      return;
+    }
+    const ack=await send("receipt",journal.claimId,journal.outcome);
+    if(ack.accepted!==true)throw Error("Receipt was not accepted.");
+    appendLabEvent(journal.claimId,"receipt_accepted");
+    process.stdout.write(JSON.stringify({claimId:journal.claimId,receiptAcknowledged:true,executedAgain:false})+"\n");
+    return;
+  }
   const polled=await send("claim");
   if(!polled.job){process.stdout.write(JSON.stringify({job:false,mode:"manual-lab-poll"})+"\n");return;}
   const job=polled.job;
@@ -105,32 +123,41 @@ async function main(){
     permit.operation!==job.operation||permit.containerId!==job.containerId||
     Date.parse(permit.expiresAt)<=Date.now()||Date.parse(permit.issuedAt)>Date.now()+5000)
       throw new Error("No valid server-signed permit. No Docker action performed.");
-  // Do not execute unless local audit persists AND exact inspected container
-  // is hardened, labeled, rootless, isolated and resource-limited.
-  let outcome="guard_denied";
+  // Permanent per-claim exclusive reservation is made BEFORE the first Docker operation.
+  // A crash or duplicate claim MUST NOT execute a previously reserved claim again.
+  reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
+  let outcome="guard_denied",attempted=false;
   try{
-    if(Date.parse(permit.expiresAt)<=Date.now())throw new Error("Permit expired.");
+    if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
     const raw=docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]);
-    const target=JSON.parse(raw);
-    verifyManagedTarget(target,permit.containerId);
-    if(Date.parse(permit.expiresAt)<=Date.now())throw new Error("Permit expired.");
+    const before=JSON.parse(raw);
+    verifyManagedTarget(before,permit.containerId);
+    if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
     audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:"attempted"});
+    appendLabEvent(permit.claimId,"attempted");
+    attempted=true;
     outcome="failed";
     docker(["--context",context,"container",permit.operation,permit.containerId],20000);
+    const after=JSON.parse(docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]));
+    if(!labPostcondition(permit.operation,before,after))throw Error("Docker postcondition unconfirmed.");
     outcome="completed";
-  }catch(error){
-    process.stderr.write("Local lab operation refused or failed; no internal details exported.\n");
+  }catch{
+    process.stderr.write("Lab mutation refused, failed or uncertain. Review local journal; never auto-retry.\n");
   }
+  if(attempted&&outcome==="guard_denied")outcome="failed";
+  appendLabEvent(permit.claimId,outcome);
   audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:outcome});
   try{
     const receipt=await send("receipt",permit.claimId,outcome);
-    if(receipt.accepted!==true)throw new Error("Receipt was not accepted.");
+    if(receipt.accepted!==true)throw Error("Receipt was not accepted.");
+    appendLabEvent(permit.claimId,"receipt_accepted");
     process.stdout.write(JSON.stringify({claimId:permit.claimId,
       agentReportedStatus:"reported_"+outcome,independentlyVerified:false})+"\n");
   }catch{
-    process.stderr.write("Receipt delivery failed; ETERNYX status is unknown, inspect local audit before retry.\n");
+    process.stderr.write("Receipt delivery uncertain. Use --resend-receipt with exact claim ID, never rerun Docker.\n");
     process.exitCode=1;
   }
+  } finally {unlock();}
 }
 main().catch(error=>{
   process.stderr.write((error instanceof Error?error.message:"Local Docker lab dispatch failed.")+"\n");

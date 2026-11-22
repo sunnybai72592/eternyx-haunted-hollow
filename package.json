@@ -24,7 +24,8 @@
     "range:microvm:preflight": "node scripts/cyber-range-microvm-preflight.mjs",
     "docker:heartbeat": "node scripts/docker-agent-heartbeat.mjs",
     "range:microvm:plan": "node scripts/cyber-range-microvm-plan.mjs",
-    "range:microvm:supervisor": "node scripts/cyber-range-microvm-supervisor.mjs"
+    "range:microvm:supervisor": "node scripts/cyber-range-microvm-supervisor.mjs",
+    "docker:lab:recovery": "node scripts/docker-lab-recovery.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
