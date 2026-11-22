@@ -4,10 +4,7 @@ import EternalConstellation from "./EternalConstellation";
 import HomeTaskFinder from "./HomeTaskFinder";
 import { VisitorPresence } from "@/components/home/VisitorPresence";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  ArrowRight, ArrowUpRight, CheckCircle2, Compass,
-  LockKeyhole, Sparkles, Workflow, Zap
-} from "lucide-react";
+import { ArrowRight, ArrowUpRight, CheckCircle2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ecosystemPillars } from "@/data/ecosystem";
 import { useAuthStore } from "@/store/authStore";
