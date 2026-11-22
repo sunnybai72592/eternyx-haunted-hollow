@@ -356,3 +356,7 @@ verify_jwt = true
 # Authenticated, user-specific CTF casefiles and server-side solve verification.
 [functions.ctf-verified]
 verify_jwt = true
+
+# Authenticated control plane; provider is disabled until a separately reviewed range is online.
+[functions.ctf-range-control]
+verify_jwt = true

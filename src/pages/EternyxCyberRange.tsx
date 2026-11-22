@@ -36,6 +36,17 @@ export default function EternyxCyberRange() {
           </div>
         </header>
 
+        <section className="flex flex-col gap-4 rounded-2xl border border-primary/25 bg-primary/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">New · Session control plane</p>
+            <h2 className="mt-2 text-xl font-bold">My cyber range sessions</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Account-linked reservations, server-side capacity quotas, expiring sessions and stop requests. Starts disabled until a separately reviewed provider and secure ingress are configured.</p>
+          </div>
+          <Link to="/labs/sessions" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+            Session dashboard <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </section>
+
         <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.05] p-5 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-bold"><ShieldAlert className="h-5 w-5 text-amber-500" /> Developer preview — not a hosted lab yet</h2>
           <p className="mt-2 text-sm leading-7 text-muted-foreground">

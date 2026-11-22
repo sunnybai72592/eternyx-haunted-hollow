@@ -1,0 +1,40 @@
+name: CTF Range Control SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261122180000_ctf_range_session_control.sql'
+      - 'tests/sql/ctf-range-db-*.sql'
+      - '.github/workflows/ctf-range-control-sql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-postgres:
+    name: Verify session quotas and RLS against PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Launch isolated disposable Postgres with no Docker network
+        run: |
+          docker run --detach --rm --network none --name eternyx-range-sql-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          for i in $(seq 1 30); do
+            if docker exec eternyx-range-sql-ci pg_isready -U postgres >/dev/null 2>&1; then
+              echo 'PostgreSQL is accepting local socket connections'
+              break
+            fi
+            sleep 1
+          done
+          docker exec eternyx-range-sql-ci pg_isready -U postgres
+      - name: Create minimal Supabase-like roles and Auth identities
+        run: docker exec --interactive eternyx-range-sql-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply the exact checked-in CTF range control migration
+        run: docker exec --interactive eternyx-range-sql-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < supabase/migrations/20261122180000_ctf_range_session_control.sql
+      - name: Test provider fail-closed behavior, quotas, ownership RLS and worker lifecycle
+        run: docker exec --interactive eternyx-range-sql-ci psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 < tests/sql/ctf-range-db-smoke.sql
+      - name: Delete ephemeral Postgres
+        if: always()
+        run: docker rm --force eternyx-range-sql-ci || true
