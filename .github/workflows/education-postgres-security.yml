@@ -53,6 +53,8 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-acceptance.sql
       - name: Execute adversarial cross-account and lifecycle checks
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-adversarial.sql
+      - name: Check Education authoring, review decisions and expiry edge cases
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-lifecycle-edge-cases.sql
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true
