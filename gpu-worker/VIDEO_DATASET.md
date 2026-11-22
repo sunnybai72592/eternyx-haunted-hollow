@@ -154,3 +154,30 @@ The five new safeguards and planning outputs are:
 5. **Local audit plan:** `--output` writes exactly the JSON printed to stdout to a **new** file. An existing path will never be overwritten. Keep this plan with your private `pilot.json` and source manifest; do not commit private footage or proprietary model assets.
 
 This is a CPU benchmark and planning tool, not a job scheduler or a model-training progress promise. If the full-size snapshot is too large for available RAM, the actual run is not feasible regardless of its estimated time.
+
+
+## Compare multiple completed CPU video adapter experiments
+
+After training separate adapters on **the same reviewed manifest**, evaluate each checkpoint using the **same held-out clips and noise seeds** with `evaluate_video_adapter.py`. Select one reference adapter and compare candidate adapter evaluation receipts without loading a model, renting a GPU, or calling an external AI service.
+
+```sh
+python gpu-worker/compare_video_evaluations.py \
+  --reference ./pilot-reference/evaluation.json \
+  --candidate short=./pilot-short/evaluation.json \
+  --candidate long=./pilot-long/evaluation.json \
+  --output ./comparison-01 \
+  --max-mean-regression 0 \
+  --max-pair-regression 0.05 \
+  --max-scene-regression 0.02 \
+  --fail-on-regression
+```
+
+The tool implements five practical capabilities:
+
+1. **Strict comparable provenance:** It checks versioned evaluation JSON, file digests, training-manifest and indexed dataset identities, identical held-out source/seed sets, window offsets, noise levels and near-equal baseline-model errors. If any differ, comparison fails rather than reporting a misleading winner. Inputs are regular local JSON files under 4 MiB each.
+2. **Paired adapter measurements:** For each held-out clip, seed and noise level, the CSV records candidate adapter error minus reference adapter error. Negative changes favor the candidate on this metric; the JSON includes source receipt hashes, adapter hashes and training steps.
+3. **Deterministic multi-candidate ranking:** Up to 12 uniquely named candidate reports are sorted by mean paired MSE change, with a stable name tie-break. All candidates are checked against the same reference.
+4. **Configurable regression gates:** The mean change, worst individual clip/seed mean change and worst scene-average change are each compared against a nonnegative threshold. `--fail-on-regression` returns exit code 2 for gate failures **after saving** the evidence.
+5. **Private, create-only evidence:** A new output directory contains `summary.json`, `pairs.csv` and an escaped, offline `review.html`. Existing directories are never replaced. Keep raw JSON evaluation reports and rendered video inspections alongside the results outside the repository.
+
+**Interpretation:** Lower held-out flow-prediction MSE does not establish realistic movement, recognizable images, prompt adherence or high-quality output. The tool compares *already evaluated* adapters only, never trains them. All models and footage remain local; no subscription or paid compute is activated. If you changed the dataset, baseline model, evaluation cases or noise levels, run a separate experiment series rather than forcing a comparison.
