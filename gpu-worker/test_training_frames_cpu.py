@@ -31,6 +31,20 @@ class FrameWindowTests(unittest.TestCase):
         self.assertLess(frames[:, :, 0].max(), 8)
         self.assertGreater(frames[:, 112, 192, 0].min(), 240)
 
+    def test_offset_matches_overlapping_decoded_frames(self):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "testsrc2=size=80x120:rate=16:duration=2", "-c:v", "mpeg4", str(self.path)], check=True)
+        self.row["sha256"] = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        first = prepare_frames(self.root, self.manifest, self.path.name)["frames"]
+        self.row["start_frame"] = 8
+        shifted = prepare_frames(self.root, self.manifest, self.path.name)
+        self.assertEqual(shifted["start_frame"], 8)
+        self.assertTrue((first[8:] == shifted["frames"][:9]).all())
+        self.assertFalse((first == shifted["frames"]).all())
+        self.row["start_frame"] = 16
+        with self.assertRaisesRegex(ValueError, "too short"):
+            prepare_frames(self.root, self.manifest, self.path.name)
+
     def test_changed_or_short(self):
         self.make_clip("0.25")
         with self.assertRaisesRegex(ValueError, "changed"):

@@ -60,7 +60,7 @@ def evaluate(snapshot, adapter, clips, manifest_bytes, seeds):
             model.enable_adapters()
             candidate = holdout_loss(model, batch, noise)
             delta = sum(c - b for b, c in zip(baseline, candidate)) / len(NOISE_LEVELS)
-            cases.append({"scene": window["scene"], "source_sha256": window["sha256"], "seed": seed,
+            cases.append({"scene": window["scene"], "start_frame": window["start_frame"], "source_sha256": window["sha256"], "seed": seed,
                           "baseline_flow_mse": baseline, "adapter_flow_mse": candidate, "mean_mse_delta": delta})
     return {"version": 1, "metric": "flow velocity mean squared error", "noise_levels": NOISE_LEVELS,
             "manifest_sha256": manifest_digest, "training_dataset": dataset,

@@ -41,6 +41,10 @@ def read_dataset(index_path, manifest_path):
             raise ValueError("Indexed training sources differ from the manifest")
         with safe_open(str(path), framework="pt") as handle:
             metadata = handle.metadata() or {}
+        start = row.get("start_frame", 0)
+        if (type(start) is not int or not 0 <= start <= 2**31 - 1
+                or entry.get("start_frame", 0) != start or metadata.get("start_frame", "0") != str(start)):
+            raise ValueError("Indexed window offset differs from the manifest")
         if any(metadata.get(key) != row[key] for key in ("sha256", "caption", "scene")):
             raise ValueError("Window annotations differ from the manifest")
         windows.append(path)
