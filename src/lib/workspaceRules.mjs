@@ -21,7 +21,7 @@ export function validWorkspaceLink(value) {
 export function workspaceFileKey(userId, projectId, fileName, fileId) {
   if (!/^[a-f0-9-]{36}$/i.test(userId) || !/^[a-f0-9-]{36}$/i.test(projectId) ||
       !/^[a-f0-9-]{36}$/i.test(fileId)) throw new Error("Invalid workspace file identity");
-  const clean = String(fileName).replace(/[^\p{L}\p{N}._-]/gu, "_").replace(/^\.+/, "").slice(0, 90) || "file";
+  const clean = String(fileName).replace(/[^\p{L}\p{N}._-]/gu, "_").replace(/\.\.+/g, ".").replace(/^\.+/, "").slice(0, 90) || "file";
   return userId + "/" + projectId + "/" + fileId + "-" + clean;
 }
 
