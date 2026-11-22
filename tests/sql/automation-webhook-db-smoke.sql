@@ -11,8 +11,8 @@ DECLARE
   b_workflow uuid;
   trigger_id uuid;
   b_trigger uuid;
-  previous_rotated_at timestamptz;
-  fresh_rotated_at timestamptz;
+  previous_credential_version integer;
+  fresh_credential_version integer;
   request_id uuid := gen_random_uuid();
   result jsonb;
   replay jsonb;
@@ -28,7 +28,7 @@ BEGIN
   SELECT public.automation_register_webhook(alice,a_workflow,repeat('a',96),repeat('b',24),false) INTO result;
   IF result->>'ok' <> 'true' OR result->>'enabled' <> 'false' THEN RAISE EXCEPTION 'trigger must start disabled'; END IF;
   trigger_id := (result->>'trigger_id')::uuid;
-  SELECT rotated_at INTO previous_rotated_at FROM public.automation_webhook_triggers WHERE id=trigger_id;
+  SELECT credential_version INTO previous_credential_version FROM public.automation_webhook_triggers WHERE id=trigger_id;
 
   SELECT public.automation_register_webhook(bob,a_workflow,repeat('c',96),repeat('d',24),false) INTO result;
   IF result->>'reason' <> 'not_found' THEN RAISE EXCEPTION 'cross-owner registration allowed'; END IF;
@@ -37,7 +37,7 @@ BEGIN
 
   SELECT public.automation_record_webhook_run(
     trigger_id,alice,a_workflow,1,request_id,repeat('a',64),
-    1,1,4,4,trace_steps,previous_rotated_at
+    1,1,4,4,trace_steps,previous_credential_version
   ) INTO result;
   IF result->>'reason' <> 'trigger_revoked' THEN RAISE EXCEPTION 'disabled webhook still executed'; END IF;
 
@@ -48,7 +48,7 @@ BEGIN
 
   SELECT public.automation_record_webhook_run(
     trigger_id,alice,a_workflow,1,request_id,repeat('a',64),
-    1,1,4,4,trace_steps,previous_rotated_at
+    1,1,4,4,trace_steps,previous_credential_version
   ) INTO result;
   IF result->>'ok' <> 'true' OR result->>'already_recorded' <> 'false' THEN
     RAISE EXCEPTION 'verified execution not recorded: %',result; END IF;
@@ -57,25 +57,25 @@ BEGIN
     RAISE EXCEPTION 'signed provenance missing'; END IF;
   SELECT public.automation_record_webhook_run(
     trigger_id,alice,a_workflow,1,request_id,repeat('a',64),
-    1,1,4,4,trace_steps,previous_rotated_at
+    1,1,4,4,trace_steps,previous_credential_version
   ) INTO replay;
   IF replay->>'already_recorded' <> 'true' OR replay->>'run_id' <> result->>'run_id' THEN
     RAISE EXCEPTION 'same signed event was not deduplicated'; END IF;
   SELECT public.automation_record_webhook_run(
     trigger_id,alice,a_workflow,1,request_id,repeat('c',64),
-    1,1,4,4,trace_steps,previous_rotated_at
+    1,1,4,4,trace_steps,previous_credential_version
   ) INTO result;
   IF result->>'reason' <> 'idempotency_conflict' THEN RAISE EXCEPTION 'reused request ID with changed body accepted'; END IF;
 
   SELECT public.automation_register_webhook(alice,a_workflow,repeat('f',96),repeat('e',24),true) INTO result;
   IF result->>'ok' <> 'true' OR result->>'enabled' <> 'false' THEN RAISE EXCEPTION 'rotation must disable trigger'; END IF;
-  SELECT rotated_at INTO fresh_rotated_at FROM public.automation_webhook_triggers WHERE id=trigger_id;
-  IF fresh_rotated_at < previous_rotated_at THEN RAISE EXCEPTION 'rotation time regressed'; END IF;
+  SELECT credential_version INTO fresh_credential_version FROM public.automation_webhook_triggers WHERE id=trigger_id;
+  IF fresh_credential_version <= previous_credential_version THEN RAISE EXCEPTION 'rotation time regressed'; END IF;
   -- A pre-rotation in-flight request must be denied after rotation and re-enable.
   PERFORM public.automation_set_webhook_enabled(alice,trigger_id,true);
   SELECT public.automation_record_webhook_run(
     trigger_id,alice,a_workflow,1,gen_random_uuid(),repeat('a',64),
-    1,1,4,4,trace_steps,previous_rotated_at - interval '1 second'
+    1,1,4,4,trace_steps,previous_credential_version
   ) INTO result;
   IF result->>'reason' <> 'trigger_revoked' THEN RAISE EXCEPTION 'stale key request accepted'; END IF;
 
@@ -100,7 +100,7 @@ BEGIN
      OR has_function_privilege('authenticated',
          'public.automation_register_webhook(uuid,uuid,text,text,boolean)','EXECUTE')
      OR has_function_privilege('anon',
-         'public.automation_record_webhook_run(uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,timestamptz)','EXECUTE') THEN
+         'public.automation_record_webhook_run(uuid,uuid,uuid,integer,uuid,text,integer,integer,integer,integer,jsonb,integer)','EXECUTE') THEN
     RAISE EXCEPTION 'webhook credential or write privilege leaked to browser roles';
   END IF;
 END;
