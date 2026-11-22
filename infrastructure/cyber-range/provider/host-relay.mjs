@@ -65,6 +65,7 @@ export function createHostRangeRelay({sessionId,token,verifyUpstream,requestFetc
   }
   let actualPort=0;
   const server=createServer(async(req,res)=>{
+    let privatePhase="preflight";
     try{
       if(!actualPort || !new RegExp("^(?:127\\.0\\.0\\.1|localhost):"+actualPort+"$").test(req.headers.host??""))
         return answer(res,421,"Localhost host required");
@@ -83,6 +84,7 @@ export function createHostRangeRelay({sessionId,token,verifyUpstream,requestFetc
       const expected=Buffer.from(token);
       if(presented.length!==expected.length||!timingSafeEqual(presented,expected))
         return answer(res,401,"Valid managed lab credential required");
+      privatePhase="verify-private-docker";
       const {ip}=await verifyUpstream();
       // No arbitrary DNS, caller-supplied URL, redirects, proxy headers or
       // cloud metadata address. IP is verified against this session's Docker
@@ -103,11 +105,13 @@ export function createHostRangeRelay({sessionId,token,verifyUpstream,requestFetc
         }
         body=Buffer.concat(chunks);
       }
+      privatePhase="private-http-fetch";
       const upstream=await requestFetch(destination,{
         method:req.method,headers,redirect:"manual",
         ...(req.method==="POST"?{body}:{}),
         signal:AbortSignal.timeout(3500),
       });
+      privatePhase="read-private-response";
       const buffer=Buffer.from(await upstream.arrayBuffer());
       if(buffer.length>32768)return answer(res,502,"Lab response exceeds limit");
       const safe={...HEADERS};
@@ -116,6 +120,10 @@ export function createHostRangeRelay({sessionId,token,verifyUpstream,requestFetc
       res.writeHead(upstream.status,safe);
       res.end(buffer);
     }catch{
+      if(process.env.ETERNYX_RANGE_HOST_SMOKE==="CI_DISPOSABLE_ONLY" &&
+         ["verify-private-docker","private-http-fetch","read-private-response"].includes(privatePhase)) {
+        console.error("Host relay safe diagnostic phase: "+privatePhase);
+      }
       if(!res.headersSent)answer(res,503,"Internal range gateway unavailable");
       else res.end();
     }
