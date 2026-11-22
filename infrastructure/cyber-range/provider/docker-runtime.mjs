@@ -220,7 +220,9 @@ export class LocalDockerRangeRuntime {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
     const listed = executeDocker(composeArgs(sessionId, ["ps", "--status", "running", "-q", "gateway"]));
-    return listed.length > 0;
+    if (!listed.length) return false;
+    await this.attest(sessionId);
+    return true;
   }
 
   async stop(sessionId) {
