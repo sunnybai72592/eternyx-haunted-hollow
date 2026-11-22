@@ -14,7 +14,7 @@ test("explicit suspend/release signatures are bound to case and reject spoofed f
   {action:"incident_escalate",incidentId:"../x",note,confirmation:"SUSPEND ../x"},
   {action:"incident_escalate",incidentId:id,note:"too short",confirmation:"SUSPEND "+id.slice(0,8)},
   {action:"incident_escalate",incidentId:id,note:"a".repeat(501),confirmation:"SUSPEND "+id.slice(0,8)},
-  {action:"incident_escalate",incidentId:id,note:"Confirmed note\\nsecret",confirmation:"SUSPEND "+id.slice(0,8)},
+  {action:"incident_escalate",incidentId:id,note:"Confirmed note\nsecret",confirmation:"SUSPEND "+id.slice(0,8)},
  ])assert.equal(parseDockerContainmentAction(input),null);
 });
 test("readiness is a source-derived observation, never execution authorization",()=>{
