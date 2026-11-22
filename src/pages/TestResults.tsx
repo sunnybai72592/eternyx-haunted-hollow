@@ -4,6 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, BookOpen, Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
+import {
+  readVerifiedStudentGrade, verifiedStudentResultsEnabled,
+  type VerifiedEducationReceipt,
+} from "@/lib/educationVerifiedResultsRpc";
+import { projectVerifiedAttempt, projectVerifiedAnswers } from "@/lib/educationVerifiedPresentation.mjs";
 import { assessmentDuration, buildAssessmentReport, formatAssessmentDate, summarizeAttempt } from "@/lib/educationResults.mjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -51,7 +56,23 @@ export default function TestResults() {
     },
   });
 
-  const summary = useMemo(() => summarizeAttempt(attemptQuery.data), [attemptQuery.data]);
+  const rawSummary = useMemo(() => summarizeAttempt(attemptQuery.data), [attemptQuery.data]);
+  // Hosted ledger verification is an additional authenticated, owner-scoped
+  // read. Its failure never promotes the browser's legacy score columns.
+  const verifiedQuery = useQuery<VerifiedEducationReceipt>({
+    queryKey: ["education-verified-receipt", user?.id, attemptId],
+    enabled: enabled && verifiedStudentResultsEnabled && !!attemptQuery.data &&
+      attemptQuery.data.user_id === user?.id && rawSummary.completed,
+    retry: 1,
+    queryFn: () => readVerifiedStudentGrade(attemptId!),
+  });
+  const displayedAttempt = useMemo(
+    () => projectVerifiedAttempt(attemptQuery.data, verifiedQuery.data, verifiedStudentResultsEnabled) as Attempt | undefined,
+    [attemptQuery.data, verifiedQuery.data],
+  );
+  const summary = useMemo(() => summarizeAttempt(displayedAttempt), [displayedAttempt]);
+  const gradeRevealed = !verifiedStudentResultsEnabled ||
+    (verifiedQuery.data?.grade_status === "finalized" && summary.graded);
   const testQuery = useQuery<Assessment>({
     queryKey: ["education-result-test", user?.id, attemptQuery.data?.test_id],
     enabled: enabled && !!attemptQuery.data,
@@ -64,13 +85,20 @@ export default function TestResults() {
     },
   });
   const answersQuery = useQuery<QuestionResult[]>({
-    queryKey: ["education-result-answers", user?.id, attemptId],
+    queryKey: ["education-result-answers", user?.id, attemptId, gradeRevealed],
     enabled: enabled && !!attemptQuery.data && summary.completed,
     retry: 1,
     queryFn: async () => {
-      const { data, error } = await supabase.from("user_answers")
-        .select("question_id,is_correct,points_awarded,selected_option_id,short_answer_text,questions(id,question_text,points)")
-        .eq("attempt_id", attemptId!);
+      // Pending verified mode does not even REQUEST correctness or points
+      // from the API. Only a matching final ledger receipt unlocks grades.
+      const request = gradeRevealed
+        ? supabase.from("user_answers")
+          .select("question_id,is_correct,points_awarded,selected_option_id,short_answer_text,questions(id,question_text,points)")
+          .eq("attempt_id", attemptId!)
+        : supabase.from("user_answers")
+          .select("question_id,selected_option_id,short_answer_text,questions(id,question_text,points)")
+          .eq("attempt_id", attemptId!);
+      const { data, error } = await request;
       if (error) throw error;
       return (data ?? []).map((answer: any) => {
         const question = Array.isArray(answer.questions) ? answer.questions[0] : answer.questions;
@@ -78,8 +106,8 @@ export default function TestResults() {
           id: answer.question_id,
           question_text: question?.question_text || "Question unavailable",
           points: typeof question?.points === "number" ? question.points : null,
-          is_correct: typeof answer.is_correct === "boolean" ? answer.is_correct : null,
-          points_awarded: typeof answer.points_awarded === "number" ? answer.points_awarded : null,
+          is_correct: gradeRevealed && typeof answer.is_correct === "boolean" ? answer.is_correct : null,
+          points_awarded: gradeRevealed && typeof answer.points_awarded === "number" ? answer.points_awarded : null,
           user_answer: answer.short_answer_text || answer.selected_option_id || "No answer",
         };
       });
@@ -87,8 +115,11 @@ export default function TestResults() {
   });
 
   const download = () => {
-    if (!attemptQuery.data || !summary.completed || answersQuery.isPending || answersQuery.error) return;
-    const text = buildAssessmentReport(attemptQuery.data, testQuery.data, answersQuery.data ?? []);
+    if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
+        answersQuery.isPending || answersQuery.error ||
+        (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))) return;
+    const text = buildAssessmentReport(displayedAttempt, testQuery.data,
+      projectVerifiedAnswers(answersQuery.data ?? [], gradeRevealed));
     downloadReport(text, attemptQuery.data.id);
   };
 
@@ -133,6 +164,22 @@ export default function TestResults() {
                 <CardDescription>{testQuery.data?.title || "Assessment"}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {verifiedStudentResultsEnabled && verifiedQuery.isPending && rawSummary.completed && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    Verifying the official result against the trusted final-grade ledger…
+                  </p>
+                )}
+                {verifiedStudentResultsEnabled && verifiedQuery.error && (
+                  <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+                    <span>Official grade verification is unavailable. No score will be shown.</span>
+                    <Button variant="outline" size="sm" onClick={() => void verifiedQuery.refetch()}>
+                      <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />Retry verification
+                    </Button>
+                  </div>
+                )}
+                {verifiedStudentResultsEnabled && gradeRevealed && (
+                  <p className="text-xs font-medium text-primary">Verified final grade · Trusted assessment ledger</p>
+                )}
                 {summary.graded ? (
                   <>
                     <p className="text-center text-4xl font-bold text-primary">{summary.score} / {summary.maxScore}</p>
@@ -176,7 +223,8 @@ export default function TestResults() {
                     <div key={answer.id} className="rounded-lg border border-border bg-background p-4 text-sm">
                       <p className="font-semibold">{index + 1}. {answer.question_text}</p>
                       <p className="mt-2 break-words text-muted-foreground">Submitted answer: {answer.user_answer}</p>
-                      <p className="mt-1 text-muted-foreground">{answer.is_correct === null ? "Grading pending" :
+                      <p className="mt-1 text-muted-foreground">{answer.is_correct === null && answer.points_awarded !== null && gradeRevealed ? "Written answer reviewed" :
+                        answer.is_correct === null ? "Grading pending" :
                         answer.is_correct ? "Marked correct" : "Marked incorrect"}
                         {answer.points_awarded !== null && answer.points !== null ? ` · ${answer.points_awarded} / ${answer.points} points` : ""}
                       </p>
@@ -186,7 +234,8 @@ export default function TestResults() {
               </Card>
             )}
             <div className="flex flex-wrap gap-3">
-              <Button variant="outline" disabled={!summary.completed || answersQuery.isPending || !!answersQuery.error}
+              <Button variant="outline" disabled={!summary.completed || answersQuery.isPending ||
+                !!answersQuery.error || (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
                 onClick={download}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download report (.txt)</Button>
               <Button asChild variant="outline"><Link to="/education">Back to Education</Link></Button>
               <p className="w-full text-xs text-muted-foreground">Reports are downloaded locally and are not certificates. Retakes depend on the exam service and are not enabled here.</p>
