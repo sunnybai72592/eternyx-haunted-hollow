@@ -1,0 +1,53 @@
+name: Automation Operations SQL Security Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123070000_automation_operations.sql'
+      - 'tests/sql/automation-operations-db-smoke.sql'
+      - '.github/workflows/automation-operations-sql.yml'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify atomic bulk workflow toggles, keyset run history, owner isolation and quotas on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start networkless disposable PostgreSQL 17
+        run: |
+          docker run --detach --rm --network none --name eternyx-operation-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-operation-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-operation-ci pg_isready -U postgres || { docker logs eternyx-operation-ci; exit 1; }
+      - name: Bootstrap two independent user identities
+        run: docker exec --interactive eternyx-operation-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply existing Automation workflow and operations migrations
+        run: |
+          for file in \
+            supabase/migrations/20261122220000_automation_manual_control_plane.sql \
+            supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql \
+            supabase/migrations/20261122234500_automation_scheduled_runs.sql \
+            supabase/migrations/20261123000000_automation_webhook_approvals.sql \
+            supabase/migrations/20261123060000_automation_workflow_policies.sql \
+            supabase/migrations/20261123070000_automation_operations.sql; do
+            docker exec --interactive eternyx-operation-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+          done
+      - name: Prove real owner-only bulk toggles and paginated run receipts
+        run: docker exec --interactive eternyx-operation-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-operations-db-smoke.sql
+      - name: Remove disposable Postgres
+        if: always()
+        run: docker rm --force eternyx-operation-ci || true

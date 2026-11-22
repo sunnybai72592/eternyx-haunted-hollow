@@ -5,7 +5,7 @@ import {
 } from "../_shared/automation-control-contract.mjs";
 import { runLocalWorkflow } from "../../../src/lib/automationWorkflow.mjs";
 import { createTemplateCards, fingerprintPreview } from "../_shared/automation-template-catalog.mjs";
-import { issueWebhookCredential } from "../_shared/automation-webhook-crypto.mjs";
+import { issueWebhookCredential, openWebhookCredential, signWebhookRequest, verifyWebhookRequest } from "../_shared/automation-webhook-crypto.mjs";
 import { decryptScheduledText, SCHEDULE_INPUT_BYTES } from "../_shared/automation-schedule-crypto.mjs";
 
 const responseHeaders = {
@@ -27,6 +27,8 @@ const rpcStatus: Record<string, number> = {
   pending_limit: 429, daily_approval_limit: 429, not_pending: 409,
   expired: 410, trigger_run_limit: 429, trigger_submission_limit: 429,
   preview_limit: 429, template_copy_deleted: 409, unknown_template:404,
+  daily_bulk_limit:429,stale_workflow:409,duplicate_workflow:400,
+  invalid_bulk_items:400,invalid_history_cursor:400,
   policy_daily_limit:429,policy_input_limit:413,policy_output_limit:413,
   policy_webhook_disabled:403,policy_schedule_disabled:403,
   workflow_paused:409,no_enabled_webhook:409,schedule_not_ready:409,invalid_policy:400,
@@ -91,6 +93,112 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="bulkUsage"){
+      const {data:pruned,error:pruneError}=await supabase.rpc(
+        "automation_prune_bulk_receipts",{p_user_id:user.id});
+      if(pruneError||pruned?.ok!==true)throw pruneError??Error("bulk_cleanup_failed");
+      const {data,error}=await supabase.rpc("automation_bulk_operation_usage",{
+        p_user_id:user.id,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"bulk_usage_unavailable");
+      return reply({...data,source:"authenticated_server"});
+    }
+    if(request.action==="bulkToggle"){
+      const {data,error}=await supabase.rpc("automation_bulk_toggle_workflows",{
+        p_user_id:user.id,p_request_key:request.requestKey,
+        p_items:request.items,p_active:request.active,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"bulk_action_failed");
+      return reply({...data,source:"authenticated_server",
+        triggersCreated:false,credentialsChanged:false});
+    }
+    if(request.action==="runHistory"){
+      const {data,error}=await supabase.rpc("automation_query_run_history",{
+        p_user_id:user.id,p_workflow_id:request.workflowId,
+        p_channel:request.channel,p_before_time:request.beforeTime,
+        p_before_id:request.beforeId,p_page_size:request.pageSize,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"history_unavailable");
+      return reply({...data,source:"authenticated_server"});
+    }
+    if(request.action==="triggerDiagnostics"){
+      const {data:policy,error:policyError}=await supabase.rpc(
+        "automation_workflow_policy_status",{
+          p_user_id:user.id,p_workflow_id:request.workflowId,
+        });
+      if(policyError)throw policyError;
+      if(policy?.ok!==true)return rpcResponse(policy,"not_found");
+      const [{data:triggers,error:tError},{data:schedules,error:sError},
+        {data:pending,error:pError}] = await Promise.all([
+          supabase.from("automation_webhook_triggers")
+            .select("id,enabled,approval_required,last_used_at,credential_iv,credential_ciphertext")
+            .eq("user_id",user.id).eq("workflow_id",request.workflowId).limit(1),
+          supabase.from("automation_schedules")
+            .select("id,enabled,interval_minutes,next_run_at,last_run_at,last_status,input_nonce,input_ciphertext")
+            .eq("user_id",user.id).eq("workflow_id",request.workflowId).limit(1),
+          supabase.from("automation_approval_requests")
+            .select("id",{count:"exact",head:true})
+            .eq("user_id",user.id).eq("workflow_id",request.workflowId)
+            .eq("status","pending"),
+        ]);
+      if(tError||sError||pError)throw tError??sError??pError;
+      const webhook=triggers?.[0],schedule=schedules?.[0];
+      let webhookCredentialValid=false,scheduleInputDecryptable=false;
+      if(webhook){
+        const secret=Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY")??"";
+        if(/^[a-f0-9]{64}$/i.test(secret)){
+          try{
+            const raw=await openWebhookCredential(secret,
+              webhook.credential_iv,webhook.credential_ciphertext);
+            // HMAC self-test verifies the credential can actually sign and
+            // verify a FIXED LOCAL challenge. No HTTP sent or signed webhook
+            // event enqueued; never return credential or signature.
+            const hex=[...raw].map(v=>v.toString(16).padStart(2,"0")).join("");
+            const nonce=crypto.randomUUID();
+            const signature=await signWebhookRequest(hex,"1700000000",nonce,"{}");
+            webhookCredentialValid=await verifyWebhookRequest(raw,
+              "1700000000",nonce,"{}","sha256="+signature);
+          }catch{/* encryption key mismatch or damaged ciphertext */}
+        }
+      }
+      if(schedule){
+        const master=Deno.env.get("AUTOMATION_SCHEDULE_ENCRYPTION_KEY")??"";
+        if(/^[a-f0-9]{64}$/i.test(master)){
+          try{
+            await decryptScheduledText(master,
+              schedule.input_ciphertext,schedule.input_nonce,SCHEDULE_INPUT_BYTES);
+            scheduleInputDecryptable=true;
+          }catch{/* encryption key mismatch or damaged ciphertext */}
+        }
+      }
+      return reply({source:"authenticated_server",workflowId:request.workflowId,
+        diagnosticType:"local_cryptographic_configuration_check",
+        noNetworkRequest:true,executed:false,externalActionTriggered:false,
+        policyActive:policy.active,allowWebhook:policy.allowWebhook,
+        allowSchedule:policy.allowSchedule,
+        schedulerConfigEnabled:policy.schedulerConfigEnabled,
+        webhook:webhook?{
+          id:webhook.id,enabled:webhook.enabled,
+          approvalRequired:webhook.approval_required,
+          lastUsedAt:webhook.last_used_at,credentialChallengePassed:webhookCredentialValid,
+          eligible:policy.active===true&&policy.allowWebhook===true&&
+            webhook.enabled===true&&webhookCredentialValid,
+        }:null,
+        schedule:schedule?{
+          id:schedule.id,enabled:schedule.enabled,
+          intervalMinutes:schedule.interval_minutes,nextRunAt:schedule.next_run_at,
+          lastRunAt:schedule.last_run_at,lastStatus:schedule.last_status,
+          storedInputDecryptable:scheduleInputDecryptable,
+          eligible:policy.active===true&&policy.allowSchedule===true&&
+            policy.schedulerConfigEnabled===true&&schedule.enabled===true&&
+            scheduleInputDecryptable,
+        }:null,
+        pendingApprovals:pending??0,realDeliveryVerified:false,
+        workerLivenessVerified:false});
+    }
     if (request.action === "workflowPolicy") {
       const {data,error}=await supabase.rpc("automation_workflow_policy_status",{
         p_user_id:user.id,p_workflow_id:request.workflowId,
