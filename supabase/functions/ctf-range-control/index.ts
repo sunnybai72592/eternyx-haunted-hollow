@@ -46,7 +46,7 @@ serve(async (req: Request) => {
   try {
     if (parsed.action === "status") {
       const { data, error } = await supabase.from("ctf_range_provider")
-        .select("enabled,max_active_sessions,last_heartbeat_at").eq("singleton_id", 1)
+        .select("enabled,ingress_approved,max_active_sessions,last_heartbeat_at").eq("singleton_id", 1)
         .maybeSingle();
       if (error) {
         console.error("Range provider capability unavailable", { code: error.code });
