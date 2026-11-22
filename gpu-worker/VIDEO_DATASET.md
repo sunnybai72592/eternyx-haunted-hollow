@@ -516,3 +516,43 @@ Use the Studio's **Inspect your actual rendered MP4** workflow to re-import the 
 Training and sampling run via Python's standard library and locally installed FFmpeg/FFprobe with libx264. The model fits small 12×12 and 3×12 trainable matrices and generates **1–8 seconds at 16 FPS** per sample; no API key, paid GPU or external AI service is needed. Local folder names are create-only; source path traversal, symlinks, malformed checkpoints, unsupported frame rates or sizes, nonfinite weights, missing rights references and excessive budgets are rejected.
 
 A dedicated GitHub Actions workflow trains neural weights from real CI-generated MP4s and verifies independent seeded outputs, actual decoded frame counts, original/assembled video receipts, malformed model refusal and CLI operation. Browser regression tests verify command safety, model/report integrity and that no remote inference is implied. This baseline does **not** claim the ETERNYX flagship generative model is finished; separate Wan/adapter research remains ongoing.
+
+
+
+## Neural temporal consistency controls and real MP4 seed auditions
+
+The existing **Experimental tiny neural video model · CPU-only** now exposes two controls when sampling already-trained neural weights:
+
+- **Temporal stability (integer 0–85%, default 45%).** Motion-shift the previous low-resolution frame according to the model's learned motion frequencies, then blend its previous pixel colors with the new neural RGB prediction. The model always contributes at least 15% of the next-pixel prediction. High stability can reduce frame-to-frame change but may also suppress visual variation or collapse dynamics.
+- **Controlled variation (integer 0–20%, default 6%).** Noise is now temporally correlated (an AR(1) process), rather than drawing unrelated independent Gaussian jitter every pixel every frame. This is only a seed-controlled sampling technique; it does not change training weights or ensure perceived motion quality.
+
+Use the Studio controls to generate a single video, or run directly:
+
+```sh
+python gpu-worker/train_tiny_neural_video.py generate \
+  --model ./eternyx-tiny-neural-model/model.json \
+  --output ./eternyx-tiny-neural-sample \
+  --seconds 2 --seed 42 --profile landscape --quality standard \
+  --stability 60 --variation 5
+```
+
+The video generation receipt now includes the selected settings, the SHA-256 of the uncompressed *generated* RGB frames, and genuine **temporal-frame diagnostics** from those exact frames: count, mean and maximum adjacent-frame absolute RGB differences (normalized 0–1), identical adjacent frame pairs and mean brightness of first/last frames. These are **low-level diagnostics, not aesthetics, realism, good motion, or prompt-adherence scores**. Smaller deltas can mean less flicker **or** no motion.
+
+### Compare up to three real output videos
+
+In the same Studio workspace, use **Audition three actual neural videos side by side** to choose 1–3 distinct seeds. Every candidate is generated from the same trained neural model, same stability/variation settings and selected output preset; all run locally with Python + FFmpeg.
+
+```sh
+python gpu-worker/audit_neural_video_variants.py \
+  --model ./eternyx-tiny-neural-model/model.json \
+  --output ./eternyx-tiny-neural-audition \
+  --seeds 42 43 44 --seconds 2 \
+  --profile landscape --quality standard \
+  --stability 60 --variation 5
+```
+
+Auditions are limited to **three candidates** and **four seconds each** to keep CPU usage bounded. Each candidate gets a create-only `candidate-01` / `candidate-02` / `candidate-03` directory with a real `render/video.mp4`, its original sampled clip, source/renderer receipts and captions. The shared `audition-report.json` verifies actual decoded frame counts and includes SHA-256 and byte sizes for every completed MP4. If any candidate fails, **the entire audition batch is removed** and no partial output folder is published.
+
+For inspection, select the shared `audition-report.json`, then one to three actual candidate `video.mp4` files from those local folders (the filenames can be identical). WebCrypto SHA-256 checks each file's real bytes against the matching candidate entry, and the Studio presents **independent playback**, seeds, frame counts and measured raw RGB deltas side by side. This is a local, **self-attested integrity comparison**, not a trusted signature or an automated preference/ranking. Listen/watch and make your own creative judgment; users should not interpret a lower raw frame delta as universally better video.
+
+All of these improvements use the **same existing tiny neural checkpoint schema** and CPU-only ffmpeg generator; no retraining is required to try the new sampling controls. There is no paid GPU, external AI inference API, high-resolution model, text-to-video capability, cloud upload or subscription feature. Measured improvements on small input clips must not be generalized to professional AI-generated video quality.
