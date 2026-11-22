@@ -79,7 +79,7 @@ serve(async (req: Request) => {
     }
     if (request.action === "history") {
       const { data, error } = await supabase.from("automation_runs")
-        .select("id,workflow_id,workflow_revision,status,trigger_type,webhook_trigger_id,input_lines,output_lines,input_characters,output_characters,trace,created_at")
+        .select("id,workflow_id,workflow_revision,status,trigger_type,webhook_trigger_id,schedule_id,input_lines,output_lines,input_characters,output_characters,trace,created_at")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
       if (error) throw error;
       return reply({ runs: data ?? [], source: "authenticated_server", rawInputsStored: false, rawOutputsStored: false });
