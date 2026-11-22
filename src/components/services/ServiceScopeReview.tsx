@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ClipboardCheck, FileText, MessageSquareText, RefreshCw, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
@@ -38,6 +38,14 @@ export default function ServiceScopeReview({
   requestId, ownerId, isAdmin = false,
 }: { requestId: string; ownerId: string; isAdmin?: boolean }) {
   const currentUser = useAuthStore((state) => state.user);
+  const viewerId = currentUser?.id ?? null;
+  const viewerKey = requestId + ':' + (viewerId ?? 'signed-out');
+  const loadGeneration = useRef(0);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [reviewLimit, setReviewLimit] = useState(20);
+  const [feedbackLimit, setFeedbackLimit] = useState(50);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [feedbackCount, setFeedbackCount] = useState(0);
   const [reviews, setReviews] = useState<ScopeReview[]>([]);
   const [responses, setResponses] = useState<ScopeResponse[]>([]);
   const [draft, setDraft] = useState<ScopeDraft>(emptyDraft);
@@ -49,41 +57,83 @@ export default function ServiceScopeReview({
   const [replying, setReplying] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const visibleReviews = loadedKey === viewerKey && viewerId ? reviews : [];
+  const visibleResponses = loadedKey === viewerKey && viewerId ? responses : [];
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    const { data, error: reviewsError } = await supabase.from('service_scope_reviews')
-      .select('id,author_id,scope_summary,deliverables,exclusions,assumptions,next_steps,created_at')
-      .eq('request_id', requestId).order('created_at', { ascending: false }).limit(100);
-    if (reviewsError) {
-      console.error('Scope reviews query failed', reviewsError);
-      setError('Scope review records are unavailable. Verify the database migration and try again.');
+    const generation = ++loadGeneration.current;
+    if (!viewerId) {
+      setLoadedKey(null);
       setReviews([]);
       setResponses([]);
       setLoading(false);
       return;
     }
-    const next = (data ?? []) as ScopeReview[];
-    setReviews(next);
-    if (next.length === 0) {
+    setLoading(true);
+    setError('');
+    const { data, error: reviewsError, count: countReviews } = await supabase.from('service_scope_reviews')
+      .select('id,author_id,scope_summary,deliverables,exclusions,assumptions,next_steps,created_at', { count: 'exact' })
+      .eq('request_id', requestId)
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .limit(reviewLimit);
+    if (generation !== loadGeneration.current) return;
+    if (reviewsError) {
+      console.error('Scope reviews query failed', reviewsError);
+      setError('Scope review records are unavailable. Verify database access and try again.');
+      setLoadedKey(null);
+      setReviews([]);
       setResponses([]);
-    } else {
-      const { data: notes, error: notesError } = await supabase.from('service_scope_responses')
-        .select('id,review_id,user_id,kind,note,created_at')
+      setReviewCount(0);
+      setFeedbackCount(0);
+      setLoading(false);
+      return;
+    }
+    const next = (data ?? []) as ScopeReview[];
+    let nextResponses: ScopeResponse[] = [];
+    let nextFeedbackCount = 0;
+    if (next.length) {
+      const { data: notes, error: notesError, count: notesCount } = await supabase.from('service_scope_responses')
+        .select('id,review_id,user_id,kind,note,created_at', { count: 'exact' })
         .in('review_id', next.map((item) => item.id))
-        .order('created_at', { ascending: false }).limit(200);
+        .order('created_at', { ascending: false }).order('id', { ascending: false })
+        .limit(feedbackLimit);
+      if (generation !== loadGeneration.current) return;
       if (notesError) {
+        console.error('Service scope feedback query failed', notesError);
         setError('Scope reviews loaded, but customer feedback could not be retrieved.');
-        setResponses([]);
       } else {
-        setResponses((notes ?? []) as ScopeResponse[]);
+        nextResponses = (notes ?? []) as ScopeResponse[];
+        nextFeedbackCount = notesCount ?? 0;
       }
     }
+    setReviews(next);
+    setResponses(nextResponses);
+    setReviewCount(countReviews ?? 0);
+    setFeedbackCount(nextFeedbackCount);
+    setLoadedKey(viewerKey);
     setLoading(false);
-  }, [requestId]);
+  }, [requestId, viewerId, viewerKey, reviewLimit, feedbackLimit]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    loadGeneration.current += 1;
+    setLoadedKey(null);
+    setReviews([]);
+    setResponses([]);
+    setReviewLimit(20);
+    setFeedbackLimit(50);
+    setReviewCount(0);
+    setFeedbackCount(0);
+    setDraft(emptyDraft);
+    setActiveReview(null);
+    setResponseNote('');
+    setError('');
+    setNotice('');
+  }, [viewerKey]);
+
+  useEffect(() => {
+    void load();
+    return () => { loadGeneration.current += 1; };
+  }, [load]);
 
   const publish = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -100,7 +150,9 @@ export default function ServiceScopeReview({
     setNotice('');
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) throw authError ?? new Error('Not authenticated');
+      if (authError || !user || user.id !== viewerId) throw authError ?? new Error('Not authenticated');
+      const { data: adminAllowed, error: adminError } = await supabase.rpc('is_admin');
+      if (adminError || adminAllowed !== true) throw adminError ?? new Error('Administrator permission required');
       const { data, error: publishError } = await supabase.from('service_scope_reviews').insert({
         request_id: requestId,
         author_id: user.id,
@@ -116,7 +168,7 @@ export default function ServiceScopeReview({
       await load();
     } catch (reason) {
       console.error('Scope review publication failed', reason);
-      setError('Could not publish the review. No changes were confirmed.');
+      setError('Could not publish the review. Verify your administrator session and retry.');
     } finally {
       setPublishing(false);
     }
@@ -143,7 +195,7 @@ export default function ServiceScopeReview({
       await load();
     } catch (reason) {
       console.error('Scope feedback insert failed', reason);
-      setError('Could not save feedback. Verify your account and retry.');
+      setError('Could not save feedback. The database may be limiting repeated or rapid submissions; retry after a short interval.');
     } finally {
       setReplying(false);
     }
@@ -157,10 +209,10 @@ export default function ServiceScopeReview({
       </header>
       {error && <p role="alert" className="mt-4 rounded-xl border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="mt-4 rounded-xl border border-primary/20 p-3 text-sm text-primary">{notice}</p>}
-      {loading && reviews.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">Loading scope reviews…</p>
-        : reviews.length === 0 && !error ? <p className="mt-5 text-sm text-muted-foreground">No scope review has been published yet.</p>
+      {loading && visibleReviews.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">Loading scope reviews…</p>
+        : visibleReviews.length === 0 && !error ? <p className="mt-5 text-sm text-muted-foreground">No scope review has been published yet.</p>
         : <div className="mt-6 space-y-5">
-          {reviews.map((review) => (
+          {visibleReviews.map((review) => (
             <article key={review.id} className="rounded-xl border border-border bg-background/50 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4 text-primary" />Published scope review</span>
@@ -177,7 +229,7 @@ export default function ServiceScopeReview({
               ))}
               <p className="mt-4 rounded-lg border border-border p-3 text-xs leading-5 text-muted-foreground">This review is informational. Expressing interest is not acceptance of a binding offer, and no work or billing begins here.</p>
               <div className="mt-5 space-y-3">
-                {responses.filter((r) => r.review_id === review.id).map((r) => (
+                {visibleResponses.filter((r) => r.review_id === review.id).map((r) => (
                   <div key={r.id} className="rounded-lg border border-primary/10 bg-primary/[0.03] p-3">
                     <div className="flex flex-wrap justify-between gap-2 text-xs"><span className="font-semibold">{responseLabels[r.kind]}</span><time dateTime={r.created_at} className="text-muted-foreground">{new Date(r.created_at).toLocaleString()}</time></div>
                     <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{r.note}</p>
@@ -205,7 +257,14 @@ export default function ServiceScopeReview({
             </article>
           ))}
         </div>}
-      {isAdmin && (
+      {visibleReviews.length < reviewCount && (
+        <div className="mt-5 text-center"><Button type="button" variant="outline" disabled={loading} onClick={() => setReviewLimit((n) => n + 20)}>Load older scope reviews ({reviewCount - visibleReviews.length} remaining)</Button></div>
+      )}
+      {visibleResponses.length < feedbackCount && (
+        <div className="mt-4 text-center"><Button type="button" variant="outline" disabled={loading} onClick={() => setFeedbackLimit((n) => n + 50)}>Load older customer feedback ({feedbackCount - visibleResponses.length} remaining)</Button></div>
+      )}
+      {loadedKey === viewerKey && <p className="mt-4 text-xs text-muted-foreground">Showing {visibleReviews.length} of {reviewCount} scope reviews and {visibleResponses.length} of {feedbackCount} responses for loaded reviews.</p>}
+      {isAdmin && viewerId && (
         <form onSubmit={(e) => void publish(e)} className="mt-6 space-y-4 border-t border-border pt-5">
           <h4 className="text-base font-semibold">Publish a new immutable scope review</h4>
           <p className="text-sm text-muted-foreground">Publishing makes the complete memo immediately visible to the customer. Corrections require a new review; no draft overwrites history.</p>
