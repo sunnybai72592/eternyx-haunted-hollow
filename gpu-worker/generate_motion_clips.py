@@ -68,7 +68,8 @@ def read_config(path):
             {"version", "profile", "quality", "scenes"} or
             type(data["version"]) is not int or data["version"] != 1):
         raise ValueError("Expected version 1 structured procedural scene configuration")
-    if data["profile"] not in SIZES or data["quality"] not in ("standard", "high"):
+    if (not isinstance(data["profile"], str) or data["profile"] not in SIZES or
+            not isinstance(data["quality"], str) or data["quality"] not in ("standard", "high")):
         raise ValueError("Choose a supported output profile and quality")
     scenes = data["scenes"]
     if not isinstance(scenes, list) or not 1 <= len(scenes) <= MAX_SCENES:
@@ -78,7 +79,8 @@ def read_config(path):
         if (not isinstance(scene, dict) or set(scene) !=
                 {"style", "palette", "seconds", "seed", "caption"}):
             raise ValueError("Each scene requires style, palette, seconds, seed and caption")
-        if scene["style"] not in STYLES or scene["palette"] not in PALETTES:
+        if (not isinstance(scene["style"], str) or scene["style"] not in STYLES or
+                not isinstance(scene["palette"], str) or scene["palette"] not in PALETTES):
             raise ValueError("Unsupported procedural style or palette")
         seconds, seed = scene["seconds"], scene["seed"]
         if type(seconds) is not int or not 1 <= seconds <= 8:
@@ -118,7 +120,7 @@ def pixel(style, x, y, phase, seed):
                           y - (0.5 + 0.08 * math.cos(t)))
         return 0.5 + 0.44 * math.sin(dist * 45 - t * 4 + seed * 0.001)
     if style == "scanlines":
-        stripe = math.sin((x * 10 + y * 6) * TWO_PI - t * 2 + seed * 0.01)
+        stripe = math.sin((x * 10 + y * 6) * TWO_PI - t * 0.75 + seed * 0.01)
         return 0.38 + 0.34 * (stripe ** 2) + 0.22 * y
     if style == "sunrise":
         cx = 0.5
