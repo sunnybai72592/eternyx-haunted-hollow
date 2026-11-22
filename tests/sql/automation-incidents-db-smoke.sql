@@ -228,6 +228,25 @@ BEGIN
   IF history->'rows'->0->>'review_decision'<>'reviewed_for_manual_restore' THEN
     RAISE EXCEPTION 'Stored recovery decision invisible in factual inbox';
   END IF;
+  -- A reviewed quarantine has independent audit lifetime. Seven-day pruning
+  -- must not fail because of a foreign key or erase the review decision.
+  UPDATE public.automation_schedule_quarantines SET
+    created_at=pg_catalog.statement_timestamp()-interval '8 days'
+    WHERE user_id=alice AND request_key=qkey;
+  SELECT public.automation_prune_audit_recovery(alice) INTO output;
+  IF output->>'quarantines'<>'1' THEN
+    RAISE EXCEPTION 'Old reviewed quarantine receipt could not be pruned: %',output;
+  END IF;
+  SELECT public.automation_recovery_review_inbox(alice) INTO history;
+  IF history->>'totalMatching'<>'0' OR
+     history->>'pastReviewTotal'<>'1' OR
+     history->'pastReviews'->0->>'decision'<>'reviewed_for_manual_restore' THEN
+    RAISE EXCEPTION 'Recovery review history disappeared with source retention: %',history;
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.automation_incidents WHERE user_id=alice
+     AND source_kind='schedule_quarantine' AND source_id=qkey) THEN
+    RAISE EXCEPTION 'Evidence-linked incident disappeared after receipt cleanup';
+  END IF;
   SELECT count(*) INTO count_after FROM public.automation_runs WHERE user_id=alice;
   IF count_after<>count_before THEN
     RAISE EXCEPTION 'Incident/recovery actions fabricated execution receipts';
