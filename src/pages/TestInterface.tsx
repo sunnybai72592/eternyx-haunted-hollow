@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Clock3, LogOut } from "lucide-react";
+import { AlertTriangle, Bookmark, Clock3, ListChecks, LogOut, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
-import { answeredExamCount, examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
+import { examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
 import { createEducationAnswerSaveQueue } from "@/lib/educationAnswerSaveQueue.mjs";
+import {
+  createEducationExamReview, educationReviewSummaryMessage,
+  nextEducationReviewIndex, toggleEducationReviewFlag,
+} from "@/lib/educationExamReview.mjs";
 import { atomicCbtEnabled, startCbtAttempt, saveCbtAnswer, submitCbtAttempt } from "@/lib/educationCbtRpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +37,8 @@ export default function TestInterface() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Map<string, Answer>>(() => new Map());
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [reviewPanelOpen, setReviewPanelOpen] = useState(true);
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<string>>(() => new Set());
   const [submitting, setSubmitting] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
@@ -104,20 +110,23 @@ export default function TestInterface() {
   });
 
   // A save queue belongs to exactly ONE account and ONE exam attempt.
-  // Never carry unsaved response text into another account or attempt.
-  useEffect(() => {
-    const scope = atomicCbtEnabled && enabled && attemptQuery.data?.id
+  // Clear private answer text and review flags before a new user paints.
+  useLayoutEffect(() => {
+    const scope = enabled && attemptQuery.data?.id
       ? user?.id + ":" + attemptQuery.data.id : null;
     if (saveQueueScopeRef.current === scope) return;
     if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
     answerSaveTimerRef.current = null;
     saveQueueRef.current?.dispose();
     saveQueueScopeRef.current = scope;
-    saveQueueRef.current = scope && attemptQuery.data?.id
+    saveQueueRef.current = atomicCbtEnabled && scope && attemptQuery.data?.id
       ? createEducationAnswerSaveQueue((answer: Answer) => saveCbtAnswer(attemptQuery.data!.id, answer))
       : null;
     restoredAttemptRef.current = null;
     setAnswers(new Map());
+    setFlaggedQuestions(new Set());
+    setQuestionIndex(0);
+    setConfirmSubmit(false);
     setAnswerSaveStatus("idle");
     setAnswerSaveFailed(false);
   }, [enabled, user?.id, attemptQuery.data?.id]);
@@ -130,7 +139,24 @@ export default function TestInterface() {
     setAnswers(new Map(restoredAnswersQuery.data.map(answer => [answer.questionId, answer])));
   }, [user?.id, attemptQuery.data?.id, restoredAnswersQuery.data]);
 
+  const review = useMemo(() => createEducationExamReview(
+    testQuery.data?.questions ?? [], answers, flaggedQuestions,
+  ), [testQuery.data?.questions, answers, flaggedQuestions]);
   const question = testQuery.data?.questions[questionIndex];
+  const jumpToReviewQuestion = (index: number) => {
+    if (submitting || !testQuery.data?.questions[index]) return;
+    setQuestionIndex(index);
+    setConfirmSubmit(false);
+  };
+  const jumpToNextReview = (mode: "unanswered" | "flagged") => {
+    const target = nextEducationReviewIndex(review.entries, questionIndex, mode);
+    if (target !== -1) jumpToReviewQuestion(target);
+  };
+  const toggleCurrentFlag = () => {
+    if (!question || submitting || attemptQuery.data?.status !== "in_progress") return;
+    setFlaggedQuestions(previous => toggleEducationReviewFlag(
+      previous, question.id, testQuery.data?.questions ?? []));
+  };
   const optionsQuery = useQuery<ExamOption[]>({
     queryKey: ["education-question-options", user?.id, question?.id],
     enabled: enabled && !!attemptQuery.data && !!question &&
@@ -176,11 +202,17 @@ export default function TestInterface() {
 
   const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
   const expired = remaining === 0;
-  const canEdit = !!attemptQuery.data && !submitting && !expired &&
+  const canEdit = attemptQuery.data?.status === "in_progress" && !submitting && !expired &&
     (!atomicCbtEnabled || (restoredAnswersQuery.isSuccess &&
       !!saveQueueRef.current && saveQueueScopeRef.current === user?.id + ":" + attemptQuery.data.id));
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
     if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
+    if (attemptQuery.data.status !== "in_progress") {
+      if (["submitted", "auto_submitted"].includes(attemptQuery.data.status))
+        navigate("/test-results/" + attemptQuery.data.id, { replace: true });
+      else setNotice("This attempt cannot be submitted from the exam editor. Check its server status.");
+      return;
+    }
     if (atomicCbtEnabled && (!restoredAnswersQuery.isSuccess || !saveQueueRef.current)) {
       setNotice("Your existing saved answers are not ready. Do not submit until the server has restored the attempt.");
       return;
@@ -241,8 +273,18 @@ export default function TestInterface() {
   }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers, queryClient, restoredAnswersQuery.isSuccess]);
   submitRef.current = submitExam;
 
+  // A resumed attempt may already be submitted. Do not show editable
+  // responses or initiate duplicate submissions for completed attempts.
   useEffect(() => {
-    if (deadline === null || !attemptQuery.data) return;
+    if (!enabled || !attemptQuery.data || !user?.id) return;
+    if (["submitted", "auto_submitted"].includes(attemptQuery.data.status)) {
+      navigate("/test-results/" + attemptQuery.data.id, { replace: true });
+    }
+  }, [enabled, attemptQuery.data?.id, attemptQuery.data?.status, user?.id, navigate]);
+
+  useEffect(() => {
+    if (deadline === null || !attemptQuery.data ||
+        attemptQuery.data.status !== "in_progress") return;
     expirySubmitRequested.current = false;
     const tick = () => {
       const left = examSecondsRemaining(deadline);
@@ -255,7 +297,7 @@ export default function TestInterface() {
     tick();
     const interval = window.setInterval(tick, 1000);
     return () => window.clearInterval(interval);
-  }, [deadline, attemptQuery.data?.id]);
+  }, [deadline, attemptQuery.data?.id, attemptQuery.data?.status]);
 
   useEffect(() => {
     const change = () => {
@@ -279,6 +321,20 @@ export default function TestInterface() {
     window.addEventListener("online", reconnect);
     return () => window.removeEventListener("online", reconnect);
   }, [attemptQuery.data?.id, deadline, flushPendingAnswers]);
+
+  // Only native page reload/close can use beforeunload; route navigation
+  // remains a separate concern. No answer data is stored on device.
+  useEffect(() => {
+    if (!atomicCbtEnabled || !enabled || attemptQuery.data?.status !== "in_progress")
+      return;
+    const warnUnconfirmedSave = (event: BeforeUnloadEvent) => {
+      if (!saveQueueRef.current?.hasUnsaved()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnUnconfirmedSave);
+    return () => window.removeEventListener("beforeunload", warnUnconfirmedSave);
+  }, [enabled, attemptQuery.data?.id, attemptQuery.data?.status]);
 
   const updateAnswer = (value: string) => {
     if (!question || !canEdit) return;
@@ -322,9 +378,18 @@ export default function TestInterface() {
       <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
     </div>;
   }
-  const count = exam.questions.length;
-  const answered = answeredExamCount(answers);
-  const progress = answered / count * 100;
+  if (attemptQuery.data.status !== "in_progress") {
+    const complete = ["submitted", "auto_submitted"].includes(attemptQuery.data.status);
+    return <main className="mx-auto max-w-xl space-y-4 p-8" role="status">
+      <h1 className="text-xl font-semibold">This attempt is no longer editable</h1>
+      <p>Its status is confirmed by the assessment service. Do not submit it again from this screen.</p>
+      {complete && <Button asChild><Link to={"/test-results/" + attemptQuery.data.id}>View your results</Link></Button>}
+      <Button asChild variant="outline"><Link to="/education/history">My assessments</Link></Button>
+    </main>;
+  }
+  const count = review.total;
+  const answered = review.answered;
+  const progress = count > 0 ? answered / count * 100 : 0;
   const selected = answers.get(question.id);
 
   return <main className="min-h-screen bg-background px-4 py-8 text-foreground">
@@ -337,8 +402,14 @@ export default function TestInterface() {
       </div>
       <p className="text-xs text-muted-foreground">The clock follows the stored attempt start time. Final deadlines and grading require server-side enforcement.</p>
       <div className="space-y-2">
-        <div className="flex justify-between text-sm"><span>Question {questionIndex + 1} of {count}</span><span>{answered} answered</span></div>
+        <div className="flex flex-wrap justify-between gap-2 text-sm">
+          <span>Question {questionIndex + 1} of {count}</span>
+          <span>{answered} answered · {review.unanswered} unanswered · {review.flagged} flagged</span>
+        </div>
         <Progress value={progress} aria-label="Questions answered" />
+        <p className="text-xs text-muted-foreground">
+          Review flags stay in this tab only; they are not saved with your exam answers.
+        </p>
       </div>
       {visibilityNotice && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" />
         <AlertDescription>Tab visibility changed during this attempt. This alone is not proof of a screen lock or misconduct.</AlertDescription></Alert>}
@@ -358,6 +429,12 @@ export default function TestInterface() {
               Retry saving
             </Button>
           )}
+          {!answerSaveFailed && !expired && saveQueueRef.current?.hasUnsaved() && (
+            <Button size="sm" variant="outline" disabled={submitting}
+              onClick={() => void flushPendingAnswers().catch(() => {})}>
+              <Save aria-hidden="true" className="mr-1 h-4 w-4" />Save answers now
+            </Button>
+          )}
         </div>
       )}
       {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription className="flex flex-wrap items-center justify-between gap-3">
@@ -366,7 +443,16 @@ export default function TestInterface() {
           onClick={() => void submitExam(true)}>Retry submission</Button>
       </AlertDescription></Alert>}
       <Card className="border-border bg-card">
-        <CardHeader><CardTitle className="text-xl">{question.question_text}</CardTitle>
+        <CardHeader>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Question {questionIndex + 1}</p>
+            <Button size="sm" variant="outline" disabled={submitting || attemptQuery.data.status !== "in_progress"}
+              aria-pressed={flaggedQuestions.has(question.id)} onClick={toggleCurrentFlag}>
+              <Bookmark aria-hidden="true" className="mr-1 h-4 w-4" />
+              {flaggedQuestions.has(question.id) ? "Remove review flag" : "Flag for review"}
+            </Button>
+          </div>
+          <CardTitle className="text-xl">{question.question_text}</CardTitle>
           <CardDescription>{question.points} points · {question.question_type.replace(/_/g, " ")}</CardDescription></CardHeader>
         <CardContent>
           {["multiple_choice", "true_false"].includes(question.question_type) ? (
@@ -385,6 +471,50 @@ export default function TestInterface() {
           ) : <p role="alert">This question type is not supported in the assessment interface.</p>}
         </CardContent>
       </Card>
+      <section aria-label="Exam question overview" className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 font-semibold">
+              <ListChecks aria-hidden="true" className="h-4 w-4 text-primary" />Review questions
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Jump to any question without submitting your exam.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" aria-expanded={reviewPanelOpen}
+            onClick={() => setReviewPanelOpen(previous => !previous)}>
+            {reviewPanelOpen ? "Hide overview" : "Show overview"}
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={submitting || review.unanswered === 0}
+            onClick={() => jumpToNextReview("unanswered")}>
+            Next unanswered ({review.unanswered})
+          </Button>
+          <Button size="sm" variant="outline" disabled={submitting || review.flagged === 0}
+            onClick={() => jumpToNextReview("flagged")}>
+            Next flagged ({review.flagged})
+          </Button>
+        </div>
+        {reviewPanelOpen && (
+          <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10">
+            {review.entries.map(item => (
+              <Button key={item.id} type="button" size="sm"
+                variant={item.index === questionIndex ? "default" : "outline"}
+                className={"min-h-11 min-w-0 " + (item.flagged && item.index !== questionIndex
+                  ? "border-amber-500/60" : "")}
+                disabled={submitting}
+                aria-current={item.index === questionIndex ? "step" : undefined}
+                aria-label={"Question " + item.number + ": " +
+                  (item.answered ? "answered" : "unanswered") +
+                  (item.flagged ? ", flagged for review" : "")}
+                onClick={() => jumpToReviewQuestion(item.index)}>
+                {item.number}{item.flagged ? " •" : item.answered ? " ✓" : ""}
+              </Button>
+            ))}
+          </div>
+        )}
+      </section>
       <nav aria-label="Exam question navigation" className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="outline" disabled={questionIndex === 0 || submitting} onClick={() => setQuestionIndex(i => Math.max(0, i - 1))}>Previous</Button>
         <Button variant="destructive" disabled={submitting} onClick={() => setConfirmSubmit(true)}><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Submit assessment</Button>
@@ -393,7 +523,24 @@ export default function TestInterface() {
       <AlertDialog open={confirmSubmit} onOpenChange={setConfirmSubmit}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Submit this assessment?</AlertDialogTitle>
-            <AlertDialogDescription>{answered} of {count} questions answered. Your answers cannot be changed after a confirmed submission.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogDescription>
+              {answered} of {count} questions answered. {educationReviewSummaryMessage(review)}
+              Your answers cannot be changed after a confirmed submission.
+              Review flags do not change your grade or block submission.
+            </AlertDialogDescription></AlertDialogHeader>
+          {(review.unanswered > 0 || review.flagged > 0) && (
+            <div role="group" aria-label="Questions to revisit" className="max-h-44 overflow-y-auto rounded-lg border border-border p-3">
+              <p className="mb-2 text-sm font-semibold">Revisit before submitting</p>
+              <div className="flex flex-wrap gap-2">
+                {review.entries.filter(item => !item.answered || item.flagged).map(item => (
+                  <Button key={item.id} type="button" size="sm" variant="outline"
+                    onClick={() => jumpToReviewQuestion(item.index)}>
+                    Question {item.number}{item.flagged ? " · Flagged" : " · Unanswered"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <AlertDialogCancel disabled={submitting}>Continue assessment</AlertDialogCancel>
             <AlertDialogAction disabled={submitting} onClick={() => void submitExam(expired)}>Confirm submission</AlertDialogAction>
