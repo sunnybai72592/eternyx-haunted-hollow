@@ -32,6 +32,23 @@ export function assessmentDuration(start, end) {
   return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s";
 }
 
+/** A verified written response earns numeric points, not a fabricated right/wrong label. */
+export function describeAssessmentAnswerGrading(question, officialGradeRecorded) {
+  if (!officialGradeRecorded) return "Grading: Pending";
+  const hasPoints = Number.isSafeInteger(question?.points_awarded) &&
+    Number.isSafeInteger(question?.points) && question.points > 0 &&
+    question.points_awarded >= 0 && question.points_awarded <= question.points;
+  if (question?.is_correct === null || question?.is_correct === undefined) {
+    return hasPoints
+      ? "Grading: Written response reviewed · " + question.points_awarded +
+        " / " + question.points + " points"
+      : "Grading: Pending";
+  }
+  if (typeof question.is_correct !== "boolean") return "Grading: Pending";
+  return "Grading: " + (question.is_correct ? "Correct" : "Incorrect") +
+    (hasPoints ? " · " + question.points_awarded + " / " + question.points + " points" : "");
+}
+
 /** Text export contains only the authenticated user's server-returned attempt. */
 export function buildAssessmentReport(attempt, test, questions = []) {
   const summary = summarizeAttempt(attempt);
@@ -55,8 +72,7 @@ export function buildAssessmentReport(attempt, test, questions = []) {
     lines.push(
       String(index + 1) + ". " + String(question.question_text || "Question"),
       "Answer: " + String(question.user_answer || "No answer"),
-      question.is_correct === null || question.is_correct === undefined ?
-        "Grading: Pending" : "Grading: " + (question.is_correct ? "Correct" : "Incorrect"),
+      describeAssessmentAnswerGrading(question, summary.graded),
       ""
     );
   }
