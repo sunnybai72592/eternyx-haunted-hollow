@@ -8,6 +8,9 @@ import {
   approvedHardwareManifest,requireLocalHardwareApproval,
   auditOfflineHardwareHost,runOfflineHardwareAcceptance,
 } from "../infrastructure/cyber-range/provider/firecracker-hardware-acceptance.mjs";
+import {
+  createHardwareEvidence,saveHardwareEvidence,loadHardwareEvidence,
+} from "../infrastructure/cyber-range/provider/firecracker-hardware-evidence.mjs";
 import {SystemdMicrovmSupervisor} from
   "../infrastructure/cyber-range/provider/firecracker-systemd-supervisor.mjs";
 import {validSessionId} from
@@ -19,6 +22,10 @@ const usage=[
   "  npm run range:microvm:hardware -- --inspect --session UUID --uid 22001 --gid 22001 --kernel-sha SHA256 --rootfs-sha SHA256 --jailer-sha SHA256 --firecracker-sha SHA256",
   "Manually approved, offline guest boot and immediate teardown:",
   "  npm run range:microvm:hardware -- --run --confirm-local-kvm --session UUID --uid 22001 --gid 22001 --kernel-sha SHA256 --rootfs-sha SHA256 --jailer-sha SHA256 --firecracker-sha SHA256",
+  "Optional protected evidence record (only after a successful local run):",
+  "  npm run range:microvm:hardware -- --run --confirm-local-kvm --save-evidence [the same pinned fields as above]",
+  "Read-only receipt verifier:",
+  "  npm run range:microvm:hardware -- --verify-evidence --session UUID",
   "Read-only crash-recovery audit:",
   "  npm run range:microvm:hardware -- --verify-stopped --session UUID",
   "NEVER runs automatically. No cloud accounts, billing, public ports or image downloads.",
@@ -32,7 +39,11 @@ try{
     console.log(usage);
   }else{
     const mode=argv[0];
-    if(mode==="--verify-stopped"){
+    if(mode==="--verify-evidence"){
+      if(argv.length!==3||argv[1]!=="--session"||
+         !validSessionId(argv[2]))throw Error("Invalid receipt inspection");
+      console.log(JSON.stringify(await loadHardwareEvidence(argv[2])));
+    }else if(mode==="--verify-stopped"){
       if(argv.length!==3||argv[1]!=="--session"||
          !validSessionId(argv[2]))throw Error("Invalid status inspection");
       const stopped=await new SystemdMicrovmSupervisor().verifyDead(argv[2]);
@@ -44,7 +55,8 @@ try{
       if(!["--inspect","--run"].includes(mode))
         throw Error("Unknown acceptance mode");
       const run=mode==="--run";
-      const tail=run?argv.slice(2):argv.slice(1);
+      const saveEvidence=run&&argv[2]==="--save-evidence";
+      const tail=run?argv.slice(saveEvidence?3:2):argv.slice(1);
       if(run&&argv[1]!=="--confirm-local-kvm")
         throw Error("Missing human KVM run confirmation");
       if(tail.length!==keys.length*2)throw Error("Missing guest approval arguments");
@@ -76,7 +88,14 @@ try{
         const result=await runOfflineHardwareAcceptance({
           ...config,signal:abort.signal,
         });
-        console.log(JSON.stringify(result));
+        if(saveEvidence){
+          const receipt=createHardwareEvidence({config,result});
+          const saved=await saveHardwareEvidence(receipt);
+          console.log(JSON.stringify({...result,evidenceRecorded:true,
+            evidenceChecksum:saved.checksum}));
+        }else{
+          console.log(JSON.stringify(result));
+        }
       }else{
         console.log(JSON.stringify(await auditOfflineHardwareHost(config)));
       }
