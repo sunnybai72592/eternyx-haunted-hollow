@@ -29,6 +29,9 @@ const statusName = (status: string | null) =>
 
 export default function ServiceRequestTimeline({ requestId, ownerId, refreshToken = 0 }: Props) {
   const user = useAuthStore((state) => state.user);
+  const viewerId = user?.id ?? null;
+  const viewerKey = requestId + ':' + (viewerId ?? 'signed-out');
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,9 +42,18 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
   const queryGeneration = useRef(0);
   const [olderLoading, setOlderLoading] = useState(false);
   const PAGE_SIZE = 50;
+  const visibleActivity = viewerId && loadedKey === viewerKey ? activity : [];
+  const visibleCount = viewerId && loadedKey === viewerKey ? totalCount : 0;
 
   const load = useCallback(async () => {
     const generation = ++queryGeneration.current;
+    if (!viewerId) {
+      setLoadedKey(null);
+      setActivity([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
     setOlderLoading(false);
     setLoading(true);
     setError('');
@@ -56,13 +68,24 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
       console.error('Service request activity query failed:', queryError);
       setActivity([]);
       setTotalCount(0);
+      setLoadedKey(null);
       setError('Could not load the conversation. Verify that the service desk migration is active.');
     } else {
       setActivity(((data ?? []) as ActivityRow[]).reverse());
       setTotalCount(count ?? 0);
+      setLoadedKey(viewerKey);
     }
     setLoading(false);
-  }, [requestId]);
+  }, [requestId, viewerId, viewerKey]);
+
+  useEffect(() => {
+    setLoadedKey(null);
+    setActivity([]);
+    setTotalCount(0);
+    setMessage('');
+    setError('');
+    setNotice('');
+  }, [viewerKey]);
 
   useEffect(() => {
     void load();
@@ -70,8 +93,8 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
   }, [load, refreshToken]);
 
   const loadOlder = async () => {
-    const oldest = activity[0];
-    if (!oldest || olderLoading || loading || activity.length >= totalCount) return;
+    const oldest = visibleActivity[0];
+    if (!oldest || olderLoading || loading || visibleActivity.length >= visibleCount) return;
     const generation = queryGeneration.current;
     setOlderLoading(true);
     setError('');
@@ -94,7 +117,7 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
           Date.parse(a.created_at) - Date.parse(b.created_at) || a.id.localeCompare(b.id)
         );
       });
-      if (older.length === 0) setTotalCount(activity.length);
+      if (older.length === 0) setTotalCount(visibleActivity.length);
     }
     setOlderLoading(false);
   };
@@ -112,7 +135,7 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
     setNotice('');
     try {
       const { data: { user: verifiedUser }, error: authError } = await supabase.auth.getUser();
-      if (authError || !verifiedUser) throw new Error('Session expired. Sign in again.');
+      if (authError || !verifiedUser || verifiedUser.id !== viewerId) throw new Error('Session expired. Sign in again.');
       const { data, error: insertError } = await supabase
         .from('service_request_activity')
         .insert({
@@ -129,7 +152,13 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
       await load();
     } catch (insertError) {
       console.error('Service request message insert failed:', insertError);
-      setError('Message not saved. Please retry after verifying your connection.');
+      const detail = insertError && typeof insertError === 'object' && 'message' in insertError
+        ? String(insertError.message) : '';
+      setError(/already submitted recently/i.test(detail)
+        ? 'This message was already submitted recently. Check the conversation before retrying.'
+        : /too many service messages/i.test(detail)
+          ? 'Message rate limit reached. Please retry in about a minute.'
+          : 'Message not saved. Please retry after verifying your connection.');
     } finally {
       setSending(false);
     }
@@ -146,9 +175,9 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
       {error && <p role="alert" className="mt-4 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="mt-4 rounded-lg border border-primary/20 p-3 text-sm text-primary">{notice}</p>}
       <div aria-live="polite" className="mt-5 max-h-96 space-y-3 overflow-y-auto">
-        {loading ? <p className="text-sm text-muted-foreground">Loading activity…</p>
-          : activity.length === 0 ? <p className="text-sm text-muted-foreground">No activity yet. Your original project brief is recorded above.</p>
-          : activity.map((item) => {
+        {loading || loadedKey !== viewerKey ? <p className="text-sm text-muted-foreground">Loading activity…</p>
+          : visibleActivity.length === 0 ? <p className="text-sm text-muted-foreground">No activity yet. Your original project brief is recorded above.</p>
+          : visibleActivity.map((item) => {
             const isEvent = item.event_type !== 'message';
             const actor = item.actor_id === ownerId ? 'Customer' : item.actor_id ? 'ETERNYX administrator' : 'System';
             const heading = item.event_type === 'request_created'
@@ -166,14 +195,14 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
               </article>
             );
           })}
-        {activity.length < totalCount && (
+        {visibleActivity.length < visibleCount && (
           <div className="py-3 text-center">
             <Button type="button" variant="outline" size="sm" disabled={olderLoading} onClick={() => void loadOlder()}>
-              {olderLoading ? 'Loading older activity…' : 'Load older events (' + (totalCount - activity.length) + ' remaining)'}
+              {olderLoading ? 'Loading older activity…' : 'Load older events (' + (visibleCount - visibleActivity.length) + ' remaining)'}
             </Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">{activity.length} of {totalCount} saved events loaded. Earlier pages use stable event cursors, not shifting offsets.</p>
+        <p className="text-xs text-muted-foreground">{visibleActivity.length} of {visibleCount} saved events loaded. Earlier pages use stable event cursors, not shifting offsets.</p>
       </div>
       <form onSubmit={(event) => void submit(event)} className="mt-5 space-y-3 border-t border-border pt-4">
         <label htmlFor={'service-request-message-' + requestId} className="block text-sm font-semibold">Send a follow-up</label>
@@ -185,12 +214,12 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
           minLength={10}
           maxLength={1500}
           required
-          disabled={sending || !user}
+          disabled={sending || !user || loadedKey !== viewerKey}
           placeholder="Ask a question or clarify project scope. Do not include passwords, private keys or confidential client records."
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">{message.length}/1,500 · No attachments or payment requests here.</p>
-          <Button type="submit" disabled={sending || !user || message.trim().length < 10}>
+          <p className="text-xs text-muted-foreground">{message.length}/1,500 · Messages are rate-limited; no attachments or payment requests here.</p>
+          <Button type="submit" disabled={sending || !user || loadedKey !== viewerKey || message.trim().length < 10}>
             <Send className="mr-2 h-4 w-4" />{sending ? 'Sending…' : 'Send message'}
           </Button>
         </div>
