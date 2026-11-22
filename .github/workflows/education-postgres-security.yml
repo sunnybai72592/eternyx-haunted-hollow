@@ -22,11 +22,21 @@ jobs:
       - name: Start disposable PostgreSQL without network access
         run: |
           docker run --detach --rm --network none --name eternyx-education-db-ci -e POSTGRES_PASSWORD=ci_synthetic_only postgres:17-alpine
-          for i in $(seq 1 35); do
-            if docker exec eternyx-education-db-ci pg_isready -U postgres >/dev/null 2>&1; then break; fi
+          consecutive=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-education-db-ci psql -X -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+              consecutive=$((consecutive + 1))
+              if [ "$consecutive" -ge 2 ]; then
+                echo 'Disposable PostgreSQL ready for SQL acceptance'
+                exit 0
+              fi
+            else
+              consecutive=0
+            fi
             sleep 1
           done
-          docker exec eternyx-education-db-ci pg_isready -U postgres
+          docker logs eternyx-education-db-ci --tail 30
+          exit 1
       - name: Bootstrap only synthetic Supabase-like users and schema
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-bootstrap.sql
       - name: Apply historical CBT access policies
