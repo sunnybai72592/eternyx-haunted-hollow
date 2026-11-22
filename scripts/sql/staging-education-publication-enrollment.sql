@@ -282,19 +282,30 @@ BEGIN
 END;
 $fn$;
 
+-- RLS policies run as the querying student, who must NOT have direct
+-- SELECT on the private enrollment table. A narrow definer helper checks
+-- only whether the current JWT owner is enrolled in a published active test.
+CREATE OR REPLACE FUNCTION public.education_student_can_read_questions(p_test_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $fn$
+  SELECT (SELECT auth.uid()) IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.education_test_enrollments AS e
+    JOIN public.tests AS t ON t.id = e.test_id
+    WHERE e.test_id = p_test_id AND e.user_id = (SELECT auth.uid())
+      AND t.is_active IS TRUE AND t.is_published IS TRUE
+  );
+$fn$;
+REVOKE ALL ON FUNCTION public.education_student_can_read_questions(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.education_student_can_read_questions(uuid)
+  TO authenticated;
+
 -- Narrow legacy question browsing policy when enrolled-only admission is
 -- activated. The existing admin-specific policy remains in place.
 DROP POLICY IF EXISTS "Users can view questions for their attempts" ON public.questions;
 CREATE POLICY "Students can view enrolled published questions"
 ON public.questions FOR SELECT TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.education_test_enrollments AS e
-    JOIN public.tests AS t ON t.id = e.test_id
-    WHERE e.test_id = questions.test_id AND e.user_id = (SELECT auth.uid())
-      AND t.is_active IS TRUE AND t.is_published IS TRUE
-  )
-);
+USING (public.education_student_can_read_questions(questions.test_id));
 
 -- Explicit EXECUTE grants; internal readiness helper stays unavailable.
 REVOKE ALL ON FUNCTION public.education_publication_ready(uuid)
