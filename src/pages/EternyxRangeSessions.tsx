@@ -279,6 +279,25 @@ export default function EternyxRangeSessions() {
           </>
         )}
 
+        <section className="rounded-2xl border border-primary/20 bg-card/70 p-5 sm:p-7">
+          <h2 className="flex items-center gap-2 text-xl font-bold"><LockKeyhole className="h-5 w-5 text-primary" /> Session-bound browser access</h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            Access authorization is being prepared as a separate operator-controlled feature.
+            It requires both a short-lived session grant and a currently valid ETERNYX login, checks session ownership and provider readiness,
+            and rejects access immediately when a session stops or expires. Private gateway credentials
+            stay outside the browser.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <span className="rounded-lg border border-border px-3 py-2">60-second maximum grant</span>
+            <span className="rounded-lg border border-border px-3 py-2">Verification on every request</span>
+            <span className="rounded-lg border border-border px-3 py-2">No target URL issued yet</span>
+          </div>
+          <p className="mt-4 text-xs leading-6 text-muted-foreground">
+            Public access remains disabled. The local staging proxy is for supervised operator testing,
+            not a production-ready internet-facing cyber range or an operational browser terminal.
+          </p>
+        </section>
+
         <section className="grid gap-3 md:grid-cols-2">
           <Link to="/labs/range" className="rounded-xl border border-border/70 bg-card/70 p-5 transition hover:border-primary/40">
             <Terminal className="h-5 w-5 text-primary" /><h2 className="mt-3 font-semibold">Run a real local target now</h2>
