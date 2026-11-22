@@ -1,0 +1,31 @@
+name: Docker Ed25519 signed protocol acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-protocol-acceptance.yml'
+      - 'tests/docker-signed-protocol-integration.test.mjs'
+      - 'supabase/functions/_shared/docker-command-contract.mjs'
+      - 'supabase/functions/_shared/docker-action-verifier.mjs'
+      - 'supabase/functions/docker-command-dispatch/index.ts'
+      - 'src/lib/dockerLabPermitGuard.mjs'
+      - 'src/lib/dockerLabReceiptGuard.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-contract:
+    name: Real Ed25519 agent actions, pinned permits and receipts (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22 WebCrypto
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exercise production crypto guards using real ephemeral signing keys
+        run: node --test tests/docker-signed-protocol-integration.test.mjs
