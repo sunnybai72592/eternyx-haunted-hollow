@@ -8,9 +8,11 @@ on:
       - 'supabase/migrations/20261124010000_workspace_owner_quotas_and_pinned.sql'
       - 'supabase/migrations/20261124030000_workspace_task_priorities_and_safe_purge.sql'
       - 'supabase/migrations/20261124050000_workspace_task_details_checklists.sql'
+      - 'supabase/migrations/20261124070000_workspace_checklist_restore_batches.sql'
       - 'tests/sql/workspace-owner-quotas-db-smoke.sql'
       - 'tests/sql/workspace-priority-archive-purge-db-smoke.sql'
       - 'tests/sql/workspace-task-checklists-db-smoke.sql'
+      - 'tests/sql/workspace-checklist-restore-db-smoke.sql'
       - 'tests/sql/workspace-revisions-bootstrap.sql'
       - 'tests/sql/workspace-revisions-db-smoke.sql'
       - '.github/workflows/workspace-revisions-postgres.yml'
@@ -51,6 +53,7 @@ jobs:
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124010000_workspace_owner_quotas_and_pinned.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124030000_workspace_task_priorities_and_safe_purge.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124050000_workspace_task_details_checklists.sql
+          docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124070000_workspace_checklist_restore_batches.sql
       - name: Verify actual ownership, revision history, audit and archive invariants
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-revisions-db-smoke.sql
       - name: Verify owner caps, pinned RLS and Storage registration metadata
@@ -59,6 +62,8 @@ jobs:
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-priority-archive-purge-db-smoke.sql
       - name: Verify checklist RLS, completion timestamps, quotas and archive guards
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-task-checklists-db-smoke.sql
+      - name: Verify atomic v3 checklist restore, task identity mapping and owner isolation
+        run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-checklist-restore-db-smoke.sql
       - name: Dispose PostgreSQL
         if: always()
         run: docker rm --force eternyx-workspace-test || true
