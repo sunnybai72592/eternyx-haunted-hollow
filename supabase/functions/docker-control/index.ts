@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
 import { parseDockerControlRequest, effectiveDockerControlState } from "../_shared/docker-control-contract.mjs";
 import { reconcileDockerClaim, dockerDispatchOverview } from "../_shared/docker-dispatch-observability.mjs";
+import { parseDockerIncidentAction } from "../_shared/docker-incident-contract.mjs";
 const headers={
   "Access-Control-Allow-Origin":"*",
   "Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type",
@@ -14,7 +15,7 @@ const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status
 const reasonStatus:Record<string,number>={
   invalid_request:400,not_found:404,expired:410,idempotency_conflict:409,
   already_decided:409,policy_disabled:403,agent_unavailable:409,
-  open_limit:429,daily_limit:429,
+  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,
 };
 const reasonMessage:Record<string,string>={
   invalid_request:"Invalid Docker control request",
@@ -25,7 +26,10 @@ const reasonMessage:Record<string,string>={
   policy_disabled:"Explicit Docker operation review policy is disabled",
   agent_unavailable:"Agent has no recent verified-key signed Docker report",
   open_limit:"Three unexpired operation requests are already open",
-  daily_limit:"Daily operation request limit reached",
+  daily_limit:"Daily request limit reached",
+  case_limit:"Maximum investigation cases reached",
+  event_limit:"Investigation history limit reached",
+  not_actionable:"Only failed or delayed signed claims can open an incident",
 };
 serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
@@ -34,7 +38,8 @@ serve(async(req:Request)=>{
   try{
     const raw=await req.text();
     if(raw.length>1800)return reply({error:"Request too large"},413);
-    parsed=parseDockerControlRequest(JSON.parse(raw));
+    const body=JSON.parse(raw);
+    parsed=parseDockerControlRequest(body)||parseDockerIncidentAction(body);
   }catch{return reply({error:"Invalid JSON body"},400);}
   if(!parsed)return reply({error:"Invalid Docker control action"},400);
   const {user,supabase}=await authenticateUser(req);
@@ -42,14 +47,16 @@ serve(async(req:Request)=>{
   const owner=user.id;
   try{
     if(parsed.action==="list"){
-      const [policy,requests,events,agents,dispatch]=await Promise.all([
+      const [policy,requests,events,agents,dispatch,incidents,incidentEvents]=await Promise.all([
         supabase.from("docker_control_policies").select("enabled,daily_limit,updated_at").eq("owner_id",owner).maybeSingle(),
         supabase.from("docker_control_requests").select("id,agent_id,operation,container_id,state,requested_at,expires_at,approved_at,resolved_at").eq("owner_id",owner).order("requested_at",{ascending:false}).limit(30),
         supabase.from("docker_control_events").select("request_id,event_kind,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
         supabase.from("docker_agent_registrations").select("id,display_name,status").eq("owner_id",owner).eq("status","key_verified").limit(10),
         supabase.from("docker_command_claims").select("request_id,id,state,claimed_at,authorized_at,reported_at").eq("owner_id",owner).order("claimed_at",{ascending:false}).limit(30),
+        supabase.from("docker_lab_incidents").select("id,claim_id,reason,status,created_at,updated_at").eq("owner_id",owner).order("created_at",{ascending:false}).limit(50),
+        supabase.from("docker_lab_incident_events").select("id,incident_id,action,note,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
       ]);
-      if(policy.error||requests.error||events.error||agents.error||dispatch.error)throw new Error("Database read unavailable");
+      if(policy.error||requests.error||events.error||agents.error||dispatch.error||incidents.error||incidentEvents.error)throw new Error("Database read unavailable");
       const observedAt=new Date().toISOString();
       const claimsByRequest=new Map<string,Record<string,unknown>>(
         (dispatch.data??[]).map((x:Record<string,unknown>)=>[String(x.request_id),x] as const)
@@ -58,6 +65,7 @@ serve(async(req:Request)=>{
         const claim=claimsByRequest.get(String(r.id));
         return {...r,effective_state:effectiveDockerControlState(r),
           execution_status:claim?claim.state:"not_dispatched",
+          dispatch_claim_id:claim?.id??null,
           dispatch_claimed_at:claim?.claimed_at??null,
           dispatch_reported_at:claim?.reported_at??null,
           reconciliation:reconcileDockerClaim(claim,Date.parse(observedAt))};
@@ -68,6 +76,7 @@ serve(async(req:Request)=>{
         dispatchOverview:dockerDispatchOverview(ownedRequests),
         observedAt,
         events:events.data??[],agents:agents.data??[],
+        incidents:incidents.data??[],incidentEvents:incidentEvents.data??[],
         remoteExecutionEnabled:false,labDispatchConfigurable:true,source:"authenticated_server",
       });
     }
@@ -85,6 +94,14 @@ serve(async(req:Request)=>{
     }else if(parsed.action==="decide"){
       ({data,error}=await supabase.rpc("docker_decide_control_request",{
         p_owner_id:owner,p_request_id:parsed.requestId,p_decision:parsed.decision,
+      }));
+    }else if(parsed.action==="incident_open"){
+      ({data,error}=await supabase.rpc("docker_lab_open_incident",{
+        p_owner_id:owner,p_claim_id:parsed.claimId,p_note:parsed.note,
+      }));
+    }else if(parsed.action==="incident_triage"){
+      ({data,error}=await supabase.rpc("docker_lab_triage_incident",{
+        p_owner_id:owner,p_incident_id:parsed.incidentId,p_status:parsed.status,p_note:parsed.note,
       }));
     }else return reply({error:"Unsupported action"},400);
     if(error)throw new Error("Database mutation unavailable");
