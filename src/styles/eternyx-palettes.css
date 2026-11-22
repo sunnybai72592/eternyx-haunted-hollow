@@ -59,12 +59,12 @@
   --popover-foreground: var(--foreground);
   --secondary-foreground: var(--foreground);
   --muted-foreground: 190 12% 69%;
-  --background: 220 22% 5%;
-  --card: 220 20% 9%;
-  --popover: 220 20% 9%;
-  --muted: 220 16% 14%;
-  --input: 220 15% 20%;
-  --secondary: 220 16% 14%;
+  --background: var(--eternyx-color-hue) 17% 5%;
+  --card: var(--eternyx-color-hue) 15% 9%;
+  --popover: var(--eternyx-color-hue) 15% 9%;
+  --muted: var(--eternyx-color-hue) 12% 14%;
+  --input: var(--eternyx-color-hue) 12% 20%;
+  --secondary: var(--eternyx-color-hue) 12% 14%;
   --gradient-cyber: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
   --gradient-hologram: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--cyber-pink)));
   /* shadcn sidebars and panels also honor the selected swatch */

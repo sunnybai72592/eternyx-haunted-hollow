@@ -170,7 +170,7 @@ const CybersecurityHub = () => {
   );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#070b13] text-slate-100">
+    <main className="relative min-h-screen overflow-hidden bg-background text-slate-100">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-48 top-0 h-[34rem] w-[34rem] rounded-full bg-cyan-500/[0.09] blur-[110px]" />
         <div className="absolute -right-48 top-72 h-[34rem] w-[34rem] rounded-full bg-violet-500/[0.08] blur-[110px]" />
@@ -178,7 +178,7 @@ const CybersecurityHub = () => {
       </div>
 
       <div className="relative mx-auto max-w-[1440px] space-y-16 px-4 py-7 sm:px-6 sm:py-10 lg:px-10">
-        <section className="grid gap-8 overflow-hidden rounded-[2rem] border border-white/10 bg-[#0c1421]/90 p-6 shadow-2xl shadow-black/30 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)] lg:gap-12 lg:p-12">
+        <section className="grid gap-8 overflow-hidden rounded-[2rem] border border-white/10 bg-card/90 p-6 shadow-2xl shadow-black/30 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)] lg:gap-12 lg:p-12">
           <div className="relative z-10 flex flex-col items-start justify-center">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
               <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,.9)]" />
@@ -213,7 +213,7 @@ const CybersecurityHub = () => {
             </div>
           </div>
 
-          <div className="relative flex min-h-[330px] flex-col justify-between overflow-hidden rounded-2xl border border-cyan-300/15 bg-[#080f1b] p-5 sm:p-6">
+          <div className="relative flex min-h-[330px] flex-col justify-between overflow-hidden rounded-2xl border border-cyan-300/15 bg-card p-5 sm:p-6">
             <div aria-hidden="true" className="absolute -right-16 -top-20 h-64 w-64 rounded-full border border-cyan-300/10" />
             <div aria-hidden="true" className="absolute -right-2 -top-6 h-44 w-44 rounded-full border border-cyan-300/10" />
             <div className="relative flex items-center justify-between gap-3">
@@ -267,7 +267,7 @@ const CybersecurityHub = () => {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Find a domain or capability..."
                 aria-label="Search cybersecurity domains and tools"
-                className="h-11 border-white/10 bg-[#0c1421] pl-9 text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
+                className="h-11 border-white/10 bg-card pl-9 text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
               />
             </div>
           </div>
@@ -279,7 +279,7 @@ const CybersecurityHub = () => {
                 <Link
                   key={domain.id}
                   to={domain.href}
-                  className="group rounded-2xl border border-white/[0.09] bg-[#0c1421]/80 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-[#101c2c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070b13]"
+                  className="group rounded-2xl border border-white/[0.09] bg-card/80 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070b13]"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-semibold tracking-[0.2em] text-slate-600">{domain.number} / DOMAIN</span>
@@ -323,7 +323,7 @@ const CybersecurityHub = () => {
                 <Link
                   key={destination.href}
                   to={destination.href}
-                  className="group flex min-h-[178px] flex-col rounded-2xl border border-white/[0.09] bg-[#0c1421]/75 p-5 transition-all hover:border-violet-300/25 hover:bg-[#111a2a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070b13]"
+                  className="group flex min-h-[178px] flex-col rounded-2xl border border-white/[0.09] bg-card/75 p-5 transition-all hover:border-violet-300/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070b13]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className="rounded-xl border border-violet-300/15 bg-violet-300/[0.08] p-2.5 text-violet-200"><Icon className="h-5 w-5" /></span>
@@ -355,7 +355,7 @@ const CybersecurityHub = () => {
               No invented scan results, fictional incidents, or unsupported security guarantees.
             </p>
           </div>
-          <Link to="/knowledge" className="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#0c1421]/80 p-6 transition-colors hover:border-cyan-300/25 hover:bg-[#111a2a]">
+          <Link to="/knowledge" className="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-card/80 p-6 transition-colors hover:border-cyan-300/25 hover:bg-card">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300">Keep building skill</p>
               <h3 className="mt-2 text-lg font-semibold text-white">Explore the knowledge hub</h3>
