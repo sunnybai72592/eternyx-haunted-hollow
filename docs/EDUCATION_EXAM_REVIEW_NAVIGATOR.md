@@ -32,3 +32,5 @@ A browser tab close warning is best-effort, not a delivery guarantee. If answer 
 ## Validation
 
 At least **35 new Node regression tests** cover actual answer-state counting, unique-question and wrong-test isolation, flag toggles, next-question wraparound, completion integrity, safe pre-submit review, current attempt status enforcement, prevention of duplicate completed submissions, account reset, explicit save and real server boundaries. The standard repository utility tests, build, security checks and desktop/mobile browser journeys are also required before merge.
+
+All authorization is enforced server-side in the backend.
