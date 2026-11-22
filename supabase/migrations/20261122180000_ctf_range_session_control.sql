@@ -5,6 +5,7 @@
 CREATE TABLE IF NOT EXISTS public.ctf_range_provider (
   singleton_id smallint PRIMARY KEY DEFAULT 1 CHECK (singleton_id = 1),
   enabled boolean NOT NULL DEFAULT false,
+  ingress_approved boolean NOT NULL DEFAULT false,
   max_active_sessions smallint NOT NULL DEFAULT 0
     CHECK (max_active_sessions BETWEEN 0 AND 3),
   last_heartbeat_at timestamptz,
@@ -86,6 +87,7 @@ BEGIN
 
   SELECT * INTO v_provider FROM public.ctf_range_provider WHERE singleton_id = 1;
   IF NOT FOUND OR v_provider.enabled IS DISTINCT FROM true
+     OR v_provider.ingress_approved IS DISTINCT FROM true
      OR v_provider.max_active_sessions < 1
      OR v_provider.last_heartbeat_at IS NULL
      OR v_provider.last_heartbeat_at <= pg_catalog.statement_timestamp() - interval '60 seconds' THEN
@@ -194,6 +196,13 @@ AS $$
 DECLARE
   v_session public.ctf_range_sessions%ROWTYPE;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ctf_range_provider
+    WHERE singleton_id = 1 AND enabled = true AND ingress_approved = true
+      AND max_active_sessions > 0
+      AND last_heartbeat_at > pg_catalog.statement_timestamp() - interval '60 seconds'
+  ) THEN RETURN jsonb_build_object('ok', false, 'reason', 'provider_offline'); END IF;
+
   UPDATE public.ctf_range_sessions s
   SET status = 'provisioning', updated_at = pg_catalog.statement_timestamp()
   WHERE s.id = (
@@ -260,6 +269,6 @@ GRANT EXECUTE ON FUNCTION public.ctf_range_report_session(uuid,text,text)
 TO service_role;
 
 COMMENT ON TABLE public.ctf_range_provider IS
-  'Disabled-by-default provider capability and heartbeat; only trusted service role may manage it.';
+  'Disabled-by-default provider, independently approved secure ingress and heartbeat; only trusted service role may manage it.';
 COMMENT ON TABLE public.ctf_range_sessions IS
   'Control-plane reservation records only. No running target or browser terminal is created by this migration.';
