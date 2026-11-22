@@ -81,6 +81,7 @@ export function planVerifiedCleanup(inspections, now = new Date(), emergency = f
       project,
       sessionId: containers[0].sessionId,
       containerCount: containers.length,
+      containerIds: containers.map(x=>x.id).sort(),
       ageSeconds,
       cleanupEligible: emergency ||
         ageSeconds >= RANGE_MAX_AGE_SECONDS + RANGE_CLEANUP_GRACE_SECONDS,
@@ -118,7 +119,8 @@ export async function runOrphanSweep({
     const latest = planVerifiedCleanup(await runtime.listVerifiedManagedProjects(), new Date(), emergency);
     const candidate = latest.find(x=>x.project===entry.project);
     if (!candidate || !candidate.cleanupEligible ||
-        candidate.containerCount !== entry.containerCount) {
+        candidate.containerCount !== entry.containerCount ||
+        candidate.containerIds.join(",") !== entry.containerIds.join(",")) {
       throw new Error("Docker project changed during sweep; cleanup refused");
     }
     await runtime.stop(entry.sessionId);
