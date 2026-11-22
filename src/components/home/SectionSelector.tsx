@@ -1,5 +1,6 @@
 import React from "react";
 import ContinueWork from "./ContinueWork";
+import EternalConstellation from "./EternalConstellation";
 import HomeTaskFinder from "./HomeTaskFinder";
 import { VisitorPresence } from "@/components/home/VisitorPresence";
 import { Link, useNavigate } from "react-router-dom";
@@ -53,33 +54,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             </div>
           </div>
 
-          <div className="relative mx-auto flex aspect-square w-full max-w-[500px] items-center justify-center lg:ml-auto" aria-label="Abstract illustration of the connected ETERNYX ecosystem">
-            <div className="absolute inset-[5%] rounded-full border border-cyan-200/[0.13]" />
-            <div className="absolute inset-[15%] rounded-full border border-dashed border-sky-200/[0.17]" />
-            <div className="absolute inset-[27%] rounded-full border border-violet-200/[0.16]" />
-            <div className="absolute inset-[8%] rounded-full bg-cyan-300/[0.04] blur-3xl" />
-            <div className="absolute h-[72%] w-[72%] rounded-full border border-cyan-100/[0.08] [transform:rotateX(68deg)_rotateZ(-24deg)]" />
-            <div className="absolute h-[54%] w-[92%] rounded-full border border-violet-200/[0.12] [transform:rotateX(68deg)_rotateZ(32deg)]" />
-            <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-cyan-100/25 bg-card/90 shadow-[0_0_90px_hsl(var(--primary)/.20),inset_0_0_40px_hsl(var(--primary)/.07)] sm:h-44 sm:w-44">
-              <Zap className="mb-2 h-9 w-9 text-cyan-200 sm:h-11 sm:w-11" />
-              <span className="text-lg font-black tracking-[.2em] text-white sm:text-xl">ETERNYX</span>
-              <span className="mt-1 text-[9px] font-semibold uppercase tracking-[.25em] text-cyan-100/60">Connected by design</span>
-            </div>
-            {[
-              { label: "SECURITY", icon: LockKeyhole, position: "left-[4%] top-[23%]", tone: "text-cyan-200 border-cyan-200/20" },
-              { label: "DEVELOP", icon: Zap, position: "right-[1%] top-[28%]", tone: "text-violet-200 border-violet-200/20" },
-              { label: "AI", icon: Sparkles, position: "right-[8%] bottom-[17%]", tone: "text-fuchsia-200 border-fuchsia-200/20" },
-              { label: "WORKSPACE", icon: Compass, position: "left-[0%] bottom-[22%]", tone: "text-sky-200 border-sky-200/20" },
-              { label: "CLOUD", icon: Workflow, position: "left-[38%] top-[0%]", tone: "text-blue-200 border-blue-200/20" },
-              { label: "AUTOMATE", icon: ArrowRight, position: "right-[34%] bottom-[0%]", tone: "text-emerald-200 border-emerald-200/20" },
-            ].map(({ label, icon: Icon, position, tone }) => (
-              <div key={label} className={cn("absolute z-20 inline-flex items-center gap-2 rounded-xl border bg-card/90 px-3 py-2.5 text-[9px] font-bold tracking-[.15em] shadow-xl backdrop-blur-xl sm:px-3.5 sm:text-[10px]", position, tone)}>
-                <Icon className="h-3.5 w-3.5" />{label}
-              </div>
-            ))}
-            <div className="absolute left-[17%] top-[12%] h-2 w-2 rounded-full bg-cyan-200 shadow-[0_0_18px_hsl(var(--primary)/.9)]" />
-            <div className="absolute bottom-[12%] right-[18%] h-1.5 w-1.5 rounded-full bg-violet-200 shadow-[0_0_16px_hsl(var(--accent)/.9)]" />
-          </div>
+          <EternalConstellation />
         </section>
 
         <section className="border-t border-white/[0.08] pt-14 sm:pt-16" id="pillars" aria-labelledby="pillars-heading">
