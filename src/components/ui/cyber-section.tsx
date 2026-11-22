@@ -39,17 +39,17 @@ export const CyberSection: React.FC<CyberSectionProps> = ({
 
     const backgroundClasses = {
       transparent: '',
-      dark: 'bg-black/50 backdrop-blur-sm',
-      gradient: `bg-gradient-to-br from-${glowColor}-900/10 to-${glowColor}-800/5`,
-      matrix: 'bg-gradient-to-br from-green-900/10 to-emerald-800/5'
+      dark: 'bg-background/50 backdrop-blur-sm',
+      gradient: 'bg-gradient-to-br from-primary/10 to-accent/5',
+      matrix: 'bg-gradient-to-br from-primary/10 to-accent/5'
     };
 
     const variantClasses = {
       default: '',
       hero: 'min-h-screen flex items-center justify-center',
       feature: 'relative overflow-hidden',
-      tools: `border-t border-${glowColor}-500/20`,
-      footer: 'border-t border-gray-700/50 bg-black/80'
+      tools: 'border-t border-primary/20',
+      footer: 'border-t border-border/50 bg-background/80'
     };
 
     return cn(
@@ -88,9 +88,9 @@ export const CyberSection: React.FC<CyberSectionProps> = ({
       {/* Background Effects */}
       {variant === 'hero' && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/20 via-blue-900/10 to-purple-900/20" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10" />
           <div className="absolute inset-0 opacity-30">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent animate-pulse" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-pulse" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_1px,_rgba(255,255,255,0.02)_1px)] bg-[length:60px_60px]" />
           </div>
         </div>
@@ -102,7 +102,7 @@ export const CyberSection: React.FC<CyberSectionProps> = ({
         {(title || subtitle || description || icon) && (
           <div className={getHeaderClasses()}>
             {icon && (
-              <div className={`flex justify-center mb-4 text-${glowColor}-400`}>
+              <div className="flex justify-center mb-4 text-primary">
                 {icon}
               </div>
             )}
@@ -110,7 +110,7 @@ export const CyberSection: React.FC<CyberSectionProps> = ({
             {subtitle && (
               <ResponsiveText
                 variant="caption"
-                className={`text-${glowColor}-400 font-medium uppercase tracking-wider mb-2`}
+                className="text-primary font-medium uppercase tracking-wider mb-2"
                 cyberpunk
                 glowColor={glowColor}
               >
@@ -148,7 +148,7 @@ export const CyberSection: React.FC<CyberSectionProps> = ({
 
       {/* Decorative Elements */}
       {variant === 'feature' && (
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" />
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
       )}
     </section>
   );
