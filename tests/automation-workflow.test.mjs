@@ -97,7 +97,7 @@ test("execution enforces input, line, step and expanded-output budgets", () => {
   assert.throws(() => runLocalWorkflow("x".repeat(MAX_WORKFLOW_INPUT + 1), [step("trim")]), (e) => e.code === "input_too_large");
   assert.throws(() => runLocalWorkflow("x\n".repeat(MAX_WORKFLOW_LINES + 1), [step("trim")]), (e) => e.code === "too_many_lines");
   assert.throws(() => normalizeWorkflowSteps(Array.from({ length: MAX_WORKFLOW_STEPS + 1 }, (_, n) => ({ id: "id" + n, kind: "trim" }))), (e) => e.code === "invalid_steps");
-  assert.throws(() => runLocalWorkflow("x".repeat(49999), [step("prefix", { value: "Y".repeat(120) })]), (e) => e.code === "output_too_large");
+  assert.throws(() => runLocalWorkflow("x\n".repeat(1000), [step("prefix", { value: "Y".repeat(120) })]), (e) => e.code === "output_too_large");
 });
 
 test("automation route exposes a real workbench, preserves list cleaner and has no privileged executor", async () => {
