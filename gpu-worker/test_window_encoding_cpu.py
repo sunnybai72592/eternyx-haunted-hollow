@@ -173,6 +173,8 @@ def run_fixture(root, output):
     command = [sys.executable, str(Path(__file__).with_name("evaluate_video_adapter.py")),
                str(root), str(indexed_checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
     subprocess.run(command, check=True)
+    subprocess.run([sys.executable, str(worker_dir / "review_video_evaluation.py"), str(report),
+                    str((output or root) / "evaluation-review.html")], check=True)
     result = json.loads(report.read_text())
     assert [case["scene"] for case in result["cases"]] == ["smptebars", "testsrc"]
     assert all(case["seed"] == 7 for case in result["cases"])
