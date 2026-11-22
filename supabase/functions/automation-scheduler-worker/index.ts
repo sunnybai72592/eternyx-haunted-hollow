@@ -107,6 +107,27 @@ serve(async (req: Request) => {
         throw new Error("saved_workflow_unavailable");
       }
       const input=await decryptScheduledText(master,claim.ciphertext,claim.nonce,SCHEDULE_INPUT_BYTES);
+      const {data:policy,error:policyError}=await db.rpc("automation_workflow_preflight",{
+        p_user_id:claim.user_id,p_workflow_id:workflow.id,
+        p_channel:"scheduled",p_input_characters:input.length,
+        p_output_characters:null,
+      });
+      if(policyError||policy?.ok!==true)throw Error("schedule_policy_unavailable");
+      if(policy.allowed!==true){
+        // A quota-limited task remains eligible for a future tick; an explicitly
+        // blocked channel is a failure that the owner must resolve.
+        if(policy.reason==="policy_daily_limit"){
+          const {data:deferred,error:deferError}=await db.rpc(
+            "automation_defer_scheduled_run",{
+              p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
+              p_schedule_revision:claim.revision,
+            });
+          if(deferError||deferred?.ok!==true)throw Error("policy_deferral_failed");
+          deferred++;
+          continue;
+        }
+        throw Error("schedule_policy_denied");
+      }
       const result=runLocalWorkflow(input,workflow.steps);
       const encryptedOutput=await encryptScheduledText(master,result.output,SCHEDULE_OUTPUT_BYTES);
       const trace=result.trace.map((step: {
