@@ -87,7 +87,10 @@ test("fresh session-bound digest rejects malformed or replayed responses",()=>{
 async function withGuestUnixServer(handle,run){
   const dir=await mkdtemp(join(tmpdir(),"eternyx-vsock-probe-"));
   const path=join(dir,"socket");
+  const openSockets=new Set();
   const server=createServer(socket=>{
+    openSockets.add(socket);
+    socket.on("close",()=>openSockets.delete(socket));
     let phase=0;
     socket.on("data",chunk=>{
       if(phase===0){
@@ -108,7 +111,7 @@ async function withGuestUnixServer(handle,run){
     });
     return await run(path);
   }finally{
-    server.closeAllConnections();
+    for(const socket of openSockets)socket.destroy();
     await new Promise(resolve=>server.close(resolve));
     await rm(dir,{recursive:true,force:true});
   }
