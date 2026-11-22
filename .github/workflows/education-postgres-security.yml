@@ -51,6 +51,8 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-publication-enrollment.sql
       - name: Execute real role-specific authorization and CBT lifecycle checks
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-acceptance.sql
+      - name: Execute adversarial cross-account and lifecycle checks
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-adversarial.sql
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true
