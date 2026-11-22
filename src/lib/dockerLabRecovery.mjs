@@ -46,6 +46,26 @@ export function readLabClaim(claimId,dir=labJournalDir){
   let entries;
   try{entries=lines.map(x=>JSON.parse(x));}catch{throw Error("Invalid lab journal JSON.");}
   const first=entries[0],events=entries.map(x=>x.event);
+  // Exact canonical transitions, not merely the presence of an attempted event.
+  // Corrupt/reordered entries cannot be treated as successful or acknowledged.
+  const allowed=[
+    ["reserved"],["reserved","attempted"],["reserved","guard_denied"],
+    ["reserved","attempted","completed"],["reserved","attempted","failed"],
+    ["reserved","guard_denied","receipt_accepted"],
+    ["reserved","attempted","completed","receipt_accepted"],
+    ["reserved","attempted","failed","receipt_accepted"],
+  ];
+  if(!allowed.some(sequence=>sequence.length===events.length &&
+       sequence.every((event,index)=>event===events[index])))
+    throw Error("Invalid journal event ordering.");
+  const timestamp=v=>typeof v==="string"&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
+  if(!entries.every((entry,index)=>{
+    const keys=Object.keys(entry).sort().join(",");
+    return timestamp(entry.at)&&
+      (index===0?keys==="agentId,at,claimId,containerId,event,operation":keys==="at,event")&&
+      (index===0||Date.parse(entries[index-1].at)<=Date.parse(entry.at));
+  }))throw Error("Invalid journal fields or timestamps.");
+
   if(first?.event!=="reserved"||first.claimId!==claimId.toLowerCase()||!UUID.test(first.agentId||"")||
     !ACTIONS.has(first.operation)||!FULL.test(first.containerId||"")||
     new Set(events).size!==events.length ||
