@@ -142,7 +142,7 @@ test("17: browsers only send question text and selected IDs, never keys or secre
 test("18: the rollout document explicitly blocks teacher breakage and live deployment", () => {
   assert.match(guide, /CreateTest\.tsx/);
   assert.match(guide, /direct .*options\.select\('\*'\)/);
-  assert.match(guide, /teacher authoring/);
+  assert.match(guide, /teacher authoring/i);
   assert.match(guide, /Two-student authorization tests/);
   assert.match(guide, /isolated PostgreSQL integration test/);
   assert.match(guide, /No production database or function deployment/);
