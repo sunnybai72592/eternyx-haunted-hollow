@@ -191,6 +191,23 @@ def run_fixture(root, output):
         assert len(pixels) == 17 * 224 * 384 * 3
     ranked = sorted(measurements, key=lambda row: (-float(row["mean_adjacent_rgb_change"]), int(row["start_frame"])))
     assert re.findall(r'href="#frame-([0-9]+)"', sample_html) == [row["start_frame"] for row in ranked]
+    selection_dir = (output or root) / "batch-selection"
+    select_command = [sys.executable, str(Path(__file__).with_name("select_footage_windows.py")),
+                      str(root), str(manifest_path)]
+    subprocess.run(select_command + [str(selection_dir), "--pick", "smptebars.mp4", "0",
+                                     "--pick", "testsrc2.mp4", "8"], check=True)
+    combined = json.loads((selection_dir / "dataset.json").read_bytes())
+    offsets = {"smptebars.mp4": 0, "testsrc2.mp4": 8}
+    assert combined == {**manifest, "clips": [{**row, "start_frame": offsets.get(row["file"], row["start_frame"])}
+                                               for row in rows]}
+    receipt = json.loads((selection_dir / "selections.json").read_bytes())
+    assert receipt["original_manifest_sha256"] == fingerprint(manifest_path)
+    assert receipt["selected_manifest_sha256"] == fingerprint(selection_dir / "dataset.json")
+    assert (selection_dir / "footage-review.html").read_text().count("data:image/png;base64,") == 9
+    bad = root / "incomplete-selection"
+    rejected = subprocess.run(select_command + [str(bad), "--pick", "testsrc2.mp4", "8",
+                                                "--pick", "testsrc.mp4", "16"], capture_output=True)
+    assert rejected.returncode and not bad.exists()
     page = footage_review.read_text()
     assert "<figcaption>0.25 s</figcaption>" in page
     assert page.count("data:image/png;base64,") == 9
