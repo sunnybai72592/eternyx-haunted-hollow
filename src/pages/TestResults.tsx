@@ -262,6 +262,7 @@ export default function TestResults() {
                 !!answersQuery.error || (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
                 onClick={download}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download report (.txt)</Button>
               <Button asChild variant="outline"><Link to="/education">Back to Education</Link></Button>
+              <Button asChild variant="outline"><Link to="/education/history">My assessments</Link></Button>
               <p className="w-full text-xs text-muted-foreground">Reports are downloaded locally and are not certificates. Retakes depend on the exam service and are not enabled here.</p>
             </div>
           </>
