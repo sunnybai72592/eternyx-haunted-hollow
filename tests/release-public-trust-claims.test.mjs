@@ -56,7 +56,7 @@ test("development inquiry uses existing server-confirmed contact path rather tha
   assert.ok(app.includes('path="/contact"'));
 });
 
-test("public service listing and detail legacy routes redirect to the real capability directory", () => {
+test("legacy service routes redirect to the real service-request gateway", () => {
   for (const source of [catalog, detail, oldServices]) {
     assert.ok(source.includes('<Navigate to="/services-hub" replace />'));
     assert.doesNotMatch(source, /Starting at \$/);
@@ -64,13 +64,15 @@ test("public service listing and detail legacy routes redirect to the real capab
   assert.ok(app.includes('path="/services"'));
   assert.ok(app.includes('path="/services/:serviceId"'));
   assert.ok(app.includes('path="/services-hub"'));
-  assert.match(hub, /ETERNYX capability directory/);
+  assert.match(hub, /ETERNYX \/ Service gateway/);
+  assert.match(hub, /No charges are collected here/);
 });
 
 test("old service marketing cannot surface speculative AI models, teams, or cybersecurity protection through active routes", () => {
   assert.doesNotMatch(catalog + detail, /certified ethical hackers|custom operational deployments|GOD_MODE|Request a Consultation/);
-  assert.match(hub, /Preview · status varies by tool/);
-  assert.match(hub, /Backend-dependent/);
+  assert.match(hub, /serviceOfferings\.map/);
+  assert.match(hub, /not instant purchase or guaranteed fulfillment/);
+  assert.doesNotMatch(hub, /verified consulting capacity|guaranteed results|starting at \$/i);
 });
 
 test("legacy public routes remain registered without silently activating entitlements", () => {
