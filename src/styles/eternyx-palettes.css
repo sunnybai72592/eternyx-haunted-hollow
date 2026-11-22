@@ -1,0 +1,104 @@
+/* Shared ETERNYX color engine: the /auth swatches apply to EVERY route.
+   Palette variables are semantic. Account environment (dark/matrix/cyberpunk)
+   remains a separate existing preference. */
+:root[data-eternyx-palette] {
+  --swatch-cyan: 181 79% 64%;
+  --swatch-violet: 270 73% 73%;
+  --swatch-emerald: 157 54% 61%;
+  --swatch-bronze: 28 58% 65%;
+  --swatch-rose: 336 74% 74%;
+  --scene-shadow: 0 0% 0%;
+}
+:root[data-eternyx-palette='cyan'] {
+  --primary: 181 79% 64%; --accent: 192 70% 51%; --ring: var(--primary);
+  --cyber-cyan: 181 79% 64%; --cyber-pink: 286 68% 73%; --cyber-green: 157 54% 61%;
+  --neon-blue: 181 79% 64%; --neon-green: 157 54% 61%; --neon-purple: 270 73% 73%;
+  --border: 190 15% 24%; --primary-foreground: 190 35% 7%;
+}
+:root[data-eternyx-palette='violet'] {
+  --primary: 270 73% 73%; --accent: 286 61% 62%; --ring: var(--primary);
+  --cyber-cyan: 270 73% 73%; --cyber-pink: 324 66% 71%; --cyber-green: 225 66% 71%;
+  --neon-blue: 270 73% 73%; --neon-green: 225 66% 71%; --neon-purple: 286 61% 62%;
+  --border: 270 14% 24%; --primary-foreground: 270 32% 8%;
+}
+:root[data-eternyx-palette='emerald'] {
+  --primary: 157 54% 61%; --accent: 179 49% 47%; --ring: var(--primary);
+  --cyber-cyan: 157 54% 61%; --cyber-pink: 182 51% 62%; --cyber-green: 157 54% 61%;
+  --neon-blue: 179 49% 47%; --neon-green: 157 54% 61%; --neon-purple: 183 55% 67%;
+  --border: 160 15% 23%; --primary-foreground: 160 35% 7%;
+}
+:root[data-eternyx-palette='bronze'] {
+  --primary: 28 58% 65%; --accent: 36 63% 53%; --ring: var(--primary);
+  --cyber-cyan: 28 58% 65%; --cyber-pink: 12 56% 62%; --cyber-green: 43 65% 60%;
+  --neon-blue: 28 58% 65%; --neon-green: 43 65% 60%; --neon-purple: 12 56% 62%;
+  --border: 25 15% 24%; --primary-foreground: 25 35% 7%;
+}
+:root[data-eternyx-palette='rose'] {
+  --primary: 336 74% 74%; --accent: 352 65% 60%; --ring: var(--primary);
+  --cyber-cyan: 336 74% 74%; --cyber-pink: 336 74% 74%; --cyber-green: 270 64% 72%;
+  --neon-blue: 336 74% 74%; --neon-green: 270 64% 72%; --neon-purple: 315 62% 69%;
+  --border: 336 15% 24%; --primary-foreground: 336 35% 7%;
+}
+/* Preserve readable neutral surface and text contrast even for saturated
+   accents; visual emphasis changes immediately on all semantic components. */
+:root[data-eternyx-palette] {
+  --foreground: 180 13% 93%;
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: 190 12% 69%;
+  --background: 220 22% 5%;
+  --card: 220 20% 9%;
+  --popover: 220 20% 9%;
+  --muted: 220 16% 14%;
+  --input: 220 15% 20%;
+  --secondary: 220 16% 14%;
+  --gradient-cyber: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  --gradient-hologram: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--cyber-pink)));
+  color-scheme: dark;
+}
+/* Account modes still affect surface tone, independently of accent palette. */
+:root[data-eternyx-palette][data-eter-theme='matrix'] {
+  --background: 156 25% 4%; --card: 157 21% 8%; --muted: 155 16% 13%;
+}
+:root[data-eternyx-palette][data-eter-theme='dark'] {
+  --background: 222 27% 5%; --card: 220 22% 9%; --muted: 219 14% 16%;
+}
+.auth-palette-dock {
+  display: flex; align-items: center; gap: 2px; padding: 4px 8px;
+  border: 1px solid hsl(var(--border)); border-radius: 30px;
+  background: hsl(var(--card) / .94); box-shadow: 0 10px 36px hsl(0 0% 0% / .3);
+  backdrop-filter: blur(18px);
+}
+.auth-palette-button {
+  display: grid; place-items: center; padding: 8px; width: 40px; height: 40px;
+  border: 0; border-radius: 50%; background: transparent;
+  cursor: pointer; touch-action: manipulation;
+}
+.auth-palette-button[data-swatch='cyan'] { --swatch: var(--swatch-cyan); }
+.auth-palette-button[data-swatch='violet'] { --swatch: var(--swatch-violet); }
+.auth-palette-button[data-swatch='emerald'] { --swatch: var(--swatch-emerald); }
+.auth-palette-button[data-swatch='bronze'] { --swatch: var(--swatch-bronze); }
+.auth-palette-button[data-swatch='rose'] { --swatch: var(--swatch-rose); }
+.auth-liquid-swatch {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  color: hsl(0 0% 6%); background: radial-gradient(ellipse at 30% 20%, hsl(0 0% 100% / .55), transparent 48%), hsl(var(--swatch));
+  box-shadow: inset 0 -3px 4px hsl(0 0% 0% / .3), 0 3px 6px hsl(0 0% 0% / .3);
+  transition: transform .25s;
+}
+.auth-liquid-swatch svg { width: 13px; height: 13px; }
+.auth-palette-button[aria-pressed='true'] { box-shadow: inset 0 0 0 2px hsl(var(--swatch) / .85); }
+.auth-palette-button:hover .auth-liquid-swatch { transform: translateY(-2px); }
+.auth-palette-button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+.eternyx-palette-floating {
+  position: fixed; z-index: 65; right: max(1rem, env(safe-area-inset-right)); top: 94px;
+}
+@media (max-width: 700px) {
+  .auth-palette-dock { padding: 3px; gap: 0; }
+  .auth-palette-button { width: 32px; height: 36px; padding: 6px; }
+  .auth-liquid-swatch { width: 21px; height: 21px; }
+  .eternyx-palette-floating { top: 91px; right: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-liquid-swatch { transition: none; }
+}
