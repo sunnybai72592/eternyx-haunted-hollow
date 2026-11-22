@@ -2,6 +2,7 @@
 import argparse
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from tokenizers.pre_tokenizers import Whitespace
 from transformers import PreTrainedTokenizerFast, UMT5Config, UMT5EncoderModel
 
 from encode_training_window import encode
+from evaluate_video_adapter import holdout_loss
 from prepare_training_frames import prepare_evaluation_frames, prepare_frames
 from train_video_adapter import run
 from wan_adapter_bundle import fingerprint, load_for_inference, transformer_identity
@@ -32,22 +34,6 @@ def render(model, vae, noise, text):
     if not pixels.isfinite().all():
         raise ValueError("Non-finite decoded pixels")
     return ((pixels.clamp(-1, 1) + 1) * 127.5).round().to(torch.uint8)
-
-
-@torch.inference_mode()
-def holdout_loss(model, batch, noise):
-    """Flow velocity MSE at fixed noise levels on the unseen clip."""
-    clean = batch["latents"]
-    target = noise - clean
-    losses = []
-    for t in (0.25, 0.5, 0.75):
-        noisy = clean.lerp(noise, t)
-        prediction = model(noisy, torch.tensor([1000 * t]), batch["text_embeddings"]).sample
-        loss = torch.nn.functional.mse_loss(prediction.float(), target.float())
-        if not torch.isfinite(loss):
-            raise ValueError("Non-finite evaluation loss")
-        losses.append(loss.item())
-    return losses
 
 
 def export_pair(left, right, clip):
@@ -111,30 +97,34 @@ def compare(batch, evaluations, provenance, vae, root, output):
             (output / clip.name).write_bytes(clip.read_bytes())
         (output / "comparison.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(summary), flush=True)
+    return checkpoint
 
 
 def main(output):
     torch.manual_seed(31)
     with tempfile.TemporaryDirectory() as work:
-        root = Path(work)
-        rows = []
-        for split, source, caption in (("train", "testsrc2", "moving shapes"),
-                                       ("eval", "smptebars", "color bars"),
-                                       ("eval", "testsrc", "moving bars")):
-            video = root / f"{source}.mp4"
-            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
-                            f"{source}=size=64x64:rate=16:duration=2", "-c:v", "mpeg4", str(video)], check=True)
-            rows.append({"file": video.name, "sha256": fingerprint(video), "caption": caption,
-                         "scene": source, "split": split, "rights": "original",
-                         "rights_ref": "synthetic test generator"})
-        manifest = {"version": 1, "clips": rows}
-        window = prepare_frames(root, manifest, "testsrc2.mp4")
-        held_out = {row["scene"]: prepare_evaluation_frames(root, manifest, row["file"])
-                    for row in rows if row["split"] == "eval"}
-        def describe(window):
-            return {key: window[key] for key in ("scene", "sha256", "caption")}
-        provenance = {"train": describe(window), "eval": describe(held_out["smptebars"]),
-                      "evaluations": {scene: describe(clip) for scene, clip in held_out.items()}}
+        run_fixture(Path(work).resolve(), output)
+
+
+def run_fixture(root, output):
+    rows = []
+    for split, source, caption in (("train", "testsrc2", "moving shapes"),
+                                   ("eval", "smptebars", "color bars"),
+                                   ("eval", "testsrc", "moving bars")):
+        video = root / f"{source}.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+                        f"{source}=size=64x64:rate=16:duration=2", "-c:v", "mpeg4", str(video)], check=True)
+        rows.append({"file": video.name, "sha256": fingerprint(video), "caption": caption,
+                     "scene": source, "split": split, "rights": "original",
+                     "rights_ref": "synthetic test generator"})
+    manifest = {"version": 1, "clips": rows}
+    window = prepare_frames(root, manifest, "testsrc2.mp4")
+    held_out = {row["scene"]: prepare_evaluation_frames(root, manifest, row["file"])
+                for row in rows if row["split"] == "eval"}
+    def describe(window):
+        return {key: window[key] for key in ("scene", "sha256", "caption")}
+    provenance = {"train": describe(window), "eval": describe(held_out["smptebars"]),
+                  "evaluations": {scene: describe(clip) for scene, clip in held_out.items()}}
     vocab = Tokenizer(WordLevel({"<pad>": 0, "<unk>": 1, "moving": 2, "shapes": 3,
                                  "color": 4, "bars": 5}, unk_token="<unk>"))
     vocab.pre_tokenizer = Whitespace()
@@ -150,8 +140,20 @@ def main(output):
     assert batch["latents"].shape == (1, 4, 5, 4, 4)
     text = batch["text_embeddings"]
     assert text.shape == (1, 8, 16) and text[:, 2:].count_nonzero() == 0
-    with tempfile.TemporaryDirectory() as work:
-        compare(batch, evaluations, provenance, vae, Path(work).resolve(), output)
+    checkpoint = compare(batch, evaluations, provenance, vae, root, output)
+    vae.save_pretrained(root / "vae")
+    tokenizer.save_pretrained(root / "tokenizer")
+    encoder.save_pretrained(root / "text_encoder")
+    manifest_path = root / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    report = root / "evaluation.json"
+    command = [sys.executable, str(Path(__file__).with_name("evaluate_video_adapter.py")),
+               str(root), str(checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
+    subprocess.run(command, check=True)
+    result = json.loads(report.read_text())
+    assert [case["scene"] for case in result["cases"]] == ["smptebars", "testsrc"]
+    assert all(case["seed"] == 7 for case in result["cases"])
+    assert result["adapter_sha256"] == fingerprint(checkpoint / "adapter.safetensors")
 
 
 if __name__ == "__main__":

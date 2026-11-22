@@ -36,3 +36,13 @@ python gpu-worker/prepare_training_frames.py ./clips dataset-v1.json workshop-wi
 ```
 
 This CPU step takes the first 17 frames at 16 fps after resampling, fits the picture inside 384 × 224 with black padding, and stores RGB bytes in time × height × width × channels order. Short clips fail instead of receiving invented frames. The archive includes the original caption, scene, frame rate and source digest. Open it with `numpy.load(path, allow_pickle=False)`. Keep clips unchanged while preparing windows, and check that the caption describes the opening window. VAE encoding and caption embedding are still required before these frames can enter the Wan adapter training step.
+
+## Score an adapter on reviewed footage
+
+Run the evaluator on a CPU machine with FFmpeg, the training dependencies, the local Wan snapshot and the trained adapter bundle. The full snapshot and encoders must fit in RAM. The evaluation rows should describe footage held out from adapter training. Use the same reviewed manifest that defined the training split.
+
+```sh
+python gpu-worker/evaluate_video_adapter.py ./wan-snapshot ./training/step-100 ./clips dataset-v1.json evaluation.json --seeds 1701 1702 1703
+```
+
+The evaluator encodes the opening window and caption of each evaluation clip. Each paired measurement uses identical noise with the adapter disabled and enabled. The JSON records the clip, manifest and adapter hashes, the seed and the scores at three noise levels. A negative mean delta means lower flow prediction error on that clip and seed. Judge visible motion and prompt fidelity separately using rendered clips.
