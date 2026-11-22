@@ -40,7 +40,7 @@ const equal64=(a,b)=>SHA.test(a??"")&&SHA.test(b??"")&&
   timingSafeEqual(Buffer.from(a,"hex"),Buffer.from(b,"hex"));
 const bytes=o=>Buffer.from(JSON.stringify(o),"utf8");
 function publicSpki(key){
-  const publicKey=createPublicKey(key);
+  const publicKey=key?.type==="public"?key:createPublicKey(key);
   if(publicKey.asymmetricKeyType!=="ed25519")
     throw Error("Only Ed25519 operator attestations are accepted");
   return createHash("sha256").update(publicKey.export({
