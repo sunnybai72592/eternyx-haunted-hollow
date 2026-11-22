@@ -40,9 +40,27 @@ serve(async (req: Request) => {
   if (!validSchedulerWorkerKey(supplied,expected)) return reply({error:"Unauthorized worker"},401);
   let action: unknown;
   try {
-    const body=await req.text();
-    if (body.length>80) return reply({error:"Request too large"},413);
-    action=JSON.parse(body);
+    if (Number(req.headers.get("content-length") ?? 0) > 80) {
+      return reply({error:"Request too large"},413);
+    }
+    if (!req.body) return reply({error:"Missing worker request"},400);
+    const reader=req.body.getReader();
+    const chunks: Uint8Array[]=[];
+    let length=0;
+    while (true) {
+      const chunk=await reader.read();
+      if (chunk.done) break;
+      length+=chunk.value.byteLength;
+      if (length>80) {
+        await reader.cancel().catch(()=>undefined);
+        return reply({error:"Request too large"},413);
+      }
+      chunks.push(chunk.value);
+    }
+    const data=new Uint8Array(length);
+    let offset=0;
+    for (const chunk of chunks) { data.set(chunk,offset);offset+=chunk.byteLength; }
+    action=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(data));
   } catch { return reply({error:"Invalid worker request"},400); }
   if (!action || typeof action!=="object" || Array.isArray(action) ||
       Object.keys(action).length!==1 || (action as {action?:unknown}).action!=="tick") {
@@ -58,6 +76,7 @@ serve(async (req: Request) => {
   });
   let processed=0;
   let failed=0;
+  let deferred=0;
   let disabled=false;
   // Two claims maximum in one invocation, and at most two concurrent leases
   // across all worker instances (enforced again in the SQL claim transaction).
@@ -68,7 +87,7 @@ serve(async (req: Request) => {
       if (response.error) throw response.error;
       claim=response.data;
     } catch {
-      return reply({error:"Schedule claim service unavailable",processed,failed},503);
+      return reply({error:"Schedule claim service unavailable",processed,failed,deferred},503);
     }
     if (typeof claim==="object" && claim!==null && "ok" in claim &&
         (claim as {ok?:boolean}).ok===false) {
@@ -111,6 +130,15 @@ serve(async (req: Request) => {
         p_trace:trace,p_output_ciphertext:encryptedOutput.ciphertext,
         p_output_nonce:encryptedOutput.nonce,
       });
+      if (!completeError && completion?.reason==="daily_run_limit") {
+        const {data:postponed,error:deferError}=await db.rpc("automation_defer_scheduled_run",{
+          p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
+          p_schedule_revision:claim.revision,
+        });
+        if (deferError || postponed?.ok!==true) throw new Error("quota_deferral_failed");
+        deferred++;
+        continue;
+      }
       if (completeError || completion?.ok!==true) {
         throw new Error("scheduled_completion_rejected");
       }
@@ -131,5 +159,5 @@ serve(async (req: Request) => {
     // Prune aged ciphertext on every authenticated tick; no plaintext retained.
     await db.rpc("automation_prune_schedule_outputs");
   } catch { /* background cleanup is best-effort; read paths still enforce expiry */ }
-  return reply({processed,failed,schedulerEnabled:!disabled,source:"trusted_scheduler_worker"});
+  return reply({processed,failed,deferred,schedulerEnabled:!disabled,source:"trusted_scheduler_worker"});
 });
