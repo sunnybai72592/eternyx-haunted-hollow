@@ -133,10 +133,14 @@ test("database reserves a one-way approved write and guarantees no second POST f
   assert.match(sql,/status='submitting',payload_ciphertext=NULL,payload_nonce=NULL/);
   assert.match(sql,/pg_advisory_xact_lock/);
   assert.match(sql,/automation_housekeep_github_issues/);
+  assert.match(sql,/automation_mark_github_issue_previewed/);
+  assert.match(sql,/d\.previewed_at<pg_catalog\.statement_timestamp\(\)-interval '10 minutes'/);
+  assert.match(sql,/Prevent reconnecting with a fresh version=1/);
   assert.match(sql,/REVOKE ALL ON public\.automation_github_issue_connections FROM PUBLIC,anon,authenticated/);
   assert.match(sql,/REVOKE ALL ON public\.automation_github_issue_drafts FROM PUBLIC,anon,authenticated/);
   assert.doesNotMatch(sql,/SECURITY DEFINER/);
   assert.match(handler,/authenticateUser\(req\)/);
+  assert.match(handler,/automation_mark_github_issue_previewed/);
   assert.match(handler,/automation_claim_github_issue/);
   assert.match(handler,/createApprovedGitHubIssue\(token,claimed.owner,claimed.repo,/);
   assert.match(handler,/automation_finish_github_issue/);
