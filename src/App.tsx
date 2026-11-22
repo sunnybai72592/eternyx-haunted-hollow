@@ -17,6 +17,9 @@ import { PageTransitionWrapper } from "@/components/PageTransitionWrapper";
 import Footer from "@/components/Footer";
 import { useAuthStore } from "@/store/authStore";
 import { applyAccountTheme } from "@/lib/accountTheme";
+import { EternyxPaletteDock } from "@/components/EternyxPaletteDock";
+import { applyEternyxPalette, readEternyxPalette } from "@/lib/eternyxPalette";
+import "@/styles/eternyx-palettes.css";
 import { BackButton } from "@/components/BackButton"; // <-- NEW IMPORT
 import RequireAuth from "@/components/auth/RequireAuth";
 
@@ -152,6 +155,11 @@ const AppContent = () => {
     applyAccountTheme(profile?.preferences?.theme);
   }, [profile?.preferences?.theme]);
 
+  useEffect(() => {
+    // The auth swatches are the same global palette everywhere, even for guests.
+    applyEternyxPalette(readEternyxPalette());
+  }, []);
+
   // Determine if the back button should be shown
   const isAuthPage = ['/auth', '/login'].includes(location.pathname);
   const showBackButton = location.pathname !== '/' && !isAuthPage;
@@ -180,6 +188,7 @@ const AppContent = () => {
               <PWAInstallPrompt />
               
               {!isAuthPage && <MobileResponsiveNavigation />}
+              {!isAuthPage && <EternyxPaletteDock floating />}
               
               {/* Back Button Placement */}
               {showBackButton && (

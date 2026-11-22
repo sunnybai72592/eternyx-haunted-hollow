@@ -113,3 +113,54 @@
   .lamp-auth-footer > span:nth-child(2) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .lamp-auth-page *, .lamp-auth-page { transition: none !important; animation: none !important; } }
+
+/* True interactive lighting. The lamp illuminates the environment, but form
+   controls stay legible and operable when off (including keyboard focus).
+   Preserve semantic palette colors above instead of hard-coded glows. */
+.lamp-auth-page[data-light='off'] {
+  background: #020304;
+  --background: 220 24% 2%;
+  --card: 220 15% 5%;
+  --muted: 220 11% 9%;
+  --border: 220 12% 17%;
+  --muted-foreground: 190 9% 66%;
+}
+.lamp-auth-page[data-light='on'] {
+  background: radial-gradient(ellipse at 67% 43%, hsl(var(--primary) / .14), transparent 52%),
+    radial-gradient(ellipse at 22% 53%, hsl(var(--primary) / .075), transparent 47%),
+    hsl(var(--background));
+}
+.lamp-auth-page::after {
+  content: ''; position: absolute; z-index: 0; inset: 0;
+  pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse 72% 65% at 70% 48%, hsl(var(--primary) / .12), transparent 77%);
+  transition: opacity .75s ease;
+}
+.lamp-auth-page[data-light='on']::after { opacity: 1; }
+.lamp-auth-page[data-light='off'] .lamp-auth-scene { filter: brightness(.32) saturate(.45); }
+.lamp-auth-page[data-light='on'] .lamp-auth-scene { filter: brightness(1.07) saturate(1.1); }
+.lamp-auth-page .lamp-auth-scene { transition: filter .65s ease; }
+.lamp-auth-page[data-light='off'] .lamp-auth-form { filter: brightness(.86); }
+.lamp-auth-page[data-light='on'] .lamp-auth-form {
+  filter: brightness(1.08);
+  text-shadow: 0 0 22px hsl(var(--primary) / .055);
+}
+.lamp-auth-page .lamp-auth-form { transition: filter .65s ease, text-shadow .65s ease; }
+.lamp-auth-page[data-light='off'] .auth-primary-submit { box-shadow: none; }
+.lamp-auth-page[data-light='on'] .auth-form-shell input {
+  border-color: hsl(var(--border) / .9);
+  box-shadow: 0 0 0 1px hsl(var(--primary) / .035);
+}
+.lamp-auth-page[data-light='on'] .auth-light-beam { opacity: 1; }
+.lamp-auth-page[data-light='off'] .auth-light-beam { opacity: 0; }
+.lamp-auth-page[data-light='off'] .lamp-bulb { opacity: .06; filter: none; }
+.lamp-auth-page[data-light='on'] .lamp-bulb { opacity: 1; }
+/* All interactive actions remain visible in the darkness. */
+.lamp-auth-page button:focus-visible, .lamp-auth-page input:focus-visible {
+  outline: 2px solid hsl(var(--primary)); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lamp-auth-page .lamp-auth-scene,
+  .lamp-auth-page .lamp-auth-form,
+  .lamp-auth-page::after { transition: none !important; }
+}
