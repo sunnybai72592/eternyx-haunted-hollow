@@ -35,7 +35,15 @@ export function createEducationAnswerSaveQueue(save) {
         // A newer edit may have been made during the failed request.
         // Keep that newer edit and never let the rejected older payload
         // overwrite it. The queue remains retryable after a failure.
-        if (!disposed && !pending.has(questionId)) pending.set(questionId, answer);
+        if (!disposed) {
+          // Retry the failed question FIRST, but retain any newer edit made
+          // while its request was in flight. Other questions remain queued.
+          const latest = pending.has(questionId) ? pending.get(questionId) : answer;
+          const remainder = [...pending.entries()].filter(([id]) => id !== questionId);
+          pending.clear();
+          pending.set(questionId, latest);
+          for (const [id, value] of remainder) pending.set(id, value);
+        }
         throw error;
       }
     }
