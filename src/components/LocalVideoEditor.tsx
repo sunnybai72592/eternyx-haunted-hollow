@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import LocalRenderReview from "@/components/LocalRenderReview";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import LocalMotionComposer from "@/components/LocalMotionComposer";
+import LocalLearnedVideoStudio from "@/components/LocalLearnedVideoStudio";
 import { Clapperboard, Copy, Download, Film, Music2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -188,6 +189,7 @@ export default function LocalVideoEditor() {
         </Alert>
 
         <LocalMotionComposer />
+        <LocalLearnedVideoStudio />
 
         <LocalVideoImportPrep sources={sources} />
 

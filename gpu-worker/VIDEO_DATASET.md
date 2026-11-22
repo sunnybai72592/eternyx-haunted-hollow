@@ -415,3 +415,54 @@ Use **Inspect your actual rendered MP4** in the Studio to open `render/video.mp4
 Dedicated CI exercises real MP4 encodes, all six animated styles, all five palettes, deterministic seeds, multi-scene assembly, high portrait/square outputs, v2 receipt hashes, and rejected or interrupted renders. Browser regression tests verify JSON schema, safe bounds and Studio wiring.
 
 All generated content remains on the operator's machine unless deliberately shared. No external API, GPU provider or subscription action is activated.
+
+
+
+## First actual CPU-trained video model: a small Markov texture generator
+
+The AI Video Studio now has **Train a small video texture model on CPU**. Unlike the earlier original procedural animations (which use fixed mathematical equations), this deliberately modest experiment **learns statistical parameters from real local video frames** and then samples new moving pixels from those learned parameters.
+
+### 1. Local training
+
+The tool requires reviewed 16 FPS MP4 input clips produced by the existing `prepare_video_sources.py` or equivalent. Place 1–8 local clips in `./local-video-media`. Sources must be no more than 64 MiB each, 512x512 or smaller, fixed 16 FPS, with at least eight real decodable frames. For CPU limits, it uses only the first **240 frames (15 seconds)** from each clip, downscaled to **32 × 18 RGB** pixels.
+
+```sh
+python gpu-worker/learn_cpu_video_texture.py train \
+  --input ./local-video-media \
+  --output ./eternyx-learned-cpu-model \
+  --rights-ref operator-reviewed-original-footage
+```
+
+The tool trains a **64-color-state categorical transition model** plus a **3×3 empirical coarse-motion histogram**. It also learns a position-dependent color distribution for initializing new texture samples. These are actual measured frequencies and state transitions, not randomly assigned fake scores. There are **no learned neural layers, neural network weights, diffusion parameters or text conditioning**. Training uses only Python standard library and local FFmpeg/FFprobe; no Torch, CUDA, model-provider account or internet connection is needed.
+
+The first 75% of each decoded training window contributes model counts; the final 25% are held out. The report contains actual held-out **transition negative log likelihood** and a **global color frequency baseline** on the same held-out frames. Lower negative log likelihood means better *categorical prediction*; it does not measure realism, aesthetic quality, continuity or text-prompt alignment.
+
+A new create-only folder `eternyx-learned-cpu-model` receives `model.json` (learned counts, source digests and rights references) and `training-report.json` (holdout metrics and model SHA-256). It does not contain raw source frames or source MP4 files. However, position/color distributions may reveal visual style or aspects of private footage, so **keep the trained model file private**.
+
+### 2. Sample new video from the trained model
+
+```sh
+python gpu-worker/learn_cpu_video_texture.py generate \
+  --model ./eternyx-learned-cpu-model/model.json \
+  --output ./eternyx-learned-cpu-video \
+  --seconds 3 --seed 42 --profile landscape --quality standard
+```
+
+Choose an integer 1–8 second duration, seed 0–2147483647, landscape/portrait/square, and standard/high. The trained parameters and the seed determine the generated coarse animated texture; the implementation samples per-pixel categorical transitions and learned global translations. It **does not copy training MP4 frames into the generated output** or merely replay a training clip. It can still resemble training inputs because it is explicitly conditioned on their empirical visual patterns. Different seeds produce distinct samples; the same model and seed reproduce the same sampled RGB frames. Encoded MP4 hashes may differ between FFmpeg environments.
+
+The tool creates actual `eternyx-learned-cpu-video/clip-01.mp4`, a matching v2 `eternyx-video-v2.json`, and a full finished `eternyx-learned-cpu-video/render/video.mp4` via the existing CPU video renderer. `render/manifest.json`, `render/captions.srt` and `render/preview.html` are included. The separate `generation-report.json` **explicitly labels these outputs as learned non-neural model-generated pixels**. The v2 renderer's own manifest still labels its **editing/assembly operation** as non-generative: the **source** of the assembled frames was learned, the **final rendering operation** is conventional editing. Do not confuse those two independent claims.
+
+### 3. Local inspection and limitations
+
+In AI Video Studio, expand the CPU learned-model section. Copy commands, choose sample parameters, and optionally select both the actual `model.json` and `training-report.json` from your computer. WebCrypto SHA-256 checks that the selected model file matches the training report without uploading model files. Real held-out metrics are displayed exactly as recorded; no invented model quality or realism score is shown. Open the finished MP4 and `render/manifest.json` in the already available **Inspect your actual rendered MP4** workflow to review it locally.
+
+**Boundaries:**
+
+- This is a **learned video texture baseline**, not a high-capability neural video diffusion model, not prompt-to-video, not realistic human/action animation, and not pretrained Wan inference. It demonstrates genuine learned temporal sampling and the completed offline train → sample → MP4 pipeline within a small CPU budget.
+- The model is a first-order categorical estimator and has very low visual resolution. Outputs will look like stylized, sometimes noisy abstract moving textures; photorealistic production quality should not be expected.
+- Training data rights are operator-attested with a required reference, **not legally certified**; no dataset, training video or model is published.
+- Training is bounded (8 sources, first 15 seconds each, tiny 32x18 frames); generation is limited to 8 seconds. Output folders are create-only and incomplete batches are removed on failure.
+- The data-dependent model, training and generation run **locally**; the website prepares safe commands and verifies reports but does not run video inference remotely. No paid GPU, external AI API, hidden model download or subscription is enabled.
+- ETERNYX's separate Wan adapter research workflow remains distinct and is **not represented as trained, deployed or operational** by this prototype.
+
+Dedicated CI creates actual synthetic MP4 training clips, trains on real decoded frames, checks held-out sample counts and provenance, generates new seeded frames, rejects tampered model schemas, renders real portrait/square/landscape MP4s and tests the CLI. Browser regressions cover command injection, model receipt integrity, accurate metrics and no-upload Studio integration.
