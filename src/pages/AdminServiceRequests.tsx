@@ -11,7 +11,7 @@ import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline
 import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceTriagePanel from '@/components/services/ServiceTriagePanel';
 import { Input } from '@/components/ui/input';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
 
 type ServiceRow = {
@@ -28,6 +28,7 @@ type Draft = { status: ServiceRequestStatus; client_update: string };
 export default function AdminServiceRequests() {
   const { user, isLoading: authLoading } = useAuthStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const [authorizedFor, setAuthorizedFor] = useState<string | null>(null);
   const authorized = !!user && authorizedFor === user.id;
   const fetchGeneration = useRef(0);
@@ -168,6 +169,7 @@ export default function AdminServiceRequests() {
     setActiveSearchField('title');
     setPage(0);
     setFeedback(null);
+    if (location.search) navigate('/admin/service-requests', { replace: true });
   };
 
   const copyAdminLink = async (id: string) => {
