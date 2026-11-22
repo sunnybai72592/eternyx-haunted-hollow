@@ -112,7 +112,7 @@ export default function AutomationGitHubIssuesPanel(){
       Connect one GitHub repository using a <strong>fine-grained personal access token</strong>
       limited to that repository with <strong>Issues: write</strong>. Your token and draft text are
       AES-encrypted on the backend. Saving a draft does not write to GitHub: you must separately
-      preview and approve it. All issue creation is disabled by default.
+      preview and approve it within 10 minutes. The server checks this preview before any write. All issue creation is disabled by default.
     </p>
     <p className="text-xs text-muted-foreground">
       Maximum 3 approved issue write attempts per rolling 24 hours, 3 pending drafts, 10 drafts
