@@ -27,9 +27,15 @@ export type Database = {
         Relationships: []
       }
       workspace_items: {
-        Row: { id: string; owner_id: string; project_id: string; kind: string; title: string; note_text: string | null; target_url: string | null; storage_path: string | null; file_size: number | null; mime_type: string | null; created_at: string }
-        Insert: { id?: string; owner_id: string; project_id: string; kind: string; title: string; note_text?: string | null; target_url?: string | null; storage_path?: string | null; file_size?: number | null; mime_type?: string | null; created_at?: string }
-        Update: { id?: string; owner_id?: string; project_id?: string; kind?: string; title?: string; note_text?: string | null; target_url?: string | null; storage_path?: string | null; file_size?: number | null; mime_type?: string | null; created_at?: string }
+        Row: { id: string; owner_id: string; project_id: string; kind: string; title: string; note_text: string | null; target_url: string | null; storage_path: string | null; file_size: number | null; mime_type: string | null; created_at: string; updated_at: string; revision: number }
+        Insert: { id?: string; owner_id: string; project_id: string; kind: string; title: string; note_text?: string | null; target_url?: string | null; storage_path?: string | null; file_size?: number | null; mime_type?: string | null; created_at?: string; updated_at?: string; revision?: number }
+        Update: { id?: string; owner_id?: string; project_id?: string; kind?: string; title?: string; note_text?: string | null; target_url?: string | null; storage_path?: string | null; file_size?: number | null; mime_type?: string | null; created_at?: string; updated_at?: string; revision?: number }
+        Relationships: []
+      }
+      workspace_item_revisions: {
+        Row: { id: string; item_id: string; owner_id: string; project_id: string; revision: number; kind: string; title: string; note_text: string | null; target_url: string | null; saved_at: string }
+        Insert: { id?: string; item_id: string; owner_id: string; project_id: string; revision: number; kind: string; title: string; note_text?: string | null; target_url?: string | null; saved_at?: string }
+        Update: { id?: string; item_id?: string; owner_id?: string; project_id?: string; revision?: number; kind?: string; title?: string; note_text?: string | null; target_url?: string | null; saved_at?: string }
         Relationships: []
       }
       workspace_activity: {
