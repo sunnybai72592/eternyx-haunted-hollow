@@ -2,6 +2,7 @@
 // claim evidence. Dashboard JSON is NOT cryptographically authenticated.
 import {readLabClaim} from "./dockerLabRecovery.mjs";
 import {verifyLabAudit} from "./dockerLabAttestation.mjs";
+import {isAbsolute} from "node:path";
 import {validateOwnerClaimExport} from "./dockerLabOwnerExport.mjs";
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const ID=/^[a-f0-9]{64}$/;
@@ -15,7 +16,7 @@ export function reviewLocalClaimAgainstOwnerExport(data,claimId,{
  journalDir,pinnedAgentPublicKey=null,signedAudit=null,now=Date.now()
 }={}){
  validateOwnerClaimExport(data);
- if(!UUID.test(claimId||"")||typeof journalDir!=="string"||!journalDir.startsWith("/"))
+ if(!UUID.test(claimId||"")||typeof journalDir!=="string"||!isAbsolute(journalDir))
    throw Error("Claim ID and absolute operator journal directory required.");
  const record=data.requests.find(r=>r.claimId===claimId);
  if(!record)return {claimId,status:"not_in_bounded_export",attentionRequired:true,
@@ -52,7 +53,7 @@ export function reviewLocalClaimAgainstOwnerExport(data,claimId,{
  const mismatched=findings.length>0;
  return {claimId,status:mismatched?"manual_investigation_required":reported?
    "consistent_agent_assertions":"pending_or_unreported",
-   attentionRequired:mismatched||!reported||record.executionStatus!=="reported_completed",
+   attentionRequired:mismatched||!reported||record.executionStatus!=="reported_completed"||!proof,
    serverExportVerified:false,remoteOperationVerified:false,
    signedLocalProofVerified:proof,localReceiptAcknowledged:local.acknowledged,
    agentReportedStatus:record.executionStatus,
