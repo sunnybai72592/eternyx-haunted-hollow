@@ -165,7 +165,7 @@ export default function TestInterface() {
     });
   };
 
-  if (authLoading || (enabled && (testQuery.isPending || attemptQuery.isPending))) {
+  if (authLoading || (enabled && (testQuery.isPending || (!!testQuery.data?.questions.length && attemptQuery.isPending)))) {
     return <p role="status" className="mx-auto max-w-2xl p-8">Preparing your assessment…</p>;
   }
   if (!isAuthenticated) {
