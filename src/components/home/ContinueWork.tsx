@@ -20,10 +20,10 @@ export default function ContinueWork() {
     };
   }, []);
   if (!note) return null;
-  return <Link to="/workspace" state={{ resumeNote: note }} className="group mt-5 flex items-center gap-4 rounded-xl border border-cyan-200/25 bg-cyan-100/[0.05] p-4 focus-visible:ring-2 focus-visible:ring-cyan-200">
-    <NotebookPen aria-hidden="true" className="size-5 shrink-0 text-cyan-200" />
-    <span className="flex-1"><strong className="block text-white">Continue my work</strong>
-      <span className="text-sm text-slate-300">{note.kind === "draft" ? "Open the scratchpad draft saved in this browser." : "Open the latest scratchpad copy saved in this browser."}</span>
-    </span><ArrowRight aria-hidden="true" className="size-5 text-cyan-200" />
+  return <Link to="/workspace" state={{ resumeNote: note }} className="group mt-5 flex min-h-16 items-center gap-4 rounded-xl border border-primary/25 bg-primary/[0.05] p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+    <NotebookPen aria-hidden="true" className="size-5 shrink-0 text-primary" />
+    <span className="flex-1"><strong className="block text-foreground">Continue my work</strong>
+      <span className="text-sm text-muted-foreground">{note.kind === "draft" ? "Open the scratchpad draft saved in this browser." : "Open the latest scratchpad copy saved in this browser."}</span>
+    </span><ArrowRight aria-hidden="true" className="size-5 text-primary" />
   </Link>;
 }
