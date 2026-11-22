@@ -39,8 +39,8 @@ test("emits exact Python v2 storyboard keys, source provenance, optional license
 });
 
 test("exports accurate 16fps SRT sidecar and supports Unicode", () => {
-  const output = build({shots: [{...shotA, frames: 8, caption: "<start> مرحبًا"},
-                                {...shotB, frames: 16, caption: "Second & final"}]});
+  const output = build({shots: [{...shotA, frames: 8, fadeInFrames: 0, caption: "<start> مرحبًا"},
+                                {...shotB, frames: 16, fadeOutFrames: 0, caption: "Second & final"}]});
   const srt = localVideoSrt(output.board);
   assert.match(srt, /00:00:00,000 --> 00:00:00,500/);
   assert.match(srt, /00:00:00,500 --> 00:00:01,500/);
