@@ -97,6 +97,7 @@ serve(async(req:Request)=>{
     if(error)throw error;
     if(data?.ok!==true)return reply({error:"Receipt rejected",code:data?.reason||"denied"},409);
     return reply({accepted:true,claimId:input.claimId,status:data.state,
+      alreadyRecorded:data.reused===true,
       verification:"agent_signature_only",independentExecutionAudit:false});
   }catch{
     return reply({error:"Docker dispatch unavailable"},503);
