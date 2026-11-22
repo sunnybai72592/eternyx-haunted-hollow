@@ -217,6 +217,7 @@ export default function AdminServiceRequests() {
       if (authError || auth.user?.id !== user.id) throw new Error('Session expired');
       const { data, error } = await supabase.rpc('mark_service_request_checked', { p_request_id: id });
       if (error || !data) throw error ?? new Error('Check-in not confirmed');
+      if (useAuthStore.getState().user?.id !== user.id) return;
       setFeedback('Your personal check-in was recorded. It does not send a message or claim anyone read one.');
       void load();
     } catch (reason) {
