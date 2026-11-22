@@ -26,9 +26,9 @@ test("security service listings do not advertise unsupported 24/7 monitoring", a
     assert.ok(!source.includes("instant threat response"));
   }
 
-  assert.ok(servicesHub.includes("Platform Security Monitoring"));
+  assert.ok(servicesHub.includes("No charges are collected here"));
+  assert.ok(servicesHub.includes("not instant purchase or guaranteed fulfillment"));
   assert.ok(services.includes('<Navigate to="/services-hub" replace />'));
-  assert.ok(servicesHub.includes("Platform Security Monitoring"));
   assert.ok(cybersecurityHub.includes("No invented scan results, fictional incidents, or unsupported security guarantees"));
 });
 

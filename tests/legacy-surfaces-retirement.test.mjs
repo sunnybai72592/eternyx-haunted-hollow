@@ -104,6 +104,7 @@ test('retired Black Hat Pentesting console is not shipped or advertised as an op
   assert.doesNotMatch(navigation, /Black Hat Pentesting/);
   assert.match(navigation, /Assessment & Remediation/);
   assert.doesNotMatch(servicesHub, /Black Hat Pentesting|black-hat-pentesting/);
-  assert.match(servicesHub, /Assessment & Remediation/);
+  assert.match(servicesHub, /serviceOfferings\.map/);
+  assert.match(servicesHub, /\/services\/request/);
   assert.doesNotMatch(services, /Black Hat Pentesting|black-hat-pentesting|Social Engineering Assessments/);
 });
