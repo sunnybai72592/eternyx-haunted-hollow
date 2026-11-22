@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { filterEducationTests, normalizeEducationTest } from "@/lib/educationCatalog.mjs";
 import { atomicCbtEnabled } from "@/lib/educationCbtRpc";
+import { publicationRpcEnabled, listEnrolledEducationTests } from "@/lib/educationPublicationRpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ export default function Education() {
     enabled: !authLoading && isAuthenticated && !!user?.id,
     retry: 1,
     queryFn: async () => {
+      if (publicationRpcEnabled) return await listEnrolledEducationTests();
       const activeTests = supabase
         .from("tests")
         .select("id,title,description,duration_minutes,created_at,is_active")
@@ -112,7 +114,7 @@ export default function Education() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Assessment catalog</p>
                 <h2 id="available-assessments" className="mt-1 text-2xl font-bold">Available tests</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Live database listings, not sample exams.</p>
+                <p className="mt-1 text-sm text-muted-foreground">{publicationRpcEnabled ? "Only assessments you are enrolled in are shown." : "Live database listings, not sample exams."}</p>
               </div>
               <Button variant="outline" disabled={isFetching} onClick={() => void refetch()} className="min-h-11">
                 <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />{isFetching ? "Refreshing…" : "Refresh tests"}

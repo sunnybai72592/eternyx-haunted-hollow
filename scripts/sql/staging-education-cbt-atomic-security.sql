@@ -72,13 +72,30 @@ BEGIN
   IF v_user IS NULL OR p_test_id IS NULL THEN
     RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
   END IF;
+  -- Share-lock enrollment before creating the attempt. Revocation takes an
+  -- UPDATE lock on the same row, eliminating the revoke-vs-start race.
+  PERFORM 1 FROM public.education_test_enrollments AS e
+  JOIN public.education_publication_requests AS r ON r.test_id = e.test_id
+  WHERE e.test_id = p_test_id AND e.user_id = v_user
+    AND r.status = 'approved'
+  FOR SHARE OF e;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Student is not enrolled in an approved test'
+      USING ERRCODE = '42501';
+  END IF;
   SELECT t.duration_minutes INTO v_minutes
   FROM public.tests AS t
   WHERE t.id = p_test_id AND t.is_active IS TRUE
     AND t.is_published IS TRUE
     -- Do not bypass instructor access passwords. A separately verified
     -- enrollment/password service is needed before these exams can open.
-    AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL;
+    AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL
+    -- Enforced only with coordinated reviewed publication/enrollment staging.
+    AND EXISTS (
+      SELECT 1 FROM public.education_test_enrollments AS e
+      JOIN public.education_publication_requests AS r ON r.test_id = e.test_id
+      WHERE e.test_id = t.id AND e.user_id = v_user AND r.status = 'approved'
+    );
   IF v_minutes IS NULL OR v_minutes NOT BETWEEN 1 AND 1440 OR
      NOT EXISTS (SELECT 1 FROM public.questions AS q WHERE q.test_id = p_test_id) THEN
     RAISE EXCEPTION 'Assessment unavailable' USING ERRCODE = '22023';

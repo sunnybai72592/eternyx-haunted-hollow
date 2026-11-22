@@ -111,6 +111,7 @@ const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 const DomainDns = lazy(() => import("./pages/DomainDns"));
 const Education = lazy(() => import("./pages/Education"));
 const EducationInstructorStudio = lazy(() => import("./pages/EducationInstructorStudio"));
+const EducationPublicationAdmin = lazy(() => import("./pages/EducationPublicationAdmin"));
 const TestInterface = lazy(() => import("./pages/TestInterface"));
 const TestResults = lazy(() => import("./pages/TestResults"));
 
@@ -292,6 +293,7 @@ const AppContent = () => {
                         <Route path="/admin/enquiries" element={<AdminContactSubmissions />} />
                         <Route path="/admin/users" element={<AdminUsers />} />
                         <Route path="/admin/security" element={<AdminSecurityMonitoring />} />
+                        <Route path="/admin/education" element={<RequireAuth><EducationPublicationAdmin /></RequireAuth>} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/tools/network-scanner" element={<Navigate to="/explore" replace />} />
                         <Route path="/tools/code-analyzer" element={<Navigate to="/explore" replace />} />

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AdminWorkspaceNav from '@/components/admin/AdminWorkspaceNav';
+import { publicationRpcEnabled } from '@/lib/educationPublicationRpc';
 
 type ActivityItem = {
   id: string;
@@ -122,6 +123,7 @@ export default function AdminOverview() {
       <Button variant="outline" onClick={() => void load()} disabled={loading} className="h-10 w-full border-white/15 bg-white/[0.035] text-slate-200 hover:bg-white/[0.08] sm:w-auto"><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh overview</Button>
     </header>
     <AdminWorkspaceNav />
+    {publicationRpcEnabled && <div className="mb-5"><Link to="/admin/education" className="inline-flex min-h-11 items-center rounded-xl border border-primary/25 bg-primary/10 px-4 text-sm font-semibold text-primary hover:bg-primary/15">Education publication & enrollment <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" /></Link></div>}
 
     <section aria-label="Platform operations metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {metrics.map(({ label, value, note, icon: Icon, tone, href }) => <Link key={label} to={href} className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
