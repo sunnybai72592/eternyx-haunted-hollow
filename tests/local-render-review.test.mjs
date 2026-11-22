@@ -69,6 +69,19 @@ test("check real renderer-style exact SRT timing and captions", () => {
   assert.throws(() => checkRenderedSubtitles("x".repeat(32769),receipt),/32 KiB/);
 });
 
+test("16fps subtitle rounding exactly matches Python half-even millisecond semantics", () => {
+  const tiny = buildLocalVideoBoard({
+    sources:[sourceA],
+    shots:[
+      {...shots[0],frames:1,fadeInFrames:0,fadeOutFrames:0},
+      {...shots[0],frames:4,fadeInFrames:0,fadeOutFrames:0},
+    ],
+  });
+  const srt = localVideoSrt(tiny.board);
+  assert.match(srt,/00:00:00,000 --> 00:00:00,062/);
+  assert.match(srt,/00:00:00,062 --> 00:00:00,312/);
+});
+
 test("reject mismatched, corrupt, tampered, renamed or overlarge rendered MP4", () => {
   const receipt = makeReceipt();
   for (const changed of (
