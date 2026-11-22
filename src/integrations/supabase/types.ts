@@ -385,6 +385,30 @@ export type Database = {
           },
         ]
       }
+      service_request_checks: {
+        Row: {
+          request_id: string
+          user_id: string
+          checked_at: string
+        }
+        Insert: {
+          request_id: string
+          user_id: string
+          checked_at?: string
+        }
+        Update: {
+          checked_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_request_checks_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       service_triage_history: {
         Row: {
           id: string
@@ -2515,6 +2539,57 @@ export type Database = {
       }
     }
     Views: {
+      service_admin_check_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          contact_email: string
+          company: string | null
+          status: string
+          client_update: string | null
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          created_at: string
+          updated_at: string
+          priority: string
+          priority_rank: number
+          assigned_admin_id: string | null
+          triage_updated_at: string | null
+          last_customer_activity_at: string | null
+          last_admin_activity_at: string | null
+          needs_follow_up: boolean
+          next_action_kind: string
+          next_review_on: string | null
+          review_bucket: string
+          last_checked_at: string | null
+          needs_my_check: boolean
+        }
+        Relationships: []
+      }
+      service_customer_check_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          status: string
+          client_update: string | null
+          created_at: string
+          updated_at: string
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          last_admin_activity_at: string | null
+          last_checked_at: string | null
+          has_updates_since_check: boolean
+        }
+        Relationships: []
+      }
       service_admin_review_queue: {
         Row: {
           id: string
@@ -2572,6 +2647,7 @@ export type Database = {
       }
     }
     Functions: {
+      mark_service_request_checked: { Args: { p_request_id: string }; Returns: string }
       workspace_delete_archived_project: { Args: { p_project_id: string }; Returns: boolean }
       admin_list_users: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
