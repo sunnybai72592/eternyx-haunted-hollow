@@ -402,3 +402,7 @@ verify_jwt = true
 # Agent-initiated Ed25519-authenticated Docker heartbeat (no user JWT)
 [functions.docker-heartbeat]
 verify_jwt = false
+
+# Authenticated owner operation REVIEW only. No Docker API execution.
+[functions.docker-control]
+verify_jwt = true

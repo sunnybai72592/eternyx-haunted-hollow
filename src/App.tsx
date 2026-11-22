@@ -29,6 +29,7 @@ const CybersecurityHub = lazy(() => import("./pages/CybersecurityHub"));
 const Explore = lazy(() => import("./pages/Explore"));
 const EcosystemPillarPage = lazy(() => import("./pages/EcosystemPillarPage"));
 const DockerEnrollment = lazy(() => import("./pages/DockerEnrollment"));
+const DockerControlReview = lazy(() => import("./pages/DockerControlReview"));
 const CloudIntegrations = lazy(() => import("./pages/CloudIntegrations"));
 const AIArsenal = lazy(() => import("./pages/AIArsenal"));
 const AIVideoStudio = lazy(() => import("./pages/AIVideoStudio"));
@@ -264,6 +265,7 @@ const AppContent = () => {
                         <Route path="/workspace" element={<EcosystemPillarPage pillarId="workspace" />} />
                         <Route path="/integrations" element={<CloudIntegrations />} />
                         <Route path="/integrations/docker-enrollment" element={<RequireAuth><DockerEnrollment /></RequireAuth>} />
+                        <Route path="/integrations/docker-control" element={<RequireAuth><DockerControlReview /></RequireAuth>} />
                         <Route path="/automation" element={<EcosystemPillarPage pillarId="automation" />} />
                         <Route path="/arsenal" element={<CyberArsenal />} />
                         <Route path="/subscriptions" element={<SubscriptionHub />} />

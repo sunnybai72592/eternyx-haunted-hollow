@@ -125,6 +125,7 @@ export default function DockerEnrollment(){
       <textarea aria-label="Agent challenge signature" rows={2} maxLength={100} value={signature} onChange={e=>setSignature(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background p-3 font-mono text-xs"/>
       <button disabled={busy||!signature.trim()} onClick={verify} className="mt-3 min-h-11 rounded-lg bg-cyan-500 px-4 font-semibold text-slate-950 disabled:opacity-50">Verify possession</button>
     </section>}
+    <div className="rounded-2xl border border-border bg-card p-5"><h2 className="text-lg font-semibold">Owner-controlled operation review</h2><p className="mt-2 text-sm text-muted-foreground">Review time-limited, audited Docker operation plans. This does not execute commands on enrolled machines.</p><Link to="/integrations/docker-control" className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-cyan-500/50 px-4 text-sm font-semibold">Open Docker operation review</Link></div>
     <section className="rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Registered agent identities &amp; signed reports</h2>
