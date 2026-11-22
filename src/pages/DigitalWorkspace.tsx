@@ -6,6 +6,7 @@ import {
   RotateCcw, Search, ShieldCheck, Trash2,
 } from "lucide-react";
 import DeviceNote from "@/components/DeviceNote";
+import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +18,7 @@ import {
   WORKSPACE_MIME_TYPES, validWorkspaceLink, workspaceFileAllowed, workspaceFileKey,
 } from "@/lib/workspaceRules.mjs";
 import type { Database } from "@/integrations/supabase/types";
+import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, workspaceExportFileName } from "@/lib/workspaceLibrary.mjs";
 
 type Project = Database["public"]["Tables"]["workspace_projects"]["Row"];
 type Task = Database["public"]["Tables"]["workspace_tasks"]["Row"];
@@ -67,6 +69,10 @@ export default function DigitalWorkspace() {
   const [editDescription, setEditDescription] = useState("");
   const [newTask, setNewTask] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [taskFilter, setTaskFilter] = useState("all");
+  const [taskQuery, setTaskQuery] = useState("");
+  const [itemFilter, setItemFilter] = useState("all");
+  const [itemQuery, setItemQuery] = useState("");
   const [itemMode, setItemMode] = useState<"note" | "link">("note");
   const [itemName, setItemName] = useState("");
   const [itemBody, setItemBody] = useState("");
@@ -132,6 +138,8 @@ export default function DigitalWorkspace() {
   const selected = projects.find((project) => project.id === projectId) ?? null;
   const projectTasks = tasks.filter((task) => task.project_id === projectId);
   const projectItems = items.filter((item) => item.project_id === projectId);
+  const shownTasks = filterWorkspaceTasks(projectTasks, taskFilter, taskQuery);
+  const shownItems = filterWorkspaceItems(projectItems, itemFilter, itemQuery);
   const active = selected?.status === "active";
   const visibleProjects = projects.filter((project) =>
     (showArchived || project.status === "active") &&
@@ -339,6 +347,52 @@ export default function DigitalWorkspace() {
     }, "Selected device note imported. The original local copy was not changed.");
   };
 
+  const exportProject = () => {
+    if (!owner || !selected) return;
+    if (!window.confirm("Download a local JSON export of this project? Notes and saved links contain private data. File contents are not included.")) return;
+    void mutate(async () => {
+      // Fetch ALL rows for this project, not just the dashboard's initial 1000.
+      // An incomplete export is an error, never represented as a full backup.
+      const pullTasks = async (): Promise<Task[]> => {
+        const result: Task[] = [];
+        for (let start = 0; start <= 10000; start += 500) {
+          const { data, error: queryError } = await supabase.from("workspace_tasks").select("*")
+            .eq("owner_id", owner).eq("project_id", selected.id)
+            .order("id", { ascending: true }).range(start, start + 499);
+          if (queryError) throw new Error(queryError.message);
+          const batch = (data ?? []) as Task[];
+          if (start >= 10000 && batch.length) throw new Error("Export limit reached (10,000 tasks). Contact support for a larger backup.");
+          result.push(...batch);
+          if (batch.length < 500) break;
+        }
+        return result;
+      };
+      const pullItems = async (): Promise<Item[]> => {
+        const result: Item[] = [];
+        for (let start = 0; start <= 10000; start += 500) {
+          const { data, error: queryError } = await supabase.from("workspace_items").select("*")
+            .eq("owner_id", owner).eq("project_id", selected.id)
+            .order("id", { ascending: true }).range(start, start + 499);
+          if (queryError) throw new Error(queryError.message);
+          const batch = (data ?? []) as Item[];
+          if (start >= 10000 && batch.length) throw new Error("Export limit reached (10,000 items). Contact support for a larger backup.");
+          result.push(...batch);
+          if (batch.length < 500) break;
+        }
+        return result;
+      };
+      const [allTasks, allItems] = await Promise.all([pullTasks(), pullItems()]);
+      const snapshot = buildWorkspaceExport(selected, allTasks, allItems);
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = workspaceExportFileName(selected.name);
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }, "Export prepared. Private file bytes and revision history are not included.");
+  };
+
   const ownedDataVisible = Boolean(owner && loadedOwner === owner);
 
   return <main className="mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-6 text-foreground sm:px-6">
@@ -448,6 +502,8 @@ export default function DigitalWorkspace() {
                     <h2 className="mt-1 break-words text-2xl font-semibold">{selected.name}</h2>
                   </div>
                   <Button type="button" variant="outline" disabled={busy}
+                    onClick={exportProject}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export JSON</Button>
+                  <Button type="button" variant="outline" disabled={busy}
                     onClick={() => setArchive(active)}>
                     {active ? <Archive className="mr-2 h-4 w-4" aria-hidden="true" /> :
                       <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />}
@@ -491,8 +547,16 @@ export default function DigitalWorkspace() {
                     <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Add task
                   </Button>
                 </form>}
+                <div className="flex flex-wrap gap-3 rounded-lg border border-border p-3">
+                  <label htmlFor="workspace-task-filter" className="text-sm">Status</label>
+                  <select id="workspace-task-filter" value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)} className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
+                    <option value="all">All</option><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option>
+                  </select>
+                  <label htmlFor="workspace-task-search" className="sr-only">Find a task</label>
+                  <Input id="workspace-task-search" placeholder="Search task names / due dates" value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} className="min-w-[180px] flex-1" />
+                </div>
                 <div className="divide-y divide-border">
-                  {projectTasks.map((task) => <div key={task.id} className="flex flex-wrap items-center gap-3 py-3">
+                  {shownTasks.map((task) => <div key={task.id} className="flex flex-wrap items-center gap-3 py-3">
                     <span className="min-w-0 flex-1">
                       <span className={"block break-words text-sm font-medium " +
                         (task.status === "done" ? "text-muted-foreground line-through" : "")}>{task.title}</span>
@@ -510,6 +574,7 @@ export default function DigitalWorkspace() {
                     </Button>}
                   </div>)}
                   {!projectTasks.length && <p className="py-4 text-sm text-muted-foreground">No tasks saved for this project.</p>}
+                  {!!projectTasks.length && !shownTasks.length && <p className="py-4 text-sm text-muted-foreground">No tasks match this filter.</p>}
                 </div>
               </section>
 
@@ -584,8 +649,16 @@ export default function DigitalWorkspace() {
                   </div>
                 </>}
 
+                <div className="flex flex-wrap gap-3 rounded-lg border border-border p-3">
+                  <label htmlFor="workspace-item-filter" className="text-sm">Type</label>
+                  <select id="workspace-item-filter" value={itemFilter} onChange={(event) => setItemFilter(event.target.value)} className="min-h-10 rounded-md border border-border bg-background px-2 text-sm">
+                    <option value="all">All</option><option value="note">Notes</option><option value="link">Links</option><option value="file">Files</option>
+                  </select>
+                  <label htmlFor="workspace-item-search" className="sr-only">Find saved work</label>
+                  <Input id="workspace-item-search" placeholder="Search titles and saved text" value={itemQuery} onChange={(event) => setItemQuery(event.target.value)} className="min-w-[180px] flex-1" />
+                </div>
                 <div className="divide-y divide-border">
-                  {projectItems.map((item) => <article key={item.id} className="space-y-2 py-4">
+                  {shownItems.map((item) => <article key={item.id} className="space-y-2 py-4">
                     <div className="flex flex-wrap items-center gap-2">
                       {item.kind === "file" ? <Download className="h-4 w-4 text-cyan-400" aria-hidden="true" /> :
                         item.kind === "link" ? <Link2 className="h-4 w-4 text-cyan-400" aria-hidden="true" /> :
@@ -602,6 +675,7 @@ export default function DigitalWorkspace() {
                       : <a href={item.target_url} target="_blank" rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 break-all text-sm text-cyan-400 underline">
                           Open saved HTTPS link <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>)}
+                    {item.kind !== "file" && <WorkspaceItemEditor key={item.id} item={item} owner={owner!} readOnly={!active} busy={busy} onRun={(action, success) => void mutate(action, success)} />}
                     {item.kind === "file" && <Button type="button" variant="outline" size="sm" disabled={busy}
                       onClick={() => downloadFile(item)}>
                       <Download className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -611,6 +685,7 @@ export default function DigitalWorkspace() {
                   {!projectItems.length && <p className="py-4 text-sm text-muted-foreground">
                     No saved work yet. Notes, verified links and uploaded files will appear here.
                   </p>}
+                  {!!projectItems.length && !shownItems.length && <p className="py-4 text-sm text-muted-foreground">No saved items match this filter.</p>}
                 </div>
               </section>
             </>}
