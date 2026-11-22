@@ -167,7 +167,7 @@ test("accepted local guest boot is observed and ALWAYS terminated before success
     publicLabsEnabled:false,cloudProvisioningAllowed:false,
     providerHardLimitVerified:false,teardownVerified:true,
   });
-  assert.deepEqual(supervisor.events,["launch","attest","kill","dead"]);
+  assert.deepEqual(supervisor.events,["launch","attest","attest","kill","dead"]);
   assert.equal(supervisor.active,false);
 });
 
@@ -217,6 +217,25 @@ test("unsafe changed host attestation after boot always terminates",async()=>{
     /hardware acceptance failed/);
   assert.ok(supervisor.events.includes("kill"));
   assert.equal(supervisor.active,false);
+});
+
+test("VM dying during observation is rejected before success and cleaned",async()=>{
+  const supervisor=fakeSupervisor();
+  let attests=0;
+  const original=supervisor.attest;
+  supervisor.attest=async(id)=>{
+    attests++;
+    if(attests===2)return{
+      jailed:false,hostNetworkDenied:true,externalWatchdogArmed:true,
+      cgroupEnforced:true,cloudProvisioningAllowed:false,
+    };
+    return original(id);
+  };
+  await assert.rejects(runOfflineHardwareAcceptance(runArgs(supervisor)),
+    /hardware acceptance failed/);
+  assert.equal(attests,2);
+  assert.equal(supervisor.active,false);
+  assert.ok(supervisor.events.includes("kill"));
 });
 
 test("unconfirmed cgroup death never reports successful acceptance",async()=>{
