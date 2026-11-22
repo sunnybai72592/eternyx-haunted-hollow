@@ -123,6 +123,10 @@ def generate_with_wan(job, snapshot, output):
     pipe = WanPipeline.from_pretrained(
         str(snapshot), vae=vae, torch_dtype=torch.bfloat16,
         local_files_only=True)
+    adapter = os.environ.get("ETERNYX_WAN_ADAPTER_DIR")
+    if adapter is not None:
+        from wan_adapter_bundle import load_for_inference
+        load_for_inference(pipe.transformer, snapshot, adapter)
     pipe.enable_model_cpu_offload()
     sampling = {}
     if "seed" in job:

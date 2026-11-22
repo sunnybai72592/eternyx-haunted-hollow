@@ -72,3 +72,17 @@ A real GPU end-to-end acceptance test is the next separate milestone.
 For an approved staging canary, use the same `--seed` for the baseline and candidate (default 0, range 0–4294967295). Each render initializes a fresh CPU random generator, and the success report includes the seed and pinned model revision. Keep the prompt, duration, hardware and software versions fixed when comparing the clips. A shared seed controls starting noise; it does not guarantee identical frames across hardware or library versions.
 
 The direct offline executable also accepts an optional integer `seed` in its input JSON. Omitting the field preserves its previous sampling behavior. This comparison setting applies to the staging executable; the public queue contract is unchanged.
+
+## Compare a trained adapter with the base model
+
+Use a newly written `train_video_adapter.py` checkpoint. Copy its `adapter.json` and
+`adapter.safetensors` together to an operator-owned read-only directory. The metadata
+records the adapter checksum, rank and the hashes of the transformer files used in training.
+Older checkpoints without this metadata still support training resume. Continue training
+to a new checkpoint to export the pair.
+
+For the baseline render, leave `ETERNYX_WAN_ADAPTER_DIR` unset. For the candidate,
+set it to the absolute bundle directory in the inference process environment and repeat
+with the same prompt, seed and snapshot. Install the compatible PEFT dependency from
+`adapter-smoke-requirements.txt` in the candidate runtime. Record the adapter SHA-256
+from the metadata with the comparison. A failed integrity check stops the render.
