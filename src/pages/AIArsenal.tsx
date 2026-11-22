@@ -111,7 +111,7 @@ const AIArsenal = () => {
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <span>AI chat checks the central credit system. Its database and function activation are intentionally still pending.</span>
               </div>
-              <Button asChild className="w-full justify-between bg-primary text-slate-950 hover:bg-primary">
+              <Button asChild className="w-full justify-between bg-primary text-primary-foreground hover:bg-primary/90">
                 <Link to="/eternyx-ai">Open ETERNYX AI <ArrowRight className="h-4 w-4" /></Link>
               </Button>
             </CardContent>
