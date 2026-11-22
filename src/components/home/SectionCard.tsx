@@ -171,7 +171,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         >
           <Icon 
             className="w-6 h-6 md:w-7 md:h-7" 
-            style={{ color: section.accentColor }}
+            style={{ color: 'hsl(var(--primary))' }}
           />
         </motion.div>
 
@@ -208,7 +208,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         {/* CTA */}
         <motion.div
           className="flex items-center gap-2 text-sm font-medium"
-          style={{ color: section.accentColor }}
+          style={{ color: 'hsl(var(--primary))' }}
           animate={isHovered ? { x: 6 } : { x: 0 }}
           transition={{ duration: 0.25 }}
         >
