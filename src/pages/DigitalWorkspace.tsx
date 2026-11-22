@@ -558,10 +558,14 @@ export default function DigitalWorkspace() {
             if (target?.status === "archived") setShowArchived(true);
             setSearch("");
             setProjectId(result.projectId);
-            setTaskFilter("all"); setScheduleFilter("all"); setTaskQuery("");
-            setItemFilter("all"); setItemQuery("");
+            setTaskFilter("all"); setScheduleFilter("all"); setPriorityFilter("all");
+            setTaskQuery(result.kind === "task" ? result.title : "");
+            setItemFilter("all"); setItemQuery(result.kind === "item" ? result.title : "");
             setNotice("Opened " + result.projectName + " for " + result.kind + " · " + result.title + ".");
-            window.setTimeout(() => document.getElementById("workspace-project-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+            const targetId = result.kind === "task" ? "workspace-project-tasks"
+              : result.kind === "item" ? "workspace-project-saved-items" : "workspace-project-panel";
+            window.setTimeout(() => document.getElementById(targetId)
+              ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
           }} />
 
         <WorkspaceTaskFocus projects={projects} tasks={tasks} disabled={busy}
@@ -771,7 +775,7 @@ export default function DigitalWorkspace() {
                 </div>
               </section>
 
-              <section className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <section id="workspace-project-saved-items" className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-6">
                 <h2 className="flex items-center gap-2 text-xl font-semibold">
                   <FileText className="h-5 w-5 text-cyan-400" aria-hidden="true" />
                   Notes, links & files ({projectItems.length})
