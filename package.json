@@ -25,7 +25,8 @@
     "docker:heartbeat": "node scripts/docker-agent-heartbeat.mjs",
     "range:microvm:plan": "node scripts/cyber-range-microvm-plan.mjs",
     "range:microvm:supervisor": "node scripts/cyber-range-microvm-supervisor.mjs",
-    "docker:lab:recovery": "node scripts/docker-lab-recovery.mjs"
+    "docker:lab:recovery": "node scripts/docker-lab-recovery.mjs",
+    "docker:lab:audit": "node scripts/docker-lab-audit.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
