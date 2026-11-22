@@ -86,6 +86,24 @@ export default function EternyxLabs() {
           </div>
         </header>
 
+        <section className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/[0.12] via-card to-accent/[0.08] p-5 sm:p-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">New · Capture the flag</p>
+              <h2 className="mt-2 text-2xl font-bold">ETERNYX CTF Challenge Rooms</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Hunt real flags in four interactive, intentionally vulnerable browser mini-apps.
+                Explore source leaks, broken access control, DOM XSS and path traversal.
+                Reveal hints, check answers and save local practice progress.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">Browser-only starter CTF · no remote vulnerable server or trusted leaderboard</p>
+            </div>
+            <Link to="/labs/ctf" className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              Open CTF rooms <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
+
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(245px,290px)_minmax(0,1fr)]">
           <nav aria-label="Choose a practical lab" className="rounded-2xl border border-border/70 bg-card/70 p-3">
             <p className="px-3 pb-3 pt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Practical workstations</p>
