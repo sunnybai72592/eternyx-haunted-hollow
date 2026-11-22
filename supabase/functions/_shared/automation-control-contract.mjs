@@ -33,6 +33,11 @@ const fields = {
   incidentEvidence: ["action","incidentId"],
   incidentReport: ["action","days"],
   incidentRecoveryCheck: ["action","quarantineKey"],
+  investigationPlanCreate: ["action","incidentId","incidentRevision","steps","requestKey"],
+  investigationPlanRead: ["action","incidentId"],
+  investigationStepAck: ["action","planId","expectedRevision","stepKind","note","requestKey"],
+  investigationPlanTransition: ["action","planId","expectedRevision","nextStage","note","requestKey"],
+  incidentDailyTrend: ["action","days"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -107,6 +112,60 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="investigationPlanCreate"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
+       !Number.isInteger(value.incidentRevision)||value.incidentRevision<1||
+       value.incidentRevision>2147483647||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)||
+       !Array.isArray(value.steps)||value.steps.length<1||
+       value.steps.length>6||
+       value.steps.some(step=>typeof step!=="string"||
+          !["review_evidence","inspect_run_history","inspect_workflow_policy",
+          "verify_schedule_state","review_quarantine","document_outcome"].includes(step))||
+       new Set(value.steps).size!==value.steps.length){
+      return {ok:false,reason:"invalid_investigation_plan"};
+    }
+    return {ok:true,action,incidentId:value.incidentId,
+      incidentRevision:value.incidentRevision,steps:value.steps,
+      requestKey:value.requestKey};
+  }
+  if(action==="investigationPlanRead"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
+      return {ok:false,reason:"invalid_incident_id"};
+    }
+    return {ok:true,action,incidentId:value.incidentId};
+  }
+  if(action==="investigationStepAck"||action==="investigationPlanTransition"){
+    if(typeof value.planId!=="string"||!UUID_RE.test(value.planId)||
+       !Number.isInteger(value.expectedRevision)||
+       value.expectedRevision<1||value.expectedRevision>2147483646||
+       typeof value.note!=="string"||value.note.trim().length<12||
+       value.note.trim().length>500||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_plan_update"};
+    }
+    if(action==="investigationStepAck"){
+      if(!["review_evidence","inspect_run_history","inspect_workflow_policy",
+         "verify_schedule_state","review_quarantine","document_outcome"].includes(value.stepKind)){
+        return {ok:false,reason:"invalid_plan_step"};
+      }
+      return {ok:true,action,planId:value.planId,
+        expectedRevision:value.expectedRevision,
+        stepKind:value.stepKind,note:value.note.trim(),requestKey:value.requestKey};
+    }
+    if(!["reviewed","closed"].includes(value.nextStage)){
+      return {ok:false,reason:"invalid_plan_stage"};
+    }
+    return {ok:true,action,planId:value.planId,
+      expectedRevision:value.expectedRevision,
+      nextStage:value.nextStage,note:value.note.trim(),requestKey:value.requestKey};
+  }
+  if(action==="incidentDailyTrend"){
+    if(![7,30].includes(value.days)){
+      return {ok:false,reason:"invalid_report_period"};
+    }
+    return {ok:true,action,days:value.days};
   }
   if(action==="incidentCaptureEvidence"){
     if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
