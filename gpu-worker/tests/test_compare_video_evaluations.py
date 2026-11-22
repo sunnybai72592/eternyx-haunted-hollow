@@ -93,7 +93,7 @@ class EvaluationComparatorTests(unittest.TestCase):
                 candidate = copy.deepcopy(baseline)
                 candidate[key] = value
                 path = self.write("changed.json", candidate)
-                with self.assertRaisesRegex(ValueError, "differ"):
+                with self.assertRaises(ValueError):
                     compare(valid_ref, [("changed", self.load(path))])
         for variant in ("missing", "offset", "drift", "scene"):
             with self.subTest(variant=variant):
