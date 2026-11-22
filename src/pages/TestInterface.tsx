@@ -41,6 +41,7 @@ export default function TestInterface() {
   const pendingAnswersRef = useRef<Map<string, Answer>>(new Map());
   const answerSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answerSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const restoredAttemptRef = useRef<string | null>(null);
 
   const testQuery = useQuery<Exam>({
     queryKey: ["education-exam", user?.id, testId],
@@ -80,6 +81,30 @@ export default function TestInterface() {
       return created as Attempt;
     },
   });
+
+  const restoredAnswersQuery = useQuery<Answer[]>({
+    queryKey: ["education-saved-answers", user?.id, attemptQuery.data?.id],
+    enabled: atomicCbtEnabled && enabled && !!attemptQuery.data?.id,
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_answers")
+        .select("question_id,selected_option_id,short_answer_text")
+        .eq("attempt_id", attemptQuery.data!.id);
+      if (error) throw error;
+      return (data ?? []).map(row => ({
+        questionId: row.question_id,
+        selectedOptionId: row.selected_option_id || undefined,
+        shortAnswer: row.short_answer_text || undefined,
+      }));
+    },
+  });
+
+  useEffect(() => {
+    if (!atomicCbtEnabled || !attemptQuery.data?.id || !restoredAnswersQuery.data ||
+        restoredAttemptRef.current === attemptQuery.data.id) return;
+    restoredAttemptRef.current = attemptQuery.data.id;
+    setAnswers(new Map(restoredAnswersQuery.data.map(answer => [answer.questionId, answer])));
+  }, [attemptQuery.data?.id, restoredAnswersQuery.data]);
 
   const question = testQuery.data?.questions[questionIndex];
   const optionsQuery = useQuery<ExamOption[]>({
@@ -128,7 +153,8 @@ export default function TestInterface() {
 
   const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
   const expired = remaining === 0;
-  const canEdit = !!attemptQuery.data && !submitting && !expired;
+  const canEdit = !!attemptQuery.data && !submitting && !expired &&
+    (!atomicCbtEnabled || restoredAnswersQuery.isSuccess);
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
     if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
     submittingRef.current = true;
@@ -228,14 +254,16 @@ export default function TestInterface() {
     }
   };
 
-  if (authLoading || (enabled && (testQuery.isPending || (!!testQuery.data?.questions.length && attemptQuery.isPending)))) {
+  if (authLoading || (enabled && (testQuery.isPending ||
+      (!!testQuery.data?.questions.length && attemptQuery.isPending) ||
+      (atomicCbtEnabled && !!attemptQuery.data && restoredAnswersQuery.isPending)))) {
     return <p role="status" className="mx-auto max-w-2xl p-8">Preparing your assessment…</p>;
   }
   if (!isAuthenticated) {
     return <div className="mx-auto max-w-xl p-8">Sign in to take an assessment. <Link className="text-primary underline" to="/auth?redirect=%2Feducation">Sign in</Link></div>;
   }
   if (!validTestId) return <p role="alert" className="p-8">Invalid assessment ID.</p>;
-  if (testQuery.error || attemptQuery.error) {
+  if (testQuery.error || attemptQuery.error || (atomicCbtEnabled && restoredAnswersQuery.error)) {
     return <div role="alert" className="mx-auto max-w-xl space-y-4 p-8">
       <p>Assessment or attempt could not be loaded. It may be unavailable or your account may lack access.</p>
       <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
