@@ -5,11 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import DockerIncidents,{type DockerIncident,type DockerIncidentEvent} from "@/components/docker/DockerIncidents";
 import DockerReadinessPanel,{type DockerReadiness} from "@/components/docker/DockerReadinessPanel";
+import {buildDockerOwnerClaimExport} from "@/lib/dockerLabOwnerExport.mjs";
 type Policy={enabled:boolean;daily_limit:number;incident_hold?:boolean;incident_hold_at?:string|null};
 type Agent={id:string;display_name:string;status:string};
 type Reconciliation={status:string;attentionRequired:boolean;receiptPresent:boolean;ageSeconds:number|null};
 type Overview={window:string;total:number;receiptPending:number;requiresReconciliation:number;agentReportedComplete:number;agentReportedIssue:number;notDispatched:number};
-type Request={id:string;agent_id:string;operation:"start"|"stop"|"restart";container_id:string;state:string;effective_state:string;requested_at:string;expires_at:string;execution_status:string;dispatch_claimed_at?:string|null;dispatch_claim_id?:string|null;reconciliation?:Reconciliation;}
+type Request={id:string;agent_id:string;operation:"start"|"stop"|"restart";container_id:string;state:string;effective_state:string;requested_at:string;expires_at:string;execution_status:string;dispatch_claimed_at?:string|null;dispatch_reported_at?:string|null;dispatch_claim_id?:string|null;reconciliation?:Reconciliation;}
 type Event={request_id:string;event_kind:string;occurred_at:string};
 const containerIdPattern=/^[0-9a-f]{64}$/;
 async function control(action:string,fields:Record<string,unknown>={}):Promise<Record<string,unknown>>{
@@ -83,6 +84,27 @@ export default function DockerControlReview(){
     setConfirmation(old=>({...old,[row.id]:""}));await load();
     setNotice(decision==="approve"?"Request approved on ETERNYX. No container operation was executed.":"Request decision recorded.");
   });
+  const exportOwnerClaims=()=>{
+    if(!user?.id||!loaded||!observedAt) {
+      setError("An authenticated server observation is required before exporting.");
+      return;
+    }
+    try{
+      const bundle=buildDockerOwnerClaimExport(requests,observedAt);
+      const file=new Blob([JSON.stringify(bundle,null,2)+"\n"],{type:"application/json"});
+      const url=URL.createObjectURL(file);
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="eternyx-docker-claim-review-"+observedAt.slice(0,10)+".json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setNotice("Owner claim snapshot saved locally. It is NOT a cryptographically authenticated server receipt; verify against operator evidence.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"Unable to export a validated owner claim snapshot.");
+    }
+  };
   const canCreate=policy.enabled && !policy.incident_hold && !!agentId && containerIdPattern.test(containerId);
   const approved=requests.filter(x=>x.effective_state==="approved");
   const reviewed=useMemo(()=>requests.filter(r=>r.effective_state!=="unavailable"),[requests]);
@@ -148,6 +170,10 @@ export default function DockerControlReview(){
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">3. Your operation requests</h2>
+        <button type="button" disabled={!loaded||!observedAt||!user?.id} onClick={exportOwnerClaims}
+          className="min-h-11 rounded-lg border border-border px-4 text-sm disabled:opacity-50">
+          Export owner claim snapshot
+        </button>
         <button disabled={busy} onClick={()=>act(async()=>{await load();setNotice("Request and audit records refreshed.");})} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 text-sm"><RefreshCw className="h-4 w-4"/> Refresh</button>
       </div>
       <div className="mt-4 space-y-3">
