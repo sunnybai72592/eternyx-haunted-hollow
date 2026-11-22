@@ -233,7 +233,15 @@ BEGIN
   IF (SELECT auth.uid()) IS NULL OR NOT public.is_admin() THEN
     RAISE EXCEPTION 'Admin authorization required' USING ERRCODE = '42501';
   END IF;
-  IF p_test_id IS NULL OR p_user_id IS NULL OR EXISTS (
+  IF p_test_id IS NULL OR p_user_id IS NULL THEN
+    RAISE EXCEPTION 'Enrollment IDs required' USING ERRCODE = '22023';
+  END IF;
+  -- Serialize with the student's start_cbt_attempt SHARE lock.
+  PERFORM 1 FROM public.education_test_enrollments AS e
+  WHERE e.test_id = p_test_id AND e.user_id = p_user_id
+  FOR UPDATE OF e;
+  IF NOT FOUND THEN RETURN false; END IF;
+  IF EXISTS (
     SELECT 1 FROM public.user_attempts AS a
     WHERE a.test_id = p_test_id AND a.user_id = p_user_id
   ) THEN
