@@ -3,6 +3,7 @@ import LocalRenderReview from "@/components/LocalRenderReview";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import LocalMotionComposer from "@/components/LocalMotionComposer";
 import LocalLearnedVideoStudio from "@/components/LocalLearnedVideoStudio";
+import TinyNeuralVideoStudio from "@/components/TinyNeuralVideoStudio";
 import { Clapperboard, Copy, Download, Film, Music2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -190,6 +191,7 @@ export default function LocalVideoEditor() {
 
         <LocalMotionComposer />
         <LocalLearnedVideoStudio />
+        <TinyNeuralVideoStudio />
 
         <LocalVideoImportPrep sources={sources} />
 
