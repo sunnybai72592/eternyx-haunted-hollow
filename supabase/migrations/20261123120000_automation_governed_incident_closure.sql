@@ -3,6 +3,7 @@
 -- compatible. No RPC below triggers/executes/restores a workflow.
 CREATE TABLE public.automation_incident_closure_decisions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  decision_sequence bigint GENERATED ALWAYS AS IDENTITY UNIQUE,
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   incident_id uuid NOT NULL REFERENCES public.automation_incidents(id) ON DELETE CASCADE,
   plan_id uuid NOT NULL REFERENCES public.automation_investigation_plans(id) ON DELETE CASCADE,
@@ -17,7 +18,7 @@ CREATE TABLE public.automation_incident_closure_decisions (
   UNIQUE(user_id,request_key)
 );
 CREATE INDEX automation_closure_decisions_owner_case_latest
- ON public.automation_incident_closure_decisions(user_id,incident_id,created_at DESC,id DESC);
+ ON public.automation_incident_closure_decisions(user_id,incident_id,decision_sequence DESC);
 ALTER TABLE public.automation_incident_closure_decisions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.automation_incident_closure_decisions FROM PUBLIC,anon,authenticated;
 GRANT SELECT,INSERT ON public.automation_incident_closure_decisions TO service_role;
@@ -58,7 +59,7 @@ BEGIN
    WHERE user_id=p_user_id AND incident_id=inc.id;
  SELECT * INTO latest FROM public.automation_incident_closure_decisions
    WHERE user_id=p_user_id AND incident_id=inc.id
-   ORDER BY created_at DESC,id DESC LIMIT 1;
+   ORDER BY decision_sequence DESC LIMIT 1;
  reviewed:=p.stage IN ('reviewed','closed') AND
    n_steps=jsonb_array_length(p.steps);
  eligible:=inc.status='investigating' AND reviewed AND n_evidence>=1;
@@ -177,13 +178,13 @@ BEGIN
  END IF;
  SELECT count(*) INTO total FROM public.automation_incident_closure_decisions
    WHERE user_id=p_user_id AND incident_id=p_incident_id;
- SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.created_at ASC,x.id ASC),
+ SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.decision_sequence ASC),
    '[]'::jsonb) INTO items FROM (
-   SELECT id,decision,note,incident_revision,plan_revision,evidence_count,
+   SELECT id,decision,note,decision_sequence,incident_revision,plan_revision,evidence_count,
      acknowledged_steps,created_at
    FROM public.automation_incident_closure_decisions
    WHERE user_id=p_user_id AND incident_id=p_incident_id
-   ORDER BY created_at ASC,id ASC LIMIT 5
+   ORDER BY decision_sequence ASC LIMIT 5
  ) x;
  RETURN jsonb_build_object('ok',true,'source','owner_closure_decision_history',
    'incidentId',p_incident_id,'rows',items,'total',total,
@@ -215,7 +216,7 @@ BEGIN
     WHERE user_id=OLD.user_id AND plan_id=p.id AND kind='step_acknowledged';
  SELECT * INTO latest FROM public.automation_incident_closure_decisions
    WHERE user_id=OLD.user_id AND incident_id=OLD.id
-   ORDER BY created_at DESC,id DESC LIMIT 1;
+   ORDER BY decision_sequence DESC LIMIT 1;
  IF OLD.status<>'investigating' OR p.stage NOT IN ('reviewed','closed') OR
     n_evidence<1 OR n_steps<>jsonb_array_length(p.steps) OR
     latest.id IS NULL OR latest.decision<>'approve' OR
