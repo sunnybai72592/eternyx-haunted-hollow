@@ -46,10 +46,10 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         'min-h-[300px] md:min-h-[340px]',
         'flex flex-col justify-end p-6 md:p-8',
         'border border-white/[0.08] backdrop-blur-sm',
-        'transition-all duration-500'
+        'transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
       )}
       style={{
-        background: section.gradient,
+        background: 'linear-gradient(140deg, hsl(var(--primary) / .12), hsl(var(--card)) 60%, hsl(var(--accent) / .08))',
       }}
       initial={{ opacity: 0, y: 40, scale: 0.95 }}
       animate={{ 
@@ -66,6 +66,12 @@ export const SectionCard: React.FC<SectionCardProps> = ({
       onMouseEnter={() => onHover(section.id)}
       onMouseLeave={() => onHover(null)}
       onClick={handleClick}
+      role="link"
+      tabIndex={0}
+      aria-label={`Explore ${section.title}`}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleClick(); } }}
+      onFocus={() => onHover(section.id)}
+      onBlur={() => onHover(null)}
       whileTap={{ scale: 0.98 }}
     >
       {/* Background Pattern - Grid */}
@@ -74,8 +80,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
           className="absolute inset-0 opacity-[0.08]"
           style={{
             backgroundImage: `
-              linear-gradient(${section.accentColor}40 1px, transparent 1px),
-              linear-gradient(90deg, ${section.accentColor}40 1px, transparent 1px)
+              linear-gradient(hsl(var(--primary) / .24) 1px, transparent 1px),
+              linear-gradient(90deg, hsl(var(--primary) / .24) 1px, transparent 1px)
             `,
             backgroundSize: '24px 24px'
           }}
@@ -87,9 +93,9 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         <div className="absolute inset-0 opacity-20">
           <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             <pattern id={`circuit-${section.id}`} width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M10 0v10h10" fill="none" stroke={section.accentColor} strokeWidth="0.3" opacity="0.6" />
-              <circle cx="10" cy="10" r="1" fill={section.accentColor} opacity="0.4" />
-              <path d="M0 5h5" fill="none" stroke={section.accentColor} strokeWidth="0.2" opacity="0.4" />
+              <path d="M10 0v10h10" fill="none" stroke="hsl(var(--primary))" strokeWidth="0.3" opacity="0.6" />
+              <circle cx="10" cy="10" r="1" fill="hsl(var(--primary))" opacity="0.4" />
+              <path d="M0 5h5" fill="none" stroke="hsl(var(--primary))" strokeWidth="0.2" opacity="0.4" />
             </pattern>
             <rect width="100%" height="100%" fill={`url(#circuit-${section.id})`} />
           </svg>
@@ -103,9 +109,9 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             className="absolute inset-0 opacity-30"
             style={{
               background: `
-                radial-gradient(circle at 15% 25%, ${section.accentColor}25 0%, transparent 35%),
-                radial-gradient(circle at 85% 75%, ${section.accentColor}15 0%, transparent 35%),
-                radial-gradient(circle at 50% 50%, ${section.accentColor}08 0%, transparent 50%)
+                radial-gradient(circle at 15% 25%, hsl(var(--primary) / .15) 0%, transparent 35%),
+                radial-gradient(circle at 85% 75%, hsl(var(--primary) / .08) 0%, transparent 35%),
+                radial-gradient(circle at 50% 50%, hsl(var(--accent) / .04) 0%, transparent 50%)
               `
             }}
           />
@@ -117,7 +123,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         <div 
           className="absolute inset-0 opacity-[0.12]"
           style={{
-            backgroundImage: `radial-gradient(circle, ${section.accentColor} 1px, transparent 1px)`,
+            backgroundImage: 'radial-gradient(circle, hsl(var(--primary)) 1px, transparent 1px)',
             backgroundSize: '20px 20px'
           }}
         />
@@ -133,7 +139,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
             style={{
-              background: `radial-gradient(ellipse at 50% 80%, ${section.accentColor}25 0%, transparent 60%)`,
+              background: `radial-gradient(ellipse at 50% 80%, hsl(var(--primary) / .15) 0%, transparent 60%)`,
             }}
           />
         )}
@@ -142,7 +148,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
       {/* Top accent line */}
       <motion.div
         className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: section.accentColor }}
+        style={{ background: 'hsl(var(--primary))' }}
         initial={{ scaleX: 0 }}
         animate={{ scaleX: isHovered ? 1 : 0 }}
         transition={{ duration: 0.4 }}
@@ -158,21 +164,21 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             'border border-white/10'
           )}
           style={{ 
-            backgroundColor: `${section.accentColor}15`,
+            backgroundColor: `hsl(var(--primary) / .08)`,
           }}
           animate={isHovered ? { scale: 1.1 } : { scale: 1 }}
           transition={{ duration: 0.3 }}
         >
           <Icon 
             className="w-6 h-6 md:w-7 md:h-7" 
-            style={{ color: section.accentColor }}
+            style={{ color: 'hsl(var(--primary))' }}
           />
         </motion.div>
 
         {/* Title */}
         <h3 
           className="text-xl md:text-2xl font-semibold mb-2 text-white tracking-tight"
-          style={{ textShadow: isHovered ? `0 0 30px ${section.accentColor}60` : 'none' }}
+          style={{ textShadow: isHovered ? `0 0 30px hsl(var(--primary) / .38)` : 'none' }}
         >
           {section.title}
         </h3>
@@ -202,7 +208,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         {/* CTA */}
         <motion.div
           className="flex items-center gap-2 text-sm font-medium"
-          style={{ color: section.accentColor }}
+          style={{ color: 'hsl(var(--primary))' }}
           animate={isHovered ? { x: 6 } : { x: 0 }}
           transition={{ duration: 0.25 }}
         >
@@ -221,7 +227,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
             style={{
-              boxShadow: `inset 0 0 0 1px ${section.accentColor}60, 0 0 40px ${section.accentColor}20`,
+              boxShadow: `inset 0 0 0 1px hsl(var(--primary) / .38), 0 0 40px hsl(var(--primary) / .12)`,
             }}
           />
         )}

@@ -37,9 +37,9 @@ export const ResponsiveText: React.FC<ResponsiveTextProps> = ({
     if (!cyberpunk) return '';
     
     return `
-      bg-gradient-to-r from-${glowColor}-400 to-${glowColor}-600 bg-clip-text text-transparent
+      bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent
       drop-shadow-lg
-      animate-pulse
+      motion-safe:animate-pulse
     `;
   };
 

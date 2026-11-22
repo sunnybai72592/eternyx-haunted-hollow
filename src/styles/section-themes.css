@@ -393,3 +393,36 @@
     opacity: 0.8;
   }
 }
+
+/* The user-selected five-color identity wins over legacy pillar-specific
+   static palettes. Retain each pillar layout, but unify accents, grids and
+   surfaces at the active ETERNYX root hue. */
+:root[data-eternyx-palette] [data-theme] {
+  --section-primary: var(--primary);
+  --section-secondary: var(--accent);
+  --section-accent: var(--primary);
+  --section-glow: var(--primary);
+  --section-bg: var(--background);
+  --section-bg-secondary: var(--card);
+  --section-text: var(--foreground);
+  --section-muted: var(--muted-foreground);
+  --section-gradient: linear-gradient(135deg, hsl(var(--primary) / .11), hsl(var(--background)) 65%, hsl(var(--accent) / .055));
+  --section-card-gradient: linear-gradient(180deg, hsl(var(--card)), hsl(var(--background)));
+  --section-glow-color: hsl(var(--primary) / .26);
+  --section-grid-color: hsl(var(--primary) / .13);
+  --section-particle-color: hsl(var(--primary) / .45);
+  --section-aurora-1: hsl(var(--primary) / .15);
+  --section-aurora-2: hsl(var(--accent) / .1);
+  --section-aurora-3: hsl(var(--primary) / .06);
+}
+:root[data-eternyx-palette] [data-theme] .neural-flow {
+  background:
+    radial-gradient(circle at 20% 30%, hsl(var(--primary) / .15), transparent 50%),
+    radial-gradient(circle at 80% 70%, hsl(var(--accent) / .12), transparent 50%);
+}
+:root[data-eternyx-palette] [data-theme] .glitch-effect::before { color: hsl(var(--primary)); }
+:root[data-eternyx-palette] [data-theme] .glitch-effect::after { color: hsl(var(--accent)); }
+@media (prefers-reduced-motion: reduce) {
+  .section-wrapper, .section-card { transition: none; }
+  .section-enter, .section-exit, .particle, [data-theme] .aurora-bg { animation: none; }
+}

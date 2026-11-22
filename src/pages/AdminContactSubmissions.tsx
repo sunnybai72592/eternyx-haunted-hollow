@@ -152,11 +152,11 @@ export default function AdminContactSubmissions() {
 
   return (
     <main className="relative mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 lg:px-8">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 -z-10 h-72 rounded-full bg-cyan-400/[0.06] blur-[100px]" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 -z-10 h-72 rounded-full bg-primary/[0.06] blur-[100px]" />
       <AdminWorkspaceNav />
       <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-200/15 bg-cyan-200/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-100"><ShieldCheck className="h-3.5 w-3.5" /> ETERNYX / Business operations</div>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-primary"><ShieldCheck className="h-3.5 w-3.5" /> ETERNYX / Business operations</div>
           <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Business enquiries</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Review incoming messages, prioritize opportunities and track each enquiry through its actual workflow.</p>
         </div>
@@ -174,7 +174,7 @@ export default function AdminContactSubmissions() {
       <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-card/85">
         <div className="flex flex-col gap-4 border-b border-white/[0.08] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Client pipeline</p><h2 className="mt-1 text-xl font-semibold text-white">Enquiry inbox</h2><p className="mt-1 text-xs text-slate-500">{filtered.length} of {enquiries.length} enquiries shown</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/65">Client pipeline</p><h2 className="mt-1 text-xl font-semibold text-white">Enquiry inbox</h2><p className="mt-1 text-xs text-slate-500">{filtered.length} of {enquiries.length} enquiries shown</p></div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1.5 text-[10px] font-semibold text-emerald-200"><ShieldCheck className="h-3.5 w-3.5" /> Admin access verified</span>
           </div>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
@@ -200,7 +200,7 @@ export default function AdminContactSubmissions() {
                   <h3 className="break-words text-base font-semibold text-white sm:text-lg">{item.subject}</h3>
                   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-400">{item.message}</p>
                   <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
-                    <span className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /><a className="text-cyan-200 hover:text-white" href={`mailto:${encodeURIComponent(item.email)}?subject=${encodeURIComponent(`Re: ${item.subject}`)}`}>{item.name} · {item.email}</a></span>
+                    <span className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /><a className="text-primary hover:text-foreground" href={`mailto:${encodeURIComponent(item.email)}?subject=${encodeURIComponent(`Re: ${item.subject}`)}`}>{item.name} · {item.email}</a></span>
                     {item.phone && <a className="inline-flex items-center gap-1.5 hover:text-white" href={`tel:${item.phone.replace(/[^+\d]/g, '')}`}><Phone className="h-3.5 w-3.5" />{item.phone}</a>}
                     {item.company && <span className="inline-flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{item.company}</span>}
                     {item.service_interested && <span>Interested in: {item.service_interested}</span>}
@@ -210,7 +210,7 @@ export default function AdminContactSubmissions() {
                 <div className="grid w-full shrink-0 gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3 sm:grid-cols-2 xl:w-64 xl:grid-cols-1">
                   <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Workflow status</span><select value={status} disabled={updatingId === item.id} onChange={(event) => void updateEnquiry(item.id, { status: event.target.value as EnquiryStatus })} className="h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">{statuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
                   <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Priority</span><select value={priority} disabled={updatingId === item.id} onChange={(event) => void updateEnquiry(item.id, { priority: event.target.value as EnquiryPriority })} className="h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">{priorities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                  {updatingId === item.id && <p className="text-[11px] text-cyan-200 sm:col-span-2 xl:col-span-1">Saving update…</p>}
+                  {updatingId === item.id && <p className="text-[11px] text-primary sm:col-span-2 xl:col-span-1">Saving update…</p>}
                 </div>
               </div>
             </article>;
