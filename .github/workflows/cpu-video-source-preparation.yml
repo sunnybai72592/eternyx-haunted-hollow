@@ -1,0 +1,41 @@
+name: CPU video source normalization
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/prepare_video_sources.py"
+      - "gpu-worker/tests/test_prepare_video_sources.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-video-source-preparation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/prepare_video_sources.py"
+      - "gpu-worker/tests/test_prepare_video_sources.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-video-source-preparation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  normalize:
+    name: Normalize real 24/30 FPS phone videos for CPU editor
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify CPU FFmpeg support
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Test actual MOV and MP4 normalization and end-to-end rendering
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_prepare_video_sources.py' -v

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import LocalRenderReview from "@/components/LocalRenderReview";
+import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import { Clapperboard, Copy, Download, Film, Music2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -184,6 +185,8 @@ export default function LocalVideoEditor() {
             The local Python renderer must still verify exact 16 FPS, frame counts, source hashes and available codecs.
           </AlertDescription>
         </Alert>
+
+        <LocalVideoImportPrep sources={sources} />
 
         <div className="space-y-3 rounded-lg border border-slate-700 p-4">
           <label htmlFor="local-video-clips" className="flex items-center gap-2 text-sm font-semibold"><Upload className="h-4 w-4"/>Select 1–8 local MP4 clips (up to 64 MiB each)</label>
