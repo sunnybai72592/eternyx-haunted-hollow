@@ -177,7 +177,7 @@ const Settings = () => {
                     <p className="mt-1.5 text-xs leading-5 text-slate-400">{theme.description}</p>
                     <p className="mt-2 text-[11px] leading-5 text-slate-500">{theme.detail}</p>
                   </div>
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${active ? 'border-cyan-200 bg-primary text-primary-foreground' : 'border-white/20 text-transparent'}`}>
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-white/20 text-transparent'}`}>
                     {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                   </span>
                 </div>
@@ -196,7 +196,7 @@ const Settings = () => {
       <section className="mt-9 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
           <div className="flex items-start gap-3">
-            <div className="rounded-xl border border-primary/15 bg-violet-200/[0.07] p-2.5 text-primary"><ShieldCheck className="h-5 w-5" /></div>
+            <div className="rounded-xl border border-primary/15 bg-primary/[0.07] p-2.5 text-primary"><ShieldCheck className="h-5 w-5" /></div>
             <div className="min-w-0 flex-1">
               <h3 className="font-semibold text-white">Privacy & identity</h3>
               <p className="mt-1.5 text-xs leading-6 text-slate-400">Manage your profile visibility and identity details together in one place. We keep these controls on your Profile page rather than duplicating settings here.</p>
