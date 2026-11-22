@@ -157,7 +157,8 @@ serve(async (req: Request) => {
       });
       if(error)throw error;
       if(data?.ok!==true)return rpcResponse(data,"case_daily_trend_unavailable");
-      return reply({...data,source:"authenticated_server",executed:false});
+      return reply({...data,reportSource:data.source,
+        source:"authenticated_server",executed:false});
     }
     if(request.action==="incidentCaptureEvidence"){
       const {data,error}=await supabase.rpc("automation_capture_incident_evidence",{
