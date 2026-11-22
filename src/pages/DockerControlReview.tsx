@@ -125,7 +125,7 @@ export default function DockerControlReview(){
             </div>
             <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold">{row.effective_state}</span>
           </div>
-          <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="h-4 w-4"/> Expires {new Date(row.expires_at).toLocaleString()} · Execution: not performed</p>
+          <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="h-4 w-4"/> Expires {new Date(row.expires_at).toLocaleString()} · Agent dispatch: {row.execution_status==="not_dispatched"?"not dispatched":row.execution_status==="claimed"?"claimed / outcome unknown":row.execution_status.replaceAll("_"," ")} (agent-reported)</p>
           {row.effective_state==="pending"&&<div className="mt-3 space-y-3">
             <label className="block text-xs text-muted-foreground">To approve, type: <strong className="font-mono">APPROVE {row.id.slice(0,8)}</strong>
               <input aria-label={"Approval confirmation "+row.id.slice(0,8)} value={confirmation[row.id]??""} onChange={e=>setConfirmation(s=>({...s,[row.id]:e.target.value}))} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3 font-mono text-xs"/>
@@ -140,7 +140,7 @@ export default function DockerControlReview(){
             <p className="text-sm font-semibold">Trusted operator preview only</p>
             <code className="block break-all text-xs">node scripts/docker-operator.mjs {row.operation} {row.container_id}</code>
             <button onClick={()=>navigator.clipboard.writeText("node scripts/docker-operator.mjs "+row.operation+" "+row.container_id).then(()=>setNotice("Local preview command copied.")).catch(()=>setError("Clipboard is unavailable."))} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm"><Copy className="h-4 w-4"/> Copy preview</button>
-            <p className="text-xs text-muted-foreground">The preview executes nothing. The trusted operator must separately inspect the exact sandboxed lab container and authorize any action locally. ETERNYX has no execution callback yet.</p>
+            <p className="text-xs text-muted-foreground">The preview executes nothing. A separately configured, manually invoked and signed lab agent may act only after a short-lived server permit; no shared production Docker hosts are supported.</p>
             <button disabled={busy} onClick={()=>decide(row,"cancel")} className="min-h-11 rounded-lg border border-border px-4 text-sm">Cancel approval</button>
           </div>}
         </article>)}
@@ -151,7 +151,7 @@ export default function DockerControlReview(){
       <h2 className="flex items-center gap-2 text-xl font-semibold"><ClipboardCheck className="h-5 w-5 text-cyan-500"/> Recent audit events</h2>
       <div className="mt-3 space-y-2">{events.map((item,index)=><p key={item.request_id+item.occurred_at+index} className="rounded-lg border border-border px-3 py-2 text-sm">{item.event_kind} · {item.request_id.slice(0,8)} <span className="text-xs text-muted-foreground">· {new Date(item.occurred_at).toLocaleString()}</span></p>)}</div>
       {events.length===0&&<p className="mt-4 text-sm text-muted-foreground">No audit events found.</p>}
-      <p className="mt-4 text-xs text-muted-foreground">Audit events document owner decisions, not Docker execution. Signed host receipts and isolated execution are separate milestones.</p>
+      <p className="mt-4 text-xs text-muted-foreground">Owner events document decisions. A signed lab-agent receipt is displayed separately as an agent-reported outcome; it is not independent proof of Docker success.</p>
     </section>
     <p className="text-xs text-muted-foreground">This interface does not expose Docker credentials, host addresses, tokens, sockets or shell access.</p>
   </div>;

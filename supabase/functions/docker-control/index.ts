@@ -41,21 +41,25 @@ serve(async(req:Request)=>{
   const owner=user.id;
   try{
     if(parsed.action==="list"){
-      const [policy,requests,events,agents]=await Promise.all([
+      const [policy,requests,events,agents,dispatch]=await Promise.all([
         supabase.from("docker_control_policies").select("enabled,daily_limit,updated_at").eq("owner_id",owner).maybeSingle(),
         supabase.from("docker_control_requests").select("id,agent_id,operation,container_id,state,requested_at,expires_at,approved_at,resolved_at").eq("owner_id",owner).order("requested_at",{ascending:false}).limit(30),
         supabase.from("docker_control_events").select("request_id,event_kind,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
         supabase.from("docker_agent_registrations").select("id,display_name,status").eq("owner_id",owner).eq("status","key_verified").limit(10),
+        supabase.from("docker_command_claims").select("request_id,id,state,claimed_at,authorized_at,reported_at").eq("owner_id",owner).order("claimed_at",{ascending:false}).limit(30),
       ]);
-      if(policy.error||requests.error||events.error||agents.error)throw new Error("Database read unavailable");
+      if(policy.error||requests.error||events.error||agents.error||dispatch.error)throw new Error("Database read unavailable");
       return reply({
         policy:policy.data??{enabled:false,daily_limit:5},
-        requests:(requests.data??[]).map((r:Record<string,unknown>)=>({
-          ...r,effective_state:effectiveDockerControlState(r),
-          execution_status:"not_executed",
-        })),
+        requests:(requests.data??[]).map((r:Record<string,unknown>)=>{
+          const claim=(dispatch.data??[]).find((x:Record<string,unknown>)=>x.request_id===r.id);
+          return {...r,effective_state:effectiveDockerControlState(r),
+            execution_status:claim?claim.state:"not_dispatched",
+            dispatch_claimed_at:claim?.claimed_at??null,
+            dispatch_reported_at:claim?.reported_at??null};
+        }),
         events:events.data??[],agents:agents.data??[],
-        remoteExecutionEnabled:false,source:"authenticated_server",
+        remoteExecutionEnabled:false,labDispatchConfigurable:true,source:"authenticated_server",
       });
     }
     let data,error;
