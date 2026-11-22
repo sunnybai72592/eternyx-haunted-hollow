@@ -42,6 +42,7 @@ const EternyxLabs = lazy(() => import("./pages/EternyxLabs"));
 const EternyxCtf = lazy(() => import("./pages/EternyxCtf"));
 const EternyxVerifiedCtf = lazy(() => import("./pages/EternyxVerifiedCtf"));
 const EternyxCyberRange = lazy(() => import("./pages/EternyxCyberRange"));
+const EternyxRangeSessions = lazy(() => import("./pages/EternyxRangeSessions"));
 const AdvancedDeveloperTools = lazy(() => import("./pages/AdvancedDeveloperTools"));
 const ApiEngineeringWorkbench = lazy(() => import("./pages/ApiEngineeringWorkbench"));
 const DevOpsLaunchpad = lazy(() => import("./pages/DevOpsLaunchpad"));
@@ -219,6 +220,7 @@ const AppContent = () => {
                          <Route path="/labs/ctf" element={<EternyxCtf />} />
                          <Route path="/labs/verified" element={<EternyxVerifiedCtf />} />
                          <Route path="/labs/range" element={<EternyxCyberRange />} />
+                         <Route path="/labs/sessions" element={<EternyxRangeSessions />} />
                         <Route path="/developer-studio/advanced" element={<AdvancedDeveloperTools />} />
                         <Route path="/developer-studio/api-workbench" element={<ApiEngineeringWorkbench />} />
                         <Route path="/developer-studio/devops" element={<DevOpsLaunchpad />} />
