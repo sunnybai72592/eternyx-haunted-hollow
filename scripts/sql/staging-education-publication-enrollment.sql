@@ -300,6 +300,14 @@ REVOKE ALL ON FUNCTION public.education_student_can_read_questions(uuid)
 GRANT EXECUTE ON FUNCTION public.education_student_can_read_questions(uuid)
   TO authenticated;
 
+-- Existing active-test metadata was readable by EVERY account under the
+-- historical policy. A student without enrollment must not enumerate exams
+-- directly via PostgREST, even when the enrolled catalog RPC is guarded.
+DROP POLICY IF EXISTS "Anyone can view active tests" ON public.tests;
+CREATE POLICY "Students can view enrolled published tests"
+ON public.tests FOR SELECT TO authenticated
+USING (public.education_student_can_read_questions(tests.id));
+
 -- Narrow legacy question browsing policy when enrolled-only admission is
 -- activated. The existing admin-specific policy remains in place.
 DROP POLICY IF EXISTS "Users can view questions for their attempts" ON public.questions;
