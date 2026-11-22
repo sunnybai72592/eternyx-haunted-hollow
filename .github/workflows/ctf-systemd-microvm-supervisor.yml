@@ -1,0 +1,44 @@
+name: CTF Independent Firecracker Systemd Supervisor
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/provider/firecracker-systemd-supervisor.mjs'
+      - 'scripts/cyber-range-microvm-supervisor.mjs'
+      - 'tests/ctf-firecracker-systemd-supervisor.test.mjs'
+      - 'package.json'
+      - '.github/workflows/ctf-systemd-microvm-supervisor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-offline-supervision:
+    name: Verify systemd cgroup watchdog and kill-before-boot contracts without KVM
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test systemd-run argv, cgroup deadlines, namespace attestation and teardown
+        run: node --test tests/ctf-firecracker-systemd-supervisor.test.mjs
+      - name: Public and automated invocation cannot start an unapproved VM
+        run: |
+          node scripts/cyber-range-microvm-supervisor.mjs --help
+          if node scripts/cyber-range-microvm-supervisor.mjs --terminate 123e4567-e89b-42d3-a456-426614174001 --confirm; then
+            echo 'Unapproved operator VM termination was allowed' >&2
+            exit 1
+          fi
+          if node scripts/cyber-range-microvm-supervisor.mjs --halt-new-launches --confirm; then
+            echo 'Unapproved privileged host mutation was allowed' >&2
+            exit 1
+          fi
+      - name: No Firecracker VM processes launched
+        run: |
+          if pgrep -x firecracker >/dev/null 2>&1; then
+            echo 'Unexpected Firecracker VM on test host' >&2
+            exit 1
+          fi
