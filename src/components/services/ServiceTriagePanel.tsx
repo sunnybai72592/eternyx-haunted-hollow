@@ -14,7 +14,7 @@ type Triage = {
 };
 const priorities: readonly Triage['priority'][] = ['low', 'normal', 'high', 'urgent'];
 
-export default function ServiceTriagePanel({ requestId }: { requestId: string }) {
+export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: string; onSaved?: () => void }) {
   const currentUser = useAuthStore((s) => s.user);
   const [saved, setSaved] = useState<Triage | null>(null);
   const [priority, setPriority] = useState<Triage['priority']>('normal');
@@ -67,6 +67,7 @@ export default function ServiceTriagePanel({ requestId }: { requestId: string })
       if (writeError || !data) throw writeError ?? new Error('Triage changed in another session');
       setSaved(data as Triage);
       setNotice('Private triage saved for administrators only.');
+      onSaved?.();
     } catch (reason) {
       console.error('Private triage update failed', reason);
       setError('Triage was not saved. Refresh to resolve changed records or permission errors.');

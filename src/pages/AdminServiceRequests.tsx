@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ClipboardList, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bell, ClipboardList, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
@@ -17,12 +17,16 @@ type ServiceRow = {
   contact_email: string; company: string | null; status: ServiceRequestStatus;
   client_update: string | null; created_at: string; updated_at: string;
   expected_outcome: string | null; timeframe: string | null; constraints: string | null;
+  priority: string; priority_rank: number; assigned_admin_id: string | null;
+  needs_follow_up: boolean; last_customer_activity_at: string | null; last_admin_activity_at: string | null;
 };
 type Draft = { status: ServiceRequestStatus; client_update: string };
 
 export default function AdminServiceRequests() {
   const { user, isLoading: authLoading } = useAuthStore();
-  const [authorized, setAuthorized] = useState(false);
+  const [authorizedFor, setAuthorizedFor] = useState<string | null>(null);
+  const authorized = !!user && authorizedFor === user.id;
+  const fetchGeneration = useRef(0);
   const [checking, setChecking] = useState(true);
   const [rows, setRows] = useState<ServiceRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -32,6 +36,10 @@ export default function AdminServiceRequests() {
   const [searchField, setSearchField] = useState<'title' | 'contact_email' | 'id'>('title');
   const [activeSearchField, setActiveSearchField] = useState<'title' | 'contact_email' | 'id'>('title');
   const [page, setPage] = useState(0);
+  const [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity'>('newest');
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
@@ -43,10 +51,12 @@ export default function AdminServiceRequests() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!user?.id || authorizedFor !== user.id) return;
+    const generation = ++fetchGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_requests')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints', { count: 'exact' });
+    let query = supabase.from('service_admin_attention_queue')
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -56,10 +66,17 @@ export default function AdminServiceRequests() {
         query = query.ilike(activeSearchField, '%' + escaped + '%');
       }
     }
+    if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter);
+    if (assignmentFilter === 'mine') query = query.eq('assigned_admin_id', user.id);
+    if (assignmentFilter === 'unassigned') query = query.is('assigned_admin_id', null);
+    if (attentionOnly) query = query.eq('needs_follow_up', true);
+    if (sortOrder === 'priority') query = query.order('priority_rank', { ascending: false });
+    if (sortOrder === 'customer_activity') query = query.order('last_customer_activity_at', { ascending: false, nullsFirst: false });
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (generation !== fetchGeneration.current) return;
     if (error) {
       setLoadError(true);
       console.error('Admin service requests query failed:', error);
@@ -70,24 +87,32 @@ export default function AdminServiceRequests() {
       setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
     }
     setLoading(false);
-  }, [page, filter, activeSearch, activeSearchField]);
+  }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder]);
 
   useEffect(() => {
     let active = true;
-    const check = async () => {
-      if (authLoading) return;
-      if (!user) { if (active) { setAuthorized(false); setChecking(false); } return; }
+    fetchGeneration.current += 1;
+    setAuthorizedFor(null);
+    setRows([]);
+    setTotal(0);
+    setDrafts({});
+    if (authLoading) {
       setChecking(true);
+      return () => { active = false; };
+    }
+    if (!user) {
+      setChecking(false);
+      return () => { active = false; };
+    }
+    setChecking(true);
+    void (async () => {
       const { data, error } = await supabase.rpc('is_admin');
       if (!active) return;
-      const allowed = !error && data === true;
-      setAuthorized(allowed);
+      setAuthorizedFor(!error && data === true ? user.id : null);
       setChecking(false);
-
-    };
-    void check();
-    return () => { active = false; };
-  }, [user, authLoading]);
+    })();
+    return () => { active = false; fetchGeneration.current += 1; };
+  }, [user?.id, authLoading]);
 
   useEffect(() => { if (authorized) void load(); }, [authorized, load]);
 
@@ -161,6 +186,28 @@ export default function AdminServiceRequests() {
         </form>
         <span className="text-xs text-muted-foreground">{filtered.length} of {total} matching requests · page {page + 1}</span>
       </div>
+      <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-border p-3">
+        <div>
+          <label htmlFor="service-priority-filter" className="mb-1 block text-xs font-semibold">Priority</label>
+          <select id="service-priority-filter" value={priorityFilter} onChange={(event) => { setPage(0); setPriorityFilter(event.target.value as typeof priorityFilter); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="all">All priorities</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="service-assignment-filter" className="mb-1 block text-xs font-semibold">Assignment</label>
+          <select id="service-assignment-filter" value={assignmentFilter} onChange={(event) => { setPage(0); setAssignmentFilter(event.target.value as typeof assignmentFilter); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="all">All assignments</option><option value="mine">Assigned to me</option><option value="unassigned">Unassigned</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="service-sort-order" className="mb-1 block text-xs font-semibold">Sort</label>
+          <select id="service-sort-order" value={sortOrder} onChange={(event) => { setPage(0); setSortOrder(event.target.value as typeof sortOrder); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="newest">Newest requests</option><option value="priority">Highest priority</option><option value="customer_activity">Recent customer activity</option>
+          </select>
+        </div>
+        <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={attentionOnly} onChange={(event) => { setPage(0); setAttentionOnly(event.target.checked); }} />Needs follow-up</label>
+        <span className="text-xs text-muted-foreground">Signals are based on saved activity, not unread receipts or response deadlines.</span>
+      </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
       <p className="mb-4 text-xs text-muted-foreground">Search and status filters are applied by the database. No first-250 cutoff or invented totals.</p>
       {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The migration may not yet be deployed, or access was denied.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
@@ -170,6 +217,12 @@ export default function AdminServiceRequests() {
           const draft = drafts[item.id] ?? { status: item.status, client_update: item.client_update ?? '' };
           return <Card key={item.id} className="p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">{getServiceOffering(item.service_key)?.title ?? item.service_key}</p><h2 className="mt-2 text-xl font-bold">{item.title}</h2><p className="mt-2 break-all text-xs text-muted-foreground">Submitted {new Date(item.created_at).toLocaleString()} · {item.id}</p></div><span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{serviceRequestStatuses[item.status]?.label ?? item.status}</span></div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border px-3 py-1">Priority: {item.priority}</span>
+              <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
+              {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
+              {item.last_customer_activity_at && <span>Customer activity: {new Date(item.last_customer_activity_at).toLocaleString()}</span>}
+            </div>
             <div className="mt-5 grid gap-4 rounded-xl border border-border p-4 text-sm md:grid-cols-2"><div><p className="font-semibold">Contact</p><p className="mt-2 break-all text-muted-foreground">{item.contact_email}</p>{item.company && <p className="mt-1 text-muted-foreground">{item.company}</p>}</div><div><p className="font-semibold">Project brief</p><p className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-muted-foreground">{item.description}</p></div></div>
             <div className="mt-4 grid gap-3 rounded-xl border border-border p-4 text-sm">
               {item.expected_outcome && <p><strong>Expected outcome:</strong> {item.expected_outcome}</p>}
@@ -196,7 +249,7 @@ export default function AdminServiceRequests() {
               </Button>
             </div>
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
-            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} />}
+            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => void load()} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
           </Card>;
         })}</div>}
