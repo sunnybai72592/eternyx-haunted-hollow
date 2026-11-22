@@ -32,13 +32,19 @@ export function checkedIncidentReport(raw){
     throw Error("Unverified incident report.");
   }
   const list=raw.topUnresolvedWorkflows.map(entry=>{
-    if(!entry||typeof entry!=="object"||
-       typeof entry.workflow_id!=="string"||
-       !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(entry.workflow_id)||
-       !isCount(entry.unresolved_cases)){
+    if(!entry||typeof entry!=="object"){
       throw Error("Unverified workflow report breakdown.");
     }
-    return {workflowId:entry.workflow_id,unresolvedCases:entry.unresolved_cases};
+    // Accept only the original PostgreSQL keys OR this module's already-
+    // sanitized keys so the displayed report can be exported safely later.
+    const workflowId=entry.workflow_id??entry.workflowId;
+    const unresolvedCases=entry.unresolved_cases??entry.unresolvedCases;
+    if(typeof workflowId!=="string"||
+       !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(workflowId)||
+       !isCount(unresolvedCases)){
+      throw Error("Unverified workflow report breakdown.");
+    }
+    return {workflowId,unresolvedCases};
   });
   return {
     schema:"eternyx-incident-report-v1",
