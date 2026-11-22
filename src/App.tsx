@@ -108,6 +108,7 @@ const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 // CBT System pages
 const DomainDns = lazy(() => import("./pages/DomainDns"));
 const Education = lazy(() => import("./pages/Education"));
+const EducationInstructorStudio = lazy(() => import("./pages/EducationInstructorStudio"));
 const TestInterface = lazy(() => import("./pages/TestInterface"));
 const TestResults = lazy(() => import("./pages/TestResults"));
 
@@ -294,6 +295,7 @@ const AppContent = () => {
                         {/* CBT System Routes */}
                         <Route path="/cybersecurity/dns" element={<RequireAuth><DomainDns /></RequireAuth>} />
                         <Route path="/education" element={<Education />} />
+                        <Route path="/education/question-bank" element={<RequireAuth><EducationInstructorStudio /></RequireAuth>} />
                         <Route path="/test/:testId" element={<TestInterface />} />
                         <Route path="/test-results/:attemptId" element={<TestResults />} />
 
