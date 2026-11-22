@@ -11,7 +11,7 @@ const home = read("src/components/home/SectionSelector.tsx");
 test("1: empty or irrelevant task searches show real fallback suggestions instead of relying on an absent top result", () => {
   assert.ok(finder.includes("findHomeTaskChoices(value, tools)"));
   assert.match(finder, /No matching tool found/);
-  assert.match(finder, /to="\\/explore"/);
+  assert.ok(finder.includes('to="/explore"'));
   assert.ok(finder.includes("setChoices(found)"));
 });
 
