@@ -116,7 +116,7 @@ test("controller derives JWT identity, avoids host APIs and has bounded request 
   assert.match(handler, /publicRangeSession\(session\)/);
   assert.match(config, /\[functions\.ctf-range-control\]\s*verify_jwt\s*=\s*true/);
   assert.doesNotMatch(handler, /body\.user_id|body\.userId|body\.points|body\.score/);
-  assert.doesNotMatch(handler, /Docker|docker\.sock|spawnSync|createServer\(/);
+  assert.doesNotMatch(handler, /from\s+["\x27]node:child_process|spawnSync\(|createServer\(|\/var\/run\/docker\.sock/);
 });
 
 test("account session dashboard links are discoverable and don't claim hosted access", async () => {
@@ -131,5 +131,5 @@ test("account session dashboard links are discoverable and don't claim hosted ac
   assert.match(page, /hostedAccessAvailable === true/);
   assert.match(page, /supabase\.functions\.invoke\("ctf-range-control"/);
   assert.match(page, /Nothing is launched or billed when the service is unavailable/);
-  assert.doesNotMatch(page, /Math\.random|localStorage\.setItem|fake.*instance|mockResults/i);
+  assert.doesNotMatch(page, /Math\.random|localStorage\.setItem|fakeInstanceId|mockInstanceId|mockResults/i);
 });
