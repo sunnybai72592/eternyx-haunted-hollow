@@ -2573,6 +2573,7 @@ export type Database = {
       service_customer_check_queue: {
         Row: {
           id: string
+          user_id: string
           service_key: string
           title: string
           description: string
