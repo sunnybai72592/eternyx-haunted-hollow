@@ -104,7 +104,11 @@ export default function ServiceScopeReview({
       const { data, error: publishError } = await supabase.from('service_scope_reviews').insert({
         request_id: requestId,
         author_id: user.id,
-        ...Object.fromEntries(fields.map((field) => [field.name, draft[field.name].trim()])) as ScopeDraft,
+        scope_summary: draft.scope_summary.trim(),
+        deliverables: draft.deliverables.trim(),
+        exclusions: draft.exclusions.trim(),
+        assumptions: draft.assumptions.trim(),
+        next_steps: draft.next_steps.trim(),
       }).select('id').single();
       if (publishError || !data?.id) throw publishError ?? new Error('Scope review not persisted');
       setDraft(emptyDraft);
