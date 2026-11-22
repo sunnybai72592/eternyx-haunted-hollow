@@ -136,7 +136,7 @@ test("14: answer keys and grading field grants remain an explicit release blocke
   assert.doesNotMatch(audit, /\bALTER\s+TABLE\b|\bCREATE\s+POLICY\b|\bREVOKE\b|\bGRANT\b/i);
   assert.match(guide, /Status: BLOCKED/);
   assert.match(guide, /could not be confirmed/);
-  assert.match(guide, /manual-review service/);
+  assert.match(guide, /Short-answer manual review is not implemented/);
 });
 
 test("15: service Edge Function sources parse as TypeScript", () => {
