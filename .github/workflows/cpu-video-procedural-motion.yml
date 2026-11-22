@@ -1,0 +1,41 @@
+name: CPU original procedural video generation
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/generate_motion_clips.py"
+      - "gpu-worker/tests/test_generate_motion_clips.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-video-procedural-motion.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/generate_motion_clips.py"
+      - "gpu-worker/tests/test_generate_motion_clips.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-video-procedural-motion.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-motion:
+    name: Generate original CPU animations and finished MP4
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check local CPU FFmpeg and libx264
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Render actual seeded motion, verify clips and assemble a finished CPU MP4
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_generate_motion_clips.py' -v
