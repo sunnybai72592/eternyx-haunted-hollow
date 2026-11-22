@@ -51,9 +51,13 @@ BEGIN
   SET max_starts_per_24h=1,max_reserved_minutes_per_24h=15
   WHERE singleton_id=1;
   SELECT public.ctf_range_worker_claim('operator-alpha',fence_a) INTO answer;
-  IF answer->>'ok' <> 'true' OR (answer->>'session_id')::uuid <> session_a THEN
+  IF answer->>'ok' <> 'true'
+     OR (answer->>'session_id')::uuid NOT IN (session_a,session_b) THEN
     RAISE EXCEPTION 'First budgeted claim unavailable: %',answer;
   END IF;
+  -- Both test reservations can have identical transaction timestamps;
+  -- the queue's documented tie-breaker is the generated UUID, not user A.
+  session_a := (answer->>'session_id')::uuid;
   IF (SELECT worker_fence_id FROM public.ctf_range_sessions WHERE id=session_a)
     IS DISTINCT FROM fence_a THEN
     RAISE EXCEPTION 'Session not fenced to elected provider';
