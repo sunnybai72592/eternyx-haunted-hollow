@@ -181,3 +181,29 @@ The tool implements five practical capabilities:
 5. **Private, create-only evidence:** A new output directory contains `summary.json`, `pairs.csv` and an escaped, offline `review.html`. Existing directories are never replaced. Keep raw JSON evaluation reports and rendered video inspections alongside the results outside the repository.
 
 **Interpretation:** Lower held-out flow-prediction MSE does not establish realistic movement, recognizable images, prompt adherence or high-quality output. The tool compares *already evaluated* adapters only, never trains them. All models and footage remain local; no subscription or paid compute is activated. If you changed the dataset, baseline model, evaluation cases or noise levels, run a separate experiment series rather than forcing a comparison.
+
+
+## Inspect actual rendered MP4 frames without a GPU
+
+The previous steps benchmark **optimizer timings and held-out flow-prediction errors**. Neither number demonstrates that the output video looks good. For locally saved short MP4 outputs, use this separate offline CPU auditor to inspect the decoded images directly:
+
+```sh
+python gpu-worker/audit_video_render.py \
+  --reference ./tiny-render-before.mp4 \
+  --candidate ./tiny-render-after.mp4 \
+  --output ./video-frame-audit-01 \
+  --max-dark-frames 1 --max-identical-transitions 2 \
+  --fail-on-flags
+```
+
+Omit `--candidate` to inspect one MP4. The CLI uses **local FFprobe and FFmpeg only**; it does not generate or train video, contact an AI API, rent compute, or need PyTorch. Keep input videos and the output folder outside the repository.
+
+Five improvements in this milestone:
+
+1. **Bounded real MP4 decoding:** Checks that the input is a local regular MP4 (not a symlink), at most 32 MiB, with one video stream, fixed frame rate from 1 to 60 fps, no more than 64 decoded frames and no more than 512 × 512 pixels. FFmpeg decodes actual frames into CPU RGB data; an empty or mismatched decode fails.
+2. **Frame-level diagnostics:** Calculates mean RGB intensity, proportion of near-black pixels, dark-frame count, exact repeats, near-static transitions, and mean RGB difference between consecutive frames. This flags potentially frozen or dark renders without pretending all low-motion/low-light videos are bad.
+3. **Paired render comparison:** Requires identical width, height, frame rate and frame count, then measures exact matching frames and per-frame absolute RGB differences. Larger differences do **not** indicate a better video.
+4. **Private visual review:** Embeds actual first, middle and last decoded frames as PNG thumbnails in a portable local HTML report. Exports all per-frame metrics as CSV and a JSON summary with source file SHA-256 hashes.
+5. **Optional reproducible checks:** Choose upper limits for dark frames or identical transitions. With `--fail-on-flags`, the CLI saves the audit **before** exiting with status 2 if a limit is exceeded. Existing output directories are never overwritten.
+
+The dedicated `CPU video frame audit` GitHub workflow exercises these paths using real FFmpeg-generated test MP4s with motion, static scenes and mismatched frame counts. These fixtures validate decoding and diagnostics; **they are not evidence of a trained high-quality video generator**. Subject realism, motion coherence, caption alignment and overall quality still require separately reviewed rendered clips. Input video thumbnails may contain sensitive imagery, so keep the generated local reports private.
