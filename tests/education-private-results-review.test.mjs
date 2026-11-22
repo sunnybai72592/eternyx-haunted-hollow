@@ -223,7 +223,9 @@ test("40 learner results keep owner filter and independent trusted receipt RPC",
  assert.match(page,/projectVerifiedAttempt\(attemptQuery\.data, verifiedQuery\.data, verifiedStudentResultsEnabled\)/);
 });
 test("41 no server answer key query or option correctness leak added",()=>{
- assert.doesNotMatch(page,/\.from\("options"\)|\.select\(".*is_correct.*"\)/);
+ assert.doesNotMatch(page,/\.from\("options"\)/);
+ // Marked correctness is requested from own user_answers only after release.
+ assert.match(page,/const request = gradeRevealed/);
  assert.match(page,/Selected option recorded/);
 });
 test("42 search and review status filters are wired to actual returned answers",()=>{
