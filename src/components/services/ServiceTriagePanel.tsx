@@ -4,12 +4,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { serviceNextActionLabels, validInternalReviewDate, type ServiceNextAction } from '@/lib/serviceReviewPlanner';
 
 type Triage = {
   request_id: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   assigned_admin_id: string | null;
   internal_note: string;
+  next_action_kind: ServiceNextAction;
+  next_review_on: string | null;
   updated_at: string;
 };
 const priorities: readonly Triage['priority'][] = ['low', 'normal', 'high', 'urgent'];
@@ -24,6 +28,8 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
   const [priority, setPriority] = useState<Triage['priority']>('normal');
   const [assignedId, setAssignedId] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [nextActionKind, setNextActionKind] = useState<ServiceNextAction>('not_set');
+  const [nextReviewOn, setNextReviewOn] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +54,7 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
       return;
     }
     const { data, error: loadError } = await supabase.from('service_request_triage')
-      .select('request_id,priority,assigned_admin_id,internal_note,updated_at')
+      .select('request_id,priority,assigned_admin_id,internal_note,next_action_kind,next_review_on,updated_at')
       .eq('request_id', requestId).maybeSingle();
     if (generation !== loadGeneration.current) return;
     if (loadError) {
@@ -62,6 +68,8 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
       setPriority(record?.priority ?? 'normal');
       setAssignedId(record?.assigned_admin_id ?? null);
       setNote(record?.internal_note ?? '');
+      setNextActionKind(record?.next_action_kind ?? 'not_set');
+      setNextReviewOn(record?.next_review_on ?? '');
       setLoadedKey(viewerKey);
     }
     setLoading(false);
@@ -74,6 +82,8 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
     setPriority('normal');
     setAssignedId(null);
     setNote('');
+    setNextActionKind('not_set');
+    setNextReviewOn('');
     setNotice('');
     setError('');
   }, [viewerKey]);
@@ -86,20 +96,26 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
   const save = async () => {
     if (saving || !currentUser || loading || loadedKey !== viewerKey) return;
     if (note.length > 2000) { setError('Internal note must be 2,000 characters or fewer.'); return; }
+    if (!validInternalReviewDate(nextReviewOn)) {
+      setError('Choose a valid UTC date between 2020 and 2100.'); return;
+    }
     setSaving(true);
     setError('');
     setNotice('');
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user || user.id !== currentUser.id) throw authError ?? new Error('Session expired');
-      const values = { priority, assigned_admin_id: assignedId, internal_note: note.trim() };
+      const values = {
+        priority, assigned_admin_id: assignedId, internal_note: note.trim(),
+        next_action_kind: nextActionKind, next_review_on: nextReviewOn || null,
+      };
       // No upsert: it can attempt to update the immutable request_id column.
       const write = saved
         ? supabase.from('service_request_triage').update(values)
           .eq('request_id', requestId).eq('updated_at', saved.updated_at)
-          .select('request_id,priority,assigned_admin_id,internal_note,updated_at').maybeSingle()
+          .select('request_id,priority,assigned_admin_id,internal_note,next_action_kind,next_review_on,updated_at').maybeSingle()
         : supabase.from('service_request_triage').insert({ request_id: requestId, ...values })
-          .select('request_id,priority,assigned_admin_id,internal_note,updated_at').maybeSingle();
+          .select('request_id,priority,assigned_admin_id,internal_note,next_action_kind,next_review_on,updated_at').maybeSingle();
       const { data, error: writeError } = await write;
       if (writeError || !data) throw writeError ?? new Error('Triage changed in another session');
       setSaved(data as Triage);
@@ -108,14 +124,14 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
       onSaved?.();
     } catch (reason) {
       console.error('Private triage update failed', reason);
-      setError('Triage was not saved. Refresh to resolve changed records or permission errors.');
+      setError('Review plan not saved. Refresh to resolve another admin’s changes, missing migrations or permission errors.');
     } finally {
       setSaving(false);
     }
   };
   const changed = !saved
-    ? priority !== 'normal' || assignedId !== null || note.trim().length > 0
-    : priority !== saved.priority || assignedId !== saved.assigned_admin_id || note.trim() !== saved.internal_note;
+    ? priority !== 'normal' || assignedId !== null || note.trim().length > 0 || nextActionKind !== 'not_set' || nextReviewOn !== ''
+    : priority !== saved.priority || assignedId !== saved.assigned_admin_id || note.trim() !== saved.internal_note || nextActionKind !== saved.next_action_kind || (nextReviewOn || null) !== saved.next_review_on;
 
   return (
     <section aria-label="Private administrator triage" className="mt-5 rounded-2xl border border-border bg-card/45 p-4 sm:p-5">
@@ -143,6 +159,20 @@ export default function ServiceTriagePanel({ requestId, onSaved }: { requestId: 
             <Textarea id={'triage-note-' + requestId} rows={4} maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Internal only: feasibility blockers, next review action, dependencies. Never paste credentials or sensitive customer datasets." />
             <p className="mt-1 text-right text-xs text-muted-foreground">{note.length}/2,000</p>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor={'triage-next-action-' + requestId} className="mb-2 block text-sm font-semibold">Next internal action</label>
+              <select id={'triage-next-action-' + requestId} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={nextActionKind} onChange={(event) => setNextActionKind(event.target.value as ServiceNextAction)}>
+                {Object.entries(serviceNextActionLabels).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor={'triage-next-review-' + requestId} className="mb-2 block text-sm font-semibold">Internal review date (UTC)</label>
+              <Input id={'triage-next-review-' + requestId} type="date" min="2020-01-01" max="2100-12-31" value={nextReviewOn} onChange={(event) => setNextReviewOn(event.target.value)} />
+              <p className="mt-1 text-xs text-muted-foreground">Optional. Leave empty if no internal review is planned.</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Internal planning only. Dates are not customer deadlines, delivery promises or service-level agreements.</p>
           <Button type="button" onClick={() => void save()} disabled={!changed || saving || !currentUser}><Save className="mr-2 h-4 w-4" />{saving ? 'Saving…' : 'Save private triage'}</Button>
         </div>
       )}
