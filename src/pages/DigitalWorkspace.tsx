@@ -24,7 +24,8 @@ import {
 } from "@/lib/workspaceRules.mjs";
 import type { Database } from "@/integrations/supabase/types";
 import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, workspaceExportFileName } from "@/lib/workspaceLibrary.mjs";
-import { createWorkspaceFullBackup } from "@/lib/workspaceFullBackup.mjs";
+import { createWorkspaceArchiveV3 } from "@/lib/workspaceChecklistArchive.mjs";
+import { fetchWorkspaceChecklistSnapshot } from "@/lib/workspaceChecklistPaging.mjs";
 import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
 import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
 import { buildWorkspaceTasksCsv, workspaceTaskProgress, copyWorkspaceTask } from "@/lib/workspaceTaskOps.mjs";
@@ -490,11 +491,15 @@ export default function DigitalWorkspace() {
     }, "Selected device note imported. The original local copy was not changed.");
   };
 
-  const exportProject = (includeFiles: boolean) => {
+  const exportProject = (mode: "legacy" | "checklists" | "complete") => {
     if (!owner || !selected) return;
+    const includeFiles = mode === "complete";
+    const includeSteps = mode !== "legacy";
     if (!window.confirm(includeFiles
-      ? "Download a private-file-inclusive project backup? It may contain sensitive data. Protect it. Up to 8 files / 12 MiB; checklist steps, completion timestamps and historical revisions are not included."
-      : "Download a local JSON export of this project? Notes and saved links contain private data. File contents, checklist steps and historical revisions are not included.")) return;
+      ? "Download an ETERNYX v3 checklist archive WITH private file bytes? This is sensitive data. Limit 1,000 tasks, 30 steps each, 8 files / 12 MiB; no old revisions or activity history."
+      : includeSteps
+        ? "Download an ETERNYX v3 checklist archive with actual task steps, notes and links? File bytes and historical revisions are excluded; limit 1,000 tasks."
+        : "Download a legacy v1 JSON export? This omits checklist steps, private file bytes and history.")) return;
     void mutate(async () => {
       // Fetch ALL rows for this project, not just the dashboard's initial 1000.
       // An incomplete export is an error, never represented as a full backup.
@@ -527,26 +532,37 @@ export default function DigitalWorkspace() {
         return result;
       };
       const [allTasks, allItems] = await Promise.all([pullTasks(), pullItems()]);
-      const content = includeFiles
-        ? await createWorkspaceFullBackup(selected, allTasks, allItems, async (path: string) => {
-          const { data, error: storageError } = await supabase.storage.from(WORKSPACE_BUCKET).download(path);
-          if (storageError || !data) throw new Error("Private backup download failed: " +
-            (storageError?.message ?? "file unavailable"));
-          return data;
-        })
+      // An incomplete step list must reject the entire archive. V1 remains
+      // separately available when the account exceeds v3 bounded limits.
+      const steps = includeSteps
+        ? await fetchWorkspaceChecklistSnapshot(supabase, owner, allTasks)
+        : [];
+      const download = async (path: string) => {
+        const { data, error: storageError } = await supabase.storage.from(WORKSPACE_BUCKET).download(path);
+        if (storageError || !data) throw new Error("Private backup download failed: " +
+          (storageError?.message ?? "file unavailable"));
+        return data;
+      };
+      const content = includeSteps
+        ? await createWorkspaceArchiveV3(selected, allTasks, allItems, steps,
+          includeFiles ? download : null)
         : JSON.stringify(buildWorkspaceExport(selected, allTasks, allItems), null, 2);
       const blob = new Blob([content], { type: "application/json" });
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.href = url;
-      link.download = includeFiles
-        ? workspaceExportFileName(selected.name).replace(/\.json$/, "-complete.json")
-        : workspaceExportFileName(selected.name);
+      link.download = mode === "complete"
+        ? workspaceExportFileName(selected.name).replace(/\.json$/, "-complete-v3.json")
+        : mode === "checklists"
+          ? workspaceExportFileName(selected.name).replace(/\.json$/, "-checklists-v3.json")
+          : workspaceExportFileName(selected.name);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 30000);
     }, includeFiles
-      ? "Complete backup download started. It includes private file bytes but not revision history."
-      : "Export prepared. Private file bytes and revision history are not included.");
+      ? "Full v3 archive download started. Current checklist steps and private file bytes included."
+      : includeSteps
+        ? "V3 checklist archive download started. Private file bytes and revisions are not included."
+        : "Legacy export download started without checklist steps or private file bytes.");
   };
 
   const ownedDataVisible = Boolean(owner && loadedOwner === owner);
@@ -702,9 +718,11 @@ export default function DigitalWorkspace() {
                       <Pin className="mr-2 h-4 w-4" aria-hidden="true" />}
                     {selected.pinned ? "Unpin" : "Pin project"}</Button>
                   <Button type="button" variant="outline" disabled={busy}
-                    onClick={() => exportProject(false)}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export JSON</Button>
+                    onClick={() => exportProject("legacy")}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Legacy JSON</Button>
                   <Button type="button" variant="outline" disabled={busy}
-                    onClick={() => exportProject(true)}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Backup with files</Button>
+                    onClick={() => exportProject("checklists")}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export with checklists</Button>
+                  <Button type="button" variant="outline" disabled={busy}
+                    onClick={() => exportProject("complete")}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Backup files + checklists</Button>
                   <Button type="button" variant="outline" disabled={busy}
                     onClick={() => setArchive(active)}>
                     {active ? <Archive className="mr-2 h-4 w-4" aria-hidden="true" /> :
