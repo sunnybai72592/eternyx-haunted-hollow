@@ -1,462 +1,247 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Progress } from '@/components/ui/progress';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import LoadingSpinner from '@/components/LoadingSpinner';
-import { Clock, AlertTriangle, CheckCircle2, LogOut } from 'lucide-react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Clock3, LogOut } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthStore } from "@/store/authStore";
+import { answeredExamCount, examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface Question {
-  id: string;
-  question_text: string;
-  question_type: string;
-  points: number;
-  order_index: number;
-}
+type ExamQuestion = { id: string; question_text: string; question_type: string; points: number; order_index: number };
+type ExamOption = { id: string; option_text: string };
+type Exam = { id: string; title: string; duration_minutes: number; is_active: boolean; questions: ExamQuestion[] };
+type Attempt = { id: string; start_time: string; status: string };
+type Answer = { questionId: string; selectedOptionId?: string; shortAnswer?: string };
 
-interface Option {
-  id: string;
-  option_text: string;
-  is_correct: boolean;
-}
-
-interface TestData {
-  id: string;
-  title: string;
-  duration_minutes: number;
-  questions: Question[];
-}
-
-interface UserAnswer {
-  questionId: string;
-  selectedOptionId?: string;
-  shortAnswer?: string;
-}
-
-const TestInterface: React.FC = () => {
+export default function TestInterface() {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const validTestId = validExamId(testId);
+  const enabled = !authLoading && isAuthenticated && !!user?.id && validTestId;
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<Map<string, Answer>>(() => new Map());
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
+  const submittingRef = useRef(false);
+  const expirySubmitRequested = useRef(false);
+  const submitRef = useRef<(expired: boolean) => Promise<void>>(async () => {});
+  const [visibilityNotice, setVisibilityNotice] = useState(false);
 
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Map<string, UserAnswer>>(new Map());
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  const [attemptId, setAttemptId] = useState<string | null>(null);
-  const [showExitDialog, setShowExitDialog] = useState(false);
-  const [screenLockViolation, setScreenLockViolation] = useState(false);
-  const [isAppInBackground, setIsAppInBackground] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const appStateRef = useRef<any>(null);
-
-  // Fetch test data
-  const { data: testData, isLoading: testLoading, error: testError } = useQuery({
-    queryKey: ['test', testId],
+  const testQuery = useQuery<Exam>({
+    queryKey: ["education-exam", user?.id, testId],
+    enabled,
+    retry: 1,
     queryFn: async () => {
-      if (!testId) throw new Error('Test ID is required');
-
-      const { data: test, error: testErr } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', testId)
-        .single();
-
-      if (testErr) throw testErr;
-
-      const { data: questions, error: questionsErr } = await supabase
-        .from('questions')
-        .select('*')
-        .eq('test_id', testId)
-        .order('order_index', { ascending: true });
-
-      if (questionsErr) throw questionsErr;
-
-      return {
-        ...test,
-        questions: questions || [],
-      } as TestData;
-    },
-  });
-
-  // Fetch question options
-  const { data: questionOptions } = useQuery({
-    queryKey: ['question-options', testData?.questions[currentQuestionIndex]?.id],
-    queryFn: async () => {
-      const currentQuestion = testData?.questions[currentQuestionIndex];
-      if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') {
-        return [];
-      }
-
-      const { data, error } = await supabase
-        .from('options')
-        .select('*')
-        .eq('question_id', currentQuestion.id);
-
+      const { data: test, error } = await supabase.from("tests")
+        .select("id,title,duration_minutes,is_active").eq("id", testId!).eq("is_active", true).single();
       if (error) throw error;
-      return data as Option[];
+      const { data: questions, error: questionError } = await supabase.from("questions")
+        .select("id,question_text,question_type,points,order_index")
+        .eq("test_id", testId!).order("order_index", { ascending: true });
+      if (questionError) throw questionError;
+      return { ...test, questions: questions ?? [] } as Exam;
     },
-    enabled: !!testData && currentQuestionIndex < testData.questions.length,
   });
 
-  // Initialize test attempt
-  useEffect(() => {
-    const initializeAttempt = async () => {
-      if (!testId) return;
+  // Attempt start_time comes from the database; refreshing does not restart the clock.
+  const attemptQuery = useQuery<Attempt>({
+    queryKey: ["education-active-exam-attempt", user?.id, testId],
+    enabled: enabled && !!testQuery.data && testQuery.data.questions.length > 0,
+    retry: 0,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const { data: previous, error: findError } = await supabase.from("user_attempts")
+        .select("id,start_time,status").eq("user_id", user!.id).eq("test_id", testId!)
+        .eq("status", "in_progress").maybeSingle();
+      if (findError) throw findError;
+      if (previous) return previous as Attempt;
+      const { data: created, error: createError } = await supabase.from("user_attempts")
+        .insert({ user_id: user!.id, test_id: testId!, status: "in_progress" })
+        .select("id,start_time,status").single();
+      if (createError) throw createError;
+      return created as Attempt;
+    },
+  });
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error('You must be logged in to take a test');
-        navigate('/education');
-        return;
-      }
+  const question = testQuery.data?.questions[questionIndex];
+  const optionsQuery = useQuery<ExamOption[]>({
+    queryKey: ["education-question-options", user?.id, question?.id],
+    enabled: enabled && !!attemptQuery.data && !!question &&
+      ["multiple_choice", "true_false"].includes(question.question_type),
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("options").select("id,option_text")
+        .eq("question_id", question!.id).order("id", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
-      // Check if user already has an in-progress attempt
-      const { data: existingAttempt } = await supabase
-        .from('user_attempts')
-        .select('id, status')
-        .eq('user_id', user.id)
-        .eq('test_id', testId)
-        .eq('status', 'in_progress')
-        .single();
-
-      if (existingAttempt) {
-        setAttemptId(existingAttempt.id);
-      } else {
-        // Create new attempt
-        const { data: newAttempt, error } = await supabase
-          .from('user_attempts')
-          .insert({
-            user_id: user.id,
-            test_id: testId,
-            status: 'in_progress',
-          })
-          .select('id')
-          .single();
-
-        if (error) {
-          toast.error('Failed to start test');
-          navigate('/education');
-          return;
-        }
-
-        setAttemptId(newAttempt.id);
-      }
-    };
-
-    initializeAttempt();
-  }, [testId, navigate]);
-
-  // Initialize timer
-  useEffect(() => {
-    if (!testData) return;
-
-    const durationSeconds = testData.duration_minutes * 60;
-    setTimeRemaining(durationSeconds);
-
-    timerRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          // Auto-submit when time runs out
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [testData]);
-
-  // Submit test mutation - must come before screen lock detection
-  const submitTestMutation = useMutation({
-    mutationFn: async () => {
-      if (!attemptId || !testData) throw new Error('Missing attempt or test data');
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Save all answers to database
-      for (const [, answer] of answers) {
-        const { error } = await supabase
-          .from('user_answers')
-          .upsert({
-            attempt_id: attemptId,
-            question_id: answer.questionId,
-            selected_option_id: answer.selectedOptionId || null,
-            short_answer_text: answer.shortAnswer || null,
-          });
-
+  const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
+  const expired = remaining === 0;
+  const canEdit = !!attemptQuery.data && !submitting && !expired;
+  const submitExam = useCallback(async (dueToExpiry: boolean) => {
+    if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setConfirmSubmit(false);
+    setNotice("");
+    try {
+      const attemptId = attemptQuery.data.id;
+      // This client sequence is not a server-side transaction. RLS, status and
+      // deadlines must be enforced by an atomic server-side submission service.
+      for (const answer of answers.values()) {
+        const { error } = await supabase.from("user_answers").upsert({
+          attempt_id: attemptId,
+          question_id: answer.questionId,
+          selected_option_id: answer.selectedOptionId || null,
+          short_answer_text: answer.shortAnswer || null,
+        }, { onConflict: "attempt_id,question_id" });
         if (error) throw error;
       }
+      const { data, error } = await supabase.from("user_attempts").update({
+        status: dueToExpiry ? "auto_submitted" : "submitted",
+        end_time: new Date().toISOString(),
+      }).eq("id", attemptId).eq("user_id", user.id).eq("status", "in_progress")
+        .select("id").maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("The attempt was not updated. Please check its server status.");
+      toast.success("Assessment submission recorded.");
+      navigate("/test-results/" + attemptId, { replace: true });
+    } catch {
+      setNotice("The assessment could not be submitted. Your answers are still in this tab. Check your connection and retry; server deadline enforcement must be verified.");
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }, [attemptQuery.data, testQuery.data, user, answers, navigate]);
+  submitRef.current = submitExam;
 
-      // Mark attempt as submitted
-      const { error: submitError } = await supabase
-        .from('user_attempts')
-        .update({
-          status: 'submitted',
-          end_time: new Date().toISOString(),
-        })
-        .eq('id', attemptId);
-
-      if (submitError) throw submitError;
-    },
-    onSuccess: () => {
-      toast.success('Test submitted successfully!');
-      navigate(`/test-results/${attemptId}`);
-    },
-    onError: (error) => {
-      toast.error('Failed to submit test: ' + (error as Error).message);
-    },
-  });
-
-  const handleAutoSubmit = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    submitTestMutation.mutate();
-  }, [submitTestMutation]);
-
-  // Screen lock detection (using Visibility API for web)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setIsAppInBackground(true);
-        setScreenLockViolation(true);
-        toast.error('Test paused: Tab hidden or screen lock detected. Your test will be auto-submitted.');
-        setTimeout(() => {
-          if (timerRef.current) clearInterval(timerRef.current);
-          submitTestMutation.mutate();
-        }, 2000);
-      } else {
-        setIsAppInBackground(false);
+    if (deadline === null || !attemptQuery.data) return;
+    expirySubmitRequested.current = false;
+    const tick = () => {
+      const left = examSecondsRemaining(deadline);
+      setRemaining(left);
+      if (left === 0 && !expirySubmitRequested.current && !submittingRef.current) {
+        expirySubmitRequested.current = true;
+        void submitRef.current(true);
       }
     };
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [deadline, attemptQuery.data?.id]);
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+  useEffect(() => {
+    const change = () => {
+      if (document.hidden) setVisibilityNotice(true);
+      // Recalculate from the fixed deadline when the tab becomes visible.
+      if (!document.hidden && deadline !== null) setRemaining(examSecondsRemaining(deadline));
     };
-  }, [submitTestMutation]);
+    document.addEventListener("visibilitychange", change);
+    return () => document.removeEventListener("visibilitychange", change);
+  }, [deadline]);
 
-  // Save answer
-  const handleAnswerChange = (questionId: string, value: string | undefined) => {
-    const newAnswers = new Map(answers);
-    const currentQuestion = testData?.questions[currentQuestionIndex];
-
-    if (currentQuestion?.question_type === 'multiple_choice') {
-      newAnswers.set(questionId, { questionId, selectedOptionId: value });
-    } else if (currentQuestion?.question_type === 'short_answer') {
-      newAnswers.set(questionId, { questionId, shortAnswer: value });
-    }
-
-    setAnswers(newAnswers);
+  const updateAnswer = (value: string) => {
+    if (!question || !canEdit) return;
+    setAnswers(previous => {
+      const next = new Map(previous);
+      next.set(question.id, question.question_type === "short_answer"
+        ? { questionId: question.id, shortAnswer: value }
+        : { questionId: question.id, selectedOptionId: value });
+      return next;
+    });
   };
 
-  const handleManualSubmit = () => {
-    setShowExitDialog(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-    submitTestMutation.mutate();
-  };
-
-  const handleExit = () => {
-    setShowExitDialog(true);
-  };
-
-  if (testLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner variant="cyber" text="Loading test..." />
-      </div>
-    );
+  if (authLoading || (enabled && (testQuery.isPending || (!!testQuery.data?.questions.length && attemptQuery.isPending)))) {
+    return <p role="status" className="mx-auto max-w-2xl p-8">Preparing your assessment…</p>;
   }
-
-  if (testError || !testData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Alert className="max-w-md border-red-500/50 bg-red-500/5">
-          <AlertTriangle className="h-4 w-4 text-red-500" />
-          <AlertDescription className="text-red-500">
-            Failed to load test. Please try again.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
+  if (!isAuthenticated) {
+    return <div className="mx-auto max-w-xl p-8">Sign in to take an assessment. <Link className="text-primary underline" to="/auth?redirect=%2Feducation">Sign in</Link></div>;
   }
+  if (!validTestId) return <p role="alert" className="p-8">Invalid assessment ID.</p>;
+  if (testQuery.error || attemptQuery.error) {
+    return <div role="alert" className="mx-auto max-w-xl space-y-4 p-8">
+      <p>Assessment or attempt could not be loaded. It may be unavailable or your account may lack access.</p>
+      <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
+    </div>;
+  }
+  const exam = testQuery.data;
+  if (!exam || !exam.questions.length || !question || !attemptQuery.data) {
+    return <div className="mx-auto max-w-xl space-y-4 p-8">
+      <p role="status">This assessment has no available questions or attempt. It cannot be started yet.</p>
+      <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
+    </div>;
+  }
+  const count = exam.questions.length;
+  const answered = answeredExamCount(answers);
+  const progress = answered / count * 100;
+  const selected = answers.get(question.id);
 
-  const currentQuestion = testData.questions[currentQuestionIndex];
-  const progressPercentage = ((currentQuestionIndex + 1) / testData.questions.length) * 100;
-  const currentAnswer = answers.get(currentQuestion.id);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const isTimeWarning = timeRemaining !== null && timeRemaining < 300; // 5 minutes
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header with Timer */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold text-cyber-cyan">{testData.title}</h1>
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${
-              isTimeWarning ? 'border-red-500 bg-red-500/10' : 'border-cyber-cyan/50 bg-cyber-cyan/10'
-            }`}>
-              <Clock className={`w-5 h-5 ${isTimeWarning ? 'text-red-500 animate-pulse' : 'text-cyber-cyan'}`} />
-              <span className={`font-mono font-bold ${isTimeWarning ? 'text-red-500' : 'text-cyber-cyan'}`}>
-                {timeRemaining !== null ? formatTime(timeRemaining) : 'Loading...'}
-              </span>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Question {currentQuestionIndex + 1} of {testData.questions.length}</span>
-              <span>{Math.round(progressPercentage)}%</span>
-            </div>
-            <Progress value={progressPercentage} className="h-2" />
-          </div>
+  return <main className="min-h-screen bg-background px-4 py-8 text-foreground">
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-primary sm:text-3xl">{exam.title}</h1>
+        <div role="timer" aria-label="Time remaining" className="flex items-center gap-2 rounded-lg border border-primary/30 bg-card px-4 py-2 font-mono">
+          <Clock3 aria-hidden="true" className="h-4 w-4" />{remaining === null ? "Loading…" : examClock(remaining)}
         </div>
-
-        {/* Screen Lock Warning */}
-        {screenLockViolation && (
-          <Alert className="mb-6 border-red-500/50 bg-red-500/5">
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-            <AlertDescription className="text-red-500">
-              Screen lock or app backgrounding detected. Your test will be auto-submitted to maintain integrity.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Question Card */}
-        <Card className="mb-8 bg-background/50 backdrop-blur-sm border-border/50">
-          <CardHeader>
-            <CardTitle className="text-2xl mb-2">{currentQuestion.question_text}</CardTitle>
-            <CardDescription>
-              Points: {currentQuestion.points}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            {currentQuestion.question_type === 'multiple_choice' && (
-              <RadioGroup 
-                value={currentAnswer?.selectedOptionId || ''} 
-                onValueChange={(value) => handleAnswerChange(currentQuestion.id, value)}
-              >
-                <div className="space-y-3">
-                  {questionOptions?.map((option) => (
-                    <div key={option.id} className="flex items-center space-x-2">
-                      <RadioGroupItem value={option.id} id={option.id} />
-                      <Label htmlFor={option.id} className="cursor-pointer flex-1">
-                        {option.option_text}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </RadioGroup>
-            )}
-
-            {currentQuestion.question_type === 'short_answer' && (
-              <Textarea
-                placeholder="Enter your answer here..."
-                value={currentAnswer?.shortAnswer || ''}
-                onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
-                className="min-h-32"
-              />
-            )}
-
-            {currentQuestion.question_type === 'true_false' && (
-              <RadioGroup 
-                value={currentAnswer?.selectedOptionId || ''} 
-                onValueChange={(value) => handleAnswerChange(currentQuestion.id, value)}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="true" id="true" />
-                    <Label htmlFor="true" className="cursor-pointer">True</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="false" id="false" />
-                    <Label htmlFor="false" className="cursor-pointer">False</Label>
-                  </div>
-                </div>
-              </RadioGroup>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Navigation Buttons */}
-        <div className="flex gap-4 justify-between">
-          <Button
-            onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
-            disabled={currentQuestionIndex === 0}
-            variant="outline"
-            className="border-cyber-cyan/50 text-cyber-cyan hover:bg-cyber-cyan/10"
-          >
-            ← Previous
-          </Button>
-
-          <div className="flex gap-4">
-            <Button
-              onClick={handleExit}
-              variant="destructive"
-              className="gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              Exit & Submit
-            </Button>
-
-            <Button
-              onClick={() => setCurrentQuestionIndex(Math.min(testData.questions.length - 1, currentQuestionIndex + 1))}
-              disabled={currentQuestionIndex === testData.questions.length - 1}
-              className="bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black font-semibold"
-            >
-              Next →
-            </Button>
-          </div>
-        </div>
-
-        {/* Exit Confirmation Dialog */}
-        <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Submit Test?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to submit your test? You won't be able to change your answers after submission.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="my-4 p-3 bg-muted rounded-lg">
-              <p className="text-sm font-semibold mb-2">Summary:</p>
-              <p className="text-sm text-muted-foreground">
-                Answered: {answers.size} / {testData.questions.length} questions
-              </p>
-            </div>
-            <div className="flex gap-4">
-              <AlertDialogCancel>Continue Test</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleManualSubmit}
-                className="bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black"
-              >
-                Submit Test
-              </AlertDialogAction>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
+      <p className="text-xs text-muted-foreground">The clock follows the stored attempt start time. Final deadlines and grading require server-side enforcement.</p>
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm"><span>Question {questionIndex + 1} of {count}</span><span>{answered} answered</span></div>
+        <Progress value={progress} aria-label="Questions answered" />
+      </div>
+      {visibilityNotice && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" />
+        <AlertDescription>Tab visibility changed during this attempt. This alone is not proof of a screen lock or misconduct.</AlertDescription></Alert>}
+      {notice && <Alert variant="destructive"><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+      {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription>Time has elapsed. Submission is required; confirm the server recorded it before leaving.</AlertDescription></Alert>}
+      <Card className="border-border bg-card">
+        <CardHeader><CardTitle className="text-xl">{question.question_text}</CardTitle>
+          <CardDescription>{question.points} points · {question.question_type.replace(/_/g, " ")}</CardDescription></CardHeader>
+        <CardContent>
+          {["multiple_choice", "true_false"].includes(question.question_type) ? (
+            optionsQuery.isPending ? <p role="status">Loading choices…</p> :
+            optionsQuery.error ? <p role="alert">Choices could not be loaded.</p> :
+            !optionsQuery.data?.length ? <p role="alert">No options are configured for this question.</p> :
+            <RadioGroup disabled={!canEdit} value={selected?.selectedOptionId || ""} onValueChange={updateAnswer}>
+              {optionsQuery.data.map(option => <div key={option.id} className="flex min-h-11 items-center gap-3">
+                <RadioGroupItem id={"exam-option-" + option.id} value={option.id} />
+                <Label htmlFor={"exam-option-" + option.id} className="cursor-pointer break-words">{option.option_text}</Label>
+              </div>)}
+            </RadioGroup>
+          ) : question.question_type === "short_answer" ? (
+            <Textarea aria-label="Your short answer" disabled={!canEdit} maxLength={5000}
+              value={selected?.shortAnswer || ""} onChange={event => updateAnswer(event.target.value)} className="min-h-32" />
+          ) : <p role="alert">This question type is not supported in the assessment interface.</p>}
+        </CardContent>
+      </Card>
+      <nav aria-label="Exam question navigation" className="flex flex-wrap items-center justify-between gap-3">
+        <Button variant="outline" disabled={questionIndex === 0 || submitting} onClick={() => setQuestionIndex(i => Math.max(0, i - 1))}>Previous</Button>
+        <Button variant="destructive" disabled={submitting} onClick={() => setConfirmSubmit(true)}><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Submit assessment</Button>
+        <Button disabled={questionIndex === count - 1 || submitting} onClick={() => setQuestionIndex(i => Math.min(count - 1, i + 1))}>Next</Button>
+      </nav>
+      <AlertDialog open={confirmSubmit} onOpenChange={setConfirmSubmit}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Submit this assessment?</AlertDialogTitle>
+            <AlertDialogDescription>{answered} of {count} questions answered. Your answers cannot be changed after a confirmed submission.</AlertDialogDescription></AlertDialogHeader>
+          <div className="flex flex-wrap justify-end gap-2">
+            <AlertDialogCancel disabled={submitting}>Continue assessment</AlertDialogCancel>
+            <AlertDialogAction disabled={submitting} onClick={() => void submitExam(expired)}>Confirm submission</AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-  );
-};
-
-export default TestInterface;
+  </main>;
+}
