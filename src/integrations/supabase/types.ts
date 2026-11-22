@@ -314,6 +314,48 @@ export type Database = {
         }
         Relationships: []
       }
+      service_requests: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          contact_email: string
+          company: string | null
+          status: string
+          client_update: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          contact_email: string
+          company?: string | null
+          status?: string
+          client_update?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          service_key?: string
+          title?: string
+          description?: string
+          contact_email?: string
+          company?: string | null
+          status?: string
+          client_update?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_history: {
         Row: {
           content: string
