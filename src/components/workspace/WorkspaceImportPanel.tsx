@@ -52,14 +52,17 @@ export default function WorkspaceImportPanel({ owner, disabled, onImported }: Pr
       return;
     }
     try {
-      const content = await file.text();
+      // Hash the exact original archive bytes, not re-encoded text:
+      // distinct malformed UTF-8 inputs must never share an import session.
+      const sourceBytes = new Uint8Array(await file.arrayBuffer());
+      const content = new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes);
       const header = JSON.parse(content);
       const validated = header?.format_version === 3
         ? await parseWorkspaceArchiveV3(content)
         : header?.format_version === 2
           ? await parseWorkspaceFullBackup(content)
           : parseWorkspaceRestore(content);
-      const fingerprint = await sha256Hex(content);
+      const fingerprint = await sha256Hex(sourceBytes);
       setPreview(validated);
       setSourceHash(fingerprint);
       setSourceVersion(header.format_version);
