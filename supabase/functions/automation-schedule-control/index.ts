@@ -50,6 +50,7 @@ serve(async (req: Request) => {
   try {
     const master = Deno.env.get("AUTOMATION_SCHEDULE_ENCRYPTION_KEY") ?? "";
     const keyConfigured = /^[a-f0-9]{64}$/i.test(master);
+    const workerConfigured = /^[a-f0-9]{64}$/i.test(Deno.env.get("AUTOMATION_SCHEDULER_WORKER_KEY") ?? "");
     if (request.action === "list") {
       const [{ data, error }, status] = await Promise.all([
         supabase.from("automation_schedules")
@@ -62,6 +63,7 @@ serve(async (req: Request) => {
       return reply({ schedules: data ?? [], source: "authenticated_server",
         schedulerEnabled: status.data?.enabled === true,
         encryptionConfigured: keyConfigured,
+        workerConfigured,
         scheduledOutputRetentionDays: 7,
       });
     }
@@ -80,6 +82,14 @@ serve(async (req: Request) => {
       return resultReply(data);
     }
     if (request.action === "toggle") {
+      if (request.enabled === true) {
+        const { data:status, error:statusError } = await supabase.from("automation_scheduler_config")
+          .select("enabled").eq("singleton_id",1).maybeSingle();
+        if (statusError) throw statusError;
+        if (!status || status.enabled !== true || !keyConfigured || !workerConfigured) {
+          return reply({ error: "Trusted scheduler is disabled or server secrets are missing" }, 409);
+        }
+      }
       const { data, error } = await supabase.rpc("automation_toggle_schedule", {
         p_user_id: user.id,p_schedule_id: request.scheduleId,p_enabled: request.enabled,
       });
