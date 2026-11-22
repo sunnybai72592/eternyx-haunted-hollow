@@ -154,10 +154,12 @@ export async function runOfflineHardwareAcceptance({
     const status=await supervisor.launchJailer({
       sessionId,manifest,uid,gid,jailerSha256,firecrackerSha256,
     });
+    // A service may exist even when its receipt is malformed. Any resolved
+    // launch must receive unconditional kill and death verification.
+    launched=true;
     if(status?.launched!==true||status.localOnly!==true ||
        status.guestNotBooted!==true ||status.cloudProvisioningAllowed!==false)
       throw Error("Untrusted jailed service launch receipt");
-    launched=true;
     await socketReady({sessionId,jailBase:JAIL_BASE,signal});
     if(signal?.aborted)throw Error("Offline KVM acceptance was cancelled");
     const bootStatus=await boot({
