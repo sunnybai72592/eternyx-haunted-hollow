@@ -79,7 +79,7 @@ export default function WorkspaceImportPanel({ owner, disabled, onImported }: Pr
         const { error: taskError } = await supabase.from("workspace_tasks").insert(
           batch.map((entry) => ({
             owner_id: owner, project_id: createdId!, title: entry.title,
-            status: entry.status, due_on: entry.due_on,
+            status: entry.status, due_on: entry.due_on, priority: entry.priority,
           }))
         );
         if (taskError) throw new Error("Task import failed after " + taskCount + " records: " + taskError.message);
