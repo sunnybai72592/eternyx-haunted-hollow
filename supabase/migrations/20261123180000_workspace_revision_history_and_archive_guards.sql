@@ -149,16 +149,16 @@ USING (owner_id = (SELECT auth.uid())
 CREATE POLICY workspace_private_insert ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2]
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2]
       AND p.owner_id = (SELECT auth.uid()) AND p.status = 'active')
 );
 CREATE POLICY workspace_private_delete ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2]
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2]
       AND p.owner_id = (SELECT auth.uid()) AND p.status = 'active')
 );
