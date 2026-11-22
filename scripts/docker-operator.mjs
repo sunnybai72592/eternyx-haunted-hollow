@@ -13,10 +13,11 @@ const help = [
   "  node scripts/docker-operator.mjs start|stop|restart FULL_CONTAINER_ID --confirm FULL_CONTAINER_ID",
   "The first lifecycle command previews; a confirmed command executes only on hardened, labeled local lab targets.",
 ].join("\n");
-function docker(argv,ms=8000) {
+function docker(argv,ms=8000,includeStderr=false) {
   const result=spawnSync("docker",argv,{shell:false,encoding:"utf8",timeout:ms,maxBuffer:524288,windowsHide:true});
   if (result.error || result.status!==0) throw new Error("Docker operation failed; verify local Engine and CLI permissions.");
-  return result.stdout.trim();
+  // Docker logs can use both output streams. Only show stderr for the explicit logs command.
+  return (includeStderr ? [result.stdout,result.stderr].filter(Boolean).join("\n") : result.stdout).trim();
 }
 function context() {
   if (process.env.DOCKER_HOST && !isLocalEndpoint(process.env.DOCKER_HOST)) throw new Error("Remote DOCKER_HOST endpoints are not supported.");
@@ -54,7 +55,7 @@ function main(){
   if(cmd.action==="stats") return output({source:"live-docker",context:current,stats:safeStats(jsonRows(docker([...pre,"stats","--no-stream","--format","{{json .}}",cmd.id]),1))});
   if(cmd.action==="logs"){
     process.stderr.write("Warning: container logs can contain secrets. Keep output private.\n");
-    return process.stdout.write(docker([...pre,"container","logs","--timestamps","--tail","50",cmd.id])+"\n");
+    return process.stdout.write(docker([...pre,"container","logs","--timestamps","--tail","50",cmd.id],8000,true)+"\n");
   }
   const item=inspect(pre,cmd.id);
   if(cmd.action==="inspect") return output({source:"live-docker",context:current,container:safeInspect(item)});
