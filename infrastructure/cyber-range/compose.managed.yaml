@@ -1,0 +1,75 @@
+# Developer-/staging-local managed range template. Never use as public ingress.
+# Only a trusted host-side provider worker may set ETERNYX_GATEWAY_TOKEN.
+# The target never receives the token, Supabase keys or Docker socket.
+services:
+  http-range:
+    build:
+      context: ./target
+      dockerfile: Dockerfile
+    restart: "no"
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 48
+    cpus: 0.40
+    mem_limit: 128m
+    memswap_limit: 128m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    environment:
+      PORT: "8080"
+      RANGE_MAX_AGE_SECONDS: "900"
+    networks:
+      - local_target_only
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    restart: "no"
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 32
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    environment:
+      RANGE_MANAGED_MODE: "required"
+      ETERNYX_MANAGED_GATEWAY_TOKEN: "${ETERNYX_GATEWAY_TOKEN:?A private session token is required}"
+      RANGE_MAX_AGE_SECONDS: "900"
+    depends_on:
+      http-range:
+        condition: service_healthy
+    networks:
+      - local_target_only
+      - localhost_ingress
+    ports:
+      - "127.0.0.1::8081"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/healthz',{headers:{authorization:'Bearer '+process.env.ETERNYX_MANAGED_GATEWAY_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+networks:
+  local_target_only:
+    internal: true
+    driver: bridge
+  localhost_ingress:
+    driver: bridge

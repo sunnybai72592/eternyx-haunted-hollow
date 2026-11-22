@@ -8,9 +8,24 @@
  * Not for Internet exposure or multi-tenant access.
  */
 import { createServer } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 
 const targetOrigin = "http://http-range:8080";
 const allowedMethods = new Set(["GET", "POST"]);
+const managedMode = process.env.RANGE_MANAGED_MODE === "required";
+const managedToken = process.env.ETERNYX_MANAGED_GATEWAY_TOKEN ?? "";
+if (managedMode && !/^[0-9a-f]{64,128}$/i.test(managedToken)) {
+  // Refuse to serve any vulnerable endpoints if the provider's access key is missing.
+  throw new Error("Managed range ingress token is missing or invalid");
+}
+
+function checkManagedToken(value) {
+  if (!managedMode) return true; // Existing localhost-only developer range unchanged.
+  if (typeof value !== "string" || !value.startsWith("Bearer ")) return false;
+  const supplied = Buffer.from(value.slice(7));
+  const expected = Buffer.from(managedToken);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
 const fail = (res, status, message) => {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -25,6 +40,7 @@ const gateway = createServer(async (req, res) => {
   if (!/^(127\.0\.0\.1|localhost):\d{1,5}$/.test(host)) {
     return fail(res, 421, "Localhost Host required");
   }
+  if (!checkManagedToken(req.headers.authorization)) return fail(res, 401, "Managed session credential required");
   if (!allowedMethods.has(req.method)) return fail(res, 405, "Method not allowed");
   if (!req.url?.startsWith("/") || req.url.startsWith("//") || req.url.includes("\\")) {
     return fail(res, 400, "Invalid local target path");
@@ -88,5 +104,9 @@ gateway.listen(port, "0.0.0.0", () => {
   console.log("ETERNYX local-only range gateway ready on internal port", port);
 });
 
-const ttl = setTimeout(() => gateway.close(() => process.exit(0)), 1800 * 1000);
+const lifetimeSeconds = Number.parseInt(process.env.RANGE_MAX_AGE_SECONDS || "1800", 10);
+if (!Number.isInteger(lifetimeSeconds) || lifetimeSeconds < 60 || lifetimeSeconds > 1800) {
+  throw new Error("Invalid gateway lifetime");
+}
+const ttl = setTimeout(() => gateway.close(() => process.exit(0)), lifetimeSeconds * 1000);
 ttl.unref();

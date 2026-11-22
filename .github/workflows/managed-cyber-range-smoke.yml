@@ -1,0 +1,82 @@
+name: Managed Cyber Range Isolation Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/**'
+      - 'supabase/functions/_shared/ctf-range-worker-contract.mjs'
+      - '.github/workflows/managed-cyber-range-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  managed-isolation:
+    name: Verify two independent token-protected local Docker ranges
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare ephemeral CI-only managed ingress secret
+        run: |
+          echo "ETERNYX_TOKEN_A=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "ETERNYX_TOKEN_B=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Validate managed Compose configuration
+        run: env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml config --quiet
+      - name: Launch two isolated managed targets with separate Docker projects
+        run: |
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml up --build --detach
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml up --build --detach
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml ps
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml ps
+      - name: Verify authenticated local ingress, per-instance flags and network boundaries
+        run: |
+          port_a="$(env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml port gateway 8081)"
+          port_b="$(env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml port gateway 8081)"
+          [[ "$port_a" =~ ^127\.0\.0\.1:[0-9]{4,5}$ ]]
+          [[ "$port_b" =~ ^127\.0\.0\.1:[0-9]{4,5}$ ]]
+          [[ "$port_a" != "$port_b" ]]
+          export RANGE_CI_PORT_A="${port_a##*:}"
+          export RANGE_CI_PORT_B="${port_b##*:}"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const tokens = [process.env.ETERNYX_TOKEN_A, process.env.ETERNYX_TOKEN_B];
+          const origins = [process.env.RANGE_CI_PORT_A, process.env.RANGE_CI_PORT_B].map((port) => 'http://127.0.0.1:' + port);
+          async function fetchReady(url, token) {
+            for (let i = 0; i < 25; i++) {
+              try {
+                const response = await fetch(url + '/healthz', {headers:{authorization:'Bearer ' + token}, signal:AbortSignal.timeout(1200)});
+                if (response.ok) return;
+              } catch { /* startup race */ }
+              await new Promise((resolve) => setTimeout(resolve, 400));
+            }
+            throw new Error('Managed gateway did not respond to authenticated health check');
+          }
+          await Promise.all(origins.map((url,i) => fetchReady(url, tokens[i])));
+          const flags = [];
+          for (const [i,url] of origins.entries()) {
+            const token = tokens[i];
+            assert.equal((await fetch(url + '/api/tickets?ticket=102')).status, 401);
+            assert.equal((await fetch(url + '/api/tickets?ticket=102', {headers:{authorization:'Bearer ' + tokens[1-i]}})).status, 401);
+            const ok = await fetch(url + '/api/tickets?ticket=102', {headers:{authorization:'Bearer ' + token}});
+            assert.equal(ok.status, 200);
+            const data = await ok.json();
+            const flag = data.content.match(/ETERNYX\{ticket_idor_[0-9a-f]{24}\}/)?.[0];
+            assert.ok(flag);
+            flags.push(flag);
+          }
+          assert.notEqual(flags[0], flags[1], 'Independent managed target must rotate practice flags');
+          NODE
+      - name: Verify vulnerable targets have no external Internet egress
+        run: |
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml exec -T http-range node -e "fetch('https://example.com',{signal:AbortSignal.timeout(1300)}).then(()=>process.exit(1),()=>process.exit(0))"
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml exec -T http-range node -e "fetch('https://example.com',{signal:AbortSignal.timeout(1300)}).then(()=>process.exit(1),()=>process.exit(0))"
+      - name: Remove all vulnerable managed test instances and networks
+        if: always()
+        run: |
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_A" docker compose -p eternyx-mng-a -f infrastructure/cyber-range/compose.managed.yaml down --volumes --remove-orphans || true
+          env ETERNYX_GATEWAY_TOKEN="$ETERNYX_TOKEN_B" docker compose -p eternyx-mng-b -f infrastructure/cyber-range/compose.managed.yaml down --volumes --remove-orphans || true
