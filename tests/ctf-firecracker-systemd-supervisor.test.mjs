@@ -43,7 +43,8 @@ function notFound(){
     SubState:"dead",MainPID:"0",ControlGroup:"",Transient:"no",
     Type:"simple",ExecStart:"",Description:""});
 }
-function fakeHost({initial=false,failStart=false,cgroupText="",badNetwork=false}={}){
+function fakeHost({initial=false,failStart=false,cgroupText="",
+  badNetwork=false,cgroupMember=true,populated=0}={}){
   let active=initial;const calls=[];
   const host={
     calls,
@@ -65,11 +66,17 @@ function fakeHost({initial=false,failStart=false,cgroupText="",badNetwork=false}
       throw Error("Unexpected systemctl action");
     },
     files:{async readFile(path){
-      if(!path.endsWith("/cgroup.procs"))throw Error("unexpected path");
-      if(cgroupText===null){
-        const e=Error("missing cgroup");e.code="ENOENT";throw e;
+      if(path==="/proc/12001/cgroup")
+        return "0::"+(cgroupMember?"/system.slice/"+unit:"/other.slice/foreign.service")+"\n";
+      if(path.endsWith("/cgroup.procs")||path.endsWith("/cgroup.events")){
+        if(cgroupText===null){
+          const e=Error("missing cgroup");e.code="ENOENT";throw e;
+        }
+        if(path.endsWith("/cgroup.events"))
+          return "populated "+populated+"\nfrozen 0\n";
+        return cgroupText;
       }
-      return cgroupText;
+      throw Error("unexpected file read");
     }},
     get active(){return active;},
   };
@@ -114,6 +121,8 @@ test("real systemd-run contract has external service lifetime and full cgroup ki
   assert.ok(!spec.argv.includes("--daemonize"));
   assert.ok(!spec.argv.includes("--no-seccomp"));
   assert.ok(!spec.argv.includes("--network-interface"));
+  assert.ok(!spec.argv.includes("--cgroup"),"Jailer must not escape systemd cgroup");
+  assert.ok(spec.argv.includes("--cgroup-version"));
   assert.equal(spec.spawnsPublicListener,false);
   assert.equal(spec.cloudProvisioningAllowed,false);
 });
@@ -150,6 +159,7 @@ test("attestation requires exact active transient unit, cgroup kill and 900s bou
     {TasksMax:"infinity"},{CPUQuotaPerSecUSec:"infinity"},
     {MainPID:"0"},{MainPID:"1212;rm"},{ControlGroup:"/system.slice/other.service"},
     {Description:"Unrelated unit"},{ExecStart:"path=/bin/bash"},
+    {ExecStart:argv+" --cgroup memory.max=99999"},
     {ActiveState:"inactive"},{SubState:"exited"},
   ];
   for(const change of modifications){
@@ -243,6 +253,13 @@ test("namespace must be only loopback before launch and while running",async()=>
   await assert.rejects(makeSupervisor(fakeHost({
     badNetwork:true,initial:true,
   })).attest(session),/non-loopback/);
+});
+
+test("escaped main process or nested cgroup tasks refuse attestation and teardown",async()=>{
+  const escaped=makeSupervisor(fakeHost({initial:true,cgroupMember:false}));
+  await assert.rejects(escaped.attest(session),/escaped/);
+  const nested=makeSupervisor(fakeHost({populated:1,cgroupText:""}));
+  assert.equal(await nested.verifyDead(session),false);
 });
 
 test("if systemd launched but attestation fails, cleanup stops unit and checks cgroup",async()=>{
