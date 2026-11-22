@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { getSupabaseSecretKey } from "../_shared/supabase.ts";
 import { runLocalWorkflow } from "../../../src/lib/automationWorkflow.mjs";
+import { encryptScheduledText, SCHEDULE_INPUT_BYTES } from "../_shared/automation-schedule-crypto.mjs";
 import {
   openWebhookCredential, validateWebhookEnvelope, verifyWebhookRequest,
 } from "../_shared/automation-webhook-crypto.mjs";
@@ -72,7 +73,7 @@ serve(async (req: Request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: trigger, error: triggerError } = await client.from("automation_webhook_triggers")
-      .select("id,user_id,workflow_id,credential_ciphertext,credential_iv,enabled,credential_version")
+      .select("id,user_id,workflow_id,credential_ciphertext,credential_iv,enabled,credential_version,approval_required")
       .eq("id", envelope.triggerId).maybeSingle();
     if (triggerError) throw triggerError;
     // Do not disclose whether the trigger exists or whether its signature failed.
@@ -88,6 +89,42 @@ serve(async (req: Request) => {
     if (workflowError) throw workflowError;
     if (!workflow || workflow.active !== true || workflow.trigger_kind !== "manual") {
       return reply({ error: "This workflow is not available" }, 404);
+    }
+
+    if (trigger.approval_required === true) {
+      // Owner-review mode queues an ENCRYPTED signed event; it does not run
+      // any operations until the actual account owner approves the request.
+      const approvalMaster = Deno.env.get("AUTOMATION_APPROVAL_ENCRYPTION_KEY") ?? "";
+      if (!/^[0-9a-f]{64}$/i.test(approvalMaster)) {
+        return reply({ error: "Webhook approval inbox is not configured" }, 503);
+      }
+      const bytes = new TextEncoder().encode(envelope.input);
+      if (bytes.byteLength > SCHEDULE_INPUT_BYTES) {
+        return reply({ error: "Approval-mode input must be 2,000 UTF-8 bytes or fewer" }, 413);
+      }
+      const encrypted = await encryptScheduledText(approvalMaster, envelope.input, SCHEDULE_INPUT_BYTES);
+      const { data: queued, error: enqueueError } = await client.rpc("automation_enqueue_webhook_approval", {
+        p_user_id: trigger.user_id, p_trigger_id: trigger.id,
+        p_workflow_id: workflow.id, p_workflow_revision: workflow.revision,
+        p_credential_version: trigger.credential_version, p_request_key: requestId,
+        p_fingerprint: await fingerprint(trigger.user_id, workflow.id, workflow.revision, trigger.id, envelope.input),
+        p_ciphertext: encrypted.ciphertext, p_nonce: encrypted.nonce,
+        p_input_bytes: bytes.byteLength,
+      });
+      if (enqueueError) throw enqueueError;
+      if (!queued || queued.ok !== true) {
+        const code = typeof queued?.reason === "string" ? queued.reason : "unavailable";
+        return reply({ error: "Signed approval request could not be queued", code },
+          code === "pending_limit" || code === "daily_approval_limit" ? 429 :
+          code === "idempotency_conflict" ? 409 :
+          code === "trigger_revoked" || code === "stale_workflow" ? 404 : 400);
+      }
+      return reply({
+        accepted: true, approvalId: queued.approval_id, status: queued.status,
+        expiresAt: queued.expires_at, reused: queued.reused === true,
+        source: "signed_webhook_approval_queue",
+        executed: false, message: "Queued for account-owner review. No workflow was executed.",
+      }, 202);
     }
 
     let result;
