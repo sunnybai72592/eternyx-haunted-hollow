@@ -76,20 +76,25 @@ test("AI security page does not claim fabricated model accuracy, malware verdict
 });
 
 test("Services Hub destination links are keyboard-accessible and registered in the actual route table", () => {
-  const links = [...services.matchAll(/href: "(\/[^"]+)"/g)].map(match => match[1]);
-  assert.ok(links.length >= 12, "Expected comprehensive route-grounded directory");
-  assert.equal(links.length, new Set(links).size, "Avoid duplicated destinations");
-  for (const href of links) {
-    assert.ok(app.includes('path="' + href + '"'), "Missing registered route: " + href);
+  const catalog = await read("src/lib/serviceOfferings.ts");
+  const destinations = [...catalog.matchAll(/pillar: '(\/[^']+)'/g)].map(match => match[1]);
+  assert.equal(destinations.length, 6, "Each service must link to a corresponding self-service pillar");
+  assert.equal(destinations.length, new Set(destinations).size, "Avoid duplicate pillar destinations");
+  for (const href of destinations) {
+    assert.ok(app.includes('path="' + href + '"'), "Missing registered pillar route: " + href);
   }
-  assert.match(services, /<Link to=\{item\.href\}>/);
+  assert.match(services, /serviceOfferings\.map/);
+  assert.match(services, /<Link to=\{service\.pillar\}>/);
+  for (const href of ["/services/request", "/services/requests"]) {
+    assert.ok(app.includes('path="' + href + '"'), "Missing service request route: " + href);
+  }
   assert.doesNotMatch(services, /onClick=\{\(\) => navigate\(link\)\}|hover:border-\$\{|https:\/\/openai\.com|mailto:consulting@eternyx/);
 });
 
 test("Service Hub no longer markets unsupported security protection, vendor integrations, or staff capacity", () => {
-  assert.match(services, /Assessment & Remediation/);
-  assert.match(services, /no active zero-day detector or live threat feed/);
-  assert.match(services, /Backend-dependent/);
+  assert.match(services, /not instant purchase or guaranteed fulfillment/);
+  assert.match(services, /No charges are collected here/);
+  assert.match(services, /Never include passwords, API keys or confidential production data/);
   assert.doesNotMatch(services, /impenetrable cybersecurity|proprietary detection systems|top-tier developers|real-time threat intelligence feeds|ensure your data remains secure for decades/);
 });
 
