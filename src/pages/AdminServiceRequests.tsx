@@ -237,7 +237,7 @@ export default function AdminServiceRequests() {
       void load();
     } catch (reason) {
       console.error('Admin check-in failed', reason);
-      setFeedback('Check-in not saved. Verify access and your connection before retrying.');
+      if (useAuthStore.getState().user?.id === user.id) setFeedback('Check-in not saved. Verify access and your connection before retrying.');
     } finally {
       setCheckingId(null);
     }
