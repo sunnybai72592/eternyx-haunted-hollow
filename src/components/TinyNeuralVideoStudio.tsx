@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import NeuralVideoAudition from "@/components/NeuralVideoAudition";
 import { Brain, CheckCircle2, Copy, FileCheck2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,8 @@ export default function TinyNeuralVideoStudio(){
   const [epochs,setEpochs]=useState(3);
   const [seconds,setSeconds]=useState(2);
   const [seed,setSeed]=useState(42);
+  const [stability,setStability]=useState(45);
+  const [variation,setVariation]=useState(6);
   const [profile,setProfile]=useState("landscape");
   const [quality,setQuality]=useState("standard");
   const [receipt,setReceipt]=useState<Receipt|null>(null);
@@ -29,7 +32,7 @@ export default function TinyNeuralVideoStudio(){
   let trainCommand="",generateCommand="",validation="";
   try{
     trainCommand=tinyNeuralTrainingCommand({rightsRef,seed:trainSeed,epochs});
-    generateCommand=tinyNeuralGenerateCommand({seconds,seed,profile,quality});
+    generateCommand=tinyNeuralGenerateCommand({seconds,seed,profile,quality,stability,variation});
   }catch(cause){validation=cause instanceof Error?cause.message:"Choose valid model parameters.";}
   const paths=tinyNeuralOutputPaths();
   const copy=(value:string)=>{
@@ -142,6 +145,16 @@ export default function TinyNeuralVideoStudio(){
                 {TINY_NEURAL_QUALITIES.map(value=><option key={value} value={value}>{value}</option>)}
               </select>
             </label>
+            <label className="space-y-1 text-sm">Temporal stability (0–85%)
+              <Input type="number" min={0} max={85} step={1} value={stability}
+                onChange={e=>setStability(Number(e.target.value))}
+                className="border-slate-700 bg-slate-950" aria-label="Neural temporal stability"/>
+            </label>
+            <label className="space-y-1 text-sm">Controlled frame variation (0–20%)
+              <Input type="number" min={0} max={20} step={1} value={variation}
+                onChange={e=>setVariation(Number(e.target.value))}
+                className="border-slate-700 bg-slate-950" aria-label="Neural frame variation"/>
+            </label>
           </div>
           {validation&&<p role="alert" className="text-sm text-amber-200">{validation}</p>}
           <code className="block select-all overflow-x-auto rounded border border-slate-700 bg-slate-900 p-3 text-xs leading-6 text-indigo-200">
@@ -151,6 +164,11 @@ export default function TinyNeuralVideoStudio(){
             <Copy className="mr-2 h-4 w-4"/>Copy neural video generation command
           </Button>
           <p className="text-xs leading-5 text-slate-400">
+            Temporal stability blends motion-compensated previous pixels with each neural
+            prediction. Variation adds bounded, time-correlated noise rather than unrelated
+            per-frame jitter. Neither control guarantees higher perceived visual quality.
+          </p>
+          <p className="text-xs leading-5 text-slate-400">
             This command creates actual learned-frame H.264 footage at <code>{paths.sample}</code>,
             and a finished <code>{paths.video}</code>, with independent editing receipt
             <code> {paths.manifest}</code> and neural-origin report <code>{paths.report}</code>.
@@ -158,6 +176,8 @@ export default function TinyNeuralVideoStudio(){
             Run with a new output folder each time.
           </p>
         </section>
+        <NeuralVideoAudition seconds={Math.min(seconds,4)} profile={profile}
+          quality={quality} stability={stability} variation={variation} />
         <section className="space-y-3 rounded-lg border border-slate-700 p-3">
           <h4 className="flex items-center gap-2 font-medium text-slate-100">
             <FileCheck2 className="h-4 w-4"/>3. Verify actual neural training evidence locally
