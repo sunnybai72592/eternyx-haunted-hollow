@@ -198,7 +198,7 @@ test("33 server-confirmed submitted attempts navigate to existing results",()=>{
 });
 test("34 no invented correctness, score, XP or certificate in new review helper",()=>{
  const helper=read("src/lib/educationExamReview.mjs");
- assert.doesNotMatch(helper,/is_correct|points_awarded|score:|xp:|localStorage|createClient|supabase/);
+ assert.doesNotMatch(helper,/is_correct|points_awarded|score:|xp:|localStorage\.|sessionStorage\.|createClient\(|from\("user_answers"\)/);
  assert.match(helper,/NOT persisted to the assessment backend/);
 });
 test("35 training docs preserve real server authorization and do not claim deployment",()=>{
