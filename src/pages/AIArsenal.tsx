@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import WorkspaceCaptureLink from "@/components/workspace/WorkspaceCaptureLink";
 import {
   ArrowRight,
   AudioLines,
@@ -61,6 +62,7 @@ const AIArsenal = () => {
   return (
     <div className="min-h-screen bg-[#070b14] text-white">
       <div className="mx-auto max-w-7xl space-y-10 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+        <WorkspaceCaptureLink title="AI Arsenal" />
         <section className="relative overflow-hidden rounded-3xl border border-primary/20 eternyx-arsenal-hero p-7 sm:p-10 lg:p-14">
           <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
           <div className="relative max-w-3xl">
