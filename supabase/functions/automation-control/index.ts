@@ -174,7 +174,7 @@ serve(async (req: Request) => {
       }));
       const { data: recorded, error: recordError } = await supabase.rpc("automation_approve_webhook_execution", {
         p_user_id:user.id,p_approval_id:approval.id,p_workflow_revision:workflow.revision,
-        p_input_lines:input.length ? input.split(/\\r\\n|\\n|\\r/).length : 0,
+        p_input_lines:input.length ? input.split(/\r\n|\n|\r/).length : 0,
         p_output_lines:result.outputLines,p_input_characters:input.length,
         p_output_characters:result.output.length,p_trace:trace,
       });
