@@ -102,6 +102,8 @@ test("10: only enrolled students receive allowed catalog metadata, never answers
 
 test("11: student question RLS drops legacy active-test-only public access",()=>{
   assert.match(sql,/DROP POLICY IF EXISTS "Users can view questions for their attempts" ON public.questions/);
+  assert.match(sql,/DROP POLICY IF EXISTS "Anyone can view active tests" ON public.tests/);
+  assert.match(sql,/CREATE POLICY "Students can view enrolled published tests"/);
   assert.match(sql,/CREATE POLICY "Students can view enrolled published questions"/);
   assert.match(sql,/public.education_student_can_read_questions\(questions.test_id\)/);
   assert.match(sql,/FUNCTION public.education_student_can_read_questions\(p_test_id uuid\)/);
