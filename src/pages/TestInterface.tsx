@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { answeredExamCount, examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
+import { createEducationAnswerSaveQueue } from "@/lib/educationAnswerSaveQueue.mjs";
 import { atomicCbtEnabled, startCbtAttempt, saveCbtAnswer, submitCbtAttempt } from "@/lib/educationCbtRpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,10 +39,12 @@ export default function TestInterface() {
   const expirySubmitRequested = useRef(false);
   const submitRef = useRef<(expired: boolean) => Promise<void>>(async () => {});
   const [visibilityNotice, setVisibilityNotice] = useState(false);
-  const pendingAnswersRef = useRef<Map<string, Answer>>(new Map());
   const answerSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const answerSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const saveQueueRef = useRef<ReturnType<typeof createEducationAnswerSaveQueue> | null>(null);
+  const saveQueueScopeRef = useRef<string | null>(null);
   const restoredAttemptRef = useRef<string | null>(null);
+  const [answerSaveStatus, setAnswerSaveStatus] = useState<"idle" | "saving" | "saved" | "unsaved">("idle");
+  const [answerSaveFailed, setAnswerSaveFailed] = useState(false);
 
   const testQuery = useQuery<Exam>({
     queryKey: ["education-exam", user?.id, testId],
@@ -99,12 +102,32 @@ export default function TestInterface() {
     },
   });
 
+  // A save queue belongs to exactly ONE account and ONE exam attempt.
+  // Never carry unsaved response text into another account or attempt.
   useEffect(() => {
+    const scope = atomicCbtEnabled && enabled && attemptQuery.data?.id
+      ? user?.id + ":" + attemptQuery.data.id : null;
+    if (saveQueueScopeRef.current === scope) return;
+    if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
+    answerSaveTimerRef.current = null;
+    saveQueueRef.current?.dispose();
+    saveQueueScopeRef.current = scope;
+    saveQueueRef.current = scope && attemptQuery.data?.id
+      ? createEducationAnswerSaveQueue((answer: Answer) => saveCbtAnswer(attemptQuery.data!.id, answer))
+      : null;
+    restoredAttemptRef.current = null;
+    setAnswers(new Map());
+    setAnswerSaveStatus("idle");
+    setAnswerSaveFailed(false);
+  }, [enabled, user?.id, attemptQuery.data?.id]);
+
+  useEffect(() => {
+    const scope = user?.id + ":" + attemptQuery.data?.id;
     if (!atomicCbtEnabled || !attemptQuery.data?.id || !restoredAnswersQuery.data ||
-        restoredAttemptRef.current === attemptQuery.data.id) return;
-    restoredAttemptRef.current = attemptQuery.data.id;
+        restoredAttemptRef.current === scope || saveQueueScopeRef.current !== scope) return;
+    restoredAttemptRef.current = scope;
     setAnswers(new Map(restoredAnswersQuery.data.map(answer => [answer.questionId, answer])));
-  }, [attemptQuery.data?.id, restoredAnswersQuery.data]);
+  }, [user?.id, attemptQuery.data?.id, restoredAnswersQuery.data]);
 
   const question = testQuery.data?.questions[questionIndex];
   const optionsQuery = useQuery<ExamOption[]>({
@@ -120,41 +143,41 @@ export default function TestInterface() {
     },
   });
 
-  // Server-authoritative mode persists changed answers before submission;
-  // status updates and deadline validation occur inside PostgreSQL RPCs.
+  // All browser writes are serialized; a newer in-flight edit is always
+  // persisted after an older request. Failed latest text remains retryable.
   const flushPendingAnswers = useCallback(async () => {
-    if (!atomicCbtEnabled || !attemptQuery.data) return;
+    if (!atomicCbtEnabled || !attemptQuery.data?.id) return;
     if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
     answerSaveTimerRef.current = null;
-    const batch = [...pendingAnswersRef.current.values()];
-    pendingAnswersRef.current.clear();
-    if (!batch.length) {
-      await answerSaveChainRef.current;
-      return;
-    }
-    const work = answerSaveChainRef.current.then(async () => {
-      for (let i = 0; i < batch.length; i++) {
-        try {
-          await saveCbtAnswer(attemptQuery.data!.id, batch[i]);
-        } catch (error) {
-          for (const missed of batch.slice(i)) pendingAnswersRef.current.set(missed.questionId, missed);
-          throw error;
-        }
+    const queue = saveQueueRef.current;
+    const scope = user?.id + ":" + attemptQuery.data.id;
+    if (!queue || saveQueueScopeRef.current !== scope || !queue.hasUnsaved()) return;
+    setAnswerSaveStatus("saving");
+    try {
+      await queue.flush();
+      if (saveQueueScopeRef.current === scope && saveQueueRef.current === queue) {
+        setAnswerSaveStatus("saved");
+        setAnswerSaveFailed(false);
       }
-    });
-    // Preserve a working queue after a failed write; caller sees the error.
-    answerSaveChainRef.current = work.catch(() => {});
-    await work;
-  }, [attemptQuery.data?.id]);
+    } catch (error) {
+      if (saveQueueScopeRef.current === scope && saveQueueRef.current === queue) {
+        setAnswerSaveStatus("unsaved");
+        setAnswerSaveFailed(true);
+      }
+      throw error;
+    }
+  }, [attemptQuery.data?.id, user?.id]);
 
   useEffect(() => () => {
     if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
+    saveQueueRef.current?.dispose();
   }, []);
 
   const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
   const expired = remaining === 0;
   const canEdit = !!attemptQuery.data && !submitting && !expired &&
-    (!atomicCbtEnabled || restoredAnswersQuery.isSuccess);
+    (!atomicCbtEnabled || (restoredAnswersQuery.isSuccess &&
+      !!saveQueueRef.current && saveQueueScopeRef.current === user?.id + ":" + attemptQuery.data.id));
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
     if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
     submittingRef.current = true;
@@ -237,6 +260,19 @@ export default function TestInterface() {
     return () => document.removeEventListener("visibilitychange", change);
   }, [deadline]);
 
+  // Regain connectivity: retry only while the server-side deadline is open.
+  // Never use an online event to extend an expired exam.
+  useEffect(() => {
+    const reconnect = () => {
+      if (!atomicCbtEnabled || !attemptQuery.data?.id ||
+          !saveQueueRef.current?.hasUnsaved() ||
+          (deadline !== null && Date.now() >= deadline)) return;
+      void flushPendingAnswers().catch(() => {});
+    };
+    window.addEventListener("online", reconnect);
+    return () => window.removeEventListener("online", reconnect);
+  }, [attemptQuery.data?.id, deadline, flushPendingAnswers]);
+
   const updateAnswer = (value: string) => {
     if (!question || !canEdit) return;
     const nextAnswer: Answer = question.question_type === "short_answer"
@@ -244,13 +280,14 @@ export default function TestInterface() {
       : { questionId: question.id, selectedOptionId: value };
     setAnswers(previous => new Map(previous).set(question.id, nextAnswer));
     if (atomicCbtEnabled) {
-      pendingAnswersRef.current.set(question.id, nextAnswer);
+      if (!saveQueueRef.current) return;
+      saveQueueRef.current.enqueue(nextAnswer);
+      setAnswerSaveStatus("unsaved");
+      setAnswerSaveFailed(false);
       if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
       answerSaveTimerRef.current = setTimeout(() => {
-        void flushPendingAnswers().then(() => {
-          setNotice("");
-        }).catch(() => {
-          setNotice("The latest answer could not be saved to the assessment server. Check your connection before submitting.");
+        void flushPendingAnswers().catch(() => {
+          // The queue retains the latest answer; retry and status stay visible.
         });
       }, question.question_type === "short_answer" ? 700 : 150);
     }
@@ -299,7 +336,28 @@ export default function TestInterface() {
       {visibilityNotice && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" />
         <AlertDescription>Tab visibility changed during this attempt. This alone is not proof of a screen lock or misconduct.</AlertDescription></Alert>}
       {notice && <Alert variant="destructive"><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
-      {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription>Time has elapsed. Submission is required; confirm the server recorded it before leaving.</AlertDescription></Alert>}
+      {atomicCbtEnabled && restoredAnswersQuery.isSuccess && (
+        <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+          <span className={answerSaveFailed ? "text-destructive" : "text-muted-foreground"}>
+            {answerSaveStatus === "saving" ? "Saving answers to your exam…" :
+              answerSaveFailed ? "Unsaved answers: the server did not confirm your latest changes." :
+              answerSaveStatus === "unsaved" ? "Changes waiting to be saved…" :
+              answerSaveStatus === "saved" ? "All latest answers saved to the server." :
+              "Answers are saved automatically as you work."}
+          </span>
+          {answerSaveFailed && (
+            <Button size="sm" variant="outline" disabled={submitting || expired}
+              onClick={() => void flushPendingAnswers().catch(() => {})}>
+              Retry saving
+            </Button>
+          )}
+        </div>
+      )}
+      {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+        <span>Time has elapsed. Submit to confirm the server recorded your attempt; late answer edits cannot be accepted.</span>
+        <Button size="sm" variant="outline" disabled={submitting}
+          onClick={() => void submitExam(true)}>Retry submission</Button>
+      </AlertDescription></Alert>}
       <Card className="border-border bg-card">
         <CardHeader><CardTitle className="text-xl">{question.question_text}</CardTitle>
           <CardDescription>{question.points} points · {question.question_type.replace(/_/g, " ")}</CardDescription></CardHeader>
