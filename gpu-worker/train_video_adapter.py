@@ -1,22 +1,58 @@
 """Train on local encoded windows and resume from completed CPU checkpoints (Linux)."""
 import argparse
 import fcntl
+import hashlib
+import json
+import re
 from pathlib import Path
 import tempfile
 
 import torch
 from diffusers import WanTransformer3DModel
 from peft import get_peft_model_state_dict, set_peft_model_state_dict
+from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
 from wan_adapter_bundle import fingerprint, transformer_identity, write_metadata
 from wan_adapter_step import attach_adapter, train_step
 
 
-def run(model, base_identity, windows, output, steps, resume=False, seed=17, rank=2, interval=10):
+def read_dataset(index_path, manifest_path):
+    index = json.loads(index_path.read_bytes())
+    raw = manifest_path.read_bytes()
+    if index["version"] != 1 or hashlib.sha256(raw).hexdigest() != index["manifest_sha256"]:
+        raise ValueError("Dataset index does not match the reviewed manifest")
+    manifest = json.loads(raw)
+    rows = sorted((row for row in manifest["clips"] if row["split"] == "train"), key=lambda row: row["file"])
+    entries = index["windows"]
+    if manifest["version"] != 1 or not rows or len(entries) != len(rows):
+        raise ValueError("Incomplete training split")
+    windows = []
+    digests = []
+    for row, entry in zip(rows, entries):
+        name = entry["window"]
+        if not isinstance(name, str) or not re.fullmatch(r"window-[0-9]{8,}\.safetensors", name):
+            raise ValueError("Invalid indexed window filename")
+        path = index_path.parent / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Missing or linked indexed window")
+        if (entry["source_file"], entry["source_sha256"]) != (row["file"], row["sha256"]):
+            raise ValueError("Indexed training sources differ from the manifest")
+        with safe_open(str(path), framework="pt") as handle:
+            metadata = handle.metadata() or {}
+        if any(metadata.get(key) != row[key] for key in ("sha256", "caption", "scene")):
+            raise ValueError("Window annotations differ from the manifest")
+        windows.append(path)
+        digests.append(entry["window_sha256"])
+    return windows, digests
+
+
+def run(model, base_identity, windows, output, steps, resume=False, seed=17, rank=2, interval=10, expected_digests=None):
     if min(steps, interval, rank) < 1 or not windows:
         raise ValueError("Provide encoded windows and positive steps, rank and checkpoint interval")
     digests = [fingerprint(path) for path in windows]
+    if expected_digests is not None and digests != expected_digests:
+        raise ValueError("Encoded window checksum differs from the dataset index")
     if len(set(digests)) != len(windows):
         raise ValueError("The window list contains duplicate files")
     identity = {"format": 1, "base": base_identity, "windows": digests, "seed": seed,
@@ -70,12 +106,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("snapshot", type=Path, help="Local Wan Diffusers snapshot")
     parser.add_argument("output", type=Path)
-    parser.add_argument("windows", type=Path, nargs="+", help="Ordered train-split encoded safetensors")
+    parser.add_argument("windows", type=Path, nargs="*", help="Ordered train-split encoded safetensors")
+    parser.add_argument("--dataset-index", type=Path, help="Dataset index produced by the manifest encoder")
+    parser.add_argument("--manifest", type=Path, help="Reviewed manifest used to create the index")
     parser.add_argument("--steps", type=int, required=True, help="Total optimizer steps including completed steps")
     parser.add_argument("--checkpoint-every", type=int, default=10)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
+    if bool(args.dataset_index) != bool(args.manifest) or bool(args.windows) == bool(args.dataset_index):
+        parser.error("Supply ordered windows or both --dataset-index and --manifest")
+    windows, digests = read_dataset(args.dataset_index, args.manifest) if args.dataset_index else (args.windows, None)
     root = args.snapshot.resolve(strict=True) / "transformer"
     base = transformer_identity(root)
     model = WanTransformer3DModel.from_pretrained(root, local_files_only=True, use_safetensors=True)
-    run(model, base, args.windows, args.output, args.steps, args.resume, interval=args.checkpoint_every)
+    run(model, base, windows, args.output, args.steps, args.resume,
+        interval=args.checkpoint_every, expected_digests=digests)

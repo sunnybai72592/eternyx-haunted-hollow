@@ -43,10 +43,10 @@ With a reviewed manifest and a local Wan snapshot, run these commands in Bash on
 
 ```sh
 python gpu-worker/encode_training_manifest.py ./wan-snapshot ./clips dataset-v1.json ./encoded-v1
-python gpu-worker/train_video_adapter.py ./wan-snapshot ./training ./encoded-v1/window-*.safetensors --steps 100
+python gpu-worker/train_video_adapter.py ./wan-snapshot ./training --dataset-index ./encoded-v1/index.json --manifest dataset-v1.json --steps 100
 ```
 
-The encoder loads the models once, checks each training clip against the manifest and saves its opening window. The numbered filenames follow source-path order. The index records the manifest, source and encoded file digests. Evaluation clips stay in the held-out split. The step count above is illustrative.
+The encoder loads the models once, checks each training clip against the manifest and saves its opening window. The numbered filenames follow source-path order. The trainer checks the manifest digest, ordered training sources, window annotations and encoded file digests before updating weights, including on resume. Use an immutable local dataset during training. Evaluation clips stay in the held-out split. The step count above is illustrative.
 
 ## Score an adapter on reviewed footage
 

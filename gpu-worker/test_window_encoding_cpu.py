@@ -156,9 +156,16 @@ def run_fixture(root, output):
     training_window = dataset / entries[0]["window"]
     assert fingerprint(training_window) == entries[0]["window_sha256"]
     assert entries[0]["source_sha256"] == window["sha256"]
-    subprocess.run([sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
-                    str(root / "manifest-training"), str(training_window), "--steps", "1"], check=True)
+    train_command = [sys.executable, str(worker_dir / "train_video_adapter.py"), str(root),
+                     str(root / "manifest-training"), "--dataset-index", str(dataset / "index.json"),
+                     "--manifest", str(manifest_path), "--steps", "1"]
+    subprocess.run(train_command, check=True)
     assert (root / "manifest-training" / "step-1" / "adapter.json").is_file()
+    index = json.loads((dataset / "index.json").read_text())
+    index["windows"][0]["window_sha256"] = "0" * 64
+    (dataset / "index.json").write_text(json.dumps(index))
+    rejected = subprocess.run(train_command + ["--resume"], capture_output=True, text=True)
+    assert rejected.returncode and "checksum differs" in rejected.stderr
     report = root / "evaluation.json"
     command = [sys.executable, str(Path(__file__).with_name("evaluate_video_adapter.py")),
                str(root), str(checkpoint), str(root), str(manifest_path), str(report), "--seeds", "7"]
