@@ -122,7 +122,7 @@ export default function EternyxLabs() {
             {selected === "web" && (
               <div className="space-y-5">
                 <LabNotice>
-                  Edit the three files and select Run preview. All HTML and JavaScript run in an opaque-origin sandbox frame with external network access blocked by a restrictive Content Security Policy.
+                  Edit the three files and select Run preview. HTML and JavaScript run inside an opaque-origin iframe. The preview policy blocks fetches, forms, and external subresources; browser navigation protections vary, so do not paste secrets or treat this as a virtual machine.
                 </LabNotice>
                 <div className="grid gap-4 xl:grid-cols-3">
                   <div><label htmlFor="lab-html" className="mb-2 flex items-center gap-2 text-sm font-semibold"><FileCode2 className="h-4 w-4" /> HTML</label><textarea id="lab-html" value={html} onChange={(event) => setHtml(event.target.value)} spellCheck={false} className={editorClass} /></div>
