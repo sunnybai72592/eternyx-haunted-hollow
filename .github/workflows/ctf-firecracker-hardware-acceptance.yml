@@ -14,6 +14,8 @@ on:
       - 'infrastructure/cyber-range/provider/firecracker-expiry-drill.mjs'
       - 'infrastructure/cyber-range/guest/eternyx_vsock_probe.py'
       - 'tests/ctf-firecracker-guest-probe-expiry.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-operator-evidence.mjs'
+      - 'tests/ctf-firecracker-operator-evidence.test.mjs'
       - 'tests/ctf-firecracker-systemd-supervisor.test.mjs'
       - 'tests/ctf-firecracker-boot-controller.test.mjs'
       - '.github/workflows/ctf-firecracker-hardware-acceptance.yml'
@@ -38,6 +40,7 @@ jobs:
           node --test tests/ctf-firecracker-hardware-acceptance.test.mjs \
             tests/ctf-firecracker-hardware-evidence.test.mjs \
             tests/ctf-firecracker-guest-probe-expiry.test.mjs \
+            tests/ctf-firecracker-operator-evidence.test.mjs \
             tests/ctf-firecracker-systemd-supervisor.test.mjs \
             tests/ctf-firecracker-boot-controller.test.mjs
       - name: No operator approval must refuse live guest boot

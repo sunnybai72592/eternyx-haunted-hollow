@@ -206,3 +206,97 @@ The tests use fake Unix sockets, simulated time and mock systemd results.
 Actual 900-second execution and its evidence **must** be collected on an
 approved disposable Linux/KVM host and independently reviewed before treating
 the drill as hardware-verified.
+
+
+## Next milestone — operator-signed v2 evidence, entirely offline
+
+This adds a distinct **Ed25519 operator-signed receipt** for the manually
+approved `--probe-guest` and/or `--expiry-drill` modes. The v1
+checksum-only receipt and short smoke path remain unchanged. Signing occurs
+**only after the guest shuts down and the systemd cgroup is verified empty**.
+A failed guest proof, unproven 900-second expiry, or failed teardown prevents
+a signed success record.
+
+### Key setup on a dedicated disposable Linux host
+
+The local operator prepares a private, root-owned signing directory and
+creates a unique Ed25519 keypair using **OpenSSL**. Do not commit private keys,
+upload them to Supabase, or put them inside the VM. Example:
+
+```bash
+sudo install -d -o root -g root -m 0700 /etc/eternyx-firecracker/keys
+sudo install -d -o root -g root -m 0700 /var/lib/eternyx-firecracker/evidence
+sudo openssl genpkey -algorithm ED25519 -out /etc/eternyx-firecracker/keys/attestation-ed25519.pem
+sudo chmod 0600 /etc/eternyx-firecracker/keys/attestation-ed25519.pem
+sudo openssl pkey -in /etc/eternyx-firecracker/keys/attestation-ed25519.pem   -pubout -out /etc/eternyx-firecracker/keys/attestation-ed25519.pub.pem
+sudo chmod 0644 /etc/eternyx-firecracker/keys/attestation-ed25519.pub.pem
+sudo openssl pkey -pubin -in /etc/eternyx-firecracker/keys/attestation-ed25519.pub.pem   -outform DER | sha256sum
+```
+
+The SHA-256 above is the public key's **SPKI DER fingerprint**, not the SHA
+of the PEM text. A separate reviewer should record that fingerprint via a
+trusted channel before the hardware test. Without an independently pinned
+fingerprint, verifying a self-supplied public key would not establish a
+meaningful signer identity.
+
+### Explicit signing of a manually approved guest or watchdog run
+
+After establishing the existing **three local hardware approvals**, and the
+additional expiry approval if using the 900-second drill, include
+`--save-signed-evidence-v2` and the externally recorded
+`--trusted-pubkey-sha` fingerprint:
+
+```bash
+sudo --preserve-env=ETERNYX_FIRECRACKER_HOST_EXECUTION,ETERNYX_RANGE_OPERATOR_ACK,ETERNYX_FIRECRACKER_HARDWARE_ACCEPTANCE   npm run range:microvm:hardware -- --run --confirm-local-kvm   --probe-guest --save-signed-evidence-v2   --session 123e4567-e89b-42d3-a456-426614174001   --uid 22001 --gid 22001   --kernel-sha KERNEL_SHA256 --rootfs-sha ROOTFS_SHA256   --jailer-sha JAILER_SHA256 --firecracker-sha FIRECRACKER_SHA256   --trusted-pubkey-sha TRUSTED_SPKI_SHA256
+```
+
+If running `--expiry-drill`, also set the earlier separate
+`ETERNYX_FIRECRACKER_EXPIRY_DRILL` approval flag and preserve it with
+`sudo --preserve-env`. You can select both optional proof modes for one
+signed receipt. The normal command still requires a prepared, pinned guest
+image and a dedicated, authorized KVM host. **CI never generates or saves
+a hardware-signed receipt, launches KVM, or spends money.**
+
+After a successful test and teardown, the CLI writes a bounded, immutable
+`<session>.v2-signed.json` file under
+`/var/lib/eternyx-firecracker/evidence` using restrictive
+permissions, exclusive create and directory synchronization. Existing
+filenames are never overwritten. Protect the private key from backup leaks,
+operator cross-access and untrusted root sessions.
+
+### Independent read-only verification
+
+The reviewer needs the public PEM and a separately trusted fingerprint. The
+verification path **never loads the private key**, launches a guest, opens a
+Firecracker socket, or calls a cloud service:
+
+```bash
+sudo npm run range:microvm:hardware -- --verify-signed-evidence-v2   --session 123e4567-e89b-42d3-a456-426614174001   --trusted-pubkey-sha TRUSTED_SPKI_SHA256
+```
+
+This verifies the Ed25519 signature, exact session and mode, pinned
+public-key fingerprint, v1 baseline checksum, pinned host and guest SHA-256,
+offline policy, and the separately reported challenge/timeout outcomes.
+Missing post-boot validations, a changed key, an altered field, or a
+non-private receipt are rejected.
+
+**Trust limits:** This is an **operator-signed account of the run**, not TPM
+or independently measured host boot attestation. A compromised host/root
+operator holding the signing key could forge plausible statements.
+The lightweight vsock challenge is also not a signed guest identity proof.
+Independent reviewers must still obtain and correlate real host logs,
+image provenance, actual unit timeout output and functional mission evidence
+before accepting it as a physical hardware security result. It does not
+enable public multi-tenant labs, remote user execution, or
+provider-enforced billing limits.
+
+### Free CI checks
+
+```bash
+node --test tests/ctf-firecracker-operator-evidence.test.mjs   tests/ctf-firecracker-guest-probe-expiry.test.mjs   tests/ctf-firecracker-hardware-evidence.test.mjs
+npm test
+npm run build
+```
+
+The tests generate disposable in-memory/test-directory signing keys to
+exercise rejection cases; **no operator signing key is generated in CI**.
