@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Download, FileUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Copy, Download, FileUp, Plus, Redo2, Search, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import EducationWrittenReviewPanel from "@/components/education/EducationWrittenReviewPanel";
 import { useAuthStore } from "@/store/authStore";
@@ -15,6 +15,10 @@ import {
   newQuestion, parseQuestionBankJson, QUESTION_BANK_LIMITS,
   questionBankSummary, validateQuestionBank, validateQuestionBankDraft,
 } from "@/lib/educationQuestionBank.mjs";
+import {
+  createBankUndoHistory, duplicateBankQuestion, duplicatePromptWarnings,
+  moveBankQuestion, questionIssueTargets, searchBankQuestions,
+} from "@/lib/educationBankWorkbench.mjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -38,6 +42,10 @@ export default function EducationInstructorStudio() {
   const [bank, setBank] = useState<Bank>(() => emptyQuestionBank() as Bank);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<"edit" | "learner">("edit");
+  const [questionSearch, setQuestionSearch] = useState("");
+  const [questionTypeFilter, setQuestionTypeFilter] = useState<"all" | QuestionType>("all");
+  const [historyController] = useState(() => createBankUndoHistory(emptyQuestionBank() as Bank));
+  const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
   const [message, setMessage] = useState("");
   const [importing, setImporting] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
@@ -48,17 +56,43 @@ export default function EducationInstructorStudio() {
   const { user, isAuthenticated } = useAuthStore();
   const queryClient = useQueryClient();
   const currentUserRef = useRef(user?.id);
-  useEffect(() => {
+  const resetEditor = (next: Bank) => {
+    const state = historyController.reset(next);
+    setBank(state.bank as Bank);
+    setHistoryCounts({ undo: 0, redo: 0 });
+    setQuestionSearch("");
+    setQuestionTypeFilter("all");
+  };
+  const commitBank = (apply: (current: Bank) => Bank) => {
+    try {
+      const state = historyController.edit(apply);
+      setBank(state.bank as Bank);
+      setHistoryCounts({ undo: state.undoCount, redo: state.redoCount });
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not edit this local draft.");
+    }
+  };
+  const travelHistory = (direction: "undo" | "redo") => {
+    const state = direction === "undo" ? historyController.undo() : historyController.redo();
+    setBank(state.bank as Bank);
+    setHistoryCounts({ undo: state.undoCount, redo: state.redoCount });
+    setActiveId(previous => state.bank.questions.some(q => q.id === previous)
+      ? previous : state.bank.questions.at(-1)?.id ?? null);
+    setMessage(direction === "undo" ? "Local edit undone." : "Local edit restored.");
+  };
+  // Clear ALL private answer keys (including local-only drafts) before
+  // painting a different account. No previous-user snapshot survives undo.
+  useLayoutEffect(() => {
     if (currentUserRef.current === user?.id) return;
     currentUserRef.current = user?.id;
-    if (sourceDraftId) {
-      // A loaded server answer key must never survive a change of account.
-      setBank(emptyQuestionBank() as Bank);
-      setActiveId(null);
-      setSourceDraftId(null);
-      setMessage("Previous instructor draft cleared after the account changed.");
-    }
-  }, [user?.id, sourceDraftId]);
+    resetEditor(emptyQuestionBank() as Bank);
+    setActiveId(null);
+    setSourceDraftId(null);
+    setMode("edit");
+    setMessage("Editor cleared after the account changed.");
+  }, [user?.id]);
+
   const accessQuery = useQuery({
     queryKey: ["education-instructor-access", user?.id],
     enabled: instructorRpcEnabled && isAuthenticated && !!user?.id,
@@ -77,17 +111,20 @@ export default function EducationInstructorStudio() {
   const learnerView = useMemo(() => draftCheck.valid ? learnerQuestionPreview(bank) : [], [bank, draftCheck.valid]);
   const activeIndex = bank.questions.findIndex(q => q.id === activeId);
   const active = activeIndex >= 0 ? bank.questions[activeIndex] : null;
+  const visibleQuestions = useMemo(() => searchBankQuestions(bank, questionSearch, questionTypeFilter),
+    [bank, questionSearch, questionTypeFilter]);
+  const duplicateWarnings = useMemo(() => duplicatePromptWarnings(bank), [bank]);
+  const issueTargets = useMemo(() => questionIssueTargets(bank, readiness.issues),
+    [bank, readiness.issues]);
 
   const changeBank = (fields: Partial<Bank>) => {
-    setBank(previous => ({ ...previous, ...fields }));
-    setMessage("");
+    commitBank(previous => ({ ...previous, ...fields }));
   };
   const updateQuestion = (id: string, apply: (question: Question) => Question) => {
-    setBank(previous => ({
+    commitBank(previous => ({
       ...previous,
       questions: previous.questions.map(q => q.id === id ? apply(q) : q),
     }));
-    setMessage("");
   };
   const addQuestion = (type: QuestionType) => {
     if (bank.questions.length >= QUESTION_BANK_LIMITS.questions) {
@@ -95,7 +132,7 @@ export default function EducationInstructorStudio() {
       return;
     }
     const question = newQuestion(type, crypto.randomUUID()) as Question;
-    setBank(previous => ({ ...previous, questions: [...previous.questions, question] }));
+    commitBank(previous => ({ ...previous, questions: [...previous.questions, question] }));
     setActiveId(question.id);
     setMode("edit");
     setMessage("");
@@ -131,19 +168,24 @@ export default function EducationInstructorStudio() {
   };
   const moveQuestion = (direction: -1 | 1) => {
     if (!active || activeIndex + direction < 0 || activeIndex + direction >= bank.questions.length) return;
-    setBank(previous => {
-      const next = [...previous.questions];
-      const from = next.findIndex(q => q.id === active.id);
-      const to = from + direction;
-      if (to < 0 || to >= next.length) return previous;
-      [next[from], next[to]] = [next[to], next[from]];
-      return { ...previous, questions: next };
-    });
+    commitBank(previous => moveBankQuestion(previous, active.id, direction));
   };
   const deleteQuestion = () => {
     if (!active || !window.confirm("Delete this question from the local draft?")) return;
-    setBank(previous => ({ ...previous, questions: previous.questions.filter(q => q.id !== active.id) }));
+    commitBank(previous => ({ ...previous, questions: previous.questions.filter(q => q.id !== active.id) }));
     setActiveId(null);
+  };
+  const duplicateActiveQuestion = () => {
+    if (!active || !draftCheck.valid || bank.questions.length >= QUESTION_BANK_LIMITS.questions) return;
+    try {
+      const duplicate = duplicateBankQuestion(bank, active.id, () => crypto.randomUUID());
+      commitBank(() => duplicate.bank as Bank);
+      setActiveId(duplicate.questionId);
+      setMode("edit");
+      setMessage("Question duplicated locally with fresh question and option IDs. Verify its answer key before export.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Question duplication failed.");
+    }
   };
   const handleExport = (ready: boolean) => {
     try {
@@ -162,7 +204,7 @@ export default function EducationInstructorStudio() {
     setMessage("");
     try {
       const draft = await loadInstructorDraft(draftId);
-      setBank(draft.bank as Bank);
+      resetEditor(draft.bank as Bank);
       setSourceDraftId(draft.id);
       setActiveId(draft.bank.questions[0]?.id ?? null);
       setMode("edit");
@@ -216,7 +258,7 @@ export default function EducationInstructorStudio() {
     setImporting(true);
     try {
       const parsed = parseQuestionBankJson(await file.text()) as Bank;
-      setBank(parsed);
+      resetEditor(parsed);
       setSourceDraftId(null);
       setActiveId(parsed.questions[0]?.id ?? null);
       setMode("edit");
@@ -312,6 +354,16 @@ export default function EducationInstructorStudio() {
           <EducationWrittenReviewPanel key={user.id} userId={user.id} />
         )}
 
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Local question bank editing history">
+          <Button variant="outline" onClick={() => travelHistory("undo")}
+            disabled={historyCounts.undo === 0 || serverSaving || importing || !!loadingDraftId}
+            aria-label="Undo local question bank edit"><Undo2 aria-hidden="true" className="mr-2 h-4 w-4" />Undo</Button>
+          <Button variant="outline" onClick={() => travelHistory("redo")}
+            disabled={historyCounts.redo === 0 || serverSaving || importing || !!loadingDraftId}
+            aria-label="Redo local question bank edit"><Redo2 aria-hidden="true" className="mr-2 h-4 w-4" />Redo</Button>
+          <span className="text-xs text-muted-foreground">Up to 30 in-memory undo steps · Not saved online</span>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => importRef.current?.click()} disabled={importing}>
             <FileUp aria-hidden="true" className="mr-2 h-4 w-4" />{importing ? "Importing…" : "Import JSON"}
@@ -328,7 +380,7 @@ export default function EducationInstructorStudio() {
           </Button>
           <Button variant="ghost" onClick={() => {
             if (!window.confirm("Clear this unsaved local question bank? Download a draft first if needed.")) return;
-            setBank(emptyQuestionBank() as Bank); setActiveId(null); setSourceDraftId(null); setMode("edit"); setMessage("");
+            resetEditor(emptyQuestionBank() as Bank); setActiveId(null); setSourceDraftId(null); setMode("edit"); setMessage("");
           }}>New bank</Button>
         </div>
 
@@ -369,17 +421,63 @@ export default function EducationInstructorStudio() {
           {readiness.valid ? <p role="status" className="mt-2 text-sm text-primary">Ready for validated local JSON export.</p> : (
             <div role="status" className="mt-2">
               <p className="text-sm text-muted-foreground">{readiness.issues.length} issue(s) to resolve before validated export.</p>
+              {issueTargets.length > 0 && <Button size="sm" variant="outline" className="mt-3"
+                onClick={() => { setActiveId(issueTargets[0].id); setQuestionSearch(""); setQuestionTypeFilter("all"); setMode("edit"); }}>
+                Jump to first question issue
+              </Button>}
               <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">
                 {readiness.issues.slice(0, 12).map((issue, index) => <li key={index}>{issue}</li>)}
                 {readiness.issues.length > 12 && <li>Additional issues remain.</li>}
               </ul>
             </div>
           )}
+
         </section>
+        {duplicateWarnings.length > 0 && <section aria-label="Potential duplicate question prompts"
+          className="rounded-xl border border-amber-500/30 bg-card p-4">
+          <h2 className="font-semibold">Repeated question wording</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {duplicateWarnings.length} possible duplicate prompt(s) found. These are editorial warnings, not automatic grading decisions.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {duplicateWarnings.slice(0, 10).map(warning => (
+              <Button key={warning.questionId} variant="outline" size="sm"
+                onClick={() => { setActiveId(warning.questionId); setQuestionSearch(""); setQuestionTypeFilter("all"); setMode("edit"); }}>
+                Question {warning.questionNumber} repeats {warning.firstNumber}
+              </Button>
+            ))}
+          </div>
+        </section>}
 
         <section aria-labelledby="question-authoring" className="grid gap-5 lg:grid-cols-[minmax(260px,1fr)_minmax(0,2fr)]">
           <div className="space-y-3">
             <h2 id="question-authoring" className="text-lg font-semibold">Questions</h2>
+            <div className="space-y-3 rounded-xl border border-border bg-card p-3">
+              <label htmlFor="authoring-question-search" className="block text-sm font-medium">Find questions</label>
+              <div className="relative">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground"/>
+                <input id="authoring-question-search" type="search" maxLength={120}
+                  value={questionSearch} onChange={event => setQuestionSearch(event.target.value)}
+                  placeholder="Search question wording" className="min-h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm"/>
+              </div>
+              <label htmlFor="authoring-question-type" className="block text-sm font-medium">Question type</label>
+              <select id="authoring-question-type" value={questionTypeFilter}
+                onChange={event => setQuestionTypeFilter(event.target.value as "all" | QuestionType)}
+                className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                <option value="all">All types</option>
+                <option value="multiple_choice">Multiple choice</option>
+                <option value="true_false">True / False</option>
+                <option value="short_answer">Written</option>
+              </select>
+              <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                {visibleQuestions.length} of {bank.questions.length} questions shown
+              </p>
+              {(questionSearch || questionTypeFilter !== "all") &&
+                <Button variant="ghost" size="sm"
+                  onClick={() => { setQuestionSearch(""); setQuestionTypeFilter("all"); }}>
+                  Clear question filters
+                </Button>}
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => addQuestion("multiple_choice")}><Plus aria-hidden="true" className="mr-1 h-4 w-4" />MCQ</Button>
               <Button variant="outline" onClick={() => addQuestion("true_false")}><Plus aria-hidden="true" className="mr-1 h-4 w-4" />True/False</Button>
@@ -388,15 +486,19 @@ export default function EducationInstructorStudio() {
             {bank.questions.length === 0 ? <p className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
               No questions yet. Add your first question above, or import an existing local bank.
             </p> : <div className="max-h-[540px] space-y-2 overflow-auto" aria-label="Question list">
-              {bank.questions.map((q, index) => (
-                <button type="button" key={q.id} onClick={() => { setActiveId(q.id); setMode("edit"); }}
+              {visibleQuestions.length === 0 && <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
+                No questions match these filters. Clear filters to view the full bank.
+              </p>}
+              {visibleQuestions.map(({ id, index }) => {
+                const q = bank.questions[index];
+                return <button type="button" key={id} onClick={() => { setActiveId(q.id); setMode("edit"); }}
                   aria-current={q.id === activeId ? "true" : undefined}
                   className={"w-full rounded-xl border p-3 text-left transition-colors " +
                     (q.id === activeId ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/30")}>
                   <p className="text-xs text-muted-foreground">Question {index + 1} · {q.type.replaceAll("_", " ")} · {q.points} pt</p>
                   <p className="mt-1 break-words text-sm font-medium">{q.text.trim() || "Untitled question"}</p>
-                </button>
-              ))}
+                </button>;
+              })}
             </div>}
           </div>
 
@@ -437,6 +539,10 @@ export default function EducationInstructorStudio() {
                     </Button>
                     <Button variant="outline" size="sm" disabled={activeIndex === bank.questions.length - 1}
                       onClick={() => moveQuestion(1)}><ArrowDown aria-hidden="true" className="mr-1 h-4 w-4" />Move down</Button>
+                    <Button variant="outline" size="sm" onClick={duplicateActiveQuestion}
+                      disabled={!draftCheck.valid || bank.questions.length >= QUESTION_BANK_LIMITS.questions}>
+                      <Copy aria-hidden="true" className="mr-1 h-4 w-4" />Duplicate
+                    </Button>
                     <Button variant="destructive" size="sm" onClick={deleteQuestion}><Trash2 aria-hidden="true" className="mr-1 h-4 w-4" />Delete</Button>
                   </div>
                   <div>
