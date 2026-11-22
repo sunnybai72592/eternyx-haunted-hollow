@@ -128,8 +128,17 @@ BEGIN
      OR pg_catalog.jsonb_array_length(v_drafts) <> 1 THEN
     RAISE EXCEPTION 'Owned private authoring read-back failed';
   END IF;
-  IF v_loaded->'bank'->'questions'->0->'options'->0->>'correct' <> 'true' THEN
-    RAISE EXCEPTION 'Authorized authoring view lost a correct answer flag';
+  -- MCQ choices intentionally restore in stable UUID order; correctness
+  -- must be checked by option identity rather than list position.
+  IF (SELECT pg_catalog.count(*)
+      FROM pg_catalog.jsonb_array_elements(v_loaded->'bank'->'questions'->0->'options') AS o(value)
+      WHERE o.value->>'correct' = 'true') <> 1
+     OR NOT EXISTS (
+       SELECT 1
+       FROM pg_catalog.jsonb_array_elements(v_loaded->'bank'->'questions'->0->'options') AS o(value)
+       WHERE o.value->>'text' = 'Magnesium' AND o.value->>'correct' = 'true'
+     ) THEN
+    RAISE EXCEPTION 'Authorized authoring view lost correct answer identity';
   END IF;
   IF (public.education_request_publication(v_id)->>'status') <> 'pending' THEN
     RAISE EXCEPTION 'Teacher publication request did not enter pending state';
