@@ -406,3 +406,8 @@ verify_jwt = false
 # Authenticated owner operation REVIEW only. No Docker API execution.
 [functions.docker-control]
 verify_jwt = true
+
+# Agent-authenticated Ed25519 commands; handler refuses all requests unless
+# server-only DOCKER_REMOTE_LAB_ENABLED=true and signing key are configured.
+[functions.docker-command-dispatch]
+verify_jwt = false
