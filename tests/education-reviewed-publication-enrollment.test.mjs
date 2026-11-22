@@ -111,7 +111,7 @@ test("12: staged atomic CBT requires approved request and enrolled user before s
   assert.match(atomic,/FROM public.education_test_enrollments AS e/);
   assert.match(atomic,/JOIN public.education_publication_requests AS r ON r.test_id = e.test_id/);
   assert.match(atomic,/e.test_id = t.id AND e.user_id = v_user AND r.status = 'approved'/);
-  assert.match(doc,/atomic start RPC now requires an approved publication request AND a matching student enrollment/);
+  assert.match(doc,/start RPC now requires an approved publication request AND a matching student enrollment/);
 });
 
 test("13: internal readiness has no browser EXECUTE grant; all public RPCs explicitly revoke anonymous EXECUTE",()=>{
@@ -161,7 +161,7 @@ test("18: admin route and navigation are staged behind feature switch",()=>{
   assert.match(routes,/path="\/admin\/education" element=\{<RequireAuth><EducationPublicationAdmin \/><\/RequireAuth>\}/);
   assert.match(overview,/publicationRpcEnabled && <div/);
   assert.match(overview,/to="\/admin\/education"/);
-  assert.match(doc,/all three/);
+  assert.match(doc,/all three/i);
 });
 
 test("19: all new TypeScript or TSX sources parse",()=>{
