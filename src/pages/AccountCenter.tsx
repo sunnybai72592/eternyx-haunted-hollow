@@ -102,7 +102,7 @@ export default function AccountCenter() {
   if (isLoading || (!isAuthenticated && !user)) {
     return (
       <main className="mx-auto flex min-h-[55vh] max-w-6xl items-center justify-center px-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0a1020]/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-card/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
           <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
           Restoring your ETERNYX identity…
         </div>
@@ -127,7 +127,7 @@ export default function AccountCenter() {
         </div>
       </div>
 
-      <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-[#080f1e] shadow-[0_28px_100px_rgba(0,0,0,.38)]">
+      <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/15 bg-card shadow-[0_28px_100px_rgba(0,0,0,.38)]">
         <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_78%_10%,hsl(var(--primary)/.13),transparent_36%),linear-gradient(115deg,rgba(7,15,30,.98),rgba(9,18,34,.94)_55%,rgba(13,20,43,.92))]" />
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center lg:p-10">
@@ -187,7 +187,7 @@ export default function AccountCenter() {
       </section>
 
       <section className="mt-7 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
+        <div className="rounded-2xl border border-white/[0.09] bg-card/85 p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Identity strength</p>
@@ -205,7 +205,7 @@ export default function AccountCenter() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
+        <div className="rounded-2xl border border-white/[0.09] bg-card/85 p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-200/65">Support activity</p>
@@ -250,7 +250,7 @@ export default function AccountCenter() {
           {destinations.map((item, index) => {
             const Icon = item.icon;
             return (
-              <Link key={item.href} to={item.href} className="group relative flex min-h-[174px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0a1221]/85 p-5 transition duration-300 hover:-translate-y-1 hover:border-cyan-200/30 hover:bg-[#0d192b] hover:shadow-[0_18px_50px_rgba(0,0,0,.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
+              <Link key={item.href} to={item.href} className="group relative flex min-h-[174px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-card/85 p-5 transition duration-300 hover:-translate-y-1 hover:border-cyan-200/30 hover:bg-card hover:shadow-[0_18px_50px_rgba(0,0,0,.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
                 <div aria-hidden="true" className="absolute right-0 top-0 h-28 w-28 rounded-full bg-cyan-300/[0.035] blur-2xl transition group-hover:bg-cyan-300/[0.09]" />
                 <div className="relative flex items-start justify-between gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-200/15 bg-cyan-200/[0.07] text-cyan-100"><Icon className="h-[18px] w-[18px]" /></span>
