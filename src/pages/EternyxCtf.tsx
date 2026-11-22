@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, BookOpen, CheckCircle2, ChevronRight, Flag,
@@ -54,7 +55,7 @@ export default function EternyxCtf() {
     setInstance((value) => value + 1);
   };
 
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = validateCtfFlag(selectedId, flag);
     setFeedback(result);
@@ -124,7 +125,7 @@ export default function EternyxCtf() {
               ))}
             </div>
             <div className="grid gap-2">
-              {visibleRooms.map((room, index) => {
+              {visibleRooms.map((room) => {
                 const solved = solvedIds.includes(room.id);
                 return (
                   <button key={room.id} type="button" aria-pressed={selectedId === room.id}
