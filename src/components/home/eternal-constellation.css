@@ -232,3 +232,78 @@
   .eternyx-constellation__core::before,
   .eternyx-constellation__node { animation: none !important; }
 }
+
+/*
+ * Orbital polish: animate only compositor-friendly transforms/opacity while
+ * remaining responsive to the five selected color swatches.
+ */
+.eternyx-constellation__node,
+.eternyx-constellation__core {
+  transition: border-color .5s ease, background-color .5s ease, box-shadow .5s ease, color .5s ease;
+}
+.eternyx-constellation__mark,
+.eternyx-constellation__node-icon,
+.eternyx-constellation__tagline {
+  transition: color .5s ease, filter .5s ease;
+}
+.eternyx-constellation__ring,
+.eternyx-constellation__ellipse,
+.eternyx-constellation__track {
+  backface-visibility: hidden;
+  transform-origin: center center;
+}
+.eternyx-constellation__track { will-change: transform; }
+.eternyx-constellation__node:hover {
+  border-color: hsl(var(--primary) / .55);
+  box-shadow: 0 9px 27px hsl(var(--primary) / .13);
+}
+
+/* Stop orbital work whenever the scene is not visible to the user. */
+.eternyx-constellation[data-motion="paused"] *,
+.eternyx-constellation[data-motion="paused"] *::before {
+  animation-play-state: paused !important;
+}
+
+/* Keep small handset badges comfortably separated from the central mark. */
+@media (max-width: 390px) {
+  .eternyx-constellation__node { padding: .32rem .37rem; gap: .22rem; font-size: 6px; }
+  .eternyx-constellation__node-icon { width: 11px; height: 11px; }
+  .eternyx-constellation__node--security { left: 0; }
+  .eternyx-constellation__node--develop { right: 0; }
+  .eternyx-constellation__node--workspace { left: 0; }
+  .eternyx-constellation__node--ai { right: 1%; }
+  .eternyx-constellation__node--cloud { left: 36%; }
+  .eternyx-constellation__node--automate { right: 31%; }
+}
+
+/* Power-conscious users can keep the constellation visual without motion. */
+@media (prefers-reduced-data: reduce) {
+  .eternyx-constellation__aura,
+  .eternyx-constellation__ring,
+  .eternyx-constellation__ellipse,
+  .eternyx-constellation__track,
+  .eternyx-constellation__core::before,
+  .eternyx-constellation__node { animation: none !important; }
+  .eternyx-constellation__ambient { filter: none; }
+}
+
+/* Maintain clear outlines if the operating system substitutes its own colors. */
+@media (forced-colors: active) {
+  .eternyx-constellation__core,
+  .eternyx-constellation__node,
+  .eternyx-constellation__ring,
+  .eternyx-constellation__ellipse { border-color: CanvasText; }
+  .eternyx-constellation__mark,
+  .eternyx-constellation__node-icon { color: CanvasText; }
+  .eternyx-constellation__aura,
+  .eternyx-constellation__ambient { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eternyx-constellation__track { will-change: auto; }
+  .eternyx-constellation__node,
+  .eternyx-constellation__core,
+  .eternyx-constellation__mark,
+  .eternyx-constellation__node-icon,
+  .eternyx-constellation__tagline { transition: none !important; }
+}

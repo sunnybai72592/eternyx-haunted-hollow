@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Compass, LockKeyhole, Sparkles, Workflow, Zap } from "lucide-react";
 import "./eternal-constellation.css";
 
@@ -17,8 +18,35 @@ const nodes = [
 ] as const;
 
 export function EternalConstellation() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(true);
+  const [pageVisible, setPageVisible] = useState(() =>
+    typeof document === "undefined" || !document.hidden
+  );
+
+  // Freeze the expensive repeating transforms when the illustration is offscreen.
+  useEffect(() => {
+    const element = sceneRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0.01 }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // No needless animation while the browser tab is hidden.
+  useEffect(() => {
+    const update = () => setPageVisible(!document.hidden);
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+
   return (
     <div
+      ref={sceneRef}
+      data-motion={inView && pageVisible ? "running" : "paused"}
       className="eternyx-constellation relative mx-auto aspect-square w-full max-w-[500px] lg:ml-auto"
       role="img"
       aria-label="ETERNYX connected by design: six ecosystem nodes named Security, Develop, AI, Workspace, Cloud, and Automate orbit a stable central ETERNYX mark"
