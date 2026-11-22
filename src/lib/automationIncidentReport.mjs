@@ -16,7 +16,8 @@ function exactCounters(record,keys){
 }
 export function checkedIncidentReport(raw){
   if(!raw||typeof raw!=="object"||Array.isArray(raw)||
-    raw.source!=="database_incident_reporting"||
+    raw.source!=="authenticated_server"||
+    raw.reportSource!=="database_incident_reporting"||
     ![7,30].includes(raw.rangeDays)||
     typeof raw.generatedAt!=="string"||
     !Number.isFinite(Date.parse(raw.generatedAt))||
