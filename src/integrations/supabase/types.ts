@@ -15,9 +15,9 @@ export type Database = {
   public: {
     Tables: {
       workspace_projects: {
-        Row: { id: string; owner_id: string; name: string; description: string; status: string; created_at: string; updated_at: string }
-        Insert: { id?: string; owner_id: string; name: string; description?: string; status?: string; created_at?: string; updated_at?: string }
-        Update: { id?: string; owner_id?: string; name?: string; description?: string; status?: string; created_at?: string; updated_at?: string }
+        Row: { id: string; owner_id: string; name: string; description: string; status: string; pinned: boolean; created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; name: string; description?: string; status?: string; pinned?: boolean; created_at?: string; updated_at?: string }
+        Update: { id?: string; owner_id?: string; name?: string; description?: string; status?: string; pinned?: boolean; created_at?: string; updated_at?: string }
         Relationships: []
       }
       workspace_tasks: {
