@@ -95,13 +95,13 @@ $check$;
 RESET ROLE;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '22222222-2222-4222-8222-222222222222', false);
-CREATE TEMP TABLE workspace_alice_target AS
-  SELECT id FROM public.workspace_projects WHERE name='Alice workspace';
+SELECT pg_catalog.set_config('test.alice_workspace_project', id::text, false)
+FROM public.workspace_projects WHERE name='Alice workspace';
 SET ROLE authenticated;
 DO $check$
 DECLARE alice_project_id uuid;
 BEGIN
-  SELECT id INTO alice_project_id FROM pg_temp.workspace_alice_target;
+  alice_project_id := pg_catalog.current_setting('test.alice_workspace_project')::uuid;
   BEGIN
     PERFORM public.workspace_restore_task_batch(alice_project_id,
       '[{"title":"Cross-owner","details":"","status":"todo","priority":"low","checklist":[]}]'::jsonb);
