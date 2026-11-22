@@ -21,9 +21,15 @@ export type Database = {
         Relationships: []
       }
       workspace_tasks: {
-        Row: { id: string; owner_id: string; project_id: string; title: string; status: string; priority: string; due_on: string | null; created_at: string; updated_at: string }
-        Insert: { id?: string; owner_id: string; project_id: string; title: string; status?: string; priority?: string; due_on?: string | null; created_at?: string; updated_at?: string }
-        Update: { id?: string; owner_id?: string; project_id?: string; title?: string; status?: string; priority?: string; due_on?: string | null; created_at?: string; updated_at?: string }
+        Row: { id: string; owner_id: string; project_id: string; title: string; status: string; priority: string; details: string; completed_at: string | null; due_on: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; project_id: string; title: string; status?: string; priority?: string; details?: string; completed_at?: string | null; due_on?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; owner_id?: string; project_id?: string; title?: string; status?: string; priority?: string; details?: string; completed_at?: string | null; due_on?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      workspace_task_steps: {
+        Row: { id: string; task_id: string; owner_id: string; title: string; done: boolean; created_at: string; updated_at: string }
+        Insert: { id?: string; task_id: string; owner_id: string; title: string; done?: boolean; created_at?: string; updated_at?: string }
+        Update: { id?: string; task_id?: string; owner_id?: string; title?: string; done?: boolean; created_at?: string; updated_at?: string }
         Relationships: []
       }
       workspace_items: {
