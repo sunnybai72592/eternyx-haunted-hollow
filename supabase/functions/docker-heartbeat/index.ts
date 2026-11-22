@@ -26,9 +26,25 @@ serve(async(req:Request)=>{
   if(!Number.isFinite(length)||length>2048)return reply({error:"Request too large"},413);
   let report;
   try{
-    const raw=await req.text();
-    if(raw.length>2048)return reply({error:"Request too large"},413);
-    report=parseDockerHeartbeat(JSON.parse(raw));
+    // Bound the streamed request BEFORE materializing text (Content-Length may be absent).
+    if(!req.body)return reply({error:"Request body required"},400);
+    const reader=req.body.getReader();
+    const chunks:Uint8Array[]=[];
+    let size=0;
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      size+=value.byteLength;
+      if(size>2048){
+        await reader.cancel().catch(()=>undefined);
+        return reply({error:"Request too large"},413);
+      }
+      chunks.push(value);
+    }
+    const bytes=new Uint8Array(size);
+    let offset=0;
+    for(const part of chunks){bytes.set(part,offset);offset+=part.byteLength;}
+    report=parseDockerHeartbeat(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes)));
   }catch{return reply({error:"Malformed JSON"},400);}
   if(!report)return reply({error:"Invalid signed heartbeat payload"},400);
   if(Math.abs(Date.now()-Date.parse(report.signedAt))>90000)
