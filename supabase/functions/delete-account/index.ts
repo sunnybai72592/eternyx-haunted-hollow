@@ -1,4 +1,5 @@
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { removeOwnedStorage } from "../_shared/workspace-storage-cleanup.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -17,12 +18,20 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body?.confirm !== "DELETE") return json({ error: "Type DELETE to confirm." }, 400);
 
-  // Remove the user's own avatar files, then the profile row, then the auth identity.
+  // Never delete the Auth identity while its private Storage objects remain.
+  // auth.users cascades Workspace DB rows, but Supabase Storage bytes need
+  // explicit API deletion before the identity is removed.
   try {
-    const { data: files } = await supabase.storage.from("avatars").list(user.id);
-    if (files?.length) await supabase.storage.from("avatars").remove(files.map((f) => `${user.id}/${f.name}`));
-  } catch (_) { /* storage cleanup is best effort */ }
-  await supabase.from("profiles").delete().eq("user_id", user.id);
+    await removeOwnedStorage(supabase.storage.from("workspace-private"), user.id);
+    await removeOwnedStorage(supabase.storage.from("avatars"), user.id);
+  } catch (failure) {
+    return json({
+      error: "Private file cleanup failed, so the account was not deleted. " +
+        "Please retry or contact support before deleting your identity.",
+    }, 500);
+  }
+  const { error: profileError } = await supabase.from("profiles").delete().eq("user_id", user.id);
+  if (profileError) return json({ error: "Profile cleanup failed; account was not deleted." }, 500);
 
   const { error } = await supabase.auth.admin.deleteUser(user.id);
   if (error) return json({ error: "Your account could not be deleted. Please try again." }, 500);
