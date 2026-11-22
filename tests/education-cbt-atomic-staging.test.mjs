@@ -110,9 +110,9 @@ test("13: production remains on legacy path until the feature flag is explicitly
 });
 
 test("14: server-backed autosaves are debounced and retryable", () => {
-  assert.match(exam, /pendingAnswersRef\.current\.set\(question\.id, nextAnswer\)/);
-  assert.match(exam, /answerSaveChainRef\.current\.then\(async \(\) =>/);
-  assert.match(exam, /pendingAnswersRef\.current\.set\(missed\.questionId, missed\)/);
+  assert.match(exam, /saveQueueRef\.current\.enqueue\(nextAnswer\)/);
+  assert.match(exam, /createEducationAnswerSaveQueue/);
+  assert.match(exam, /setAnswerSaveFailed\(true\)/);
   assert.match(exam, /flushPendingAnswers\(\)/);
   assert.match(exam, /question\.question_type === "short_answer" \? 700 : 150/);
 });
@@ -121,7 +121,7 @@ test("15: refresh recovery scopes previously saved answers to this account's att
   assert.match(exam, /queryKey: \["education-saved-answers", user\?\.id, attemptQuery\.data\?\.id\]/);
   assert.match(exam, /\.eq\("attempt_id", attemptQuery\.data!\.id\)/);
   assert.match(exam, /setAnswers\(new Map\(restoredAnswersQuery\.data\.map/);
-  assert.match(exam, /restoredAttemptRef\.current === attemptQuery\.data\.id/);
+  assert.match(exam, /restoredAttemptRef\.current === scope/);
   assert.match(exam, /restoredAnswersQuery\.isSuccess/);
 });
 

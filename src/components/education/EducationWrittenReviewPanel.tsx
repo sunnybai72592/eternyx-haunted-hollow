@@ -17,6 +17,7 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [reviewFilter, setReviewFilter] = useState<"pending" | "reviewed" | "all">("pending");
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["education-written-review-queue", userId],
@@ -28,6 +29,12 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
     setDrafts({});
     setErrorMessage("");
   }, [userId]);
+  const pendingCount = query.data?.filter(item => item.reviewed_points === null).length ?? 0;
+  const reviewedCount = query.data?.filter(item => item.reviewed_points !== null).length ?? 0;
+  const visibleReviews = (query.data ?? []).filter(item =>
+    reviewFilter === "all" || (reviewFilter === "pending"
+      ? item.reviewed_points === null : item.reviewed_points !== null));
+
   const save = async (answerId: string, max: number, previous: number | null) => {
     if (saving) return;
     const raw = drafts[answerId] ?? (previous === null ? "" : String(previous));
@@ -40,10 +47,19 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
       setErrorMessage("Marks must be between 0 and the question's maximum.");
       return;
     }
+    if (previous !== null && previous !== points &&
+        !window.confirm("Replace this provisional written-review mark? A finalized assessment cannot be regraded here.")) {
+      return;
+    }
     setSaving(answerId);
     setErrorMessage("");
     try {
       await saveWrittenReview(answerId, points);
+      setDrafts(previousDrafts => {
+        const next = { ...previousDrafts };
+        delete next[answerId];
+        return next;
+      });
       await queryClient.invalidateQueries({ queryKey: ["education-written-review-queue", userId] });
       toast.success("Written response review recorded. Official grade remains pending.");
     } catch {
@@ -77,8 +93,25 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
           {errorMessage && <p role="alert" className="flex gap-2 text-sm text-destructive">
             <AlertCircle aria-hidden="true" className="h-4 w-4 shrink-0" />{errorMessage}
           </p>}
-          {query.data?.length === 0 && <p className="text-sm text-muted-foreground">No submitted written responses are available for review.</p>}
-          {query.data?.map((entry) => (
+          {query.data && <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p role="status" className="text-sm text-muted-foreground">
+                {pendingCount} pending · {reviewedCount} reviewed in this queue
+              </p>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Filter written reviews">
+                {(["pending", "reviewed", "all"] as const).map(filter => (
+                  <Button key={filter} size="sm" variant={reviewFilter === filter ? "default" : "outline"}
+                    aria-pressed={reviewFilter === filter} onClick={() => setReviewFilter(filter)}>
+                    {filter === "all" ? "All" : filter === "pending" ? "Pending" : "Reviewed"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {query.data.length === 0 && <p className="text-sm text-muted-foreground">No submitted written responses are available for review.</p>}
+            {query.data.length > 0 && visibleReviews.length === 0 &&
+              <p className="text-sm text-muted-foreground">No responses match this filter.</p>}
+          </>}
+          {visibleReviews.map((entry) => (
             <article key={entry.answer_id} className="space-y-3 rounded-xl border border-border bg-background p-4">
               <div>
                 <p className="text-xs text-muted-foreground">{entry.test_title}</p>
@@ -99,7 +132,8 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
                     aria-label={`Points for written response ${entry.answer_id}`}
                   />
                 </label>
-                <Button disabled={!!saving || query.isFetching}
+                <Button disabled={!!saving || query.isFetching ||
+                    (drafts[entry.answer_id] === undefined && entry.reviewed_points !== null)}
                   onClick={() => void save(entry.answer_id, entry.points_possible, entry.reviewed_points)}>
                   {saving === entry.answer_id ? "Recording…" : "Record review"}
                 </Button>

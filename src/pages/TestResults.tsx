@@ -108,11 +108,23 @@ export default function TestResults() {
           points: typeof question?.points === "number" ? question.points : null,
           is_correct: gradeRevealed && typeof answer.is_correct === "boolean" ? answer.is_correct : null,
           points_awarded: gradeRevealed && typeof answer.points_awarded === "number" ? answer.points_awarded : null,
-          user_answer: answer.short_answer_text || answer.selected_option_id || "No answer",
+          // Post-submission options may be RLS-hidden. Never render a raw
+          // database UUID as though it were the student's choice text.
+          user_answer: answer.short_answer_text ||
+            (answer.selected_option_id ? "Selected option recorded" : "No answer"),
         };
       });
     },
   });
+
+  const refreshResults = () => {
+    // Explicit user action; no background polling or extra hosted traffic.
+    // Receipt refresh activates a newly graded answer query automatically.
+    void attemptQuery.refetch();
+    if (verifiedStudentResultsEnabled && rawSummary.completed) void verifiedQuery.refetch();
+    if (summary.completed) void answersQuery.refetch();
+    if (testQuery.isSuccess) void testQuery.refetch();
+  };
 
   const download = () => {
     if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
@@ -178,7 +190,14 @@ export default function TestResults() {
                   </div>
                 )}
                 {verifiedStudentResultsEnabled && gradeRevealed && (
-                  <p className="text-xs font-medium text-primary">Verified final grade · Trusted assessment ledger</p>
+                  <p className="text-xs font-medium text-primary">
+                    Verified final grade · Trusted assessment ledger · Finalized {formatAssessmentDate(verifiedQuery.data?.finalized_at)}
+                  </p>
+                )}
+                {!verifiedStudentResultsEnabled && rawSummary.graded && (
+                  <p role="note" className="text-xs text-muted-foreground">
+                    Legacy grading mode: this recorded score has not been independently verified against the final-grade ledger.
+                  </p>
                 )}
                 {summary.graded ? (
                   <>
@@ -234,6 +253,11 @@ export default function TestResults() {
               </Card>
             )}
             <div className="flex flex-wrap gap-3">
+              <Button variant="outline" disabled={attemptQuery.isFetching || verifiedQuery.isFetching || answersQuery.isFetching}
+                onClick={refreshResults}>
+                <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
+                {attemptQuery.isFetching || verifiedQuery.isFetching ? "Checking result…" : "Check latest result"}
+              </Button>
               <Button variant="outline" disabled={!summary.completed || answersQuery.isPending ||
                 !!answersQuery.error || (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
                 onClick={download}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download report (.txt)</Button>
