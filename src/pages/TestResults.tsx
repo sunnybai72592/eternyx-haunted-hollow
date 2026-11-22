@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, Download, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertCircle, BookOpen, Download, RefreshCw, Search, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -9,6 +9,11 @@ import {
   type VerifiedEducationReceipt,
 } from "@/lib/educationVerifiedResultsRpc";
 import { projectVerifiedAttempt, projectVerifiedAnswers } from "@/lib/educationVerifiedPresentation.mjs";
+import {
+  annotateEducationTextReport, buildEducationPrivateAnswerCsv,
+  educationAnswerReviewLabel, educationResultProvenance,
+  filterEducationAnswerReview, summarizeEducationAnswerReview,
+} from "@/lib/educationPrivateAnswerReview.mjs";
 import { assessmentDuration, buildAssessmentReport, formatAssessmentDate, summarizeAttempt } from "@/lib/educationResults.mjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,9 +41,30 @@ function downloadReport(text: string, attemptId: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function downloadAnswerCsv(csv: string, attemptId: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "eternyx-private-answers-" + attemptId + ".csv";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export default function TestResults() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const [answerSearch, setAnswerSearch] = useState("");
+  const [answerFilter, setAnswerFilter] = useState<"all" | "pending" | "reviewed" | "correct" | "incorrect">("all");
+  const [exportError, setExportError] = useState("");
+  const viewerRef = useRef(user?.id);
+  useLayoutEffect(() => {
+    if (viewerRef.current === user?.id) return;
+    viewerRef.current = user?.id;
+    // Never carry a prior account's answer search or export error state over.
+    setAnswerSearch("");
+    setAnswerFilter("all");
+    setExportError("");
+  }, [user?.id]);
   const validAttemptId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attemptId ?? "");
   const enabled = !authLoading && isAuthenticated && !!user?.id && validAttemptId;
 
@@ -117,6 +143,17 @@ export default function TestResults() {
     },
   });
 
+  const provenance = educationResultProvenance(
+    verifiedStudentResultsEnabled, verifiedQuery.data, gradeRevealed && summary.graded);
+  const reviewCounts = useMemo(
+    () => summarizeEducationAnswerReview(answersQuery.data ?? [], gradeRevealed),
+    [answersQuery.data, gradeRevealed]);
+  const effectiveFilter = gradeRevealed ? answerFilter :
+    answerFilter === "all" ? "all" : "pending";
+  const visibleAnswers = useMemo(
+    () => filterEducationAnswerReview(answersQuery.data ?? [], answerSearch, effectiveFilter, gradeRevealed),
+    [answersQuery.data, answerSearch, effectiveFilter, gradeRevealed]);
+
   const refreshResults = () => {
     // Explicit user action; no background polling or extra hosted traffic.
     // Receipt refresh activates a newly graded answer query automatically.
@@ -130,9 +167,30 @@ export default function TestResults() {
     if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
         answersQuery.isPending || answersQuery.error ||
         (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))) return;
-    const text = buildAssessmentReport(displayedAttempt, testQuery.data,
-      projectVerifiedAnswers(answersQuery.data ?? [], gradeRevealed));
-    downloadReport(text, attemptQuery.data.id);
+    try {
+      const text = buildAssessmentReport(displayedAttempt, testQuery.data,
+        projectVerifiedAnswers(answersQuery.data ?? [], gradeRevealed));
+      downloadReport(annotateEducationTextReport(text, provenance), attemptQuery.data.id);
+      setExportError("");
+    } catch {
+      setExportError("Your private text report could not be prepared.");
+    }
+  };
+  const downloadCsv = () => {
+    if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
+        !answersQuery.isSuccess || !Array.isArray(answersQuery.data) ||
+        (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))) return;
+    try {
+      const csv = buildEducationPrivateAnswerCsv({
+        attempt: displayedAttempt, test: testQuery.data, answers: answersQuery.data,
+        verifiedMode: verifiedStudentResultsEnabled, receipt: verifiedQuery.data,
+        gradeRevealed: gradeRevealed && summary.graded,
+      });
+      downloadAnswerCsv(csv, displayedAttempt.id);
+      setExportError("");
+    } catch {
+      setExportError("Your private CSV could not be prepared. Refresh your answers and retry.");
+    }
   };
 
   return (
@@ -199,6 +257,11 @@ export default function TestResults() {
                     Legacy grading mode: this recorded score has not been independently verified against the final-grade ledger.
                   </p>
                 )}
+                {summary.completed && (
+                  <p role="note" className="text-xs text-muted-foreground">
+                    Grade provenance: {provenance}
+                  </p>
+                )}
                 {summary.graded ? (
                   <>
                     <p className="text-center text-4xl font-bold text-primary">{summary.score} / {summary.maxScore}</p>
@@ -228,8 +291,43 @@ export default function TestResults() {
             {summary.completed && (
               <Card className="border-border bg-card">
                 <CardHeader><CardTitle>Submitted answers</CardTitle>
-                  <CardDescription>Availability and grading details depend on the assessment service.</CardDescription></CardHeader>
+                  <CardDescription>Search and filter only your own server-returned answer records.
+                    Availability and grading depend on the assessment service; counts here are not the total number of exam questions.</CardDescription></CardHeader>
                 <CardContent className="space-y-3">
+                  <div className="grid gap-3 rounded-lg border border-border bg-background p-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="education-answer-search" className="mb-2 block text-sm font-medium">Find a submitted answer</label>
+                      <div className="relative">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                        <input id="education-answer-search" type="search" value={answerSearch}
+                          onChange={event => setAnswerSearch(event.target.value)} maxLength={120}
+                          placeholder="Search question or your answer" className="min-h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="education-answer-filter" className="mb-2 block text-sm font-medium">Review status</label>
+                      <select id="education-answer-filter" value={effectiveFilter}
+                        onChange={event => setAnswerFilter(event.target.value as typeof answerFilter)}
+                        className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                        <option value="all">All returned answers</option>
+                        <option value="pending">Grading pending</option>
+                        {gradeRevealed && <option value="reviewed">Reviewed or marked</option>}
+                        {gradeRevealed && <option value="correct">Marked correct</option>}
+                        {gradeRevealed && <option value="incorrect">Marked incorrect</option>}
+                      </select>
+                    </div>
+                  </div>
+                  <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+                    {visibleAnswers.length} of {reviewCounts.returned} returned answers displayed
+                    {gradeRevealed ? " · " + reviewCounts.pending + " awaiting review · " +
+                      (reviewCounts.reviewed + reviewCounts.correct + reviewCounts.incorrect) + " reviewed or marked" :
+                      " · Official correctness and marks are not available"}.
+                  </p>
+                  {(answerSearch || effectiveFilter !== "all") && (
+                    <Button variant="ghost" size="sm" onClick={() => { setAnswerSearch(""); setAnswerFilter("all"); }}>
+                      Clear answer filters
+                    </Button>
+                  )}
                   {answersQuery.isPending && <p role="status">Loading submitted answers…</p>}
                   {answersQuery.error && (
                     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -238,14 +336,15 @@ export default function TestResults() {
                     </div>
                   )}
                   {answersQuery.data?.length === 0 && <p className="text-sm text-muted-foreground">No submitted answers were returned.</p>}
-                  {answersQuery.data?.map((answer, index) => (
+                  {answersQuery.isSuccess && reviewCounts.returned > 0 && visibleAnswers.length === 0 &&
+                    <p className="text-sm text-muted-foreground">No returned answers match these filters.</p>}
+                  {visibleAnswers.map((answer, index) => (
                     <div key={answer.id} className="rounded-lg border border-border bg-background p-4 text-sm">
                       <p className="font-semibold">{index + 1}. {answer.question_text}</p>
                       <p className="mt-2 break-words text-muted-foreground">Submitted answer: {answer.user_answer}</p>
-                      <p className="mt-1 text-muted-foreground">{answer.is_correct === null && answer.points_awarded !== null && gradeRevealed ? "Written answer reviewed" :
-                        answer.is_correct === null ? "Grading pending" :
-                        answer.is_correct ? "Marked correct" : "Marked incorrect"}
-                        {answer.points_awarded !== null && answer.points !== null ? ` · ${answer.points_awarded} / ${answer.points} points` : ""}
+                      <p className="mt-1 text-muted-foreground">{educationAnswerReviewLabel(answer, gradeRevealed)}
+                        {gradeRevealed && answer.points_awarded !== null && answer.points !== null
+                          ? ` · ${answer.points_awarded} / ${answer.points} points` : ""}
                       </p>
                     </div>
                   ))}
@@ -258,12 +357,20 @@ export default function TestResults() {
                 <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
                 {attemptQuery.isFetching || verifiedQuery.isFetching ? "Checking result…" : "Check latest result"}
               </Button>
-              <Button variant="outline" disabled={!summary.completed || answersQuery.isPending ||
-                !!answersQuery.error || (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
+              <Button variant="outline" disabled={!summary.completed || !answersQuery.isSuccess ||
+                (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
                 onClick={download}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download report (.txt)</Button>
+              <Button variant="outline" disabled={!summary.completed || !answersQuery.isSuccess ||
+                (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
+                onClick={downloadCsv}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download my answers (.csv)</Button>
+              {exportError && <p role="alert" className="w-full text-sm text-destructive">{exportError}</p>}
               <Button asChild variant="outline"><Link to="/education">Back to Education</Link></Button>
               <Button asChild variant="outline"><Link to="/education/history">My assessments</Link></Button>
-              <p className="w-full text-xs text-muted-foreground">Reports are downloaded locally and are not certificates. Retakes depend on the exam service and are not enabled here.</p>
+              <p className="w-full text-xs text-muted-foreground">
+                Reports are downloaded locally and are not certificates. CSV exports can contain your private written answers;
+                keep them on a trusted device. CSV marks are included only for a matching verified final-grade receipt.
+                Legacy scores are explicitly labeled unverified. Retakes depend on the exam service and are not enabled here.
+              </p>
             </div>
           </>
         )}
