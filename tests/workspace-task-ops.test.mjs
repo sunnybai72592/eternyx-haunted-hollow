@@ -24,7 +24,7 @@ test("CSV quotes values, mitigates formula injection and hides internal account 
   assert.ok(csv.includes("\"2026-11-22T12:00:00Z\""));
   assert.ok(!csv.includes("owner_id"));
   assert.ok(!csv.includes("storage_path"));
-  assert.equal(csv.split("\r\n").filter(Boolean).length, 5); // embedded newline in a quoted detail
+  assert.equal(csv.split("\r\n").filter(Boolean).length, 4); // header and three task records
 });
 
 test("CSV refuses mixed-project rows and excessive record counts", () => {
