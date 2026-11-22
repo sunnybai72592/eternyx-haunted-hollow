@@ -60,7 +60,7 @@ class TrainingEstimateTests(unittest.TestCase):
     def arguments(self, path, **changes):
         args = dict(steps=100, pilot=path, step_seconds=None, warmup_steps=1,
                     overhead_minutes=0.4, auto_overhead=True, also_steps=[200],
-                    budget_minutes=5, output=None)
+                    budget_minutes=30, output=None)
         args.update(changes)
         return argparse.Namespace(**args)
 
