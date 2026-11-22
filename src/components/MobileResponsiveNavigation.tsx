@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  ArrowUpRight, BookOpen, ChevronDown, Menu,
+  ArrowUpRight, BookOpen, ChevronDown, FlaskConical, Menu,
   PanelsTopLeft, ShieldCheck, Sparkles, X, Zap
 } from "lucide-react";
 import { ecosystemPillars } from "@/data/ecosystem";
@@ -109,6 +109,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
               )}
             </div>
             <Link to="/education" aria-current={isActive("/education") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/education") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>Education</Link>
+            <Link to="/labs" aria-current={isActive("/labs") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/labs") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>Labs</Link>
             <Link to="/services-hub" aria-current={isActive("/services-hub") ? "page" : undefined} className={`rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${isActive("/services-hub") ? "bg-white/[0.09] text-white" : "text-slate-300 hover:bg-white/[0.06] hover:text-white"}`}>Services</Link>
             <Link to="/contact" aria-current={isActive("/contact") ? "page" : undefined} className="rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white">Contact</Link>
           </div>
@@ -147,6 +148,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
               </div>
             )}
             <Link to="/education" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"><BookOpen className="h-4 w-4 text-primary" /> Education</Link>
+            <Link to="/labs" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"><FlaskConical className="h-4 w-4 text-primary" /> Labs</Link>
             <Link to="/services-hub" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"><ShieldCheck className="h-4 w-4 text-primary" /> Services</Link>
             <Link to="/contact" onClick={closeMenus} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white">Contact</Link>
             <div className="mt-auto space-y-2 border-t border-white/[0.08] pt-4">
