@@ -254,7 +254,7 @@ export default function AutomationCloudPanel({
             Raw preview inputs/outputs are not stored in audit metadata.
           </p>
         </div>}
-        {output && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.04] p-4>
+        {output && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
           <h4 className="font-semibold">Server-computed output · {output.outputLines} lines</h4>
           <p className="text-xs text-muted-foreground">Run ID: <code className="break-all">{output.runId}</code> · {formatDate(output.createdAt)}</p>
           <Textarea readOnly rows={7} className="font-mono text-xs" value={output.output} />
