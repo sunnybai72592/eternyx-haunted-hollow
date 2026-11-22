@@ -162,3 +162,11 @@ test("17: instructor client and authoring page parse as TypeScript/TSX", () => {
     assert.deepEqual(ast.parseDiagnostics.map(d=>ts.flattenDiagnosticMessageText(d.messageText,"\n")),[]);
   }
 });
+
+test("18: staging SQL has exactly one complete transaction and no duplicated function definitions", () => {
+  assert.equal((sql.match(/^BEGIN;$/gm) ?? []).length, 1);
+  assert.equal((sql.match(/^COMMIT;$/gm) ?? []).length, 1);
+  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) ?? []).length, 5);
+  assert.match(sql.split("\nCOMMIT;\n")[1], /^\s*-- Staging only:/);
+  assert.doesNotMatch(sql.split("\nCOMMIT;\n")[1], /\bINSERT INTO\b|\bCREATE OR REPLACE FUNCTION\b/i);
+});
