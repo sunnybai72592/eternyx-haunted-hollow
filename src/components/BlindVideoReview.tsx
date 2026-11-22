@@ -1,8 +1,9 @@
+import ReviewSummary from "./ReviewSummary";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 
 type Clip = { source: string; url: string };
-type Review = { question: string; clips: Clip[]; verdict: string };
+type Review = { id: string; question: string; clips: Clip[]; verdict: string };
 
 export default function BlindVideoReview() {
   const [review, setReview] = useState<Review | null>(null);
@@ -21,12 +22,12 @@ export default function BlindVideoReview() {
     }
     const pair = [{ source: "Baseline", url: URL.createObjectURL(baseline) }, { source: "Candidate", url: URL.createObjectURL(candidate) }];
     if (crypto.getRandomValues(new Uint8Array(1))[0] % 2) pair.reverse();
-    setError(""); setReady([false, false]); setReview({question, clips: pair, verdict: ""});
+    setError(""); setReady([false, false]); setReview({id: crypto.randomUUID(), question, clips: pair, verdict: ""});
   }
 
   function download() {
     if (!review?.verdict) return;
-    const report = {version: 1, question: review.question, sources: {A: review.clips[0].source, B: review.clips[1].source}, verdict: review.verdict};
+    const report = {version: 1, reviewId: review.id, question: review.question, sources: {A: review.clips[0].source, B: review.clips[1].source}, verdict: review.verdict};
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], {type: "application/json"}));
     const link = document.createElement("a");
     link.href = url; link.download = "eternyx-video-comparison.json"; link.click();
@@ -55,5 +56,6 @@ export default function BlindVideoReview() {
       <Button variant="outline" onClick={() => {setReview(null); setError("");}}>New comparison</Button>
     </>}
     {error && <p role="alert">{error}</p>}
+    {!review && <ReviewSummary />}
   </section>;
 }
