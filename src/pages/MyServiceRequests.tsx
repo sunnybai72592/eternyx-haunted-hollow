@@ -45,8 +45,6 @@ export default function MyServiceRequests() {
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
-      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints')
-      .eq('user_id', user.id).order('created_at', { ascending: false });');
       query = query.ilike('title', '%' + escaped + '%');
     }
     const { data, error, count } = await query.order('created_at', { ascending: false })
