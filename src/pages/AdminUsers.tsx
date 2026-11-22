@@ -95,7 +95,7 @@ export default function AdminUsers() {
   }
 
   if (!user || !isAdmin) {
-    return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-[#0a1221] p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p></Card></main>;
+    return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-card p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p></Card></main>;
   }
 
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -117,7 +117,7 @@ export default function AdminUsers() {
 
       <AdminWorkspaceNav />
 
-      <section className="mb-6 rounded-2xl border border-white/[0.09] bg-[#0a1221]/85 p-4 sm:p-5">
+      <section className="mb-6 rounded-2xl border border-white/[0.09] bg-card/85 p-4 sm:p-5">
         <label htmlFor="admin-user-search" className="mb-2 block text-xs font-semibold text-slate-300">Find a member</label>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -131,7 +131,7 @@ export default function AdminUsers() {
       {loading && rows.length === 0 ? (
         <div className="flex min-h-48 items-center justify-center gap-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />Loading member directory…</div>
       ) : rows.length === 0 ? (
-        <Card className="border-white/[0.09] bg-[#0a1221]/85 p-10 text-center">
+        <Card className="border-white/[0.09] bg-card/85 p-10 text-center">
           <UserRound className="mx-auto mb-3 h-8 w-8 text-slate-500" />
           <h2 className="text-lg font-semibold text-white">{error ? 'Directory unavailable' : search ? 'No matching members' : 'No members found'}</h2>
           <p className="mt-2 text-sm text-slate-500">{error ? 'Check the database migration and administrator permissions, then retry.' : 'Try a different search term.'}</p>
@@ -145,7 +145,7 @@ export default function AdminUsers() {
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((member) => (
-              <Card key={member.profile_id} className="border-white/[0.09] bg-[#0a1221]/90 p-5 transition-colors hover:border-cyan-200/20">
+              <Card key={member.profile_id} className="border-white/[0.09] bg-card/90 p-5 transition-colors hover:border-cyan-200/20">
                 <div className="flex items-start gap-3">
                   {member.avatar_url ? <img src={member.avatar_url} alt="" className="h-12 w-12 shrink-0 rounded-xl border border-white/10 object-cover" /> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-400"><UserRound className="h-5 w-5" /></div>}
                   <div className="min-w-0 flex-1">
