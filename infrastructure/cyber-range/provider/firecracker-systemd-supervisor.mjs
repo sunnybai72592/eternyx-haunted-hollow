@@ -11,7 +11,7 @@ import {spawnSync} from "node:child_process";
 import {createHash} from "node:crypto";
 import {constants} from "node:fs";
 import {lstat,open,readFile} from "node:fs/promises";
-import {basename,dirname,join} from "node:path";
+import {join} from "node:path";
 import {projectForSession,validSessionId} from
   "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 import {buildHardenedJailerCommand} from "./firecracker-jailer-contract.mjs";
@@ -27,9 +27,8 @@ const FAIL="Independent local microVM supervisor refused an unsafe host or servi
 const UNIT_FIELDS=[
   "LoadState","ActiveState","SubState","MainPID","ControlGroup",
   "Transient","Type","KillMode","SendSIGKILL","RuntimeMaxUSec",
-  "MemoryMax","TasksMax","CPUQuotaPerSecUSec","Description",
+  "MemoryMax","TasksMax","CPUQuotaPerSecUSec","Description","ExecStart",
 ];
-const ENV_KEYS=["PATH","HOME"];
 const HOST_BINARIES=["/usr/local/bin/jailer","/usr/local/bin/firecracker"];
 export function supervisedVmUnit(sessionId){
   if(!validSessionId(sessionId))throw Error("Invalid supervised microVM session");
@@ -95,7 +94,11 @@ export function verifySystemdUnitProperties(sessionId,output,{allowStopped=false
      p.MemoryMax!==String(MAX_MEMORY) ||
      p.TasksMax!==String(MAX_TASKS) ||
      !quota100(p.CPUQuotaPerSecUSec) ||
-     p.Type!=="exec"){
+     p.Type!=="exec" ||
+     !p.ExecStart.includes("path=/usr/local/bin/jailer") ||
+     !p.ExecStart.includes("--netns /run/netns/"+supervisedNetns(sessionId)) ||
+     !p.ExecStart.includes("--chroot-base-dir /srv/eternyx-firecracker") ||
+     !p.ExecStart.includes("--new-pid-ns")){
     throw Error("Systemd microVM unit lacks mandatory runtime hardening");
   }
   if(allowStopped && p.LoadState==="not-found" && p.MainPID==="0")
@@ -152,7 +155,7 @@ async function verifyFile(file,expectedSha){
     throw Error("Trusted host executable pin missing");
   const info=await lstat(file);
   if(!info.isFile()||info.uid!==0||info.nlink!==1||
-     (info.mode&0o222)!==0||info.size<=0||info.size>80*1024*1024)
+     (info.mode&0o022)!==0||info.size<=0||info.size>80*1024*1024)
     throw Error("Untrusted or mutable host executable");
   const h=await open(file,constants.O_RDONLY|constants.O_NOFOLLOW);
   try{
