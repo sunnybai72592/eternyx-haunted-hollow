@@ -109,7 +109,7 @@ export default function AdminOverview() {
   ], [bugTotal, bugOpen, enquiryTotal, enquiryNew]);
 
   if (authLoading || checking) return <main className="mx-auto flex min-h-[55vh] items-center justify-center px-4 text-sm text-slate-400">Verifying administrator access…</main>;
-  if (!user || !isAdmin) return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-[#0a1221] p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p></Card></main>;
+  if (!user || !isAdmin) return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-card p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p></Card></main>;
 
   return <main className="relative mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 lg:px-8">
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 -z-10 h-72 rounded-full bg-cyan-400/[0.06] blur-[100px]" />
@@ -125,7 +125,7 @@ export default function AdminOverview() {
 
     <section aria-label="Platform operations metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {metrics.map(({ label, value, note, icon: Icon, tone, href }) => <Link key={label} to={href} className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
-        <Card className="h-full border-white/[0.09] bg-[#0a1322]/90 p-5 transition-colors group-hover:border-cyan-200/20 group-hover:bg-[#0d192b]">
+        <Card className="h-full border-white/[0.09] bg-card/90 p-5 transition-colors group-hover:border-cyan-200/20 group-hover:bg-muted">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">{label}</span><Icon className="h-4 w-4" /></div>
           <p className={`mt-4 text-3xl font-semibold tabular-nums ${tone}`}>{loading && value === null ? '—' : value ?? 'Unavailable'}</p>
           <p className="mt-1 text-xs text-slate-500">{note}</p>
@@ -133,7 +133,7 @@ export default function AdminOverview() {
       </Link>)}
     </section>
 
-    <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0a1221]/85">
+    <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-card/85">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] p-5 sm:p-6">
         <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Operations feed</p><h2 className="mt-1 text-xl font-semibold text-white">Recent platform activity</h2><p className="mt-1 text-xs text-slate-500">The latest support reports and business enquiries, ordered by submission time.</p></div>
         <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1.5 text-[10px] font-semibold text-emerald-200"><ShieldCheck className="h-3.5 w-3.5" /> Admin access verified</span>

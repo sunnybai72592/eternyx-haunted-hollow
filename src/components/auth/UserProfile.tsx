@@ -63,7 +63,7 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
           <Button
             variant="ghost"
             aria-label={`Open account menu for ${displayName}`}
-            className="group h-12 max-w-[min(19rem,42vw)] rounded-xl border border-white/10 bg-[#0a1221]/90 px-2.5 text-left shadow-[0_8px_30px_rgba(0,0,0,.22)] backdrop-blur-xl transition duration-200 hover:border-cyan-200/30 hover:bg-[#101d30] focus-visible:ring-2 focus-visible:ring-cyan-200"
+            className="group h-12 max-w-[min(19rem,42vw)] rounded-xl border border-white/10 bg-card/90 px-2.5 text-left shadow-[0_8px_30px_rgba(0,0,0,.22)] backdrop-blur-xl transition duration-200 hover:border-cyan-200/30 hover:bg-muted focus-visible:ring-2 focus-visible:ring-cyan-200"
           >
             <span className="flex min-w-0 items-center gap-2.5">
               <Avatar className="h-8 w-8 shrink-0 border border-cyan-200/30">
@@ -82,7 +82,7 @@ export const UserProfile = ({ className = '' }: UserProfileProps) => {
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" sideOffset={10} collisionPadding={12} className="z-[70] w-[min(340px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#080f1d]/[.98] p-1.5 text-slate-200 shadow-[0_24px_80px_rgba(0,0,0,.62)] backdrop-blur-2xl">
+        <DropdownMenuContent align="end" sideOffset={10} collisionPadding={12} className="z-[70] w-[min(340px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-cyan-200/15 bg-card/[.98] p-1.5 text-slate-200 shadow-[0_24px_80px_rgba(0,0,0,.62)] backdrop-blur-2xl">
           <DropdownMenuLabel className="px-3 py-3 font-normal">
             <div className="flex min-w-0 items-center gap-3">
               <Avatar className="h-11 w-11 shrink-0 border border-cyan-200/25 ring-4 ring-cyan-200/[0.06]">

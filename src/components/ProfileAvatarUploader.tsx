@@ -89,7 +89,7 @@ const ProfileAvatarUploader = ({ currentAvatarUrl, username }: ProfileAvatarUplo
     <div className="flex flex-col items-center text-center">
       <div className="relative">
         <div aria-hidden="true" className="absolute -inset-3 rounded-full bg-cyan-300/10 blur-xl" />
-        <Avatar className="relative h-36 w-36 border border-cyan-200/30 bg-[#0b1728] shadow-[0_0_0_7px_rgba(103,232,249,.045),0_18px_45px_rgba(0,0,0,.35)]">
+        <Avatar className="relative h-36 w-36 border border-cyan-200/30 bg-card shadow-[0_0_0_7px_hsl(var(--primary)/.045),0_18px_45px_rgba(0,0,0,.35)]">
           <AvatarImage src={displayUrl} alt={`${displayName} profile image`} className="object-cover" />
           <AvatarFallback className="bg-cyan-200/[0.08] text-3xl font-semibold text-cyan-100">{initials}</AvatarFallback>
         </Avatar>

@@ -66,7 +66,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
   return (
     <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 ${className}`}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:text-slate-950">Skip to main content</a>
-      <nav aria-label="Main navigation" className="relative mx-auto max-w-7xl rounded-2xl border border-white/[0.10] bg-[#080d19]/85 shadow-[0_16px_60px_rgba(0,0,0,.34)] backdrop-blur-2xl">
+      <nav aria-label="Main navigation" className="relative mx-auto max-w-7xl rounded-2xl border border-white/[0.10] bg-card/85 shadow-[0_16px_60px_rgba(0,0,0,.34)] backdrop-blur-2xl">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4 sm:px-5">
           <Link to="/" onClick={closeMenus} aria-label="ETERNYX home" className="group inline-flex min-w-0 items-center gap-2.5">
             <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/[0.09] text-primary shadow-[0_0_24px_hsl(var(--primary)/.10)] transition group-hover:border-primary/50 group-hover:bg-primary/[0.14]">
@@ -82,7 +82,7 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
               </button>
               {ecosystemOpen && (
                 <div className="absolute left-1/2 top-full z-50 w-[min(780px,calc(100vw-2rem))] -translate-x-1/2 pt-4">
-                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a1020]/[.98] p-5 shadow-[0_24px_80px_rgba(0,0,0,.58)] backdrop-blur-2xl">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/[.98] p-5 shadow-[0_24px_80px_rgba(0,0,0,.58)] backdrop-blur-2xl">
                     <div className="mb-4 flex items-end justify-between gap-4">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[.24em] text-primary">One ecosystem</p>
@@ -131,8 +131,8 @@ export const MobileResponsiveNavigation = ({ className = "" }: NavigationProps) 
       </nav>
 
       {mobileOpen && (
-        <div className="fixed inset-0 top-[88px] z-40 bg-[#050914]/95 px-3 pb-6 pt-3 backdrop-blur-2xl lg:hidden" id="eternyx-mobile-menu">
-          <div className="mx-auto flex h-full max-w-xl flex-col overflow-y-auto rounded-2xl border border-white/10 bg-[#0a1020] p-4 shadow-2xl">
+        <div className="fixed inset-0 top-[88px] z-40 bg-background/95 px-3 pb-6 pt-3 backdrop-blur-2xl lg:hidden" id="eternyx-mobile-menu">
+          <div className="mx-auto flex h-full max-w-xl flex-col overflow-y-auto rounded-2xl border border-white/10 bg-card p-4 shadow-2xl">
             <div className="mb-4 flex items-center justify-between border-b border-white/[0.08] pb-4">
               <div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-primary">Navigate ETERNYX</p><p className="mt-1 text-sm text-slate-400">One ecosystem. Endless possibilities.</p></div>
               <span className="rounded-lg border border-primary/15 bg-primary/[0.06] p-2 text-primary"><PanelsTopLeft className="h-5 w-5" /></span>
