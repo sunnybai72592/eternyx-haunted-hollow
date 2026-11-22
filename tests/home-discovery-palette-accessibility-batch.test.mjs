@@ -1,4 +1,4 @@
-  assert.ok(finder.includes("findHomeTaskChoices(value, tools)"));import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
@@ -9,10 +9,10 @@ const resume = read("src/components/home/ContinueWork.tsx");
 const home = read("src/components/home/SectionSelector.tsx");
 
 test("1: empty or irrelevant task searches show real fallback suggestions instead of relying on an absent top result", () => {
-  assert.match(finder, /findHomeTaskChoices\\(value, tools\\)/);
+  assert.ok(finder.includes("findHomeTaskChoices(value, tools)"));
+  assert.match(finder, /No matching tool found/);
+  assert.match(finder, /to="\\/explore"/);
   assert.ok(finder.includes("setChoices(found)"));
-  assert.match(finder, /to="\/explore"/);
-  assert.match(finder, /setChoices\\(found\\)/);
 });
 
 test("2: task search is keyboard and screen-reader navigable with announced result count", () => {
