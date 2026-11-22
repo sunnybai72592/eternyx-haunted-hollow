@@ -45,7 +45,14 @@ function verifyAudio(row) {
   integer(row.volume_percent, 0, 100, "soundtrack volume");
   return true;
 }
-function sameJSON(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  }
+  return value;
+}
+function sameJSON(a, b) { return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b)); }
 
 /** Read and validate saved Python manifest.json before enabling a local review. */
 export function readLocalRenderReceipt(raw) {
