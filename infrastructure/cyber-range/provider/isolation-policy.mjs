@@ -81,7 +81,7 @@ export function verifyRuntimeIsolation(sessionId, containers, networks) {
         throw new Error(INVALID);
       }
       if (Array.isArray(config.Env) && config.Env.some(v=>
-        /^(?:ETERNYX_MANAGED_GATEWAY_TOKEN|CTF_RANGE_WORKER_TOKEN|SUPABASE_|RANGE_PROVIDER_API_URL)=/.test(v))) {
+        /^(?:ETERNYX_MANAGED_GATEWAY_TOKEN|CTF_RANGE_WORKER_TOKEN|SUPABASE_[A-Z0-9_]*|RANGE_PROVIDER_API_URL)=/.test(v))) {
         throw new Error(INVALID);
       }
       const tmpfs = host.Tmpfs ?? {};
