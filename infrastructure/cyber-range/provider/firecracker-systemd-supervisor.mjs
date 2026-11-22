@@ -256,17 +256,23 @@ export class SystemdMicrovmSupervisor {
     if(props.LoadState!=="not-found")
       throw Error("A previous or foreign VM unit requires operator review");
     await this.#launchGate();
-    this.#command(plan.executable,plan.argv);
+    // A command can time out or return nonzero AFTER systemd has already
+    // enqueued the transient service. Include that ambiguous case in cleanup.
     try{
+      this.#command(plan.executable,plan.argv);
       await this.attest(sessionId);
       return Object.freeze({launched:true,unit:plan.unit,
         localOnly:true,guestNotBooted:true,cloudProvisioningAllowed:false});
     }catch{
       // Fail closed, never return success if a service started but cannot be
       // attested. Do not bypass the unit supervisor by PID guessing.
-      await this.terminate(sessionId);
-      if(await this.verifyDead(sessionId)!==true)
-        throw Error("Unverified microVM process teardown");
+      try{
+        await this.terminate(sessionId);
+        if(await this.verifyDead(sessionId)!==true)
+          throw Error("Residual VM cgroup process");
+      }catch{
+        throw Error("Unverified microVM process teardown; operator intervention required");
+      }
       throw Error(FAIL);
     }
   }
