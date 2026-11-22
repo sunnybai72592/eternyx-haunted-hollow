@@ -43,7 +43,7 @@ test("3: instructor publication request requires approved grant and matching tea
 test("4: ready check excludes unpublished invalid drafts and already started exams",()=>{
   assert.match(sql,/t.is_active IS FALSE AND t.is_published IS FALSE/);
   assert.match(sql,/duration_minutes BETWEEN 1 AND 1440/);
-  assert.match(sql,/nullif\(pg_catalog.btrim\(t.access_password_hash\), ''\) IS NULL/);
+  assert.match(sql,/NULLIF\(pg_catalog.btrim\(t.access_password_hash\), ''\) IS NULL/);
   assert.match(sql,/NOT EXISTS \(SELECT 1 FROM public.user_attempts AS a WHERE a.test_id = t.id\)/);
   assert.match(sql,/v_count NOT BETWEEN 1 AND 100/);
 });
