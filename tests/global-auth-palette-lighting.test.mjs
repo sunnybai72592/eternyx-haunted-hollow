@@ -54,3 +54,11 @@ test("lamp-off is actually near-black; lamp-on illuminates while preserving acce
   assert.match(lighting, /prefers-reduced-motion: reduce/);
   assert.match(atmosphere, /setOn\(next\)/);
 });
+
+test("the entire right-side form dims when the lamp is off and brightens when on", () => {
+  assert.match(atmosphere, /<section className="lamp-auth-form" aria-label="Your account">/);
+  assert.match(lighting, /\\.lamp-auth-page\\[data-light='off'\\] \\.lamp-auth-form\\s*\\{\\s*opacity:\\s*\\.48;\\s*filter:\\s*brightness\\(\\.54\\) saturate\\(\\.55\\)/);
+  assert.match(lighting, /\\.lamp-auth-page\\[data-light='on'\\] \\.lamp-auth-form\\s*\\{\\s*opacity:\\s*1;\\s*filter:\\s*brightness\\(1\\.08\\)/);
+  assert.match(lighting, /\\.lamp-auth-page\\[data-light='off'\\] \\.lamp-auth-form:focus-within/);
+  assert.match(lighting, /transition: opacity \\.7s ease, filter \\.7s ease/);
+});
