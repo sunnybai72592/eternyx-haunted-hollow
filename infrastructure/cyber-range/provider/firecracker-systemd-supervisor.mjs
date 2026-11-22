@@ -10,7 +10,7 @@
 import {spawnSync} from "node:child_process";
 import {createHash} from "node:crypto";
 import {constants} from "node:fs";
-import {lstat,open,readFile} from "node:fs/promises";
+import {lstat,open,readFile,stat} from "node:fs/promises";
 import {join} from "node:path";
 import {projectForSession,validSessionId} from
   "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
@@ -150,6 +150,22 @@ export function verifyLoopbackOnlyNamespace(value){
   }
   return true;
 }
+/**
+ * Verify the actual systemd MainPID is running in the named offline netns.
+ * Checking only "ip -n NAME link" is insufficient: a jailer could be in the
+ * host network namespace while an unrelated safe namespace exists by name.
+ * nsfs identity is compared by both device and inode (follow proc symlink).
+ */
+export function verifyMicrovmProcessNetns(expected,actual){
+  const valid=s=>s && typeof s==="object" &&
+    Number.isSafeInteger(s.dev) && Number.isSafeInteger(s.ino) &&
+    s.dev>=0 && s.ino>0;
+  if(!valid(expected)||!valid(actual)||
+     expected.dev!==actual.dev || expected.ino!==actual.ino)
+    throw Error("MicroVM process is outside the pinned offline network namespace");
+  return true;
+}
+
 export function runSupervisorCommand(binary,args,{env=process.env}={}){
   if(!["systemd-run","systemctl","ip"].includes(binary)||
      !Array.isArray(args)||args.some(a=>typeof a!=="string"||
@@ -227,7 +243,7 @@ export class SystemdMicrovmSupervisor {
     execute=runSupervisorCommand,
     preflight=verifySupervisorHost,
     env=process.env,platform=process.platform,
-    uid=(process.getuid?.()??-1),files={readFile,lstat},
+    uid=(process.getuid?.()??-1),files={readFile,lstat,stat},
     launchGate=assertLocalLaunchAllowed,
   }={}){
     this.#execute=execute;
@@ -307,6 +323,17 @@ export class SystemdMicrovmSupervisor {
       return path===state.cgroup || path.startsWith(state.cgroup+"/");
     });
     if(!member)throw Error("VM escaped supervised systemd unit cgroup");
+    // Require the jailer MainPID itself to reside in the *same* netns
+    // the operator inspected. This also detects a name replacement when the
+    // current process namespace differs from the named /run/netns mount.
+    let expectedNamespace,actualNamespace;
+    try{
+      expectedNamespace=await this.#fs.stat(
+        join("/run/netns",supervisedNetns(sessionId)));
+      actualNamespace=await this.#fs.stat(
+        "/proc/"+state.mainPid+"/ns/net");
+    }catch{throw Error("Cannot attest microVM process network namespace");}
+    verifyMicrovmProcessNetns(expectedNamespace,actualNamespace);
     await this.#loopback(sessionId);
     // A transient systemd unit has an independently enforced lifetime even
     // if this Node process dies. We never rely on a JS setTimeout watchdog.
