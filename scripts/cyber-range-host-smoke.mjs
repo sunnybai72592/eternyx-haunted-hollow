@@ -87,8 +87,11 @@ if (process.platform!=="linux" ||
     }
 
     console.log("Two private network labs verified; host-only ingress, isolation and token separation passed");
-  }catch{
-    console.error("Host-only range smoke failed at safe stage: "+stage);
+  }catch(error){
+    const detail=typeof error?.message==="string" &&
+      /^Managed host-only range startup failed at (?:compose-start|verify-private-upstream|bind-host-loopback|probe-private-gateway)$/.test(error.message)
+      ? " ("+error.message+")" : "";
+    console.error("Host-only range smoke failed at safe stage: "+stage+detail);
     process.exitCode=1;
   }finally{
     // Do not output secrets; the per-session host listeners terminate first.
