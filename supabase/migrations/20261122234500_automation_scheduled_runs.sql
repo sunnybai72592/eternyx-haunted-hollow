@@ -310,7 +310,7 @@ GRANT EXECUTE ON FUNCTION public.automation_fail_scheduled_run(uuid,uuid,integer
 CREATE OR REPLACE FUNCTION public.automation_defer_scheduled_run(
   p_schedule_id uuid,p_lease_token uuid,p_schedule_revision integer
 )
-RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $
+RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $schedule_defer$
 DECLARE s public.automation_schedules%ROWTYPE;
 BEGIN
   IF p_schedule_id IS NULL OR p_lease_token IS NULL OR p_schedule_revision IS NULL THEN
@@ -328,7 +328,7 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reason','stale_lease'); END IF;
   RETURN jsonb_build_object('ok',true,'deferred',true,'next_run_at',s.next_run_at);
 END;
-$;
+$schedule_defer$;
 REVOKE ALL ON FUNCTION public.automation_defer_scheduled_run(uuid,uuid,integer)
   FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.automation_defer_scheduled_run(uuid,uuid,integer)
