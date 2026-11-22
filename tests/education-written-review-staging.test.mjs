@@ -66,8 +66,8 @@ test("staging CI applies isolated review script and executes real role checks",(
 test("browser shows response and bounded rubric without claiming final score",()=>{
   assert.match(panel,/queryKey: \["education-written-review-queue", userId\]/);
   assert.match(panel,/reviewed_points/);
-  assert.match(panel,/Number\.isInteger\(points\)/);
-  assert.match(panel,/saveWrittenReview\(answerId, points\)/);
+  assert.match(panel,/checkWrittenReviewDraft\(raw, max, previous\)/);
+  assert.match(panel,/saveWrittenReview\(answerId, checked\.points!\)/);
   assert.match(panel,/Official grade remains pending/);
   assert.match(panel,/onClick=\{\(\) => void save\(/);
 });
