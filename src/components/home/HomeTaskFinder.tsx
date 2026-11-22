@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import tools from "@/data/toolRegistry.json";
 import { findHomeTaskChoices } from "@/lib/homeTaskDiscovery.mjs";
 
+type Choice = { name: string; route: string; detail?: string };
+
 const examples = ["Check my domain", "Make a video", "Learn something"];
 export default function HomeTaskFinder() {
   const [query, setQuery] = useState("");
