@@ -47,6 +47,10 @@ export default function AdminServiceRequests() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review'>('newest');
   const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
   const [actionFilter, setActionFilter] = useState<'all' | ServiceNextAction>('all');
+  const countGeneration = useRef(0);
+  const [queueCounts, setQueueCounts] = useState<Record<ServiceReviewBucket, number | null>>({
+    unscheduled: null, overdue: null, due_today: null, upcoming: null,
+  });
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
@@ -133,7 +137,32 @@ export default function AdminServiceRequests() {
     return () => { active = false; fetchGeneration.current += 1; };
   }, [user?.id, authLoading]);
 
+  const loadQueueCounts = useCallback(async () => {
+    if (!authorized || !user?.id) return;
+    const seq = ++countGeneration.current;
+    const buckets: ServiceReviewBucket[] = ['overdue', 'due_today', 'upcoming', 'unscheduled'];
+    const data = await Promise.all(buckets.map((bucket) =>
+      supabase.from('service_admin_review_queue')
+        .select('id', { head: true, count: 'exact' }).eq('review_bucket', bucket)
+    ));
+    if (seq !== countGeneration.current) return;
+    setQueueCounts({
+      overdue: data[0].error ? null : data[0].count,
+      due_today: data[1].error ? null : data[1].count,
+      upcoming: data[2].error ? null : data[2].count,
+      unscheduled: data[3].error ? null : data[3].count,
+    });
+  }, [authorized, user?.id]);
+
   useEffect(() => { if (authorized) void load(); }, [authorized, load]);
+  useEffect(() => {
+    if (authorized) void loadQueueCounts();
+    else {
+      countGeneration.current += 1;
+      setQueueCounts({ unscheduled: null, overdue: null, due_today: null, upcoming: null });
+    }
+    return () => { countGeneration.current += 1; };
+  }, [authorized, loadQueueCounts]);
 
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
@@ -217,6 +246,7 @@ export default function AdminServiceRequests() {
       setRows((items) => items.map((row) => row.id === item.id ? { ...row, status: data.status as ServiceRequestStatus, client_update: data.client_update, updated_at: data.updated_at } : row));
       setFeedback('Request ' + item.id + ' updated in the database.');
       void load();
+      void loadQueueCounts();
     }
     setSaving(null);
   };
@@ -229,8 +259,24 @@ export default function AdminServiceRequests() {
       <AdminWorkspaceNav />
       <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Business operations</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Service request desk</h1><p className="mt-2 text-sm text-muted-foreground">Review submitted briefs and publish factual, customer-visible status updates. No payment or fulfillment is triggered here.</p></div>
-        <Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
+        <Button variant="outline" onClick={() => { void load(); void loadQueueCounts(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
       </header>
+      <section aria-label="Verified internal review workload" className="mb-6 rounded-xl border border-border p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Internal review workload</h2>
+          <p className="text-xs text-muted-foreground">Exact database counts across all requests · UTC calendar · not customer SLAs</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(['overdue', 'due_today', 'upcoming', 'unscheduled'] as const).map((bucket) => (
+            <Button key={bucket} type="button" variant={reviewBucket === bucket ? 'default' : 'outline'} className="h-auto min-h-16 flex-col gap-1 py-3" aria-pressed={reviewBucket === bucket}
+              onClick={() => { setReviewBucket((current) => current === bucket ? 'all' : bucket); setPage(0); }}>
+              <span className="text-lg font-bold">{queueCounts[bucket] ?? '—'}</span>
+              <span className="text-xs">{serviceReviewBucketLabels[bucket]}</span>
+            </Button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Unavailable counts display a dash rather than a fabricated zero. Select a card to filter the queue.</p>
+      </section>
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <label htmlFor="service-admin-filter" className="text-sm font-semibold">Status</label>
         <select id="service-admin-filter" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={filter} onChange={(e) => { setFilter(e.target.value as typeof filter); setPage(0); }}>
@@ -332,7 +378,7 @@ export default function AdminServiceRequests() {
               </Button>
             </div>
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
-            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => void load()} />}
+            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
           </Card>;
         })}</div>}
