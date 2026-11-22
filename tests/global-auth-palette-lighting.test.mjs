@@ -56,9 +56,15 @@ test("lamp-off is actually near-black; lamp-on illuminates while preserving acce
 });
 
 test("the entire right-side form dims when the lamp is off and brightens when on", () => {
-  assert.match(atmosphere, /<section className="lamp-auth-form" aria-label="Your account">/);
-  assert.match(lighting, /\\.lamp-auth-page\\[data-light='off'\\] \\.lamp-auth-form\\s*\\{\\s*opacity:\\s*\\.48;\\s*filter:\\s*brightness\\(\\.54\\) saturate\\(\\.55\\)/);
-  assert.match(lighting, /\\.lamp-auth-page\\[data-light='on'\\] \\.lamp-auth-form\\s*\\{\\s*opacity:\\s*1;\\s*filter:\\s*brightness\\(1\\.08\\)/);
-  assert.match(lighting, /\\.lamp-auth-page\\[data-light='off'\\] \\.lamp-auth-form:focus-within/);
-  assert.match(lighting, /transition: opacity \\.7s ease, filter \\.7s ease/);
+  assert.ok(atmosphere.includes('<section className="lamp-auth-form" aria-label="Your account">'));
+  const off = lighting.match(/\.lamp-auth-page\[data-light='off'\] \.lamp-auth-form\s*\{([^}]*)\}/)?.[1];
+  const on = lighting.match(/\.lamp-auth-page\[data-light='on'\] \.lamp-auth-form\s*\{([^}]*)\}/)?.[1];
+  assert.ok(off, 'the off-state must style the entire form');
+  assert.ok(on, 'the on-state must style the entire form');
+  assert.match(off, /opacity:\s*\.48\s*;/);
+  assert.match(off, /filter:\s*brightness\(\.54\) saturate\(\.55\)/);
+  assert.match(on, /opacity:\s*1\s*;/);
+  assert.match(on, /filter:\s*brightness\(1\.08\) saturate\(1\.08\)/);
+  assert.ok(lighting.includes(".lamp-auth-page[data-light='off'] .lamp-auth-form:focus-within"));
+  assert.ok(lighting.includes('transition: opacity .7s ease, filter .7s ease'));
 });
