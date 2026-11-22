@@ -6,7 +6,9 @@ on:
       - 'supabase/migrations/20261123050000_workspace_owner_projects_tasks_items.sql'
       - 'supabase/migrations/20261123180000_workspace_revision_history_and_archive_guards.sql'
       - 'supabase/migrations/20261124010000_workspace_owner_quotas_and_pinned.sql'
+      - 'supabase/migrations/20261124030000_workspace_task_priorities_and_safe_purge.sql'
       - 'tests/sql/workspace-owner-quotas-db-smoke.sql'
+      - 'tests/sql/workspace-priority-archive-purge-db-smoke.sql'
       - 'tests/sql/workspace-revisions-bootstrap.sql'
       - 'tests/sql/workspace-revisions-db-smoke.sql'
       - '.github/workflows/workspace-revisions-postgres.yml'
@@ -45,10 +47,13 @@ jobs:
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123050000_workspace_owner_projects_tasks_items.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123180000_workspace_revision_history_and_archive_guards.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124010000_workspace_owner_quotas_and_pinned.sql
+          docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124030000_workspace_task_priorities_and_safe_purge.sql
       - name: Verify actual ownership, revision history, audit and archive invariants
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-revisions-db-smoke.sql
       - name: Verify owner caps, pinned RLS and Storage registration metadata
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-owner-quotas-db-smoke.sql
+      - name: Verify safe owner-only archived project purge and task priority constraints
+        run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-priority-archive-purge-db-smoke.sql
       - name: Dispose PostgreSQL
         if: always()
         run: docker rm --force eternyx-workspace-test || true
