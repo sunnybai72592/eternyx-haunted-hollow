@@ -5,7 +5,7 @@ import { AlertTriangle, Bookmark, Clock3, ListChecks, LogOut, Save } from "lucid
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
-import { answeredExamCount, examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
+import { examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
 import { createEducationAnswerSaveQueue } from "@/lib/educationAnswerSaveQueue.mjs";
 import {
   createEducationExamReview, educationReviewSummaryMessage,
@@ -39,7 +39,6 @@ export default function TestInterface() {
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [reviewPanelOpen, setReviewPanelOpen] = useState(true);
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<string>>(() => new Set());
-  const reviewScopeRef = useRef<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
@@ -113,18 +112,17 @@ export default function TestInterface() {
   // A save queue belongs to exactly ONE account and ONE exam attempt.
   // Clear private answer text and review flags before a new user paints.
   useLayoutEffect(() => {
-    const scope = atomicCbtEnabled && enabled && attemptQuery.data?.id
+    const scope = enabled && attemptQuery.data?.id
       ? user?.id + ":" + attemptQuery.data.id : null;
     if (saveQueueScopeRef.current === scope) return;
     if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
     answerSaveTimerRef.current = null;
     saveQueueRef.current?.dispose();
     saveQueueScopeRef.current = scope;
-    saveQueueRef.current = scope && attemptQuery.data?.id
+    saveQueueRef.current = atomicCbtEnabled && scope && attemptQuery.data?.id
       ? createEducationAnswerSaveQueue((answer: Answer) => saveCbtAnswer(attemptQuery.data!.id, answer))
       : null;
     restoredAttemptRef.current = null;
-    reviewScopeRef.current = scope;
     setAnswers(new Map());
     setFlaggedQuestions(new Set());
     setQuestionIndex(0);
@@ -379,6 +377,15 @@ export default function TestInterface() {
       <p role="status">This assessment has no available questions or attempt. It cannot be started yet.</p>
       <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
     </div>;
+  }
+  if (attemptQuery.data.status !== "in_progress") {
+    const complete = ["submitted", "auto_submitted"].includes(attemptQuery.data.status);
+    return <main className="mx-auto max-w-xl space-y-4 p-8" role="status">
+      <h1 className="text-xl font-semibold">This attempt is no longer editable</h1>
+      <p>Its status is confirmed by the assessment service. Do not submit it again from this screen.</p>
+      {complete && <Button asChild><Link to={"/test-results/" + attemptQuery.data.id}>View your results</Link></Button>}
+      <Button asChild variant="outline"><Link to="/education/history">My assessments</Link></Button>
+    </main>;
   }
   const count = review.total;
   const answered = review.answered;
