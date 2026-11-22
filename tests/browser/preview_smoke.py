@@ -570,6 +570,9 @@ def home_task_finder(page):
     field.fill("zzzqqq")
     field.press("Enter")
     expect(page.get_by_role("link", name="Browse tools", exact=True)).to_be_visible()
+    page.get_by_role("button", name="Clear task search and suggestions").click()
+    expect(field).to_have_value("")
+    expect(page.get_by_role("link", name="Browse tools", exact=True)).to_have_count(0)
     expect(page.locator("#pillars h3")).to_have_count(6)
     page.get_by_role("button", name="Learn something").click()
     # A quick example now offers an explicit navigable suggestion, rather

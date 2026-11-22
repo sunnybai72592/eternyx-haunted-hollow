@@ -27,7 +27,14 @@ const aliases = new Map([
   ["repos", "repository"], ["repositories", "repository"], ["coding", "code"],
   ["developer", "development"], ["developers", "development"],
   ["vulnerabilities", "vulnerability"], ["vulns", "vulnerability"],
-  ["documents", "document"], ["notes", "note"]
+  ["documents", "document"], ["notes", "note"],
+  ["apis", "api"], ["jsons", "json"], ["sqls", "sql"],
+  ["bugs", "bug"], ["errors", "error"], ["scanners", "scanner"],
+  ["analyses", "analysis"], ["reports", "report"], ["files", "file"],
+  ["workflows", "workflow"], ["databases", "database"],
+  ["automations", "automation"], ["images", "image"],
+  ["encrypting", "encrypt"], ["encryption", "encrypt"],
+  ["decrypting", "decrypt"], ["decryption", "decrypt"]
 ]);
 
 function tokens(value) {
@@ -47,7 +54,8 @@ function validRoute(route) {
  * @returns {Array<{name:string,route:string,detail?:string}>}
  */
 export function findHomeTaskChoices(input, registry = []) {
-  const queryTerms = tokens(input).slice(0, 16);
+  // Bound work independently of user input length and registry metadata size.
+  const queryTerms = tokens(String(input ?? "").slice(0, 240)).slice(0, 16);
   if (!queryTerms.length) return [];
 
   const suggestions = [];
@@ -68,11 +76,15 @@ export function findHomeTaskChoices(input, registry = []) {
     const score = queryTerms.reduce((total, term) =>
       total + (names.has(term) ? 5 : 0) + (ids.has(term) ? 3 : 0) +
       (categories.has(term) ? 2 : 0) + (details.has(term) ? 1 : 0), 0);
-    return score ? { tool, score, index } : null;
-  }).filter(Boolean).sort((a, b) => b.score - a.score || a.index - b.index);
+    // Favor results covering the entire request when scores are otherwise tied.
+    const coverage = queryTerms.filter(term => names.has(term) || ids.has(term) ||
+      categories.has(term) || details.has(term)).length;
+    return score ? { tool, score, coverage, index } : null;
+  }).filter(Boolean).sort((a, b) => b.score - a.score || b.coverage - a.coverage || a.index - b.index);
 
   for (const { tool } of scored) {
     if (suggestions.length >= 4) break;
+    if (seen.has(tool.route)) continue;
     seen.add(tool.route);
     suggestions.push({
       name: tool.name,
