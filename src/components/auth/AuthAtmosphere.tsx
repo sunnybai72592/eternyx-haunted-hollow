@@ -1,23 +1,14 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { AuthLamp } from './AuthLamp';
 import { useLampSound } from './useLampSound';
-
-const palettes = [
-  { id: 'cyan', name: 'Electric cyan' },
-  { id: 'violet', name: 'Cosmic violet' },
-  { id: 'emerald', name: 'Blue-green' },
-  { id: 'bronze', name: 'Warm bronze' },
-  { id: 'rose', name: 'Rose pink' },
-] as const;
+import { EternyxPaletteDock } from '@/components/EternyxPaletteDock';
+import { useEternyxPalette } from '@/lib/eternyxPalette';
 
 export function AuthAtmosphere({ children }: { children: ReactNode }) {
-  const [palette, setPalette] = useState(() => {
-    try { const saved = localStorage.getItem('eternyx-auth-palette'); return palettes.some((item) => item.id === saved) ? saved : 'cyan'; }
-    catch { return 'cyan'; }
-  });
+  const { palette } = useEternyxPalette();
   const [on, setOn] = useState(false);
   const [muted, setMuted] = useState(false);
   const playSwitch = useLampSound();
@@ -27,22 +18,12 @@ export function AuthAtmosphere({ children }: { children: ReactNode }) {
     if (!muted) void playSwitch(next);
   };
 
-  const choose = (id: string) => {
-    setPalette(id);
-    try { localStorage.setItem('eternyx-auth-palette', id); } catch { /* Color selection also works without storage. */ }
-  };
 
   return (
     <div className="lamp-auth-page" data-palette={palette} data-light={on ? 'on' : 'off'}>
       <header className="lamp-auth-header">
         <Link to="/" className="lamp-auth-brand" aria-label="ETERNYX home"><ShieldCheck aria-hidden="true" /><span>ETERNYX</span></Link>
-        <div className="auth-palette-dock" role="group" aria-label="Page color">
-          {palettes.map((item) => (
-            <Button key={item.id} variant="ghost" size="icon" className="auth-palette-button" data-swatch={item.id} aria-label={item.name} title={item.name} aria-pressed={palette === item.id} onClick={() => choose(item.id)}>
-              <span className="auth-liquid-swatch">{palette === item.id && <Check aria-hidden="true" />}</span>
-            </Button>
-          ))}
-        </div>
+        <EternyxPaletteDock />
       </header>
       <main className="lamp-auth-main">
         <aside className="lamp-auth-scene">
