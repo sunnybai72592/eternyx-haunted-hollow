@@ -168,7 +168,7 @@ def preview_html(summary, compiled_frames, width, height):
         cards.append(f'<article><h2>Shot {shot["index"] + 1}: {escape(shot["caption"])}</h2>'
                      f'<img alt="Rendered shot preview" src="data:image/png;base64,{encoded}">'
                      f'<p>Timeline frames {shot["timeline_start_frame"]}–'
-                     f'{shot["timeline_start_frame"] + shot["frames"] - 1]} '
+                     f'{shot["timeline_start_frame"] + shot["frames"] - 1} '
                      f'· Source {escape(shot["file"])} · Rights {escape(shot["rights_ref"])}</p></article>')
     return ("""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Eternyx CPU storyboard preview</title><style>:root{color-scheme:light dark}body{font:1rem/1.5 system-ui;
