@@ -88,8 +88,10 @@ then applies the new finalizer. Its additional checks assert:
 - After finalization, instructor corrections and browser ledger updates
   are denied.
 
-A further concurrency gate should verify competing requests against
-one real temporary database rather than sequential simulations.
+An additional CI script opens separate PostgreSQL transactions and proves
+three actual lock waits: dual service finalizers produce one official ledger,
+a reviewer correction committed first is included in the score, and a
+late reviewer correction is rejected after finalization commits.
 No hosted staging RPC has been executed by creating this PR.
 
 ## Remaining deployment blockers
