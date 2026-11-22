@@ -188,13 +188,14 @@ def train(folder, destination, rights_ref, selected=None, seed=42, epochs=DEFAUL
             raise ValueError("A learned spatial grid cell received no training frames")
         grid[i] = [round(value / total, 8) for value in grid[i]]
     weights = init_weights(seed)
-    before, _ = sample_mse(weights, train_samples[:min(128, len(train_samples))])
+    reference_samples = train_samples[:min(128, len(train_samples))]
+    before, _ = sample_mse(weights, reference_samples)
     rng = random.Random(seed + 91)
     for _ in range(epochs):
         rng.shuffle(train_samples)
         for example in train_samples:
             train_example(weights, example, 0.085)
-    after, _ = sample_mse(weights, train_samples[:min(128, len(train_samples))])
+    after, _ = sample_mse(weights, reference_samples)
     holdout_mse, baseline_mse = sample_mse(weights, holdout_samples)
     metrics = {
         "train_examples": len(train_samples), "holdout_examples": len(holdout_samples),
