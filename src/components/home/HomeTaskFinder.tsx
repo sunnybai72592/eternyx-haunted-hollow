@@ -22,7 +22,8 @@ function findChoices(input: string): Choice[] {
     const name = tool.name.toLowerCase().split(/[^a-z0-9]+/);
     return {tool, score: terms.filter(term => name.includes(term)).length};
   }).filter(row => row.score > 0).sort((a,b) => b.score - a.score);
-  return ranked.length ? ranked.filter(row => row.score === ranked[0].score).slice(0,4).map(({tool}) => ({
+  if (ranked.length === 0) return [];
+  return ranked.filter(row => row.score === ranked[0].score).slice(0,4).map(({tool}) => ({
     name: tool.name, route: tool.route, detail: tool.description + " " + tool.access + ".",
   }));
 }
