@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ClipboardList, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import AdminWorkspaceNav from '@/components/admin/AdminWorkspaceNav';
+import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline';
+import { Input } from '@/components/ui/input';
 
 type ServiceRow = {
   id: string; user_id: string; title: string; service_key: string; description: string;
@@ -22,6 +24,8 @@ export default function AdminServiceRequests() {
   const [rows, setRows] = useState<ServiceRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [filter, setFilter] = useState<'all' | ServiceRequestStatus>('all');
+  const [search, setSearch] = useState('');
+  const [openConversation, setOpenConversation] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
@@ -61,7 +65,14 @@ export default function AdminServiceRequests() {
     return () => { active = false; };
   }, [user, authLoading, load]);
 
-  const filtered = useMemo(() => rows.filter((item) => filter === 'all' || item.status === filter), [rows, filter]);
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase();
+    return rows.filter((item) =>
+      (filter === 'all' || item.status === filter) &&
+      (!needle || [item.title, item.contact_email, item.company ?? '', item.id, item.service_key]
+        .some((value) => value.toLocaleLowerCase().includes(needle)))
+    );
+  }, [rows, filter, search]);
 
   const save = async (item: ServiceRow) => {
     const draft = drafts[item.id];
@@ -70,11 +81,13 @@ export default function AdminServiceRequests() {
     setSaving(item.id);
     setFeedback(null);
     const { data, error } = await supabase.from('service_requests')
-      .update({ status: draft.status, client_update: draft.client_update.trim() || null, updated_at: new Date().toISOString() })
-      .eq('id', item.id).select('id,status,client_update,updated_at').maybeSingle();
+      .update({ status: draft.status, client_update: draft.client_update.trim() || null })
+      .eq('id', item.id)
+      .eq('updated_at', item.updated_at)
+      .select('id,status,client_update,updated_at').maybeSingle();
     if (error || !data) {
       console.error('Admin service request update failed:', error);
-      setFeedback('Update not saved. Verify database permissions and try again.');
+      setFeedback('Update not saved. The request may have changed or the service desk migration is unavailable. Refresh before retrying.');
     } else {
       setRows((items) => items.map((row) => row.id === item.id ? { ...row, status: data.status as ServiceRequestStatus, client_update: data.client_update, updated_at: data.updated_at } : row));
       setFeedback('Request ' + item.id + ' updated in the database.');
@@ -98,6 +111,12 @@ export default function AdminServiceRequests() {
           <option value="all">All requests</option>
           {Object.entries(serviceRequestStatuses).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
         </select>
+        <label htmlFor="service-admin-search" className="sr-only">Search requests</label>
+        <div className="relative w-full min-w-0 sm:w-72">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input id="service-admin-search" value={search} onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search title, email or reference" className="pl-9" />
+        </div>
         <span className="text-xs text-muted-foreground">{filtered.length} shown · most recent 250 loaded</span>
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
@@ -113,7 +132,13 @@ export default function AdminServiceRequests() {
               <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-status-' + item.id}>Verified status</label><select id={'request-status-' + item.id} value={draft.status} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, status: e.target.value as ServiceRequestStatus } }))} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(serviceRequestStatuses).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}</select></div>
               <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-update-' + item.id}>Client-visible update</label><Textarea id={'request-update-' + item.id} rows={3} maxLength={1000} value={draft.client_update} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, client_update: e.target.value } }))} placeholder="Provide actual next steps. Do not include internal notes or secrets." /><p className="mt-1 text-right text-xs text-muted-foreground">{draft.client_update.length}/1,000</p></div>
             </div>
-            <div className="mt-4 flex justify-end"><Button disabled={saving !== null || (draft.status === item.status && draft.client_update.trim() === (item.client_update ?? ''))} onClick={() => void save(item)}>{saving === item.id ? 'Saving…' : 'Save verified update'}</Button></div>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" aria-expanded={openConversation === item.id} onClick={() => setOpenConversation((current) => current === item.id ? null : item.id)}>
+                <MessageCircle className="mr-2 h-4 w-4" />{openConversation === item.id ? 'Close conversation' : 'Customer conversation'}
+              </Button>
+              <Button disabled={saving !== null || (draft.status === item.status && draft.client_update.trim() === (item.client_update ?? ''))} onClick={() => void save(item)}>{saving === item.id ? 'Saving…' : 'Save verified update'}</Button>
+            </div>
+            {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
           </Card>;
         })}</div>}
     </main>

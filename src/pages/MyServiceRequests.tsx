@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ClipboardList, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline';
 
 type RequestRow = {
   id: string; service_key: string; title: string; description: string;
@@ -20,6 +21,7 @@ export default function MyServiceRequests() {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [openConversation, setOpenConversation] = useState<string | null>(null);
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -55,6 +57,16 @@ export default function MyServiceRequests() {
             {item.client_update && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/[0.04] p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" />Client update</div><p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">{item.client_update}</p></div>}
             <details className="mt-5"><summary className="cursor-pointer text-sm font-medium text-primary">View original brief</summary><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">{item.description}</p></details>
             <p className="mt-5 break-all text-xs text-muted-foreground">Reference: {item.id}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4"
+              aria-expanded={openConversation === item.id}
+              onClick={() => setOpenConversation((current) => current === item.id ? null : item.id)}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />{openConversation === item.id ? 'Close conversation' : 'Open conversation'}
+            </Button>
+            {openConversation === item.id && user && <ServiceRequestTimeline requestId={item.id} ownerId={user.id} refreshToken={Date.parse(item.updated_at)} />}
           </Card>;
         })}</div>}
       <p className="mt-7 text-center text-xs text-muted-foreground">These are enquiries, not paid orders. No price, timeline or delivery is promised until separately agreed.</p>

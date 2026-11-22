@@ -314,6 +314,47 @@ export type Database = {
         }
         Relationships: []
       }
+      service_request_activity: {
+        Row: {
+          id: string
+          request_id: string
+          actor_id: string | null
+          event_type: string
+          body: string | null
+          from_status: string | null
+          to_status: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          request_id: string
+          actor_id?: string | null
+          event_type: string
+          body?: string | null
+          from_status?: string | null
+          to_status?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          request_id?: string
+          actor_id?: string | null
+          event_type?: string
+          body?: string | null
+          from_status?: string | null
+          to_status?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_request_activity_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_requests: {
         Row: {
           id: string
