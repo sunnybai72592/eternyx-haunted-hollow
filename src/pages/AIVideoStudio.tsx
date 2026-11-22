@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import VideoStoryboard from "@/components/VideoStoryboard";
 import { Link } from "react-router-dom";
 import {
@@ -30,6 +30,7 @@ import { isTerminalAIJobStatus } from "@/lib/ai/jobs";
 import { getFeaturesForStudio } from "@/lib/ai/registry";
 
 const videoFeatures = getFeaturesForStudio("video");
+const JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const statusTone: Record<string, string> = {
   queued: "border-slate-500/40 text-slate-300",
@@ -63,6 +64,9 @@ function describeApiError(error: unknown): string {
 
 const AIVideoStudio = () => {
   const [jobId, setJobId] = useState("");
+  const requestVersion = useRef(0);
+  const [pageVisible, setPageVisible] = useState(() => typeof document === "undefined" || !document.hidden);
+  const validJobId = JOB_ID_PATTERN.test(jobId.trim());
   const [job, setJob] = useState<AIJobStatusResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -70,29 +74,40 @@ const AIVideoStudio = () => {
   const [notice, setNotice] = useState<string | null>(null);
 
   const lookupJob = async () => {
+    const requestedId = jobId.trim();
+    if (!JOB_ID_PATTERN.test(requestedId)) {
+      setErrorMessage("Enter a valid job ID (UUID).");
+      return;
+    }
+    const version = ++requestVersion.current;
     setErrorMessage(null);
     setNotice(null);
     setIsLoading(true);
     try {
-      const result = await getAIJobStatus(jobId.trim());
+      const result = await getAIJobStatus(requestedId);
+      if (version !== requestVersion.current) return;
       setJob(result);
       setJobId(result.id);
       toast.success("AI job status refreshed.");
     } catch (error) {
+      if (version !== requestVersion.current) return;
       setJob(null);
       setErrorMessage(describeApiError(error));
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
   };
 
   const cancelJob = async () => {
-    if (!job) return;
+    if (!job || isCancelling || isLoading) return;
+    const requestedJobId = job.id;
+    const version = ++requestVersion.current;
     setErrorMessage(null);
     setNotice(null);
     setIsCancelling(true);
     try {
-      const result = await requestAIJobCancellation(job.id);
+      const result = await requestAIJobCancellation(requestedJobId);
+      if (version !== requestVersion.current) return;
       if (result.provider_reconciliation_required) {
         setNotice("Cancellation was recorded, but provider reconciliation is required. The system has not assumed that external processing stopped.");
       } else if (result.cancellation_requested) {
@@ -104,34 +119,53 @@ const AIVideoStudio = () => {
       }
 
       try {
-        setJob(await getAIJobStatus(job.id));
+        const refreshed = await getAIJobStatus(requestedJobId);
+        if (version === requestVersion.current) setJob(refreshed);
       } catch {
         // Keep the acknowledged cancellation notice visible if status refresh is unavailable.
       }
     } catch (error) {
-      setErrorMessage(describeApiError(error));
+      if (version === requestVersion.current) setErrorMessage(describeApiError(error));
     } finally {
-      setIsCancelling(false);
+      if (version === requestVersion.current) setIsCancelling(false);
     }
   };
 
   useEffect(() => {
-    if (!job || isTerminalAIJobStatus(job.status) || job.status === "reconciliation_required") {
+    const updateVisibility = () => setPageVisible(!document.hidden);
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
+
+  // A changed input must never leave a previous job selectable for cancellation.
+  const updateJobId = (value: string) => {
+    requestVersion.current++;
+    setJobId(value);
+    setJob(null);
+    setNotice(null);
+    setErrorMessage(null);
+    setIsLoading(false);
+    setIsCancelling(false);
+  };
+
+  useEffect(() => {
+    if (!pageVisible || isLoading || isCancelling || !job || isTerminalAIJobStatus(job.status) || job.status === "reconciliation_required") {
       return;
     }
 
     let isActive = true;
+    const version = requestVersion.current;
     let timeoutId: number | undefined;
 
     const refreshStatus = async () => {
       try {
         const latest = await getAIJobStatus(job.id);
-        if (isActive) setJob(latest);
+        if (isActive && version === requestVersion.current) setJob(latest);
       } catch {
         // Keep the last confirmed state visible; the next scheduled poll can retry.
       }
 
-      if (isActive) {
+      if (isActive && version === requestVersion.current && !document.hidden) {
         timeoutId = window.setTimeout(refreshStatus, 15_000);
       }
     };
@@ -141,7 +175,7 @@ const AIVideoStudio = () => {
       isActive = false;
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     };
-  }, [job?.id, job?.status]);
+  }, [job?.id, job?.status, pageVisible, isLoading, isCancelling]);
 
   const canCancel = !!job && !isTerminalAIJobStatus(job.status) && job.status !== "cancel_requested" && job.status !== "reconciliation_required";
 
@@ -219,17 +253,22 @@ const AIVideoStudio = () => {
                 <Input
                   id="ai-video-job-id"
                   value={jobId}
-                  onChange={(event) => setJobId(event.target.value)}
+                  onChange={(event) => updateJobId(event.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   autoComplete="off"
+                  inputMode="text"
+                  aria-invalid={Boolean(jobId.trim()) && !validJobId}
+                  aria-describedby="ai-video-job-help"
+                  maxLength={36}
                   className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500"
                 />
-                <Button onClick={lookupJob} disabled={isLoading || !jobId.trim()} className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
+                <Button onClick={lookupJob} disabled={isLoading || isCancelling || !validJobId} className="bg-primary text-primary-foreground hover:bg-primary/90">
                   {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                   Check status
                 </Button>
               </div>
 
+              <p id="ai-video-job-help" className="text-xs text-muted-foreground">Enter a 36-character job UUID. Status requests are sent only for valid IDs; background polling pauses when this tab is hidden.</p>
               {errorMessage && (
                 <Alert variant="destructive">
                   <XCircle className="h-4 w-4" />
@@ -260,10 +299,10 @@ const AIVideoStudio = () => {
                     <p className="text-sm text-amber-200">Cancellation is pending confirmation. A request does not prove the provider stopped processing.</p>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={lookupJob} disabled={isLoading || isCancelling} className="border-slate-700 text-slate-200 hover:bg-slate-800">
+                    <Button variant="outline" onClick={lookupJob} disabled={isLoading || isCancelling || !validJobId} className="border-slate-700 text-slate-200 hover:bg-slate-800">
                       <RefreshCw className="mr-2 h-4 w-4" />Refresh
                     </Button>
-                    <Button variant="destructive" onClick={cancelJob} disabled={!canCancel || isCancelling} >
+                    <Button variant="destructive" onClick={cancelJob} disabled={!canCancel || isLoading || isCancelling} >
                       {isCancelling ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
                       Request cancellation
                     </Button>
