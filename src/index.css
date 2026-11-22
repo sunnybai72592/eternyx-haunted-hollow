@@ -471,7 +471,7 @@ All colors MUST be HSL.
 }
 
 .animate-neural-network {
-  background: linear-gradient(-45deg, transparent, rgba(0, 255, 136, 0.1), transparent);
+  background: linear-gradient(-45deg, transparent, hsl(var(--primary) / 0.1), transparent);
   background-size: 400% 400%;
   animation: neural-network 3s ease infinite;
 }
@@ -495,11 +495,11 @@ All colors MUST be HSL.
 
 .holographic-bg {
   background: linear-gradient(45deg, 
-    rgba(0, 255, 136, 0.1) 0%, 
-    rgba(0, 191, 255, 0.1) 25%, 
-    rgba(138, 43, 226, 0.1) 50%, 
+    hsl(var(--primary) / 0.1) 0%, 
+    hsl(var(--accent) / 0.1) 25%, 
+    hsl(var(--cyber-pink) / 0.1) 50%, 
     rgba(255, 20, 147, 0.1) 75%, 
-    rgba(0, 255, 136, 0.1) 100%);
+    hsl(var(--primary) / 0.1) 100%);
   background-size: 400% 400%;
   animation: neural-network 6s ease infinite;
 }
@@ -513,9 +513,9 @@ All colors MUST be HSL.
   right: 0;
   bottom: 0;
   background-image: 
-    radial-gradient(circle at 25% 25%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(0, 191, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(138, 43, 226, 0.05) 0%, transparent 50%);
+    radial-gradient(circle at 25% 25%, hsl(var(--primary) / 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, hsl(var(--accent) / 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, hsl(var(--cyber-pink) / 0.05) 0%, transparent 50%);
   pointer-events: none;
   z-index: -1;
 }
@@ -523,8 +523,8 @@ All colors MUST be HSL.
 /* Neural Grid Pattern */
 .neural-grid {
   background-image: 
-    linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+    linear-gradient(hsl(var(--primary) / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--primary) / 0.1) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 
@@ -537,9 +537,9 @@ All colors MUST be HSL.
   right: 0;
   bottom: 0;
   background-image: 
-    radial-gradient(circle at 20% 80%, rgba(0, 255, 136, 0.3) 1px, transparent 1px),
-    radial-gradient(circle at 80% 20%, rgba(0, 191, 255, 0.3) 1px, transparent 1px),
-    radial-gradient(circle at 40% 40%, rgba(138, 43, 226, 0.3) 1px, transparent 1px);
+    radial-gradient(circle at 20% 80%, hsl(var(--primary) / 0.3) 1px, transparent 1px),
+    radial-gradient(circle at 80% 20%, hsl(var(--accent) / 0.3) 1px, transparent 1px),
+    radial-gradient(circle at 40% 40%, hsl(var(--cyber-pink) / 0.3) 1px, transparent 1px);
   background-size: 50px 50px, 80px 80px, 60px 60px;
   animation: matrix-rain 10s linear infinite;
   pointer-events: none;
@@ -556,14 +556,14 @@ All colors MUST be HSL.
 }
 
 .android-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(45deg, #00ff88, #00bfff);
+  background: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--accent)));
   border-radius: 4px;
-  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  box-shadow: 0 0 10px hsl(var(--primary) / 0.5);
 }
 
 .android-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(45deg, #00bfff, #8a2be2);
-  box-shadow: 0 0 15px rgba(0, 191, 255, 0.7);
+  background: linear-gradient(45deg, hsl(var(--accent)), hsl(var(--cyber-pink)));
+  box-shadow: 0 0 15px hsl(var(--accent) / 0.7);
 }
 
 /* Preserve Cyberpunk Theme */
@@ -573,35 +573,35 @@ All colors MUST be HSL.
 
 /* God Mode Dashboard Specific Styles */
 .cyber-blue {
-  color: #00bfff;
+  color: hsl(var(--accent));
 }
 
 .text-cyber-blue {
-  color: #00bfff;
+  color: hsl(var(--accent));
 }
 
 .border-cyber-blue {
-  border-color: #00bfff;
+  border-color: hsl(var(--accent));
 }
 
 .border-cyber-blue\/30 {
-  border-color: rgba(0, 191, 255, 0.3);
+  border-color: hsl(var(--accent) / 0.3);
 }
 
 .border-cyber-blue\/40 {
-  border-color: rgba(0, 191, 255, 0.4);
+  border-color: hsl(var(--accent) / 0.4);
 }
 
 .bg-cyber-blue\/10 {
-  background-color: rgba(0, 191, 255, 0.1);
+  background-color: hsl(var(--accent) / 0.1);
 }
 
 .bg-cyber-blue\/20 {
-  background-color: rgba(0, 191, 255, 0.2);
+  background-color: hsl(var(--accent) / 0.2);
 }
 
 .bg-cyber-blue\/30 {
-  background-color: rgba(0, 191, 255, 0.3);
+  background-color: hsl(var(--accent) / 0.3);
 }
 
 /* Cosmic Kingdom Animations */
@@ -643,14 +643,14 @@ All colors MUST be HSL.
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.5),
-                0 0 40px rgba(6, 182, 212, 0.3),
-                0 0 60px rgba(6, 182, 212, 0.1);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.5),
+                0 0 40px hsl(var(--primary) / 0.3),
+                0 0 60px hsl(var(--primary) / 0.1);
   }
   50% {
-    box-shadow: 0 0 30px rgba(6, 182, 212, 0.8),
-                0 0 60px rgba(6, 182, 212, 0.5),
-                0 0 90px rgba(6, 182, 212, 0.3);
+    box-shadow: 0 0 30px hsl(var(--primary) / 0.8),
+                0 0 60px hsl(var(--primary) / 0.5),
+                0 0 90px hsl(var(--primary) / 0.3);
   }
 }
 
@@ -727,7 +727,7 @@ All colors MUST be HSL.
   pointer-events: none;
   width: 20px;
   height: 20px;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.6) 0%, transparent 70%);
+  background: radial-gradient(circle, hsl(var(--primary) / 0.6) 0%, transparent 70%);
   border-radius: 50%;
   animation: satellite-orbit 4s linear infinite;
 }
