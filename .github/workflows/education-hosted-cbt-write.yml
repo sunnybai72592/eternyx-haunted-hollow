@@ -1,0 +1,89 @@
+name: ETERNYX Education hosted student CBT write acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "Preflight performs ZERO CBT writes; write consumes one fresh synthetic staging attempt"
+        required: true
+        type: choice
+        options:
+          - preflight
+          - write
+        default: preflight
+      approve_cbt_attempt_write:
+        description: "I authorize one synthetic student CBT attempt write in isolated staging"
+        required: true
+        type: boolean
+        default: false
+      acknowledge_no_retake:
+        description: "I understand this fixture cannot be automatically reused or reset"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-education-hosted-cbt-student-write
+  cancel-in-progress: false
+
+jobs:
+  verify-staging-cbt-student-write:
+    name: Protected real-JWT synthetic CBT attempt preflight and write acceptance
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 12
+    env:
+      ETERNYX_EDU_WRITE_MODE: ${{ inputs.run_mode }}
+      ETERNYX_EDU_CBT_WRITE_APPROVAL: ${{ inputs.run_mode == 'write' && inputs.approve_cbt_attempt_write && 'I_APPROVE_FRESH_EDUCATION_STAGING_CBT_ATTEMPT' || '' }}
+      ETERNYX_EDU_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'write' && inputs.acknowledge_no_retake && 'I_ACKNOWLEDGE_STAGING_ATTEMPT_CANNOT_BE_RETAKEN' || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_EDU_WRITE_TEST_ID: ${{ vars.ETERNYX_EDU_WRITE_TEST_ID }}
+      ETERNYX_EDU_WRITE_MCQ_ID: ${{ vars.ETERNYX_EDU_WRITE_MCQ_ID }}
+      ETERNYX_EDU_WRITE_MCQ_OPTION_ID: ${{ vars.ETERNYX_EDU_WRITE_MCQ_OPTION_ID }}
+      ETERNYX_EDU_WRITE_ESSAY_ID: ${{ vars.ETERNYX_EDU_WRITE_ESSAY_ID }}
+    steps:
+      - name: Checkout reviewed staging rehearsal sources
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Fail closed on unsafe project, mode, credentials or incomplete approvals
+        run: |
+          node --input-type=module -e '
+            import { validateEducationHostedCbtConfig } from "./scripts/staging/educationHostedCbtWriteConfig.mjs";
+            try {
+              const c=validateEducationHostedCbtConfig(process.env);
+              process.stdout.write("Approved Education hosted "+c.mode+" mode; staging-only safety gates passed.\n");
+            } catch {
+              process.stderr.write("Refused: unsafe Education hosted CBT configuration or missing owner approval.\n");
+              process.exitCode=1;
+            }
+          '
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Execute actual staging Auth and CBT preflight or one-time student write
+        timeout-minutes: 8
+        run: node scripts/staging/verifyEducationHostedCbtWrite.mjs
+      - name: Independently check sanitized acceptance evidence
+        if: always()
+        run: node scripts/staging/verifyEducationHostedCbtEvidence.mjs
+      - name: Upload sanitized staging-only acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-hosted-cbt-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-cbt-write.json
+          if-no-files-found: warn
+          retention-days: 7
