@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   validateMicrovmManifest, canonicalHostedQuote, verifySignedHostedQuote,
@@ -34,6 +34,7 @@ const quote=()=>({
 });
 const keyPair=generateKeyPairSync("ed25519");
 const pub=keyPair.publicKey.export({type:"spki",format:"pem"}).toString();
+const fingerprint=createHash("sha256").update(keyPair.publicKey.export({type:"spki",format:"der"})).digest("hex");
 const signed=q=>sign(null,canonicalHostedQuote(q),keyPair.privateKey).toString("base64");
 const approvedBudget={singleSessionMicros:50_000,rolling24hMicros:100_000};
 const ledger={spent24hMicros:10_000,reserved24hMicros:20_000};
@@ -41,7 +42,7 @@ const evaluate=(options={})=>{
   const q=options.quote??quote();
   return evaluateHostedSpend({
     quote:q,manifest:manifest(),sessionId:session,
-    publicKeyPem:pub,signatureBase64:signed(q),now,
+    publicKeyPem:pub,trustedKeyFingerprintSha256:fingerprint,signatureBase64:signed(q),now,
     budget:approvedBudget,ledger,...options,
   });
 };
@@ -89,7 +90,7 @@ test("canonical provider quote is signed and exactly bound to a UUID and pinned 
   const q=quote(),signature=signed(q);
   assert.equal(signature.length,88);
   assert.equal(verifySignedHostedQuote({
-    quote:q,signatureBase64:signature,publicKeyPem:pub,sessionId:session,now,
+    quote:q,signatureBase64:signature,publicKeyPem:pub,trustedKeyFingerprintSha256:fingerprint,sessionId:session,now,
   }),true);
   assert.ok(Buffer.isBuffer(canonicalHostedQuote(q)));
 });
@@ -110,7 +111,7 @@ test("signature rejects tampered price, target, freshness, nonce, currency and e
     const altered=quote();mutate(altered);
     assert.throws(()=>verifySignedHostedQuote({
       quote:altered,signatureBase64:original,
-      publicKeyPem:pub,sessionId:session,now,
+      publicKeyPem:pub,trustedKeyFingerprintSha256:fingerprint,sessionId:session,now,
     }));
   }
 });
@@ -124,7 +125,7 @@ test("quote verifier rejects wrong key, malformed signatures and wrong session b
     {sessionId:other},
     {publicKeyPem:"not-a-key"},
   ])assert.throws(()=>verifySignedHostedQuote({
-    quote:q,signatureBase64:signature,publicKeyPem:pub,sessionId:session,now,
+    quote:q,signatureBase64:signature,publicKeyPem:pub,trustedKeyFingerprintSha256:fingerprint,sessionId:session,now,
     ...tweak,
   }));
 });
@@ -139,7 +140,7 @@ test("quote verifier rejects stale, future, expired or overly long 5m lifespan",
     {...base,issuedAt:"2026-11-22T19:29:30Z",expiresAt:"2026-11-22T19:40:00Z"},
   ];
   for(const q of bad)assert.throws(()=>verifySignedHostedQuote({
-    quote:q,signatureBase64:signed(q),publicKeyPem:pub,
+    quote:q,signatureBase64:signed(q),publicKeyPem:pub,trustedKeyFingerprintSha256:fingerprint,
     sessionId:session,now,
   }),/expired|freshness/);
 });
