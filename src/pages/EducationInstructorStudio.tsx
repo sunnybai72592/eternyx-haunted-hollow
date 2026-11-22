@@ -56,6 +56,7 @@ export default function EducationInstructorStudio() {
   const { user, isAuthenticated } = useAuthStore();
   const queryClient = useQueryClient();
   const currentUserRef = useRef(user?.id);
+  const accountGenerationRef = useRef(0);
   const resetEditor = (next: Bank) => {
     const state = historyController.reset(next);
     setBank(state.bank as Bank);
@@ -86,6 +87,7 @@ export default function EducationInstructorStudio() {
   useLayoutEffect(() => {
     if (currentUserRef.current === user?.id) return;
     currentUserRef.current = user?.id;
+    accountGenerationRef.current += 1;
     resetEditor(emptyQuestionBank() as Bank);
     setActiveId(null);
     setSourceDraftId(null);
@@ -200,17 +202,20 @@ export default function EducationInstructorStudio() {
   const handleLoadPrivateDraft = async (draftId: string) => {
     if (!instructorRpcEnabled || !accessQuery.data?.approved || loadingDraftId || serverSaving) return;
     if (!window.confirm("Load this private instructor draft? Unsaved edits in the current editor will be lost. Export local JSON first if needed.")) return;
+    const generation = accountGenerationRef.current;
     setLoadingDraftId(draftId);
     setMessage("");
     try {
       const draft = await loadInstructorDraft(draftId);
+      if (generation !== accountGenerationRef.current) return;
       resetEditor(draft.bank as Bank);
       setSourceDraftId(draft.id);
       setActiveId(draft.bank.questions[0]?.id ?? null);
       setMode("edit");
       setMessage("Private draft loaded. Saving these edits will create a NEW unpublished draft; the original is preserved.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Private draft could not be loaded.");
+      if (generation === accountGenerationRef.current)
+        setMessage(error instanceof Error ? error.message : "Private draft could not be loaded.");
     } finally {
       setLoadingDraftId(null);
     }
@@ -218,24 +223,29 @@ export default function EducationInstructorStudio() {
   const handleRequestPublication = async (draftId: string) => {
     if (!publicationRpcEnabled || !accessQuery.data?.approved || reviewRequestId || serverSaving) return;
     if (!window.confirm("Submit this unpublished assessment for administrator review? This will not make it available to students.")) return;
+    const generation = accountGenerationRef.current;
     setReviewRequestId(draftId);
     setMessage("");
     try {
       await requestEducationPublication(draftId);
+      if (generation !== accountGenerationRef.current) return;
       setMessage("Publication review requested. The exam remains unpublished until a trusted administrator approves it.");
       toast.success("Publication review requested.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Publication review could not be requested.");
+      if (generation === accountGenerationRef.current)
+        setMessage(error instanceof Error ? error.message : "Publication review could not be requested.");
     } finally {
       setReviewRequestId(null);
     }
   };
   const handlePrivateDraftSave = async () => {
     if (!instructorRpcEnabled || !accessQuery.data?.approved || !readiness.valid || serverSaving) return;
+    const generation = accountGenerationRef.current;
     setServerSaving(true);
     setMessage("");
     try {
       const created = await createInstructorDraft(bank);
+      if (generation !== accountGenerationRef.current) return;
       if (created.question_count !== bank.questions.length) {
         throw new Error("The server returned an unexpected question count; inspect your draft list.");
       }
@@ -244,7 +254,8 @@ export default function EducationInstructorStudio() {
       toast.success("Unpublished instructor draft saved.");
       await queryClient.invalidateQueries({ queryKey: ["education-instructor-private-drafts", user?.id] });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The instructor draft could not be saved.");
+      if (generation === accountGenerationRef.current)
+        setMessage(error instanceof Error ? error.message : "The instructor draft could not be saved.");
     } finally {
       setServerSaving(false);
     }
@@ -255,16 +266,19 @@ export default function EducationInstructorStudio() {
       setMessage("The selected JSON file is too large (limit: 256 KB).");
       return;
     }
+    const generation = accountGenerationRef.current;
     setImporting(true);
     try {
       const parsed = parseQuestionBankJson(await file.text()) as Bank;
+      if (generation !== accountGenerationRef.current) return;
       resetEditor(parsed);
       setSourceDraftId(null);
       setActiveId(parsed.questions[0]?.id ?? null);
       setMode("edit");
       setMessage("Question-bank draft imported. Review its content before exporting.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Question-bank import failed.");
+      if (generation === accountGenerationRef.current)
+        setMessage(error instanceof Error ? error.message : "Question-bank import failed.");
     } finally {
       setImporting(false);
       if (importRef.current) importRef.current.value = "";
