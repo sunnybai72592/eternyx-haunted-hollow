@@ -5,6 +5,7 @@ import { ArrowRight, BookOpen, Clock3, RefreshCw, Search, ShieldCheck } from "lu
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { filterEducationTests, normalizeEducationTest } from "@/lib/educationCatalog.mjs";
+import { educationAttemptNavigation } from "@/lib/educationAttemptNavigation.mjs";
 import { atomicCbtEnabled } from "@/lib/educationCbtRpc";
 import { publicationRpcEnabled, listEnrolledEducationTests } from "@/lib/educationPublicationRpc";
 import { Button } from "@/components/ui/button";
@@ -194,8 +195,10 @@ export default function Education() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {visible.map(test => {
                   const previous = ownedAttemptByTest.get(test.id);
-                  const submitted = !!previous && previous.status !== "in_progress";
-                  const label = previous ? submitted ? "Submitted" : "In progress" : "Available";
+                  const action = educationAttemptNavigation(test.id, previous, attemptCheckReady, user?.id);
+                  const label = action.status === "submitted" ? "Submitted" :
+                    action.status === "in_progress" ? "In progress" :
+                    action.status === "available" ? "Available" : "Checking access";
                   return (
                   <Card key={test.id} className="flex flex-col border-border bg-card transition-colors hover:border-primary/35">
                     <CardHeader className="flex-1">
@@ -211,17 +214,15 @@ export default function Education() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {attemptCheckReady ? (
+                      {action.path ? (
                         <Button asChild className="min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                          <Link to={submitted ? `/test-results/${previous!.id}` : `/test/${test.id}`}
-                            aria-label={submitted ? `View results: ${test.title}` :
-                              previous ? `Continue assessment: ${test.title}` : `Open assessment: ${test.title}`}>
-                            {submitted ? "View submitted results" : previous ? "Continue assessment" : "Open assessment"}
+                          <Link to={action.path} aria-label={`${action.label}: ${test.title}`}>
+                            {action.label}
                             <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
                           </Link>
                         </Button>
                       ) : (
-                        <Button disabled className="min-h-11 w-full">Verifying attempt status…</Button>
+                        <Button disabled className="min-h-11 w-full">Attempt status unavailable</Button>
                       )}
                     </CardContent>
                   </Card>
