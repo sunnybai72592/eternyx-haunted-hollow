@@ -384,9 +384,9 @@ export default function DigitalWorkspace() {
       {notice && <p role="status" className="rounded-lg border border-border p-3 text-sm text-cyan-300">{notice}</p>}
       {ownedDataVisible && <>
         <div className="grid gap-3 sm:grid-cols-3" aria-label="Actual workspace totals">
-          <Summary title="Projects" value={projects.length} subtitle="Owned projects" />
-          <Summary title="Open tasks" value={openTaskCount} subtitle="Not yet done" />
-          <Summary title="Private files" value={fileCount} subtitle="Registered uploads" />
+          <Summary title="Loaded projects" value={projects.length} subtitle="Showing up to 100 projects" />
+          <Summary title="Loaded open tasks" value={openTaskCount} subtitle="Within 1,000 loaded tasks" />
+          <Summary title="Loaded private files" value={fileCount} subtitle="Within 1,000 loaded items" />
         </div>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(250px,320px)_minmax(0,1fr)]">
