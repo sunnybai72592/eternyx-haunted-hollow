@@ -91,11 +91,11 @@ export default function TestInterface() {
         .select("question_id,selected_option_id,short_answer_text")
         .eq("attempt_id", attemptQuery.data!.id);
       if (error) throw error;
-      return (data ?? []).map(row => ({
+      return (data ?? []).flatMap(row => row.question_id ? [{
         questionId: row.question_id,
         selectedOptionId: row.selected_option_id || undefined,
         shortAnswer: row.short_answer_text || undefined,
-      }));
+      }] : []);
     },
   });
 
