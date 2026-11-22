@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Download, FileUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
+import { publicationRpcEnabled, requestEducationPublication } from "@/lib/educationPublicationRpc";
 import {
   createInstructorDraft, instructorRpcEnabled, loadInstructorDraft,
   readInstructorAccess, readInstructorDrafts,
@@ -42,6 +43,7 @@ export default function EducationInstructorStudio() {
   const [serverSaving, setServerSaving] = useState(false);
   const [loadingDraftId, setLoadingDraftId] = useState<string | null>(null);
   const [sourceDraftId, setSourceDraftId] = useState<string | null>(null);
+  const [reviewRequestId, setReviewRequestId] = useState<string | null>(null);
   const { user, isAuthenticated } = useAuthStore();
   const queryClient = useQueryClient();
   const currentUserRef = useRef(user?.id);
@@ -170,6 +172,21 @@ export default function EducationInstructorStudio() {
       setLoadingDraftId(null);
     }
   };
+  const handleRequestPublication = async (draftId: string) => {
+    if (!publicationRpcEnabled || !accessQuery.data?.approved || reviewRequestId || serverSaving) return;
+    if (!window.confirm("Submit this unpublished assessment for administrator review? This will not make it available to students.")) return;
+    setReviewRequestId(draftId);
+    setMessage("");
+    try {
+      await requestEducationPublication(draftId);
+      setMessage("Publication review requested. The exam remains unpublished until a trusted administrator approves it.");
+      toast.success("Publication review requested.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Publication review could not be requested.");
+    } finally {
+      setReviewRequestId(null);
+    }
+  };
   const handlePrivateDraftSave = async () => {
     if (!instructorRpcEnabled || !accessQuery.data?.approved || !readiness.valid || serverSaving) return;
     setServerSaving(true);
@@ -277,6 +294,12 @@ export default function EducationInstructorStudio() {
                       onClick={() => void handleLoadPrivateDraft(draft.id)}>
                       {loadingDraftId === draft.id ? "Loading draft…" : "Load for revision"}
                     </Button>
+                    {publicationRpcEnabled && <Button size="sm" variant="outline"
+                      className="mt-2 min-h-10 w-full sm:ml-2 sm:mt-0 sm:w-auto"
+                      disabled={!!reviewRequestId || !!loadingDraftId || serverSaving}
+                      onClick={() => void handleRequestPublication(draft.id)}>
+                      {reviewRequestId === draft.id ? "Requesting review…" : "Request publication review"}
+                    </Button>}
                   </li>)}
                 </ul>
               </div>}
