@@ -100,6 +100,7 @@ def normalize_one(source, output, *, start_seconds=0, seconds=60):
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-threads", "1",
            "-ss", str(start_seconds), "-protocol_whitelist", "file,pipe",
            "-i", str(source), "-map", "0:v:0", "-an", "-sn", "-dn",
+           "-map_metadata", "-1", "-map_chapters", "-1",
            "-vf", filtergraph, "-frames:v", str(seconds * FPS),
            "-t", str(seconds), "-r", str(FPS),
            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
