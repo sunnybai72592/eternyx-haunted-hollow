@@ -1,9 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { runLocalWorkflow } from "../../../src/lib/automationWorkflow.mjs";
 import { encryptScheduledText, decryptScheduledText } from "../_shared/automation-schedule-crypto.mjs";
 import {
   parseGitHubIssueAction,issueFingerprint,verifyIssueConnection,
-  createApprovedGitHubIssue,ISSUE_PAYLOAD_BYTES,
+  createApprovedGitHubIssue,ISSUE_PAYLOAD_BYTES,hasObviousSecret,safeIssueContent,
+  keyedWorkflowInputDigest,fetchConfirmedIssueState,
 } from "../_shared/automation-github-issues.mjs";
 
 const HEADERS={
@@ -38,6 +40,8 @@ function failure(reason:unknown){
     draft_limit:429,pending_limit:429,write_limit:429,issue_in_flight:429,
     not_pending:409,not_reviewed:409,idempotency_conflict:409,connection_changed:409,
     not_found:404,expired:410,version_exhausted:409,
+    stale_workflow:409,invalid_workflow:400,secret_detected:422,
+    read_in_flight:429,read_limit:429,not_confirmed:409,
   };
   return reply({error:"GitHub issue action could not proceed; check its status and permissions.",
     code},status[code]??503);
@@ -108,6 +112,9 @@ serve(async(req:Request)=>{
       return reply({source:"authenticated_server",disconnected:true});
     }
     if(action.action==="status"||action.action==="list"){
+      const {data:readPrune,error:readPruneError}=await supabase.rpc(
+        "automation_housekeep_github_issue_status",{p_user_id:user.id});
+      if(readPruneError||readPrune?.ok!==true)throw readPruneError??Error("status_cleanup_failed");
       const {data:clean,error:pruneError}=await supabase.rpc("automation_housekeep_github_issues",{
         p_user_id:user.id,
       });
@@ -121,6 +128,11 @@ serve(async(req:Request)=>{
         .in("status",["submitting","succeeded","failed","uncertain"])
         .gt("decided_at",new Date(Date.now()-24*60*60*1000).toISOString());
       if(quotaError)throw quotaError;
+      const {count:readCount,error:readCountError}=await supabase
+        .from("automation_github_issue_status_checks")
+        .select("id",{count:"exact",head:true}).eq("user_id",user.id)
+        .gt("created_at",new Date(Date.now()-24*60*60*1000).toISOString());
+      if(readCountError)throw readCountError;
       const safe={
         source:"authenticated_server",connected:!!connection,
         enabled:connection?.enabled===true,
@@ -130,35 +142,117 @@ serve(async(req:Request)=>{
           verifiedAt:connection.verified_at,scope:connection.scope,
         }:null,
         writeAttempts24h:count??0,writeLimit24h:3,openDraftLimit:3,
-        draftLimit24h:10,permissionProvedByRead:false,
+        draftLimit24h:10,statusReadCalls24h:readCount??0,statusReadLimit24h:12,
+        permissionProvedByRead:false,
         externalIssueWritesPossible:true,resultsMayBeUncertain:true,
       };
       if(action.action==="status")return reply(safe);
       const {data:drafts,error:draftError}=await supabase.from("automation_github_issue_drafts")
-        .select("id,repo_owner,repo_name,status,connection_version,created_at,expires_at,decided_at,issue_number,issue_url,error_code")
+        .select("id,repo_owner,repo_name,status,connection_version,created_at,expires_at,decided_at,issue_number,issue_url,error_code,source_workflow_id,source_workflow_revision,last_known_issue_state,last_checked_at")
         .eq("user_id",user.id).order("created_at",{ascending:false}).limit(20);
       if(draftError)throw draftError;
-      return reply({...safe,drafts:drafts??[],source:"authenticated_server"});
+      const {data:workflows,error:workflowError}=await supabase.from("automation_workflows")
+        .select("id,name,revision").eq("user_id",user.id)
+        .eq("active",true).order("updated_at",{ascending:false}).limit(20);
+      if(workflowError)throw workflowError;
+      return reply({...safe,drafts:drafts??[],workflows:workflows??[],
+        source:"authenticated_server"});
     }
-    if(action.action==="prepare"){
+    if(action.action==="prepare"||action.action==="prepareWorkflow"){
       const {data:connection,error:readError}=await supabase.from("automation_github_issue_connections")
         .select("repo_owner,repo_name,version,enabled")
         .eq("user_id",user.id).maybeSingle();
       if(readError)throw readError;
       if(!connection||!connection.enabled)return failure("disabled");
-      const payload=JSON.stringify({title:action.title,body:action.body});
+      let draftBody=action.action==="prepare"?action.body:"";
+      let workflowRevision:number|null=null;
+      let keyedInputDigest:string|null=null;
+      if(action.action==="prepareWorkflow"){
+        if(hasObviousSecret(action.input))return failure("secret_detected");
+        const {data:workflow,error:workflowError}=await supabase.from("automation_workflows")
+          .select("id,steps,revision,active,trigger_kind")
+          .eq("id",action.workflowId).eq("user_id",user.id).maybeSingle();
+        if(workflowError)throw workflowError;
+        if(!workflow||workflow.active!==true||workflow.trigger_kind!=="manual"){
+          return failure("stale_workflow");
+        }
+        let result;
+        try{result=runLocalWorkflow(action.input,workflow.steps);}
+        catch{return failure("invalid_workflow");}
+        draftBody=result.output;
+        workflowRevision=workflow.revision;
+        keyedInputDigest=await keyedWorkflowInputDigest(
+          master,user.id,action.workflowId,action.input);
+      }
+      if(!safeIssueContent(action.title,draftBody))return failure("secret_detected");
+      const payload=JSON.stringify({title:action.title,body:draftBody});
       const encrypted=await encryptScheduledText(master,payload,ISSUE_PAYLOAD_BYTES);
       const fp=await issueFingerprint(user.id,connection.repo_owner,
-        connection.repo_name,connection.version,action.title,action.body);
-      const {data,error}=await supabase.rpc("automation_prepare_github_issue",{
+        connection.repo_name,connection.version,action.title,draftBody);
+      const params={
         p_user_id:user.id,p_request_key:action.requestKey,p_fingerprint:fp,
         p_ciphertext:encrypted.ciphertext,p_nonce:encrypted.nonce,
-      });
+      };
+      const {data,error}=action.action==="prepareWorkflow"
+        ?await supabase.rpc("automation_prepare_github_workflow_issue",{
+          ...params,p_workflow_id:action.workflowId,
+          p_workflow_revision:workflowRevision,p_input_hash:keyedInputDigest,
+        })
+        :await supabase.rpc("automation_prepare_github_issue",params);
       if(error)throw error;
       if(data?.ok!==true)return failure(data?.reason);
       return reply({source:"authenticated_server",draftId:data.draft_id,
         status:data.status,expiresAt:data.expires_at,replayed:data.replayed,
-        executed:false,repoOwner:connection.repo_owner,repoName:connection.repo_name},201);
+        executed:false,repoOwner:connection.repo_owner,repoName:connection.repo_name,
+        derivedFromWorkflow:action.action==="prepareWorkflow",
+        workflowRevision},201);
+    }
+    if(action.action==="trackIssue"){
+      const {data:reserved,error:reserveError}=await supabase.rpc(
+        "automation_reserve_github_issue_status",{
+          p_user_id:user.id,p_draft_id:action.draftId,p_request_key:action.requestKey,
+        });
+      if(reserveError)throw reserveError;
+      if(reserved?.ok!==true)return failure(reserved?.reason);
+      if(reserved.replayed===true){
+        return reply({source:"authenticated_server",replayed:true,upstreamCalled:false,
+          checkId:reserved.check_id,state:reserved.state,
+          observedState:reserved.observed_state,errorCode:reserved.error_code},200);
+      }
+      const {data:connection,error:connError}=await supabase.from(
+        "automation_github_issue_connections")
+        .select("repo_owner,repo_name,credential_ciphertext,credential_nonce")
+        .eq("user_id",user.id).maybeSingle();
+      if(connError)throw connError;
+      let observed:{ok:boolean;issueState?:string;errorCode?:string};
+      if(!connection||connection.repo_owner.toLowerCase()!==reserved.owner.toLowerCase()||
+         connection.repo_name.toLowerCase()!==reserved.repo.toLowerCase()){
+        observed={ok:false,errorCode:"github_forbidden"};
+      }else{
+        try{
+          const token=await decryptScheduledText(master,connection.credential_ciphertext,
+            connection.credential_nonce,320);
+          observed=await fetchConfirmedIssueState(token,reserved.owner,reserved.repo,
+            reserved.issue_number);
+        }catch{
+          observed={ok:false,errorCode:"github_unavailable"};
+        }
+      }
+      const {data:finished,error:finishError}=await supabase.rpc(
+        "automation_finish_github_issue_status",{
+          p_user_id:user.id,p_check_id:reserved.check_id,
+          p_observed_state:observed.ok?observed.issueState:null,
+          p_error_code:observed.ok?null:observed.errorCode,
+        });
+      if(finishError||finished?.ok!==true){
+        return reply({error:"Status check outcome is not confirmed; refresh history",
+          code:"status_unconfirmed",retrySameKey:false},503);
+      }
+      return reply({source:"authenticated_server",replayed:false,upstreamCalled:true,
+        checkId:reserved.check_id,state:finished.status,
+        observedState:finished.observed_state,errorCode:finished.error_code,
+        confirmedAt:observed.ok?new Date().toISOString():null},
+        observed.ok?200:502);
     }
     if(action.action==="reject"){
       const {data,error}=await supabase.rpc("automation_reject_github_issue",{
@@ -180,6 +274,7 @@ serve(async(req:Request)=>{
       const decrypted=await decryptScheduledText(master,draft.payload_ciphertext,
         draft.payload_nonce,ISSUE_PAYLOAD_BYTES);
       const issue=decodeDraft(decrypted);
+      if(!safeIssueContent(issue.title,issue.body))return failure("secret_detected");
       if(action.action==="preview"){
         const {data:reviewed,error:reviewError}=await supabase.rpc(
           "automation_mark_github_issue_previewed",{

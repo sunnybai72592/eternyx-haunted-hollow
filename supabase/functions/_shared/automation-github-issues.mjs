@@ -13,6 +13,8 @@ const allow = {
   toggle:["action","enabled"],
   disconnect:["action"],
   prepare:["action","title","body","requestKey"],
+  prepareWorkflow:["action","title","input","workflowId","requestKey"],
+  trackIssue:["action","draftId","requestKey"],
   list:["action"],
   preview:["action","draftId"],
   approve:["action","draftId"],
@@ -34,6 +36,26 @@ export function parseGitHubIssueAction(value) {
   if(action==="toggle"){
     if(typeof value.enabled!=="boolean")return {ok:false,reason:"invalid_toggle"};
     return {ok:true,action,enabled:value.enabled};
+  }
+  if(action==="prepareWorkflow"){
+    if(typeof value.title!=="string"||value.title.trim().length<1||
+      value.title.trim().length>ISSUE_TITLE_MAX||
+      /[\x00-\x1f\x7f]/.test(value.title)||
+      typeof value.input!=="string"||
+      new TextEncoder().encode(value.input).byteLength>2000||
+      typeof value.workflowId!=="string"||!GH_UUID.test(value.workflowId)||
+      typeof value.requestKey!=="string"||!GH_UUID.test(value.requestKey)){
+      return {ok:false,reason:"invalid_workflow_draft"};
+    }
+    return {ok:true,action,title:value.title.trim(),input:value.input,
+      workflowId:value.workflowId,requestKey:value.requestKey};
+  }
+  if(action==="trackIssue"){
+    if(typeof value.draftId!=="string"||!GH_UUID.test(value.draftId)||
+      typeof value.requestKey!=="string"||!GH_UUID.test(value.requestKey)){
+      return {ok:false,reason:"invalid_tracking_request"};
+    }
+    return {ok:true,action,draftId:value.draftId,requestKey:value.requestKey};
   }
   if(action==="prepare"){
     if(typeof value.title!=="string" || value.title.trim().length<1 ||
@@ -156,4 +178,76 @@ export async function createApprovedGitHubIssue(token,owner,repo,title,body,fetc
     if(raw.html_url.toLowerCase()!==expected.toLowerCase())throw Error("github_invalid_response");
     return {state:"succeeded",number:raw.number,url:expected};
   }catch{return {state:"uncertain",code:"github_invalid_response"};}
+}
+
+
+// Content guard is an additional safety check, not a complete secret detector.
+export function hasObviousSecret(text) {
+  if(typeof text!=="string")return true;
+  const patterns=[
+    /\bgithub_pat_[A-Za-z0-9_]{18,}/i,
+    /\bgh[pousr]_[A-Za-z0-9_]{20,}/i,
+    /\bAKIA[0-9A-Z]{16}\b/,
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+    /\bBearer\s+[A-Za-z0-9_.-]{20,}/i,
+    /\bsk-[A-Za-z0-9_-]{24,}/,
+  ];
+  return patterns.some(re=>re.test(text));
+}
+export function safeIssueContent(title,body){
+  return typeof title==="string" && title.trim().length>0 &&
+    title.length<=120 && !/[\x00-\x1f\x7f]/.test(title) &&
+    typeof body==="string" && new TextEncoder().encode(body).byteLength<=1000 &&
+    !hasObviousSecret(title) && !hasObviousSecret(body);
+}
+
+// HMAC deliberately avoids a guessable unkeyed hash of small private inputs.
+export async function keyedWorkflowInputDigest(masterHex,userId,workflowId,input){
+  if(!/^[a-f0-9]{64}$/i.test(masterHex)||typeof input!=="string"){
+    throw Error("key_not_configured");
+  }
+  const bytes=new Uint8Array(masterHex.match(/../g).map(x=>Number.parseInt(x,16)));
+  const key=await crypto.subtle.importKey("raw",bytes,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const encoded=new TextEncoder().encode(JSON.stringify([userId,workflowId,input]));
+  const digest=await crypto.subtle.sign("HMAC",key,encoded);
+  return [...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
+}
+
+/** Verified issue-status GET. Never trust a URL from an issue receipt. */
+export async function fetchConfirmedIssueState(token,owner,repo,number,fetcher=fetch){
+  if(!validFineGrainedToken(token)||!validateGitHubName(owner,repo)||
+     !Number.isSafeInteger(number)||number<1||number>2147483647){
+    return {ok:false,errorCode:"github_invalid_response"};
+  }
+  let response;
+  const endpoint="https://api.github.com/repos/"+
+    encodeURIComponent(owner)+"/"+encodeURIComponent(repo)+"/issues/"+number;
+  try{
+    response=await fetcher(endpoint,{
+      method:"GET",redirect:"error",credentials:"omit",
+      headers:githubHeaders(token),signal:AbortSignal.timeout(6500),
+    });
+  }catch(e){
+    return {ok:false,errorCode:e?.name==="TimeoutError"||e?.name==="AbortError"
+      ?"request_timeout":"github_unavailable"};
+  }
+  if(response.status!==200){
+    if(response.body)await response.body.cancel().catch(()=>undefined);
+    const code=response.status===404?"github_not_found":
+      response.status===429 ||
+      (response.status===403 && (response.headers.get("x-ratelimit-remaining")==="0"||
+        response.headers.has("retry-after")))? "github_rate_limit":
+      response.status===401||response.status===403?"github_forbidden":"github_unavailable";
+    return {ok:false,errorCode:code};
+  }
+  try{
+    const data=await limitedJson(response);
+    const expected="https://github.com/"+owner+"/"+repo+"/issues/"+number;
+    if(!data||data.number!==number||typeof data.html_url!=="string"||
+       data.html_url.toLowerCase()!==expected.toLowerCase() ||
+       !["open","closed"].includes(data.state)||data.pull_request!==undefined){
+      throw Error("github_invalid_response");
+    }
+    return {ok:true,issueState:data.state,number,url:expected};
+  }catch{return {ok:false,errorCode:"github_invalid_response"};}
 }
