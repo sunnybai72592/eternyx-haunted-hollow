@@ -9,16 +9,29 @@ BEGIN;
 -- Row policies do not provide column secrecy: revoke broad rights and permit
 -- only safe student columns. Explicitly audit views and other RPC exposures.
 REVOKE ALL PRIVILEGES ON TABLE public.options FROM PUBLIC, anon, authenticated;
+-- Table-level REVOKE does NOT necessarily remove previously granted
+-- column-specific privileges. Remove sensitive column access explicitly.
+REVOKE SELECT (is_correct) ON public.options FROM PUBLIC, anon, authenticated;
 GRANT SELECT (id, question_id, option_text) ON public.options TO authenticated;
 
 -- Remove direct browser mutation of protected score and status columns.
 -- Student browser writes transition to checked RPCs below.
 REVOKE ALL PRIVILEGES ON TABLE public.user_attempts FROM PUBLIC, anon, authenticated;
+REVOKE INSERT (user_id, test_id, start_time, end_time, status, score, max_score, is_mobile_locked)
+ON public.user_attempts FROM PUBLIC, anon, authenticated;
+REVOKE UPDATE (user_id, test_id, start_time, end_time, status, score, max_score, is_mobile_locked)
+ON public.user_attempts FROM PUBLIC, anon, authenticated;
 GRANT SELECT (id, user_id, test_id, start_time, end_time, status,
               score, max_score, is_mobile_locked)
 ON public.user_attempts TO authenticated;
 
 REVOKE ALL PRIVILEGES ON TABLE public.user_answers FROM PUBLIC, anon, authenticated;
+REVOKE INSERT (attempt_id, question_id, selected_option_id, short_answer_text,
+               is_correct, points_awarded)
+ON public.user_answers FROM PUBLIC, anon, authenticated;
+REVOKE UPDATE (attempt_id, question_id, selected_option_id, short_answer_text,
+               is_correct, points_awarded)
+ON public.user_answers FROM PUBLIC, anon, authenticated;
 GRANT SELECT (id, attempt_id, question_id, selected_option_id,
               short_answer_text, is_correct, points_awarded)
 ON public.user_answers TO authenticated;
@@ -202,8 +215,9 @@ BEGIN
   END IF;
   SELECT t.duration_minutes INTO v_minutes
   FROM public.tests AS t WHERE t.id = v_attempt.test_id;
-  IF v_minutes IS NULL OR v_minutes NOT BETWEEN 1 AND 1440 THEN
-    RAISE EXCEPTION 'Invalid assessment duration' USING ERRCODE = '22023';
+  IF v_minutes IS NULL OR v_minutes NOT BETWEEN 1 AND 1440 OR
+     v_attempt.start_time IS NULL THEN
+    RAISE EXCEPTION 'Invalid assessment timing' USING ERRCODE = '22023';
   END IF;
   v_status := CASE WHEN v_now >= v_attempt.start_time +
     v_minutes * INTERVAL '1 minute' THEN 'auto_submitted' ELSE 'submitted' END;
