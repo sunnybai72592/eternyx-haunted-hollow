@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight, Bug, ClipboardList, Github, Zap } from "lucide-react";
 
 const Footer: React.FC = () => (
-  <footer className="relative isolate mt-0 overflow-hidden border-t border-white/[0.08] bg-[#050914] text-slate-300">
+  <footer className="relative isolate mt-0 overflow-hidden border-t border-white/[0.08] bg-background text-slate-300">
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent" />
       <div className="absolute -bottom-40 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-cyan-400/[0.045] blur-3xl" />
-      <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: "radial-gradient(rgba(103,232,249,.8) .7px, transparent .7px)", backgroundSize: "22px 22px" }} />
+      <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: "radial-gradient(hsl(var(--primary)/.8) .7px, transparent .7px)", backgroundSize: "22px 22px" }} />
     </div>
     <div className="mx-auto grid max-w-7xl gap-9 px-5 py-10 sm:px-8 sm:py-12 lg:grid-cols-[1.2fr_1fr_auto] lg:items-center lg:gap-12">
       <div className="min-w-0 text-center lg:text-left">
