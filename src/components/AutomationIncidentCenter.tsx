@@ -21,6 +21,10 @@ type Review={
   current_revision:number|null;lease_active:boolean;
   review_id:string|null;review_decision:string|null;reviewed_at:string|null;
 };
+type PastReview={
+  id:string;quarantine_request_key:string;schedule_id:string;
+  schedule_revision:number;decision:string;note:string;created_at:string;
+};
 type Event={
   id:number;kind:"opened"|"transition";from_status:Status|null;
   to_status:Status;note:string;created_at:string;
@@ -68,6 +72,8 @@ export default function AutomationIncidentCenter({
   const [evidence,setEvidence]=useState<Evidence[]>([]);
   const [reviews,setReviews]=useState<Review[]>([]);
   const [reviewTotal,setReviewTotal]=useState(0);
+  const [pastReviews,setPastReviews]=useState<PastReview[]>([]);
+  const [pastReviewTotal,setPastReviewTotal]=useState(0);
   const [sourcesLoaded,setSourcesLoaded]=useState(false);
   const [source,setSource]=useState("");
   const [newTitle,setNewTitle]=useState("");
@@ -133,7 +139,9 @@ export default function AutomationIncidentCenter({
        reviewData.ok!==true||reviewData.source!=="authenticated_server"||
        !Array.isArray(reviewData.rows)||
        reviewData.automaticRecoveryEnabled!==false||
-       typeof reviewData.totalMatching!=="number"){
+       typeof reviewData.totalMatching!=="number"||
+       !Array.isArray(reviewData.pastReviews)||
+       typeof reviewData.pastReviewTotal!=="number"){
       throw Error("Evidence could not be verified from existing records.");
     }
     const options:Evidence[]=[];
@@ -157,7 +165,14 @@ export default function AutomationIncidentCenter({
           label:"Quarantine receipt · "+date(r.quarantined_at)});
       }
     }
+    const stored=reviewData.pastReviews as PastReview[];
+    if(stored.length>20||stored.some(v=>typeof v.id!=="string"||
+      typeof v.decision!=="string"||typeof v.note!=="string"||
+      typeof v.created_at!=="string")){
+      throw Error("Stored recovery review history was not verified.");
+    }
     setReviews(verifiedReviews);
+    setPastReviews(stored);setPastReviewTotal(Number(reviewData.pastReviewTotal));
     setReviewTotal(Number(reviewData.totalMatching));
     setEvidence(options);setSourcesLoaded(true);
     setNotice("Loaded actual run and quarantine receipts. No execution or provider request was sent.");
@@ -488,6 +503,23 @@ export default function AutomationIncidentCenter({
           onClick={()=>void act(decideReview)}>
           <ShieldCheck className="mr-2 size-4"/> Save manual recovery review
         </Button>
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Stored recovery decisions: {pastReviews.length} of {pastReviewTotal}.
+            These remain available even if their original quarantine receipts
+            have passed the seven-day retention cleanup.
+          </p>
+          <ol className="space-y-2">
+            {pastReviews.map(v=><li key={v.id}
+              className="rounded border border-border/70 p-2 text-xs text-muted-foreground">
+              <p className="font-medium">{v.decision.replaceAll("_"," ")}
+                {" "}· {date(v.created_at)}</p>
+              <p className="mt-1">Schedule revision {v.schedule_revision} ·
+                {v.schedule_id.slice(0,8)}</p>
+              <p className="mt-1 whitespace-pre-wrap">{v.note}</p>
+            </li>)}
+          </ol>
+        </div>
       </>}
     </div>
     <p className="text-xs text-muted-foreground">
