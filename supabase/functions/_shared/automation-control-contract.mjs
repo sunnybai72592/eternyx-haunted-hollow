@@ -127,7 +127,7 @@ export function parseAutomationControlRequest(value) {
     if(hasBeforeTime!==hasBeforeId)return {ok:false,reason:"invalid_history_cursor"};
     if(hasBeforeTime&&
       (typeof value.beforeTime!=="string"||value.beforeTime.length>40||
-       !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value.beforeTime)||
+       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value.beforeTime)||
        Number.isNaN(Date.parse(value.beforeTime))||
        typeof value.beforeId!=="string"||!UUID_RE.test(value.beforeId)))return {ok:false,reason:"invalid_history_cursor"};
     return {ok:true,action,
