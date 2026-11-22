@@ -75,7 +75,7 @@ test("AI security page does not claim fabricated model accuracy, malware verdict
   assert.match(aiSecurity, /No AI answer was returned/);
 });
 
-test("Services Hub destination links are keyboard-accessible and registered in the actual route table", () => {
+test("Services gateway links are keyboard-accessible and registered in the actual route table", async () => {
   const catalog = await read("src/lib/serviceOfferings.ts");
   const destinations = [...catalog.matchAll(/pillar: '(\/[^']+)'/g)].map(match => match[1]);
   assert.equal(destinations.length, 6, "Each service must link to a corresponding self-service pillar");
