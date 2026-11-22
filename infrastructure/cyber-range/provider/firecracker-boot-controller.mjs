@@ -202,13 +202,16 @@ export async function bootJailedMicrovm({
     throw Error("Independent VM teardown supervisor is mandatory");
   const state=await guardian.attest(sessionId);
   if(!allTrue(state))throw Error("Host jailer and independent kill controls unverified");
-  await verifyJailedBootImages({jailBase,sessionId,manifest});
-  const socket=firecrackerApiSocket(jailBase,sessionId);
-  const armed=await guardian.armTimeout(sessionId,900);
-  if(armed?.armed!==true || armed?.maxSeconds!==900)
-    throw Error("Independent 900-second VM kill deadline is unavailable");
   let started=false;
   try{
+    // The jailer is already live when the supervisor attests successfully.
+    // Even a missing/changed image or failed watchdog arming must terminate
+    // that service; otherwise it remains alive until its systemd deadline.
+    await verifyJailedBootImages({jailBase,sessionId,manifest});
+    const socket=firecrackerApiSocket(jailBase,sessionId);
+    const armed=await guardian.armTimeout(sessionId,900);
+    if(armed?.armed!==true || armed?.maxSeconds!==900)
+      throw Error("Independent 900-second VM kill deadline is unavailable");
     for(const action of plan.requests){
       // Attest again before each configuration write; no user-supplied
       // endpoint, IP, VM size or launch action is ever accepted.
