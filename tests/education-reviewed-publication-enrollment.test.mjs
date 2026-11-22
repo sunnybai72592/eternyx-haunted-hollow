@@ -17,7 +17,7 @@ test("1: all new database changes remain staging-only and are one transaction", 
   assert.match(sql, /STAGING ONLY/);
   assert.equal((sql.match(/^BEGIN;$/gm) || []).length,1);
   assert.equal((sql.match(/^COMMIT;$/gm) || []).length,1);
-  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) || []).length,7);
+  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) || []).length,8);
   assert.match(doc, /NO live Supabase operations/);
 });
 
@@ -103,7 +103,9 @@ test("10: only enrolled students receive allowed catalog metadata, never answers
 test("11: student question RLS drops legacy active-test-only public access",()=>{
   assert.match(sql,/DROP POLICY IF EXISTS "Users can view questions for their attempts" ON public.questions/);
   assert.match(sql,/CREATE POLICY "Students can view enrolled published questions"/);
-  assert.match(sql,/e.test_id = questions.test_id AND e.user_id = \(SELECT auth.uid\(\)\)/);
+  assert.match(sql,/public.education_student_can_read_questions\(questions.test_id\)/);
+  assert.match(sql,/FUNCTION public.education_student_can_read_questions\(p_test_id uuid\)/);
+  assert.match(sql,/e.test_id = p_test_id AND e.user_id = \(SELECT auth.uid\(\)\)/);
   assert.match(sql,/t.is_active IS TRUE AND t.is_published IS TRUE/);
 });
 
