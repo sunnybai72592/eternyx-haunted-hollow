@@ -73,6 +73,8 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-owned-verified-results.sql
       - name: Assert ten student result authorization and official-ledger read gates
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-verified-results.sql
+      - name: Rehearse the complete instructor-to-student exam and grading journey
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-full-journey.sql
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true

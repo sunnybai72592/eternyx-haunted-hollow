@@ -129,3 +129,28 @@ python gpu-worker/estimate_training_time.py --pilot ./pilot-01/pilot.json --step
 ```
 
 Each scenario uses the retained samples and the same overhead. The time-budget section rounds down the updates that fit at the measured mean and slowest rates. Leave at least two samples after warm-up. New pilot receipts identify the CPU architecture, Python version, configured OpenMP thread setting and transformer file hashes. Older receipts can still produce estimates with unavailable benchmark context shown as null. These projections assume comparable hardware, data and settings.
+
+
+## CPU-only benchmark planning after the miniature pilot
+
+The local pipeline can measure **real CPU optimizer updates** using an offline, self-hosted snapshot. It does not call an AI API or start a paid GPU. The tiny synthetic CI model is a correctness fixture, **not** a performance estimate for a production-size Wan model. Repeat the pilot on the actual intended local CPU and data before planning longer experiments.
+
+For a complete run with an optional 15-minute budget and extra step targets:
+
+```sh
+python gpu-worker/estimate_training_time.py \
+  --pilot ./pilot-01/pilot.json --steps 100 \
+  --also-steps 250 500 --warmup-steps 1 \
+  --auto-overhead --overhead-minutes 2 --budget-minutes 15 \
+  --output ./cpu-plan-v1.json
+```
+
+The five new safeguards and planning outputs are:
+
+1. **Verified pilot input:** A version-1 receipt, valid positive optimizer timings, matching training-step count when present, and CPU provenance when present. Older receipts without benchmark context remain readable. The plan includes the SHA-256 of the receipt bytes for later comparison.
+2. **Measured end-to-end overhead:** With `--auto-overhead`, the calculator adds the difference between the pilot wall time and all measured optimizer updates, **plus excluded warm-up updates once**, to any extra `--overhead-minutes` supplied. This covers local encoding, setup, checkpointing and evaluation seen in the pilot; real overhead may change with data and model size. Without the flag, prior default projections remain optimizer-step-only.
+3. **Timing variability:** Reports nearest-rank observed p90, a p90 duration projection and coefficient of variation. With only two or three samples, p90 will often equal the slowest sample. These are descriptive observations, **not** confidence intervals, predictive guarantees or a measure of model quality.
+4. **Time-budget decisions:** Budget capacity includes p90 updates alongside mean and worst observed update times. Each compared target shows booleans for fitting at those rates, using full-precision durations rather than rounded displayed hours. The budget includes fixed overhead.
+5. **Local audit plan:** `--output` writes exactly the JSON printed to stdout to a **new** file. An existing path will never be overwritten. Keep this plan with your private `pilot.json` and source manifest; do not commit private footage or proprietary model assets.
+
+This is a CPU benchmark and planning tool, not a job scheduler or a model-training progress promise. If the full-size snapshot is too large for available RAM, the actual run is not feasible regardless of its estimated time.
