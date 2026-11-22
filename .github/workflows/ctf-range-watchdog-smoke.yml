@@ -24,7 +24,8 @@ jobs:
           node-version: 22
       - name: Create random isolated test project and ephemeral gateway key
         run: |
-          echo "ETERNYX_PROJECT=cr-$(node -e \"process.stdout.write(require('node:crypto').randomUUID().replaceAll('-',''))\")" >> "$GITHUB_ENV"
+          project_suffix="$(node -p "require('node:crypto').randomUUID().replaceAll('-','')")"
+          echo "ETERNYX_PROJECT=cr-$project_suffix" >> "$GITHUB_ENV"
           echo "ETERNYX_GATEWAY_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Start one managed lab and one unrelated Docker container
         run: |
