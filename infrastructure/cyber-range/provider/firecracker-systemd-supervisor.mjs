@@ -95,6 +95,7 @@ export function verifySystemdUnitProperties(sessionId,output,{allowStopped=false
      p.TasksMax!==String(MAX_TASKS) ||
      !quota100(p.CPUQuotaPerSecUSec) ||
      p.Type!=="exec" ||
+     typeof p.ExecStart!=="string" ||
      !p.ExecStart.includes("path=/usr/local/bin/jailer") ||
      !p.ExecStart.includes("--netns /run/netns/"+supervisedNetns(sessionId)) ||
      !p.ExecStart.includes("--chroot-base-dir /srv/eternyx-firecracker") ||
@@ -204,11 +205,13 @@ export class SystemdMicrovmSupervisor {
   #platform;
   #uid;
   #fs;
+  #launchGate;
   constructor({
     execute=runSupervisorCommand,
     preflight=verifySupervisorHost,
     env=process.env,platform=process.platform,
     uid=(process.getuid?.()??-1),files={readFile,lstat},
+    launchGate=assertLocalLaunchAllowed,
   }={}){
     this.#execute=execute;
     this.#preflight=preflight;
@@ -216,6 +219,7 @@ export class SystemdMicrovmSupervisor {
     this.#platform=platform;
     this.#uid=uid;
     this.#fs=files;
+    this.#launchGate=launchGate;
   }
   #command(name,args){return this.#execute(name,args);}
   #read(sessionId){
@@ -239,15 +243,19 @@ export class SystemdMicrovmSupervisor {
     }
     // No existing public/production provider runtime is activated here.
     const plan=supervisedUnitSpec(sessionId,manifest,uid,gid);
-    await assertLocalLaunchAllowed();
-    await this.#preflight({sessionId,manifest,
+    await this.#launchGate();
+    const hostCheck=await this.#preflight({sessionId,manifest,
       jailerSha256,firecrackerSha256,exec:(...args)=>this.#command(...args)});
+    if(hostCheck?.verified!==true||hostCheck.loopbackOnly!==true||
+       hostCheck.pinnedHostExecutables!==true||hostCheck.pinnedGuestImages!==true||
+       hostCheck.readyForPublicHostedLabs!==false)
+      throw Error("Host preflight was not independently verified");
     await this.#loopback(sessionId);
     const prior=this.#read(sessionId);
     const props=parseSystemdUnitShow(prior);
     if(props.LoadState!=="not-found")
       throw Error("A previous or foreign VM unit requires operator review");
-    await assertLocalLaunchAllowed();
+    await this.#launchGate();
     this.#command(plan.executable,plan.argv);
     try{
       await this.attest(sessionId);
