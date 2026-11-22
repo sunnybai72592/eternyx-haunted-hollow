@@ -150,7 +150,7 @@ export default function AdminBugReports() {
   if (!user) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
-        <Card className="border-white/10 bg-[#0a1221] p-8 text-center">
+        <Card className="border-white/10 bg-card p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-slate-400" />
           <h1 className="text-2xl font-semibold text-white">Sign in required</h1>
           <p className="mt-2 text-sm text-slate-400">Sign in with an authorized administrator account to access this workspace.</p>
@@ -162,7 +162,7 @@ export default function AdminBugReports() {
   if (!isAdmin) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
-        <Card className="border-white/10 bg-[#0a1221] p-8 text-center">
+        <Card className="border-white/10 bg-card p-8 text-center">
           <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" />
           <h1 className="text-2xl font-semibold text-white">Administrator access only</h1>
           <p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p>
@@ -191,29 +191,29 @@ export default function AdminBugReports() {
       </header>
 
       <section aria-label="Bug report overview" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-white/[0.09] bg-[#0a1322]/90 p-5">
+        <Card className="border-white/[0.09] bg-card/90 p-5">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">All reports</span><Bug className="h-4 w-4 text-cyan-200" /></div>
           <p className="mt-4 text-3xl font-semibold tabular-nums text-white">{reports.length}</p>
           <p className="mt-1 text-xs text-slate-500">Total submissions in the inbox</p>
         </Card>
-        <Card className="border-white/[0.09] bg-[#0a1322]/90 p-5">
+        <Card className="border-white/[0.09] bg-card/90 p-5">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">Needs attention</span><AlertCircle className="h-4 w-4 text-amber-200" /></div>
           <p className="mt-4 text-3xl font-semibold tabular-nums text-amber-100">{counts.open}</p>
           <p className="mt-1 text-xs text-slate-500">New reports awaiting triage</p>
         </Card>
-        <Card className="border-white/[0.09] bg-[#0a1322]/90 p-5">
+        <Card className="border-white/[0.09] bg-card/90 p-5">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">Active workload</span><Clock3 className="h-4 w-4 text-violet-200" /></div>
           <p className="mt-4 text-3xl font-semibold tabular-nums text-violet-100">{counts.active}</p>
           <p className="mt-1 text-xs text-slate-500">Triaged or currently in progress</p>
         </Card>
-        <Card className="border-white/[0.09] bg-[#0a1322]/90 p-5">
+        <Card className="border-white/[0.09] bg-card/90 p-5">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">Completed</span><CheckCircle2 className="h-4 w-4 text-emerald-200" /></div>
           <p className="mt-4 text-3xl font-semibold tabular-nums text-emerald-100">{counts.resolved}</p>
           <p className="mt-1 text-xs text-slate-500">Resolved or closed reports</p>
         </Card>
       </section>
 
-      <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0a1221]/85">
+      <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-card/85">
         <div className="flex flex-col gap-4 border-b border-white/[0.08] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -235,7 +235,7 @@ export default function AdminBugReports() {
             <label className="relative block">
               <span className="sr-only">Filter reports by status</span>
               <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | BugStatus)} className="h-11 w-full appearance-none rounded-xl border border-white/10 bg-[#0b1424] pl-10 pr-4 text-sm text-slate-200 outline-none transition focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-200/10">
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | BugStatus)} className="h-11 w-full appearance-none rounded-xl border border-white/10 bg-card pl-10 pr-4 text-sm text-slate-200 outline-none transition focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-200/10">
                 <option value="all">All statuses</option>
                 {statuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
               </select>
@@ -286,7 +286,7 @@ export default function AdminBugReports() {
 
                   <div className="w-full shrink-0 rounded-xl border border-white/[0.08] bg-black/15 p-3 xl:w-56">
                     <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500" htmlFor={`status-${report.id}`}>Update workflow</label>
-                    <select id={`status-${report.id}`} value={report.status} disabled={updatingId === report.id} onChange={(event) => void updateStatus(report.id, event.target.value as BugStatus)} className="h-10 w-full rounded-lg border border-white/10 bg-[#0b1424] px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">
+                    <select id={`status-${report.id}`} value={report.status} disabled={updatingId === report.id} onChange={(event) => void updateStatus(report.id, event.target.value as BugStatus)} className="h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">
                       {statuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                     </select>
                     {updatingId === report.id && <p className="mt-2 text-[11px] text-cyan-200">Saving update…</p>}
