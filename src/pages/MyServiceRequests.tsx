@@ -18,6 +18,9 @@ type RequestRow = {
   expected_outcome: string | null; timeframe: string | null; constraints: string | null;
   last_admin_activity_at: string | null; last_checked_at: string | null;
   has_updates_since_check: boolean;
+  has_updates_since_check_extended: boolean;
+  last_clarification_activity_at: string | null;
+  clarification_changes_since_check: number;
   open_clarification_count: number; awaiting_customer_count: number; awaiting_admin_review_count: number;
 };
 
@@ -52,11 +55,11 @@ export default function MyServiceRequests() {
     const generation = ++requestGeneration.current;
     setLoading(true);
     setLoadError(false);
-    let query = supabase.from('service_customer_clarification_queue')
-      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count', { count: 'exact' })
+    let query = supabase.from('service_customer_followup_queue')
+      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check', { count: 'exact' })
       .eq('user_id', userId);
     if (filter !== 'all') query = query.eq('status', filter);
-    if (updatesOnly) query = query.eq('has_updates_since_check', true);
+    if (updatesOnly) query = query.eq('has_updates_since_check_extended', true);
     if (answersOnly) query = query.gt('awaiting_customer_count', 0);
     if (activeSearch) {
       const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
@@ -123,8 +126,8 @@ export default function MyServiceRequests() {
     let active = true;
     setLinkedLoading(true);
     void (async () => {
-      const { data, error } = await supabase.from('service_customer_clarification_queue')
-        .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count')
+      const { data, error } = await supabase.from('service_customer_followup_queue')
+        .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check')
         .eq('user_id', userId)
         .eq('id', selected)
         .maybeSingle();
@@ -151,7 +154,7 @@ export default function MyServiceRequests() {
       if (error || !data) throw error ?? new Error('Check-in not confirmed');
       if (useAuthStore.getState().user?.id !== userId) return;
       setNotice('Your check-in was recorded. This records a manual action, not a read receipt.');
-      setLinkedRequest((current) => current?.id === id ? { ...current, last_checked_at: data, has_updates_since_check: false } : current);
+      setLinkedRequest((current) => current?.id === id ? { ...current, last_checked_at: data, has_updates_since_check: false, has_updates_since_check_extended: false, clarification_changes_since_check: 0 } : current);
       void load();
     } catch (reason) {
       console.error('Customer service check-in failed', reason);
@@ -228,7 +231,7 @@ export default function MyServiceRequests() {
           <Input id="owner-service-search" value={search} onChange={(e) => setSearch(e.target.value)} maxLength={80}
             placeholder="Search your own requests" />
         </div>
-        <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={updatesOnly} onChange={(event) => { setPage(0); setUpdatesOnly(event.target.checked); }} />Updates since my check</label>
+        <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={updatesOnly} onChange={(event) => { setPage(0); setUpdatesOnly(event.target.checked); }} />Activity since my check</label>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={answersOnly} onChange={(event) => { setPage(0); setAnswersOnly(event.target.checked); }} />Questions awaiting my answer</label>
         <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
         <span className="text-xs text-muted-foreground">{visibleRows.length} of {total} matching requests</span>
@@ -244,7 +247,8 @@ export default function MyServiceRequests() {
           <details className="mt-4"><summary className="cursor-pointer text-sm font-semibold text-primary">View project brief</summary>
             <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{visibleLinkedRequest.description}</p>
           </details>
-          {visibleLinkedRequest.has_updates_since_check && <p className="mt-3 text-xs font-semibold text-primary">New administrator activity since your last check</p>}
+          {visibleLinkedRequest.has_updates_since_check_extended && <p className="mt-3 text-xs font-semibold text-primary">New ETERNYX activity since your last check</p>}
+          {visibleLinkedRequest.clarification_changes_since_check > 0 && <p className="mt-2 text-xs text-muted-foreground">{visibleLinkedRequest.clarification_changes_since_check} clarification item(s) created or closed since your last check</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" disabled={checkingId !== null} onClick={() => void markChecked(visibleLinkedRequest.id)}>
               <CheckCircle2 className="mr-2 h-4 w-4" />{checkingId === visibleLinkedRequest.id ? 'Recording…' : 'Mark checked'}
@@ -263,7 +267,8 @@ export default function MyServiceRequests() {
           const status = serviceRequestStatuses[item.status] ?? serviceRequestStatuses.submitted;
           return <Card key={item.id} className="border-border/70 p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-primary">{getServiceOffering(item.service_key)?.title ?? 'Service enquiry'}</p><h2 className="mt-1 break-words text-xl font-semibold">{item.title}</h2><p className="mt-2 text-xs text-muted-foreground">Submitted {new Date(item.created_at).toLocaleString()}</p></div><span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{status.label}</span></div>
-            {item.has_updates_since_check && <p className="mt-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 text-sm font-medium text-primary">New administrator activity since your last check</p>}
+            {item.has_updates_since_check_extended && <p className="mt-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 text-sm font-medium text-primary">New ETERNYX activity since your last check</p>}
+            {item.clarification_changes_since_check > 0 && <p className="mt-2 text-xs text-muted-foreground">{item.clarification_changes_since_check} clarification item(s) created or closed since your last check</p>}
             {item.awaiting_customer_count > 0 && <p className="mt-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 text-sm font-medium text-primary">{item.awaiting_customer_count} clarification question(s) awaiting your answer</p>}
             {item.awaiting_admin_review_count > 0 && <p className="mt-2 text-xs text-muted-foreground">{item.awaiting_admin_review_count} clarification answer(s) awaiting administrator review</p>}
             {createdId === item.id && <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] p-3 text-sm text-emerald-300">Your request was saved successfully.</p>}
