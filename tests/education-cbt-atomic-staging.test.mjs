@@ -157,3 +157,10 @@ test("19: new TypeScript client and exam page parse", () => {
     assert.deepEqual(ast.parseDiagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, "\n")), []);
   }
 });
+
+test("20: deadline timestamps are captured only after locking each attempt", () => {
+  assert.equal((sql.match(/v_now := clock_timestamp\(\);/g) ?? []).length, 3);
+  assert.equal((sql.match(/v_now timestamptz;/g) ?? []).length, 3);
+  assert.doesNotMatch(sql, /v_now timestamptz := clock_timestamp\(\)/);
+  assert.match(sql, /FOR UPDATE OF a;[\s\S]{0,350}v_now := clock_timestamp\(\)/);
+});
