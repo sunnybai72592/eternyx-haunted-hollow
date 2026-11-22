@@ -42,6 +42,7 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
 
   const load = useCallback(async () => {
     const generation = ++queryGeneration.current;
+    setOlderLoading(false);
     setLoading(true);
     setError('');
     const { data, error: queryError, count } = await supabase
