@@ -20,6 +20,12 @@ type EducationTest = {
   created_at: string;
   is_active: true;
 };
+type OwnedExamAttempt = {
+  id: string;
+  test_id: string;
+  user_id: string;
+  status: string;
+};
 
 export default function Education() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -45,6 +51,26 @@ export default function Education() {
       return (data ?? []).map(normalizeEducationTest).filter((row): row is EducationTest => row !== null);
     },
   });
+
+  // An already-submitted exam must route to its results, never silently
+  // trigger start_cbt_attempt again. Fail closed when the attempt lookup is
+  // unavailable rather than showing a misleading "start" action.
+  const attemptsQuery = useQuery<OwnedExamAttempt[]>({
+    queryKey: ["education-owned-attempt-list", user?.id],
+    enabled: atomicCbtEnabled && !authLoading && isAuthenticated &&
+      !!user?.id && tests.length > 0,
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_attempts")
+        .select("id,test_id,user_id,status").eq("user_id", user!.id);
+      if (error) throw error;
+      return (data ?? []).filter(row => row.user_id === user!.id) as OwnedExamAttempt[];
+    },
+  });
+  const ownedAttemptByTest = useMemo(() =>
+    new Map((attemptsQuery.data ?? []).map(attempt => [attempt.test_id, attempt])),
+    [attemptsQuery.data]);
+  const attemptCheckReady = !atomicCbtEnabled || tests.length === 0 || attemptsQuery.isSuccess;
 
   const visible = useMemo(() => filterEducationTests(tests, search, sort), [tests, search, sort]);
   const busy = authLoading || (isAuthenticated && isPending);
@@ -116,11 +142,26 @@ export default function Education() {
                 <h2 id="available-assessments" className="mt-1 text-2xl font-bold">Available tests</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{publicationRpcEnabled ? "Only assessments you are enrolled in are shown." : "Live database listings, not sample exams."}</p>
               </div>
-              <Button variant="outline" disabled={isFetching} onClick={() => void refetch()} className="min-h-11">
+              <Button variant="outline" disabled={isFetching || attemptsQuery.isFetching}
+                onClick={() => {
+                  void refetch();
+                  if (atomicCbtEnabled && tests.length > 0) void attemptsQuery.refetch();
+                }} className="min-h-11">
                 <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />{isFetching ? "Refreshing…" : "Refresh tests"}
               </Button>
             </div>
 
+            {atomicCbtEnabled && tests.length > 0 && attemptsQuery.isPending && (
+              <p role="status" className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+                Checking your existing exam attempts before enabling any new starts…
+              </p>
+            )}
+            {atomicCbtEnabled && tests.length > 0 && attemptsQuery.error && (
+              <Alert variant="destructive"><AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                <span>Existing attempts could not be verified. Starting another exam is temporarily disabled to protect your previous submission.</span>
+                <Button variant="outline" onClick={() => void attemptsQuery.refetch()}>Retry attempt check</Button>
+              </AlertDescription></Alert>
+            )}
             {tests.length > 0 && (
               <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-[1fr_auto]">
                 <div>
@@ -151,11 +192,15 @@ export default function Education() {
 
             {visible.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {visible.map(test => (
+                {visible.map(test => {
+                  const previous = ownedAttemptByTest.get(test.id);
+                  const submitted = !!previous && previous.status !== "in_progress";
+                  const label = previous ? submitted ? "Submitted" : "In progress" : "Available";
+                  return (
                   <Card key={test.id} className="flex flex-col border-border bg-card transition-colors hover:border-primary/35">
                     <CardHeader className="flex-1">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <Badge variant="outline" className="border-primary/30 text-primary">Available</Badge>
+                        <Badge variant="outline" className="border-primary/30 text-primary">{attemptCheckReady ? label : "Checking attempt"}</Badge>
                         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Clock3 aria-hidden="true" className="h-4 w-4" />{test.duration_minutes} min
                         </span>
@@ -166,14 +211,22 @@ export default function Education() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button asChild className="min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                        <Link to={`/test/${test.id}`} aria-label={`Open assessment: ${test.title}`}>
-                          Open assessment <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
-                        </Link>
-                      </Button>
+                      {attemptCheckReady ? (
+                        <Button asChild className="min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                          <Link to={submitted ? `/test-results/${previous!.id}` : `/test/${test.id}`}
+                            aria-label={submitted ? `View results: ${test.title}` :
+                              previous ? `Continue assessment: ${test.title}` : `Open assessment: ${test.title}`}>
+                            {submitted ? "View submitted results" : previous ? "Continue assessment" : "Open assessment"}
+                            <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button disabled className="min-h-11 w-full">Verifying attempt status…</Button>
+                      )}
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card px-6 py-12 text-center">
