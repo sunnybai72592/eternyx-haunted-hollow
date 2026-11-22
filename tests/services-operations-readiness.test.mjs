@@ -20,14 +20,14 @@ test('admin services queue queries page-scoped results with exact server counts'
 
 test('customer requests are owner-filtered and paginated by Supabase', async () => {
   const src = await read('src/pages/MyServiceRequests.tsx');
-  assert.match(src, /\.eq\('user_id', user\.id\)/);
+  assert.match(src, /\.eq\('user_id', userId\)/);
   assert.match(src, /count: 'exact'/);
   assert.match(src, /\.range\(page \* 20, \(page \+ 1\) \* 20 - 1\)/);
   assert.match(src, /query\.ilike\('title'/);
   assert.match(src, /new URLSearchParams\(location\.search\)\.get\('request'\)/);
-  assert.match(src, /\.eq\('user_id', user\.id\)/);
+  assert.match(src, /\.eq\('user_id', userId\)/);
   assert.match(src, /\.eq\('id', selected\)/);
-  assert.match(src, /linkedRequest && !rows\.some/);
+  assert.match(src, /visibleLinkedRequest && !visibleRows\.some/);
   assert.match(src, /Opened by private link/);
   assert.match(src, /encodeURIComponent\(id\)/);
   assert.match(src, /navigator\.clipboard\.writeText/);
@@ -41,7 +41,9 @@ test('service conversations load historical pages instead of discarding older da
   const src = await read('src/components/services/ServiceRequestTimeline.tsx');
   assert.match(src, /PAGE_SIZE = 50/);
   assert.match(src, /\.range\(0, PAGE_SIZE - 1\)/);
-  assert.match(src, /\.range\(activity\.length, activity\.length \+ PAGE_SIZE - 1\)/);
+  assert.match(src, /\.or\(/);
+  assert.match(src, /created_at\.lt/);
+  assert.match(src, /id\.lt/);
   assert.match(src, /const unique = new Map/);
   assert.match(src, /Load older events/);
   assert.match(src, /event_type: 'message'/);

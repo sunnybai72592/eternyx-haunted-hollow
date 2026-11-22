@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, Download, MessageCircle, RefreshCw, Search, ShieldCheck, Link2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,9 +19,12 @@ type RequestRow = {
 
 export default function MyServiceRequests() {
   const user = useAuthStore((state) => state.user);
+  const userId = user?.id ?? null;
+  const requestGeneration = useRef(0);
   const location = useLocation();
   const createdId = (location.state as { createdId?: string } | null)?.createdId;
   const [rows, setRows] = useState<RequestRow[]>([]);
+  const [rowsOwner, setRowsOwner] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
@@ -31,17 +34,19 @@ export default function MyServiceRequests() {
   const [activeSearch, setActiveSearch] = useState('');
   const [notice, setNotice] = useState('');
   const [linkedRequest, setLinkedRequest] = useState<RequestRow | null>(null);
+  const [linkedOwner, setLinkedOwner] = useState<string | null>(null);
   const [linkedLoading, setLinkedLoading] = useState(false);
   const [linkedError, setLinkedError] = useState('');
   const [openConversation, setOpenConversation] = useState<string | null>(new URLSearchParams(location.search).get('request'));
   const [openScope, setOpenScope] = useState<string | null>(null);
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!userId) return;
+    const generation = ++requestGeneration.current;
     setLoading(true);
     setLoadError(false);
     let query = supabase.from('service_requests')
       .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints', { count: 'exact' })
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
@@ -50,20 +55,53 @@ export default function MyServiceRequests() {
     const { data, error, count } = await query.order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .range(page * 20, (page + 1) * 20 - 1);
+    if (generation !== requestGeneration.current) return;
     if (error) {
       console.error('Could not load owned service requests:', error);
       setLoadError(true);
-    } else { setRows((data ?? []) as RequestRow[]); setTotal(count ?? 0); }
+      setRows([]);
+      setTotal(0);
+    } else {
+      const size = count ?? 0;
+      if (page > 0 && page * 20 >= size) { setPage(Math.max(0, Math.ceil(size / 20) - 1)); return; }
+      setRows((data ?? []) as RequestRow[]);
+      setRowsOwner(userId);
+      setTotal(size);
+    }
     setLoading(false);
-  }, [user?.id, page, filter, activeSearch]);
+  }, [userId, page, filter, activeSearch]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    requestGeneration.current += 1;
+    setRows([]);
+    setRowsOwner(null);
+    setTotal(0);
+    setPage(0);
+    setFilter('all');
+    setSearch('');
+    setActiveSearch('');
+    setOpenConversation(null);
+    setOpenScope(null);
+    setLinkedRequest(null);
+    setLinkedOwner(null);
+    setLinkedLoading(false);
+    setLinkedError('');
+    setNotice('');
+    setLoadError(false);
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+    return () => { requestGeneration.current += 1; };
+  }, [load]);
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
     setLinkedRequest(null);
+    setLinkedOwner(null);
     setLinkedError('');
-    if (!user || !selected) return;
-    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(selected)) {
+    setLinkedLoading(false);
+    if (!userId || !selected) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selected)) {
       setLinkedError('Invalid request reference.');
       return;
     }
@@ -73,7 +111,7 @@ export default function MyServiceRequests() {
     void (async () => {
       const { data, error } = await supabase.from('service_requests')
         .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('id', selected)
         .maybeSingle();
       if (!active) return;
@@ -82,10 +120,11 @@ export default function MyServiceRequests() {
         setLinkedError('The request was not found or your account cannot access it.');
       } else {
         setLinkedRequest(data as RequestRow);
+        setLinkedOwner(userId);
       }
     })();
     return () => { active = false; };
-  }, [user?.id, location.search]);
+  }, [userId, location.search]);
 
   const copyLink = async (id: string) => {
     try {
@@ -127,6 +166,9 @@ export default function MyServiceRequests() {
     setNotice('Export prepared on this device. Keep this copy private.');
   };
 
+  const visibleRows = rowsOwner === userId && userId ? rows : [];
+  const visibleLinkedRequest = linkedOwner === userId && userId ? linkedRequest : null;
+
   return (
     <main className="mx-auto min-h-[70vh] max-w-5xl px-4 pb-24 pt-8 sm:px-6">
       <Button variant="ghost" asChild className="mb-5"><Link to="/services-hub"><ArrowLeft className="mr-2 h-4 w-4" />Services</Link></Button>
@@ -152,27 +194,27 @@ export default function MyServiceRequests() {
             placeholder="Search your own requests" />
         </div>
         <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
-        <span className="text-xs text-muted-foreground">{rows.length} of {total} matching requests</span>
+        <span className="text-xs text-muted-foreground">{visibleRows.length} of {total} matching requests</span>
       </form>
       {notice && <p role="status" className="mb-4 rounded-lg border border-primary/20 p-3 text-sm text-muted-foreground">{notice}</p>}
       {linkedLoading && <p className="mb-4 text-sm text-muted-foreground">Opening your private request…</p>}
       {linkedError && <p role="alert" className="mb-4 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{linkedError}</p>}
-      {linkedRequest && !rows.some((item) => item.id === linkedRequest.id) && user && (
+      {visibleLinkedRequest && !visibleRows.some((item) => item.id === visibleLinkedRequest.id) && user && (
         <Card className="mb-6 border-primary/20 p-5 sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Opened by private link</p>
-          <h2 className="mt-2 break-words text-xl font-bold">{linkedRequest.title}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{getServiceOffering(linkedRequest.service_key)?.title ?? linkedRequest.service_key} · {serviceRequestStatuses[linkedRequest.status]?.label ?? linkedRequest.status}</p>
+          <h2 className="mt-2 break-words text-xl font-bold">{visibleLinkedRequest.title}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{getServiceOffering(visibleLinkedRequest.service_key)?.title ?? visibleLinkedRequest.service_key} · {serviceRequestStatuses[visibleLinkedRequest.status]?.label ?? visibleLinkedRequest.status}</p>
           <details className="mt-4"><summary className="cursor-pointer text-sm font-semibold text-primary">View project brief</summary>
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{linkedRequest.description}</p>
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{visibleLinkedRequest.description}</p>
           </details>
-          <ServiceRequestTimeline requestId={linkedRequest.id} ownerId={user.id} refreshToken={Date.parse(linkedRequest.updated_at)} />
-          <ServiceScopeReview requestId={linkedRequest.id} ownerId={user.id} />
+          <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />
+          <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />
         </Card>
       )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The service desk may require its database migration to be deployed. No results are being simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
-        : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
-        : rows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">No requests yet</h2><p className="mt-2 text-muted-foreground">Your confirmed project briefs will appear here.</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
-        : <div className="space-y-4">{rows.map((item) => {
+        : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
+        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch ? 'Try a different status or search term.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
+        : <div className="space-y-4">{visibleRows.map((item) => {
           const status = serviceRequestStatuses[item.status] ?? serviceRequestStatuses.submitted;
           return <Card key={item.id} className="border-border/70 p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-primary">{getServiceOffering(item.service_key)?.title ?? 'Service enquiry'}</p><h2 className="mt-1 break-words text-xl font-semibold">{item.title}</h2><p className="mt-2 text-xs text-muted-foreground">Submitted {new Date(item.created_at).toLocaleString()}</p></div><span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{status.label}</span></div>

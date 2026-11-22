@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Clock3, MessageCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
@@ -36,10 +36,13 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [totalCount, setTotalCount] = useState(0);
+  const queryGeneration = useRef(0);
   const [olderLoading, setOlderLoading] = useState(false);
   const PAGE_SIZE = 50;
 
   const load = useCallback(async () => {
+    const generation = ++queryGeneration.current;
+    setOlderLoading(false);
     setLoading(true);
     setError('');
     const { data, error: queryError, count } = await supabase
@@ -48,9 +51,11 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
       .eq('request_id', requestId)
       .order('created_at', { ascending: false }).order('id', { ascending: false })
       .range(0, PAGE_SIZE - 1);
+    if (generation !== queryGeneration.current) return;
     if (queryError) {
       console.error('Service request activity query failed:', queryError);
       setActivity([]);
+      setTotalCount(0);
       setError('Could not load the conversation. Verify that the service desk migration is active.');
     } else {
       setActivity(((data ?? []) as ActivityRow[]).reverse());
@@ -59,17 +64,26 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
     setLoading(false);
   }, [requestId]);
 
-  useEffect(() => { void load(); }, [load, refreshToken]);
+  useEffect(() => {
+    void load();
+    return () => { queryGeneration.current += 1; };
+  }, [load, refreshToken]);
 
   const loadOlder = async () => {
-    if (olderLoading || loading || activity.length >= totalCount) return;
+    const oldest = activity[0];
+    if (!oldest || olderLoading || loading || activity.length >= totalCount) return;
+    const generation = queryGeneration.current;
     setOlderLoading(true);
     setError('');
-    const { data, error: fetchError, count } = await supabase.from('service_request_activity')
-      .select('id,actor_id,event_type,body,from_status,to_status,created_at', { count: 'exact' })
+    // An append-only activity stream can gain new events while this page is
+    // open. Cursor pagination does not skip older events after those inserts.
+    const { data, error: fetchError } = await supabase.from('service_request_activity')
+      .select('id,actor_id,event_type,body,from_status,to_status,created_at')
       .eq('request_id', requestId)
+      .or(`created_at.lt.${oldest.created_at},and(created_at.eq.${oldest.created_at},id.lt.${oldest.id})`)
       .order('created_at', { ascending: false }).order('id', { ascending: false })
-      .range(activity.length, activity.length + PAGE_SIZE - 1);
+      .limit(PAGE_SIZE);
+    if (generation !== queryGeneration.current) return;
     if (fetchError) {
       setError('Older request activity could not be retrieved. Please retry.');
     } else {
@@ -80,7 +94,7 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
           Date.parse(a.created_at) - Date.parse(b.created_at) || a.id.localeCompare(b.id)
         );
       });
-      setTotalCount(count ?? totalCount);
+      if (older.length === 0) setTotalCount(activity.length);
     }
     setOlderLoading(false);
   };
@@ -159,7 +173,7 @@ export default function ServiceRequestTimeline({ requestId, ownerId, refreshToke
             </Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">{activity.length} of {totalCount} saved events loaded. Showing the latest 200 events is no longer a hard limit.</p>
+        <p className="text-xs text-muted-foreground">{activity.length} of {totalCount} saved events loaded. Earlier pages use stable event cursors, not shifting offsets.</p>
       </div>
       <form onSubmit={(event) => void submit(event)} className="mt-5 space-y-3 border-t border-border pt-4">
         <label htmlFor={'service-request-message-' + requestId} className="block text-sm font-semibold">Send a follow-up</label>

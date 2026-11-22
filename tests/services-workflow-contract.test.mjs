@@ -30,7 +30,7 @@ test('request routes require auth and submission requires confirmed insertion', 
   assert.match(intake, /\.select\('id'\)\.single\(\)/);
   assert.match(intake, /if \(error \|\| !data\?\.id\)/);
   const owner = await read('src/pages/MyServiceRequests.tsx');
-  assert.match(owner, /\.eq\('user_id', user\.id\)/);
+  assert.match(owner, /\.eq\('user_id', userId\)/);
 });
 
 test('migration restricts reads inserts and admin status updates', async () => {
