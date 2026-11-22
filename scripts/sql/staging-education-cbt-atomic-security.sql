@@ -71,8 +71,8 @@ BEGIN
   WHERE a.user_id = v_user AND a.test_id = p_test_id
   FOR UPDATE OF a;
   IF FOUND THEN
-    IF v_attempt.status <> 'in_progress' OR
-       v_now >= v_attempt.start_time + v_minutes * INTERVAL '1 minute' THEN
+    IF v_attempt.status IS DISTINCT FROM 'in_progress' OR
+       (v_attempt.start_time IS NULL OR v_now >= v_attempt.start_time + v_minutes * INTERVAL '1 minute') THEN
       RAISE EXCEPTION 'Attempt already completed or expired' USING ERRCODE = '22023';
     END IF;
   ELSE
@@ -111,7 +111,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Attempt unavailable' USING ERRCODE = '42501';
   END IF;
-  IF v_attempt.status <> 'in_progress' THEN
+  IF v_attempt.status IS DISTINCT FROM 'in_progress' THEN
     RETURN pg_catalog.jsonb_build_object('status', 'already_submitted');
   END IF;
   SELECT t.duration_minutes INTO v_minutes
@@ -119,7 +119,7 @@ BEGIN
   IF v_minutes IS NULL OR v_minutes NOT BETWEEN 1 AND 1440 THEN
     RAISE EXCEPTION 'Invalid assessment duration' USING ERRCODE = '22023';
   END IF;
-  IF v_now >= v_attempt.start_time + v_minutes * INTERVAL '1 minute' THEN
+  IF (v_attempt.start_time IS NULL OR v_now >= v_attempt.start_time + v_minutes * INTERVAL '1 minute') THEN
     UPDATE public.user_attempts AS a
     SET status = 'auto_submitted', end_time = v_now
     WHERE a.id = p_attempt_id;
@@ -195,7 +195,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Attempt unavailable' USING ERRCODE = '42501';
   END IF;
-  IF v_attempt.status <> 'in_progress' THEN
+  IF v_attempt.status IS DISTINCT FROM 'in_progress' THEN
     RETURN pg_catalog.jsonb_build_object(
       'id', v_attempt.id, 'status', v_attempt.status
     );
