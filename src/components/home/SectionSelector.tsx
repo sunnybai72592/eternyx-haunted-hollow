@@ -67,18 +67,10 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             {ecosystemPillars.map((pillar, index) => {
               const Icon = pillar.icon;
               const isActive = pillar.status === "Existing foundation";
-              const accentClasses: Record<string, string> = {
-                cyan: "text-primary bg-primary/[0.08] border-primary/20",
-                violet: "text-primary bg-primary/[0.08] border-primary/20",
-                fuchsia: "text-primary bg-primary/[0.08] border-primary/20",
-                blue: "text-primary bg-primary/[0.08] border-primary/20",
-                sky: "text-primary bg-primary/[0.08] border-primary/20",
-                emerald: "text-primary bg-primary/[0.08] border-primary/20",
-              };
               return (
                 <Link key={pillar.id} to={pillar.href} className="group relative flex min-h-[238px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-br from-white/[0.055] to-white/[0.015] p-6 transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:from-primary/[0.07] hover:to-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                   <div className="mb-5 flex items-start justify-between gap-3">
-                    <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl border", accentClasses[pillar.accent] || accentClasses.cyan)}><Icon className="h-6 w-6" /></div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/[0.08] text-primary"><Icon className="h-6 w-6" /></div>
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider", isActive ? "border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200" : "border-white/10 bg-white/[0.035] text-slate-400")}>
                       {isActive ? <CheckCircle2 className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />}
                       {isActive ? "Foundation live" : "In development"}
