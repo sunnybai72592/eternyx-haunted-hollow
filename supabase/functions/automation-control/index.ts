@@ -30,6 +30,10 @@ const rpcStatus: Record<string, number> = {
   daily_export_limit:429,daily_quarantine_limit:429,
   incident_daily_limit:429,incident_open_limit:429,incident_event_limit:429,
   incident_evidence_limit:429,daily_evidence_limit:429,
+  missing_captured_evidence:409,requires_investigating:409,
+  plan_daily_limit:429,stale_plan:409,plan_not_draft:409,
+  step_not_planned:409,already_acknowledged:409,unreviewed_steps:409,
+  invalid_plan_transition:409,
   already_captured:409,unrelated_evidence:403,
   recovery_review_limit:429,already_reported:409,
   evidence_not_found:404,evidence_not_ready:409,invalid_transition:409,
@@ -103,6 +107,59 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="investigationPlanCreate"){
+      const {data,error}=await supabase.rpc("automation_create_investigation_plan",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+        p_incident_revision:request.incidentRevision,
+        p_steps:request.steps,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"investigation_plan_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false,automaticRestore:false});
+    }
+    if(request.action==="investigationPlanRead"){
+      const {data,error}=await supabase.rpc("automation_read_investigation_plan",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"investigation_plan_unavailable");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="investigationStepAck"){
+      const {data,error}=await supabase.rpc("automation_acknowledge_investigation_step",{
+        p_user_id:user.id,p_plan_id:request.planId,
+        p_expected_revision:request.expectedRevision,
+        p_step_kind:request.stepKind,p_note:request.note,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"review_acknowledgment_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false,userAttestationOnly:true});
+    }
+    if(request.action==="investigationPlanTransition"){
+      const {data,error}=await supabase.rpc("automation_transition_investigation_plan",{
+        p_user_id:user.id,p_plan_id:request.planId,
+        p_expected_revision:request.expectedRevision,
+        p_next_stage:request.nextStage,p_note:request.note,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"plan_transition_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false,userAttestationOnly:true});
+    }
+    if(request.action==="incidentDailyTrend"){
+      const {data,error}=await supabase.rpc("automation_incident_daily_trend",{
+        p_user_id:user.id,p_days:request.days,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"case_daily_trend_unavailable");
+      return reply({...data,reportSource:data.source,
+        source:"authenticated_server",executed:false});
+    }
     if(request.action==="incidentCaptureEvidence"){
       const {data,error}=await supabase.rpc("automation_capture_incident_evidence",{
         p_user_id:user.id,p_incident_id:request.incidentId,

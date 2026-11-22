@@ -8,6 +8,7 @@ import AutomationOperationsPanel from "@/components/AutomationOperationsPanel";
 import AutomationAuditRecoveryPanel from "@/components/AutomationAuditRecoveryPanel";
 import AutomationIncidentCenter from "@/components/AutomationIncidentCenter";
 import AutomationIncidentEvidencePanel from "@/components/AutomationIncidentEvidencePanel";
+import AutomationInvestigationPlanPanel from "@/components/AutomationInvestigationPlanPanel";
 import AutomationTemplateGallery from "@/components/AutomationTemplateGallery";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2, FlaskConical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -295,6 +296,7 @@ export default function AutomationCloudPanel({
             id:w.id,name:w.name,revision:w.revision,active:w.active,
           }))}/>}
         {loaded&&<AutomationIncidentEvidencePanel key={userId} disabled={busy}/>}
+        {loaded&&<AutomationInvestigationPlanPanel key={userId} disabled={busy}/>}
         <AutomationWebhookPanel selectedWorkflowId={selectedId} />
         <AutomationGitHubReadPanel />
         <AutomationGitHubIssuesPanel />
