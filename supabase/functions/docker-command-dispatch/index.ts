@@ -2,8 +2,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { getSupabaseSecretKey } from "../_shared/supabase.ts";
-import { parseAgentAction,agentActionMessage,labPermitMessage,parseLabPermit,bytesFromBase64url }
+import { parseAgentAction,labPermitMessage,parseLabPermit }
   from "../_shared/docker-command-contract.mjs";
+import { verifySignedDockerAgentAction } from "../_shared/docker-action-verifier.mjs";
 
 const headers={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",
   "X-Content-Type-Options":"nosniff"};
@@ -58,11 +59,8 @@ serve(async(req:Request)=>{
     if(error)throw error;
     if(!agent||agent.status!=="key_verified"||agent.revoked_at!==null)
       return reply({error:"Agent identity unavailable"},403);
-    const key=await crypto.subtle.importKey("raw",bytesFromBase64url(agent.public_key,32),
-      {name:"Ed25519"},false,["verify"]);
-    const valid=await crypto.subtle.verify({name:"Ed25519"},key,bytesFromBase64url(input.signature,64),
-      new TextEncoder().encode(agentActionMessage(input)));
-    if(!valid)return reply({error:"Invalid agent signature"},403);
+    const proof=await verifySignedDockerAgentAction(input,agent);
+    if(!proof.ok)return reply({error:"Agent signature or identity rejected"},403);
     const {data:consumed,error:nonceError}=await db.rpc("docker_command_consume_nonce",{
       p_agent_id:input.agentId,p_nonce_hash:await sha(input.nonce),p_signed_at:input.signedAt,
     });

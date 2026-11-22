@@ -79,16 +79,20 @@ test("SQL claims are one-time, account bound, owner read only, fail closed",()=>
 test("dispatch Edge has disabled gate, verifies signature before nonce and SQL, no Docker command access",()=>{
   const file=readFileSync(new URL("../supabase/functions/docker-command-dispatch/index.ts",import.meta.url),"utf8");
   assert.match(file,/DOCKER_REMOTE_LAB_ENABLED/);
-  assert.ok(file.indexOf("crypto.subtle.verify(")<file.indexOf('db.rpc("docker_command_consume_nonce"'));
+  assert.ok(file.indexOf("verifySignedDockerAgentAction(")<file.indexOf('db.rpc("docker_command_consume_nonce"'));
+  const verifier=readFileSync(new URL("../supabase/functions/_shared/docker-action-verifier.mjs",import.meta.url),"utf8");
+  assert.match(verifier,/crypt.subtle.verify/);
+  assert.match(verifier,/bytesFromBase64url\(input.signature,64\)/);
   assert.match(file,/serverSigningKey/);
-  assert.match(file,/bytesFromBase64url/);
+  assert.match(file,/verifySignedDockerAgentAction/);
   assert.doesNotMatch(file,/docker\.sock|spawnSync|Deno\.Command|ssh:\/\/|fetch\(.+container/);
 });
 test("agent requires explicit execution flag, pinned signed permit, isolation guard and local audit",()=>{
   const file=readFileSync(new URL("../scripts/docker-lab-agent.mjs",import.meta.url),"utf8");
   assert.match(file,/--execute-lab/);
   assert.match(file,/ETERNYX_REMOTE_LAB_ENABLED/);
-  assert.match(file,/verify\(null,Buffer\.from\(labPermitMessage\(permit\)\)/);
+  assert.match(file,/verifyPinnedDockerLabPermit\(authorized/);
+  assert.match(file,/validateDockerReceiptAcknowledgement\(receipt,permit.claimId,outcome\)/);
   // The recovery-aware agent inspects before/after state with a stable target ID.
   assert.match(file,/verifyManagedTarget\(before,permit\.containerId\)/);
   assert.match(file,/labPostcondition\(permit\.operation,before,after\)/);

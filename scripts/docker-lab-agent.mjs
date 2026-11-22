@@ -2,14 +2,16 @@
 // Explicitly opted-in local lab dispatch, single job per invocation, never daemon.
 // NO public Docker socket. Agent never accepts arbitrary host, URL, command or flags.
 import { spawnSync } from "node:child_process";
-import { createPrivateKey,createPublicKey,randomBytes,sign,verify } from "node:crypto";
+import { createPrivateKey,createPublicKey,randomBytes,sign } from "node:crypto";
 import { readFileSync,lstatSync,mkdirSync,openSync,writeSync,closeSync,constants } from "node:fs";
 import { join,isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import {lockLabAgent,reserveLabClaim,appendLabEvent,readLabClaim,labPostcondition} from "../src/lib/dockerLabRecovery.mjs";
 import { isLocalEndpoint,verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
-import { parseAgentAction,agentActionMessage,parseLabPermit,labPermitMessage }
+import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
+import { verifyPinnedDockerLabPermit } from "../src/lib/dockerLabPermitGuard.mjs";
+import { validateDockerReceiptAcknowledgement } from "../src/lib/dockerLabReceiptGuard.mjs";
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HELP="Usage: ETERNYX_REMOTE_LAB_ENABLED=true ETERNYX_SUPABASE_URL=https://PROJECT.supabase.co node scripts/docker-lab-agent.mjs AGENT_UUID /ABSOLUTE/AGENT-PRIVATE.pem /ABSOLUTE/PINNED-SERVER-PUBLIC.key --execute-lab";
@@ -101,7 +103,7 @@ async function main(){
       return;
     }
     const ack=await send("receipt",journal.claimId,journal.outcome);
-    if(ack.accepted!==true)throw Error("Receipt was not accepted.");
+    validateDockerReceiptAcknowledgement(ack,journal.claimId,journal.outcome);
     appendLabEvent(journal.claimId,"receipt_accepted");
     process.stdout.write(JSON.stringify({claimId:journal.claimId,receiptAcknowledged:true,executedAgain:false})+"\n");
     return;
@@ -116,13 +118,10 @@ async function main(){
   // A second signed round trip verifies policy, active approval, signature and
   // short expiry *again*, right before the guarded local action.
   const authorized=await send("authorize",job.claimId);
-  const permit=parseLabPermit(authorized.permit);
-  if(!permit||typeof authorized.signature!=="string"||
-    !verify(null,Buffer.from(labPermitMessage(permit)),pinned,Buffer.from(authorized.signature,"base64url"))||
-    permit.agentId!==agentId||permit.claimId!==job.claimId||permit.requestId!==job.requestId||
-    permit.operation!==job.operation||permit.containerId!==job.containerId||
-    Date.parse(permit.expiresAt)<=Date.now()||Date.parse(permit.issuedAt)>Date.now()+5000)
-      throw new Error("No valid server-signed permit. No Docker action performed.");
+  const permit=verifyPinnedDockerLabPermit(authorized,{
+    agentId,claimId:job.claimId,requestId:job.requestId,
+    operation:job.operation,containerId:job.containerId,
+  },pinned);
   // Permanent per-claim exclusive reservation is made BEFORE the first Docker operation.
   // A crash or duplicate claim MUST NOT execute a previously reserved claim again.
   reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
@@ -149,7 +148,7 @@ async function main(){
   audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:outcome});
   try{
     const receipt=await send("receipt",permit.claimId,outcome);
-    if(receipt.accepted!==true)throw Error("Receipt was not accepted.");
+    validateDockerReceiptAcknowledgement(receipt,permit.claimId,outcome);
     appendLabEvent(permit.claimId,"receipt_accepted");
     process.stdout.write(JSON.stringify({claimId:permit.claimId,
       agentReportedStatus:"reported_"+outcome,independentlyVerified:false})+"\n");
