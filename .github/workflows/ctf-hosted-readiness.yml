@@ -1,0 +1,57 @@
+name: CTF Hosted MicroVM Readiness and Signed Spend Guard
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/provider/hosted-readiness.mjs'
+      - 'infrastructure/cyber-range/provider/microvm-host-preflight.mjs'
+      - 'infrastructure/cyber-range/provider/docker-runtime.mjs'
+      - 'scripts/cyber-range-microvm-preflight.mjs'
+      - 'scripts/cyber-range-provider.mjs'
+      - 'tests/ctf-range-hosted-readiness.test.mjs'
+      - 'package.json'
+      - '.github/workflows/ctf-hosted-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-cost-readiness:
+    name: Check signed cloud estimates, KVM capability and disabled hosted execution
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run signed-provider quote and immutable microVM contract tests
+        run: node --test tests/ctf-range-hosted-readiness.test.mjs
+      - name: Inspect local runner with no VM launch or cloud API call
+        run: |
+          node scripts/cyber-range-microvm-preflight.mjs --json > /tmp/eternyx-readiness-ci.json
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const status = JSON.parse(readFileSync('/tmp/eternyx-readiness-ci.json','utf8'));
+          assert.equal(typeof status.linuxHost,'boolean');
+          assert.equal(typeof status.kvmReadWrite,'boolean');
+          assert.equal(status.readyForPublicHostedLabs,false);
+          assert.equal(status.providerCostEnforcementAttested,false);
+          assert.equal(status.networkEgressPolicyAttested,false);
+          assert.equal(status.sandboxAttested,false);
+          NODE
+      - name: Cloud runtime selection must be refused without an approved backend
+        run: |
+          if ETERNYX_RANGE_RUNTIME=firecracker node scripts/cyber-range-microvm-preflight.mjs --json; then
+            echo 'Unexpected hosted runtime activation without a trusted adapter' >&2
+            exit 1
+          fi
+          if ETERNYX_RANGE_RUNTIME=firecracker node scripts/cyber-range-provider.mjs --once; then
+            echo 'Unexpected provider fallback to unapproved cloud launch' >&2
+            exit 1
+          fi
+      - name: Remove CI-only inspection report
+        if: always()
+        run: rm -f /tmp/eternyx-readiness-ci.json
