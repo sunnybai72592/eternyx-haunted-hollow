@@ -42,7 +42,7 @@ export function checkedIncidentReport(raw){
   });
   return {
     schema:"eternyx-incident-report-v1",
-    source:"database_incident_reporting",
+    source:"authenticated_server",reportSource:"database_incident_reporting",
     generatedAt:raw.generatedAt,rangeDays:raw.rangeDays,
     ...Object.fromEntries(counters.map(k=>[k,raw[k]])),
     sourcesInWindow:Object.fromEntries(sourceKeys.map(k=>[k,raw.sourcesInWindow[k]])),
