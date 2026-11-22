@@ -2653,6 +2653,7 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_restore_task_batch: { Args: { p_project_id: string; p_tasks: Json }; Returns: Json }
       mark_service_request_checked: { Args: { p_request_id: string }; Returns: string }
       workspace_delete_archived_project: { Args: { p_project_id: string }; Returns: boolean }
       admin_list_users: {
