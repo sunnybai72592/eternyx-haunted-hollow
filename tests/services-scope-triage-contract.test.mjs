@@ -73,5 +73,5 @@ test('scope reviews and triage only mount for one selected request; recent activ
   assert.match(admin, /openScope === item\.id && <ServiceScopeReview/);
   assert.match(admin, /supabase\.rpc\('is_admin'\)/);
   assert.match(timeline, /\.order\('created_at', \{ ascending: false \}\)/);
-  assert.match(timeline, /Showing the latest 200 events/);
+  assert.match(timeline, /Earlier pages use stable event cursors/);
 });
