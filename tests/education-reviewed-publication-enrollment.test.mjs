@@ -175,3 +175,11 @@ test("19: all new TypeScript or TSX sources parse",()=>{
     assert.deepEqual(ast.parseDiagnostics.map(d=>ts.flattenDiagnosticMessageText(d.messageText,"\n")),[],name);
   }
 });
+
+test("20: exam start and enrollment revocation lock the same row", () => {
+  assert.match(atomic,/PERFORM 1 FROM public.education_test_enrollments AS e/);
+  assert.match(atomic,/FOR SHARE OF e/);
+  assert.match(sql,/PERFORM 1 FROM public.education_test_enrollments AS e/);
+  assert.match(sql,/FOR UPDATE OF e/);
+  assert.match(sql,/IF NOT FOUND THEN RETURN false; END IF/);
+});
