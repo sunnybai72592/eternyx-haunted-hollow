@@ -72,7 +72,7 @@ BEGIN
  THEN RAISE EXCEPTION 'Foreign instructor saw a learner response'; END IF;
 END
 $test$;
-SELECT public.education_ci_expect_invalid(
+SELECT public.education_ci_expect_denied(
  $sql$SELECT public.education_instructor_review_written_answer(
  pg_catalog.current_setting('eternyx.review_answer')::uuid,1)$sql$);
 
