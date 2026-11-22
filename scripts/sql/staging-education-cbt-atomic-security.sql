@@ -89,7 +89,7 @@ BEGIN
     AND t.is_published IS TRUE
     -- Do not bypass instructor access passwords. A separately verified
     -- enrollment/password service is needed before these exams can open.
-    AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL
+    AND NULLIF(pg_catalog.btrim(t.access_password_hash), '') IS NULL
     -- Enforced only with coordinated reviewed publication/enrollment staging.
     AND EXISTS (
       SELECT 1 FROM public.education_test_enrollments AS e
