@@ -53,6 +53,7 @@ CREATE TABLE public.automation_github_issue_drafts (
   created_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL DEFAULT (now()+interval '24 hours'),
   decided_at timestamptz,
+  previewed_at timestamptz,
   finished_at timestamptz,
   UNIQUE(user_id,request_key),
   CHECK(expires_at>created_at AND expires_at<=created_at+interval '24 hours'),
@@ -143,6 +144,12 @@ DECLARE n integer;
 BEGIN
   IF p_user_id IS NULL THEN RETURN jsonb_build_object('ok',false,'reason','invalid_request'); END IF;
   PERFORM pg_catalog.pg_advisory_xact_lock(20261122,pg_catalog.hashtext(p_user_id::text));
+  -- Prevent reconnecting with a fresh version=1 from authorizing an old draft.
+  -- The deletion and invalidation are atomic under the owner advisory lock.
+  UPDATE public.automation_github_issue_drafts SET
+    status='rejected',decided_at=pg_catalog.statement_timestamp(),
+    payload_ciphertext=NULL,payload_nonce=NULL
+    WHERE user_id=p_user_id AND status='pending';
   DELETE FROM public.automation_github_issue_connections WHERE user_id=p_user_id;
   GET DIAGNOSTICS n=ROW_COUNT;
   RETURN jsonb_build_object('ok',true,'disconnected',n>0);
@@ -242,6 +249,40 @@ REVOKE ALL ON FUNCTION public.automation_reject_github_issue(uuid,uuid)
   FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.automation_reject_github_issue(uuid,uuid) TO service_role;
 
+-- Preview proof is server-stamped after authenticated owner decrypts the
+-- exact draft. Claim requires a recent (<=10 minute) preview and active grant.
+CREATE OR REPLACE FUNCTION public.automation_mark_github_issue_previewed(
+  p_user_id uuid,p_draft_id uuid,p_version integer
+)
+RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $preview$
+DECLARE c public.automation_github_issue_connections%ROWTYPE;
+  d public.automation_github_issue_drafts%ROWTYPE;
+BEGIN
+  IF p_user_id IS NULL OR p_draft_id IS NULL OR p_version IS NULL THEN
+    RETURN jsonb_build_object('ok',false,'reason','invalid_request'); END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(20261122,pg_catalog.hashtext(p_user_id::text));
+  SELECT * INTO d FROM public.automation_github_issue_drafts
+    WHERE user_id=p_user_id AND id=p_draft_id AND status='pending'
+      AND expires_at>pg_catalog.statement_timestamp();
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reason','not_pending'); END IF;
+  SELECT * INTO c FROM public.automation_github_issue_connections
+    WHERE user_id=p_user_id AND enabled=true AND scope='github_issue_create'
+      AND version=p_version AND version=d.connection_version
+      AND lower(repo_owner)=lower(d.repo_owner)
+      AND lower(repo_name)=lower(d.repo_name);
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reason','connection_changed'); END IF;
+  UPDATE public.automation_github_issue_drafts
+    SET previewed_at=pg_catalog.statement_timestamp()
+    WHERE user_id=p_user_id AND id=p_draft_id AND status='pending';
+  RETURN jsonb_build_object('ok',true,'draft_id',d.id,
+    'previewed_at',pg_catalog.statement_timestamp());
+END;
+$preview$;
+REVOKE ALL ON FUNCTION public.automation_mark_github_issue_previewed(uuid,uuid,integer)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.automation_mark_github_issue_previewed(uuid,uuid,integer)
+  TO service_role;
+
 -- One-way reservation BEFORE posting. After this transaction no retry can
 -- reissue an external side effect for the same draft or request UUID.
 CREATE OR REPLACE FUNCTION public.automation_claim_github_issue(
@@ -264,6 +305,10 @@ BEGIN
       status='expired',decided_at=pg_catalog.statement_timestamp(),
       payload_ciphertext=NULL,payload_nonce=NULL WHERE id=d.id;
     RETURN jsonb_build_object('ok',false,'reason','expired');
+  END IF;
+  IF d.previewed_at IS NULL OR
+     d.previewed_at<pg_catalog.statement_timestamp()-interval '10 minutes' THEN
+    RETURN jsonb_build_object('ok',false,'reason','not_reviewed');
   END IF;
   SELECT * INTO c FROM public.automation_github_issue_connections
     WHERE user_id=p_user_id AND enabled=true AND scope='github_issue_create'
