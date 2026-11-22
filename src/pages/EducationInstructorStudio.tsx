@@ -36,7 +36,7 @@ export default function EducationInstructorStudio() {
   const readiness = useMemo(() => validateQuestionBank(bank), [bank]);
   const draftCheck = useMemo(() => validateQuestionBankDraft(bank), [bank]);
   const summary = useMemo(() => questionBankSummary(bank), [bank]);
-  const learnerView = useMemo(() => learnerQuestionPreview(bank), [bank]);
+  const learnerView = useMemo(() => draftCheck.valid ? learnerQuestionPreview(bank) : [], [bank, draftCheck.valid]);
   const activeIndex = bank.questions.findIndex(q => q.id === activeId);
   const active = activeIndex >= 0 ? bank.questions[activeIndex] : null;
 
@@ -262,6 +262,7 @@ export default function EducationInstructorStudio() {
               <Card><CardHeader><CardTitle>Learner preview</CardTitle>
                 <CardDescription>Displays questions and choices without showing correct answers. This does not deliver an exam.</CardDescription></CardHeader>
                 <CardContent className="space-y-4">
+                  {!draftCheck.valid && <p role="alert" className="text-sm text-destructive">Fix malformed draft fields before previewing questions.</p>}
                   {!learnerView.length && <p className="text-sm text-muted-foreground">Add questions to preview them.</p>}
                   {learnerView.map((q, index) => (
                     <div key={q.id} className="space-y-2 rounded-xl border border-border p-4">
