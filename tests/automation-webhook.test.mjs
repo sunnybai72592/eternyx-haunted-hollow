@@ -92,7 +92,7 @@ test("SQL enforces encrypted credentials, owner-scoped grants and atomic run rec
   assert.match(sql, /ENABLE ROW LEVEL SECURITY/);
   assert.match(sql, /REVOKE ALL ON public\.automation_webhook_triggers FROM PUBLIC, anon, authenticated/);
   assert.match(sql, /enabled boolean NOT NULL DEFAULT false/);
-  assert.match(sql, /rotated_at=p_rotated_at/);
+  assert.match(sql, /credential_version=p_credential_version/);
   assert.match(sql, /automation_record_run\(/);
   assert.match(sql, /trigger_type='webhook'/);
   assert.doesNotMatch(sql, /SECURITY DEFINER/);
