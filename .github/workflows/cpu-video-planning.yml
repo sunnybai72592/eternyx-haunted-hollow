@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "gpu-worker/estimate_training_time.py"
+      - "gpu-worker/compare_video_evaluations.py"
+      - "gpu-worker/tests/test_compare_video_evaluations.py"
       - "gpu-worker/tests/test_estimate_training_time.py"
       - "gpu-worker/run_video_pilot.py"
       - ".github/workflows/cpu-video-planning.yml"
@@ -11,6 +13,8 @@ on:
     branches: [main]
     paths:
       - "gpu-worker/estimate_training_time.py"
+      - "gpu-worker/compare_video_evaluations.py"
+      - "gpu-worker/tests/test_compare_video_evaluations.py"
       - "gpu-worker/tests/test_estimate_training_time.py"
       - "gpu-worker/run_video_pilot.py"
       - ".github/workflows/cpu-video-planning.yml"
@@ -31,4 +35,6 @@ jobs:
       - name: Validate stdlib-only CPU benchmark planner
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python -m unittest discover -s gpu-worker/tests -p 'test_estimate_training_time.py' -v
+        run: |
+          python -m unittest discover -s gpu-worker/tests -p 'test_estimate_training_time.py' -v
+          python -m unittest discover -s gpu-worker/tests -p 'test_compare_video_evaluations.py' -v
