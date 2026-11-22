@@ -40,6 +40,22 @@ export function supervisedNetns(sessionId){
 }
 export function supervisedUnitSpec(sessionId,manifest,uid,gid){
   const cmd=buildHardenedJailerCommand({sessionId,manifest,uid,gid});
+  // Critical: the offline service's systemd cgroup MUST own the Firecracker
+  // process. Jailer --cgroup settings create a separate host cgroup, outside
+  // systemd's unit, where RuntimeMaxSec/KillMode may fail to kill the guest.
+  // Retain jailer --cgroup-version 2 but remove the three separate --cgroup
+  // assignments: the transient unit supplies all resource limits itself.
+  const jailerArgs=[];
+  let stripped=0;
+  for(let i=0;i<cmd.args.length;i++){
+    if(cmd.args[i]==="--cgroup"){
+      if(typeof cmd.args[i+1]!=="string")throw Error("Malformed jailer cgroup contract");
+      i++;stripped++;continue;
+    }
+    jailerArgs.push(cmd.args[i]);
+  }
+  if(stripped!==3 || jailerArgs.includes("--cgroup"))
+    throw Error("Jailer must remain inside systemd unit cgroup");
   const unit=supervisedVmUnit(sessionId);
   return Object.freeze({unit,
     executable:"systemd-run",
@@ -54,7 +70,7 @@ export function supervisedUnitSpec(sessionId,manifest,uid,gid){
       "--property=MemoryMax="+MAX_MEMORY,
       "--property=TasksMax="+MAX_TASKS,
       "--property=CPUQuota=100%",
-      "--",cmd.binary,...cmd.args,
+      "--",cmd.binary,...jailerArgs,
     ]),
     serviceMaxSeconds:EXACT_MAX_SECONDS,
     killEntireCgroup:true,spawnsPublicListener:false,
@@ -99,7 +115,8 @@ export function verifySystemdUnitProperties(sessionId,output,{allowStopped=false
      !p.ExecStart.includes("path=/usr/local/bin/jailer") ||
      !p.ExecStart.includes("--netns /run/netns/"+supervisedNetns(sessionId)) ||
      !p.ExecStart.includes("--chroot-base-dir /srv/eternyx-firecracker") ||
-     !p.ExecStart.includes("--new-pid-ns")){
+     !p.ExecStart.includes("--new-pid-ns") ||
+     /--cgroup(?:\s|=)/.test(p.ExecStart)){
     throw Error("Systemd microVM unit lacks mandatory runtime hardening");
   }
   if(allowStopped && p.LoadState==="not-found" && p.MainPID==="0")
