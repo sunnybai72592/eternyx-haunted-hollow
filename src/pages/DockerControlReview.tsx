@@ -5,7 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 type Policy={enabled:boolean;daily_limit:number};
 type Agent={id:string;display_name:string;status:string};
-type Request={id:string;agent_id:string;operation:"start"|"stop"|"restart";container_id:string;state:string;effective_state:string;requested_at:string;expires_at:string;execution_status:string;dispatch_claimed_at?:string|null;}
+type Reconciliation={status:string;attentionRequired:boolean;receiptPresent:boolean;ageSeconds:number|null};
+type Overview={window:string;total:number;receiptPending:number;requiresReconciliation:number;agentReportedComplete:number;agentReportedIssue:number;notDispatched:number};
+type Request={id:string;agent_id:string;operation:"start"|"stop"|"restart";container_id:string;state:string;effective_state:string;requested_at:string;expires_at:string;execution_status:string;dispatch_claimed_at?:string|null;reconciliation?:Reconciliation;}
 type Event={request_id:string;event_kind:string;occurred_at:string};
 const containerIdPattern=/^[0-9a-f]{64}$/;
 async function control(action:string,fields:Record<string,unknown>={}):Promise<Record<string,unknown>>{
@@ -23,6 +25,8 @@ export default function DockerControlReview(){
   const [policy,setPolicy]=useState<Policy>({enabled:false,daily_limit:5});
   const [agents,setAgents]=useState<Agent[]>([]);
   const [requests,setRequests]=useState<Request[]>([]);
+  const [overview,setOverview]=useState<Overview|null>(null);
+  const [observedAt,setObservedAt]=useState<string|null>(null);
   const [events,setEvents]=useState<Event[]>([]);
   const [agentId,setAgentId]=useState("");
   const [operation,setOperation]=useState<"start"|"stop"|"restart">("stop");
@@ -41,6 +45,8 @@ export default function DockerControlReview(){
     setAgents(next);
     setAgentId(id=>next.some(a=>a.id===id)?id:next[0]?.id||"");
     setRequests(Array.isArray(data.requests)?data.requests as Request[]:[]);
+    setOverview(data.dispatchOverview&&typeof data.dispatchOverview==="object"?data.dispatchOverview as Overview:null);
+    setObservedAt(typeof data.observedAt==="string"?data.observedAt:null);
     setEvents(Array.isArray(data.events)?data.events as Event[]:[]);
     setLoaded(true);
   },[]);
@@ -112,6 +118,22 @@ export default function DockerControlReview(){
       <button disabled={busy||!loaded||!canCreate} onClick={create} className="mt-4 min-h-11 rounded-lg bg-cyan-500 px-5 font-semibold text-slate-950 disabled:opacity-50">Request review (no execution)</button>
     </section>
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <h2 className="text-xl font-semibold">Signed dispatch monitoring</h2>
+      <p className="mt-2 text-sm text-muted-foreground">Bounded to your 30 most recent requests. Counts reflect server records as of the last manual refresh, not live Docker Engine status or independently verified execution.</p>
+      {overview&&<div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          ["Unresolved / review",overview.requiresReconciliation],
+          ["Receipt pending",overview.receiptPending],
+          ["Agent reported success",overview.agentReportedComplete],
+          ["Agent reported issues",overview.agentReportedIssue],
+        ].map(([label,value])=><div key={label} className="rounded-xl border border-border bg-muted/30 p-3">
+          <p className="text-2xl font-semibold tabular-nums">{value}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+        </div>)}
+      </div>}
+      {observedAt&&<p className="mt-3 text-xs text-muted-foreground">Records sampled {new Date(observedAt).toLocaleString()}. Refresh to update.</p>}
+    </section>
+    <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">3. Your operation requests</h2>
         <button disabled={busy} onClick={()=>act(async()=>{await load();setNotice("Request and audit records refreshed.");})} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 text-sm"><RefreshCw className="h-4 w-4"/> Refresh</button>
@@ -126,12 +148,17 @@ export default function DockerControlReview(){
             <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold">{row.effective_state}</span>
           </div>
           <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="h-4 w-4"/> Expires {new Date(row.expires_at).toLocaleString()} · Agent dispatch: {row.execution_status==="not_dispatched"?"not dispatched":row.execution_status==="claimed"?"claimed / outcome unknown":row.execution_status.replaceAll("_"," ")} (agent-reported)</p>
-          {row.execution_status==="claimed"&&<p role="status" className="mt-3 rounded-lg border border-amber-500/40 p-3 text-xs leading-6">
+          {row.reconciliation?.attentionRequired&&<p role="status" className="mt-3 rounded-lg border border-amber-500/40 p-3 text-xs leading-6">
             <ShieldAlert className="mr-2 inline h-4 w-4 text-amber-500"/>
-            {row.dispatch_claimed_at&&Date.now()-Date.parse(row.dispatch_claimed_at)>60000
-              ?"Claim older than the dispatch window: outcome unknown. Inspect the local operator journal. Never auto-retry."
-              :"Claimed by an agent; no signed final receipt yet. Execution outcome is not independently verified."}
+            {row.reconciliation.status==="reconciliation_required"
+              ?"Claim has no receipt after the recovery window. Inspect the operator journal; never automatically rerun Docker."
+              :row.reconciliation.status==="receipt_pending"
+              ?"Signed receipt is not yet recorded. Check the operator audit; execution is unconfirmed."
+              :row.reconciliation.status==="agent_reported_failed"||row.reconciliation.status==="agent_reported_guard_denied"
+              ?"Agent reported a failure or guard denial. Review its signed report and local journal."
+              :"Dispatch record requires manual review; do not infer success."}
           </p>}
+          {row.reconciliation?.status==="permit_issued_no_receipt"&&<p className="mt-2 text-xs text-muted-foreground">Short-lived lab permit issued; no signed outcome received.</p>}
           {row.effective_state==="pending"&&<div className="mt-3 space-y-3">
             <label className="block text-xs text-muted-foreground">To approve, type: <strong className="font-mono">APPROVE {row.id.slice(0,8)}</strong>
               <input aria-label={"Approval confirmation "+row.id.slice(0,8)} value={confirmation[row.id]??""} onChange={e=>setConfirmation(s=>({...s,[row.id]:e.target.value}))} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3 font-mono text-xs"/>
@@ -157,7 +184,7 @@ export default function DockerControlReview(){
       <h2 className="flex items-center gap-2 text-xl font-semibold"><ClipboardCheck className="h-5 w-5 text-cyan-500"/> Recent audit events</h2>
       <div className="mt-3 space-y-2">{events.map((item,index)=><p key={item.request_id+item.occurred_at+index} className="rounded-lg border border-border px-3 py-2 text-sm">{item.event_kind} · {item.request_id.slice(0,8)} <span className="text-xs text-muted-foreground">· {new Date(item.occurred_at).toLocaleString()}</span></p>)}</div>
       {events.length===0&&<p className="mt-4 text-sm text-muted-foreground">No audit events found.</p>}
-      <p className="mt-4 text-xs text-muted-foreground">Owner events document decisions. A signed lab-agent receipt is displayed separately as an agent-reported outcome; it is not independent proof of Docker success.</p>
+      <p className="mt-4 text-xs text-muted-foreground">Owner events document decisions. Signed receipts identify enrolled keys, but do not independently prove execution. Unresolved claims require local operator reconciliation; audit export verification is available through the offline CLI.</p>
     </section>
     <p className="text-xs text-muted-foreground">This interface does not expose Docker credentials, host addresses, tokens, sockets or shell access.</p>
   </div>;

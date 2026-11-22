@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
 import { parseDockerControlRequest, effectiveDockerControlState } from "../_shared/docker-control-contract.mjs";
+import { reconcileDockerClaim, dockerDispatchOverview } from "../_shared/docker-dispatch-observability.mjs";
 const headers={
   "Access-Control-Allow-Origin":"*",
   "Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type",
@@ -49,15 +50,23 @@ serve(async(req:Request)=>{
         supabase.from("docker_command_claims").select("request_id,id,state,claimed_at,authorized_at,reported_at").eq("owner_id",owner).order("claimed_at",{ascending:false}).limit(30),
       ]);
       if(policy.error||requests.error||events.error||agents.error||dispatch.error)throw new Error("Database read unavailable");
+      const observedAt=new Date().toISOString();
+      const claimsByRequest=new Map<string,Record<string,unknown>>(
+        (dispatch.data??[]).map((x:Record<string,unknown>)=>[String(x.request_id),x] as const)
+      );
+      const ownedRequests=(requests.data??[]).map((r:Record<string,unknown>)=>{
+        const claim=claimsByRequest.get(String(r.id));
+        return {...r,effective_state:effectiveDockerControlState(r),
+          execution_status:claim?claim.state:"not_dispatched",
+          dispatch_claimed_at:claim?.claimed_at??null,
+          dispatch_reported_at:claim?.reported_at??null,
+          reconciliation:reconcileDockerClaim(claim,Date.parse(observedAt))};
+      });
       return reply({
         policy:policy.data??{enabled:false,daily_limit:5},
-        requests:(requests.data??[]).map((r:Record<string,unknown>)=>{
-          const claim=(dispatch.data??[]).find((x:Record<string,unknown>)=>x.request_id===r.id);
-          return {...r,effective_state:effectiveDockerControlState(r),
-            execution_status:claim?claim.state:"not_dispatched",
-            dispatch_claimed_at:claim?.claimed_at??null,
-            dispatch_reported_at:claim?.reported_at??null};
-        }),
+        requests:ownedRequests,
+        dispatchOverview:dockerDispatchOverview(ownedRequests),
+        observedAt,
         events:events.data??[],agents:agents.data??[],
         remoteExecutionEnabled:false,labDispatchConfigurable:true,source:"authenticated_server",
       });
