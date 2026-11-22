@@ -34,6 +34,7 @@ export function createEducationAnswerSaveQueue(save) {
       pending.delete(questionId);
       try {
         await save(answer);
+        if (disposed) throw new Error("The exam save queue is closed");
       } catch (error) {
         // A newer edit may have been made during the failed request.
         // Keep that newer edit and never let the rejected older payload
