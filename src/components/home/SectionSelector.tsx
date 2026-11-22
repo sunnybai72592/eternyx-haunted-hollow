@@ -21,7 +21,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
   const { isAuthenticated, profile } = useAuthStore();
 
   return (
-    <main className={cn("relative isolate overflow-hidden bg-[#050914] text-white", className)}>
+    <main className={cn("relative isolate overflow-hidden bg-background text-white", className)}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-72 left-[45%] h-[46rem] w-[46rem] -translate-x-1/2 rounded-full bg-cyan-400/[0.13] blur-[130px]" />
         <div className="absolute right-[-18rem] top-[28rem] h-[38rem] w-[38rem] rounded-full bg-violet-600/[0.13] blur-[130px]" />
@@ -60,7 +60,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             <div className="absolute inset-[8%] rounded-full bg-cyan-300/[0.04] blur-3xl" />
             <div className="absolute h-[72%] w-[72%] rounded-full border border-cyan-100/[0.08] [transform:rotateX(68deg)_rotateZ(-24deg)]" />
             <div className="absolute h-[54%] w-[92%] rounded-full border border-violet-200/[0.12] [transform:rotateX(68deg)_rotateZ(32deg)]" />
-            <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-cyan-100/25 bg-[#0b1b2b]/90 shadow-[0_0_90px_hsl(var(--primary)/.20),inset_0_0_40px_hsl(var(--primary)/.07)] sm:h-44 sm:w-44">
+            <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-cyan-100/25 bg-card/90 shadow-[0_0_90px_hsl(var(--primary)/.20),inset_0_0_40px_hsl(var(--primary)/.07)] sm:h-44 sm:w-44">
               <Zap className="mb-2 h-9 w-9 text-cyan-200 sm:h-11 sm:w-11" />
               <span className="text-lg font-black tracking-[.2em] text-white sm:text-xl">ETERNYX</span>
               <span className="mt-1 text-[9px] font-semibold uppercase tracking-[.25em] text-cyan-100/60">Connected by design</span>
@@ -73,7 +73,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
               { label: "CLOUD", icon: Workflow, position: "left-[38%] top-[0%]", tone: "text-blue-200 border-blue-200/20" },
               { label: "AUTOMATE", icon: ArrowRight, position: "right-[34%] bottom-[0%]", tone: "text-emerald-200 border-emerald-200/20" },
             ].map(({ label, icon: Icon, position, tone }) => (
-              <div key={label} className={cn("absolute z-20 inline-flex items-center gap-2 rounded-xl border bg-[#0a1221]/90 px-3 py-2.5 text-[9px] font-bold tracking-[.15em] shadow-xl backdrop-blur-xl sm:px-3.5 sm:text-[10px]", position, tone)}>
+              <div key={label} className={cn("absolute z-20 inline-flex items-center gap-2 rounded-xl border bg-card/90 px-3 py-2.5 text-[9px] font-bold tracking-[.15em] shadow-xl backdrop-blur-xl sm:px-3.5 sm:text-[10px]", position, tone)}>
                 <Icon className="h-3.5 w-3.5" />{label}
               </div>
             ))}
