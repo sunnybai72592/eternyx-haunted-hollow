@@ -153,7 +153,11 @@ def run_fixture(root, output):
     page = footage_review.read_text()
     assert page.count("data:image/png;base64,") == 9
     assert "Training (1)" in page and "Evaluation (2)" in page
-    assert "Identical adjacent frames: 16 of 16" in page
+    cards = page.split("<article>")[1:]
+    for card, clip in zip(cards, [window, *held_out.values()], strict=True):
+        frames = clip["frames"]
+        repeats = sum((a == b).all() for a, b in zip(frames, frames[1:]))
+        assert f"Identical adjacent frames: {repeats} of {len(frames) - 1}" in card
     assert all(row["sha256"] in page for row in rows)
     assert fingerprint(manifest_path) in page
     dataset = root / "windows"
