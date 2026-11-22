@@ -4,6 +4,7 @@ import { authenticateUser } from "../_shared/user-auth.ts";
 import { parseDockerControlRequest, effectiveDockerControlState } from "../_shared/docker-control-contract.mjs";
 import { reconcileDockerClaim, dockerDispatchOverview } from "../_shared/docker-dispatch-observability.mjs";
 import { parseDockerIncidentAction } from "../_shared/docker-incident-contract.mjs";
+import { parseDockerContainmentAction, deriveDockerReadiness } from "../_shared/docker-containment-contract.mjs";
 const headers={
   "Access-Control-Allow-Origin":"*",
   "Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type",
@@ -15,7 +16,7 @@ const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status
 const reasonStatus:Record<string,number>={
   invalid_request:400,not_found:404,expired:410,idempotency_conflict:409,
   already_decided:409,policy_disabled:403,agent_unavailable:409,
-  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,
+  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,incident_hold:423,release_required:409,not_escalated:409,
 };
 const reasonMessage:Record<string,string>={
   invalid_request:"Invalid Docker control request",
@@ -30,6 +31,9 @@ const reasonMessage:Record<string,string>={
   case_limit:"Maximum investigation cases reached",
   event_limit:"Investigation history limit reached",
   not_actionable:"Only failed or delayed signed claims can open an incident",
+  incident_hold:"Docker incident containment is active; approval policy cannot be re-enabled",
+  release_required:"Release the escalated containment explicitly before ordinary case triage",
+  not_escalated:"Only an escalated case can release containment",
 };
 serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
@@ -39,7 +43,7 @@ serve(async(req:Request)=>{
     const raw=await req.text();
     if(raw.length>1800)return reply({error:"Request too large"},413);
     const body=JSON.parse(raw);
-    parsed=parseDockerControlRequest(body)||parseDockerIncidentAction(body);
+    parsed=parseDockerControlRequest(body)||parseDockerIncidentAction(body)||parseDockerContainmentAction(body);
   }catch{return reply({error:"Invalid JSON body"},400);}
   if(!parsed)return reply({error:"Invalid Docker control action"},400);
   const {user,supabase}=await authenticateUser(req);
@@ -47,16 +51,17 @@ serve(async(req:Request)=>{
   const owner=user.id;
   try{
     if(parsed.action==="list"){
-      const [policy,requests,events,agents,dispatch,incidents,incidentEvents]=await Promise.all([
-        supabase.from("docker_control_policies").select("enabled,daily_limit,updated_at").eq("owner_id",owner).maybeSingle(),
+      const [policy,requests,events,agents,dispatch,incidents,incidentEvents,reports]=await Promise.all([
+        supabase.from("docker_control_policies").select("enabled,daily_limit,incident_hold,incident_hold_at,updated_at").eq("owner_id",owner).maybeSingle(),
         supabase.from("docker_control_requests").select("id,agent_id,operation,container_id,state,requested_at,expires_at,approved_at,resolved_at").eq("owner_id",owner).order("requested_at",{ascending:false}).limit(30),
         supabase.from("docker_control_events").select("request_id,event_kind,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
         supabase.from("docker_agent_registrations").select("id,display_name,status").eq("owner_id",owner).eq("status","key_verified").limit(10),
         supabase.from("docker_command_claims").select("request_id,id,state,claimed_at,authorized_at,reported_at").eq("owner_id",owner).order("claimed_at",{ascending:false}).limit(30),
         supabase.from("docker_lab_incidents").select("id,claim_id,reason,status,created_at,updated_at").eq("owner_id",owner).order("created_at",{ascending:false}).limit(50),
         supabase.from("docker_lab_incident_events").select("id,incident_id,action,note,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
+        supabase.from("docker_agent_reports").select("agent_id,engine_available,last_received_at").eq("owner_id",owner).order("last_received_at",{ascending:false}).limit(25),
       ]);
-      if(policy.error||requests.error||events.error||agents.error||dispatch.error||incidents.error||incidentEvents.error)throw new Error("Database read unavailable");
+      if(policy.error||requests.error||events.error||agents.error||dispatch.error||incidents.error||incidentEvents.error||reports.error)throw new Error("Database read unavailable");
       const observedAt=new Date().toISOString();
       const claimsByRequest=new Map<string,Record<string,unknown>>(
         (dispatch.data??[]).map((x:Record<string,unknown>)=>[String(x.request_id),x] as const)
@@ -74,6 +79,13 @@ serve(async(req:Request)=>{
         policy:policy.data??{enabled:false,daily_limit:5},
         requests:ownedRequests,
         dispatchOverview:dockerDispatchOverview(ownedRequests),
+        readiness:deriveDockerReadiness({
+          policy:policy.data??{enabled:false,incident_hold:false},
+          agents:agents.data??[],
+          reports:reports.data??[],
+          incidents:incidents.data??[],
+          claims:dispatch.data??[],
+        },Date.parse(observedAt)),
         observedAt,
         events:events.data??[],agents:agents.data??[],
         incidents:incidents.data??[],incidentEvents:incidentEvents.data??[],
@@ -102,6 +114,14 @@ serve(async(req:Request)=>{
     }else if(parsed.action==="incident_triage"){
       ({data,error}=await supabase.rpc("docker_lab_triage_incident",{
         p_owner_id:owner,p_incident_id:parsed.incidentId,p_status:parsed.status,p_note:parsed.note,
+      }));
+    }else if(parsed.action==="incident_escalate"){
+      ({data,error}=await supabase.rpc("docker_lab_escalate_incident",{
+        p_owner_id:owner,p_incident_id:parsed.incidentId,p_note:parsed.note,
+      }));
+    }else if(parsed.action==="incident_release_hold"){
+      ({data,error}=await supabase.rpc("docker_lab_release_incident_hold",{
+        p_owner_id:owner,p_incident_id:parsed.incidentId,p_note:parsed.note,
       }));
     }else return reply({error:"Unsupported action"},400);
     if(error)throw new Error("Database mutation unavailable");
