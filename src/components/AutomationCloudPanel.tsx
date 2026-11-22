@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
@@ -45,12 +45,16 @@ function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString();
 }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 function readWorkflows(raw: unknown): SavedWorkflow[] {
   if (!Array.isArray(raw)) throw new Error("Invalid saved workflow list.");
-  return raw.map((value) => {
-    if (!value || typeof value !== "object" || typeof value.id !== "string" ||
+  return raw.map((value: unknown) => {
+    if (!isRecord(value) || typeof value.id !== "string" ||
         typeof value.name !== "string" || typeof value.revision !== "number" ||
-        typeof value.active !== "boolean" || value.trigger_kind !== "manual") {
+        typeof value.active !== "boolean" || value.trigger_kind !== "manual" ||
+        typeof value.updated_at !== "string") {
       throw new Error("Invalid saved workflow record.");
     }
     return { ...value, steps: normalizeWorkflowSteps(value.steps) } as SavedWorkflow;
@@ -58,8 +62,8 @@ function readWorkflows(raw: unknown): SavedWorkflow[] {
 }
 function readHistory(raw: unknown): SavedRun[] {
   if (!Array.isArray(raw)) throw new Error("Invalid execution history.");
-  return raw.filter((value): value is SavedRun =>
-    value && typeof value === "object" && typeof value.id === "string" &&
+  return raw.filter((value: unknown): value is SavedRun =>
+    isRecord(value) && typeof value.id === "string" &&
     typeof value.created_at === "string" && value.status === "completed" &&
     typeof value.output_lines === "number" && Array.isArray(value.trace));
 }
@@ -78,10 +82,13 @@ export default function AutomationCloudPanel({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loaded, setLoaded] = useState(false);
+  // Preserve a request key across transport failures for safe user-initiated retries.
+  const pendingRun = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
     setWorkflows([]); setHistory([]); setSelectedId(null);
     setOutput(null); setError(""); setNotice(""); setLoaded(false);
+    pendingRun.current = null;
   }, [userId]);
 
   const selected = workflows.find((item) => item.id === selectedId);
@@ -155,11 +162,16 @@ export default function AutomationCloudPanel({
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={busy || !selected.active || !unchanged || input.length > 12000}
               onClick={() => manage(async () => {
+                const signature = JSON.stringify([selected.id, selected.revision, input]);
+                const requestKey = pendingRun.current?.signature === signature
+                  ? pendingRun.current.key : crypto.randomUUID();
+                pendingRun.current = { signature, key: requestKey };
                 const response = await callAutomation("run", {
-                  workflowId: selected.id, input, requestKey: crypto.randomUUID(),
+                  workflowId: selected.id, input, requestKey,
                 });
                 if (response.source !== "authenticated_server" || typeof response.output !== "string" ||
                     typeof response.runId !== "string" || !Array.isArray(response.trace)) throw new Error("Invalid cloud run result.");
+                pendingRun.current = null;
                 setOutput(response as unknown as CloudResult);
                 setNotice("Executed against the saved server-side workflow. Raw output is available only in this response.");
               })}><Play className="mr-2 size-4" /> Run saved workflow</Button>
