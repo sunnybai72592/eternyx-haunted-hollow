@@ -1,237 +1,185 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import LoadingSpinner from '@/components/LoadingSpinner';
-import { AlertCircle, Clock, BookOpen, ArrowRight } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, BookOpen, Clock3, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthStore } from "@/store/authStore";
+import { filterEducationTests, normalizeEducationTest } from "@/lib/educationCatalog.mjs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface Test {
+type EducationTest = {
   id: string;
   title: string;
   description: string;
   duration_minutes: number;
-  is_active: boolean;
   created_at: string;
-}
+  is_active: true;
+};
 
-const Education: React.FC = () => {
-  const navigate = useNavigate();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+export default function Education() {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
 
-  // Check authentication status
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserEmail(user.email || null);
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-      }
-    };
-
-    checkAuth();
-
-    // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || null);
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-      }
-    });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, []);
-
-  // Fetch available tests
-  const { data: tests, isLoading, error } = useQuery({
-    queryKey: ['available-tests'],
+  // Never return a different account's catalog from the React Query cache.
+  const { data: tests = [], isPending, isFetching, error, refetch } = useQuery<EducationTest[]>({
+    queryKey: ["education-active-tests", user?.id],
+    enabled: !authLoading && isAuthenticated && !!user?.id,
+    retry: 1,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as Test[];
+      const { data, error: loadError } = await supabase
+        .from("tests")
+        .select("id,title,description,duration_minutes,created_at,is_active")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      if (loadError) throw loadError;
+      return (data ?? []).map(normalizeEducationTest).filter((row): row is EducationTest => row !== null);
     },
-    enabled: isAuthenticated,
   });
 
-  const handleStartTest = (testId: string) => {
-    navigate(`/test/${testId}`);
-  };
-
-  const handleLoginRedirect = () => {
-    navigate('/');
-  };
+  const visible = useMemo(() => filterEducationTests(tests, search, sort), [tests, search, sort]);
+  const busy = authLoading || (isAuthenticated && isPending);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header Section */}
-        <div className="mb-12 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <BookOpen className="w-8 h-8 text-cyber-cyan" />
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyber-cyan to-cyber-magenta bg-clip-text text-transparent">
-              Education Hub
-            </h1>
+    <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 sm:py-12">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <header className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-accent/10 p-6 sm:p-10">
+          <div className="flex items-center gap-3 text-primary">
+            <BookOpen aria-hidden="true" className="h-8 w-8" />
+            <span className="text-xs font-bold uppercase tracking-[0.2em]">ETERNYX Learning</span>
           </div>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Access our comprehensive collection of Computer-Based Tests (CBTs) to assess your knowledge and skills. 
-            Each test is designed with security and fairness in mind.
+          <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">Education Hub</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+            Find available computer-based assessments, review their duration, and open the test workspace.
+            Only tests returned by the Education service are listed here.
           </p>
-        </div>
+        </header>
 
-        {/* Authentication Check */}
-        {!isAuthenticated && (
-          <Alert className="mb-8 border-cyber-cyan/50 bg-cyber-cyan/5">
-            <AlertCircle className="h-4 w-4 text-cyber-cyan" />
-            <AlertDescription className="text-cyber-cyan">
-              You need to be logged in to access tests. Please log in or create an account to continue.
-              <Button 
-                variant="link" 
-                className="ml-2 text-cyber-cyan hover:text-cyber-magenta"
-                onClick={handleLoginRedirect}
-              >
-                Go to Login
+        {!authLoading && !isAuthenticated && (
+          <Alert className="border-primary/25 bg-card">
+            <ShieldCheck aria-hidden="true" className="h-4 w-4 text-primary" />
+            <AlertDescription className="flex flex-col items-start gap-3 text-foreground sm:flex-row sm:items-center sm:justify-between">
+              <span>Sign in to view available assessments and access your own test attempts.</span>
+              <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Link to="/auth?redirect=%2Feducation">Sign in to Education <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" /></Link>
               </Button>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex justify-center items-center min-h-96">
-            <LoadingSpinner variant="cyber" text="Loading available tests..." />
+        {busy && (
+          <div role="status" className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            {authLoading ? "Checking your session…" : "Loading available assessments…"}
           </div>
         )}
 
-        {/* Error State */}
-        {error && (
-          <Alert className="mb-8 border-red-500/50 bg-red-500/5">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <AlertDescription className="text-red-500">
-              Failed to load tests. Please try again later.
+        {isAuthenticated && !authLoading && !isPending && error && (
+          <Alert variant="destructive">
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>Assessments could not be loaded. The database or your account permissions may be unavailable.</span>
+              <Button variant="outline" onClick={() => void refetch()}><RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />Retry loading</Button>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Tests Grid */}
-        {isAuthenticated && tests && tests.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {tests.map((test) => (
-              <Card 
-                key={test.id} 
-                className="group hover:border-cyber-cyan/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyber-cyan/20 bg-background/50 backdrop-blur-sm border-border/50"
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <CardTitle className="text-xl group-hover:text-cyber-cyan transition-colors">
-                        {test.title}
-                      </CardTitle>
-                      <CardDescription className="mt-2">
-                        {test.description}
-                      </CardDescription>
-                    </div>
+        {isAuthenticated && !authLoading && !isPending && !error && (
+          <section aria-labelledby="available-assessments" className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Assessment catalog</p>
+                <h2 id="available-assessments" className="mt-1 text-2xl font-bold">Available tests</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Live database listings, not sample exams.</p>
+              </div>
+              <Button variant="outline" disabled={isFetching} onClick={() => void refetch()} className="min-h-11">
+                <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />{isFetching ? "Refreshing…" : "Refresh tests"}
+              </Button>
+            </div>
+
+            {tests.length > 0 && (
+              <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-[1fr_auto]">
+                <div>
+                  <label htmlFor="education-search" className="mb-2 block text-sm font-medium">Find an assessment</label>
+                  <div className="relative">
+                    <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <input id="education-search" type="search" value={search} maxLength={120}
+                      onChange={e => setSearch(e.target.value)} placeholder="Search titles or descriptions"
+                      className="min-h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
                   </div>
-                </CardHeader>
+                </div>
+                <div>
+                  <label htmlFor="education-sort" className="mb-2 block text-sm font-medium">Sort tests</label>
+                  <select id="education-sort" value={sort} onChange={e => setSort(e.target.value)}
+                    className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <option value="newest">Newest first</option>
+                    <option value="title">Title A–Z</option>
+                    <option value="shortest">Shortest duration</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Test Duration */}
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="w-4 h-4 text-cyber-cyan" />
-                      <span>{test.duration_minutes} minutes</span>
-                    </div>
-
-                    {/* Status Badge */}
-                    <div className="flex gap-2">
-                      <Badge 
-                        variant="outline" 
-                        className="border-cyber-cyan/50 text-cyber-cyan bg-cyber-cyan/10"
-                      >
-                        {test.is_active ? 'Available' : 'Inactive'}
-                      </Badge>
-                    </div>
-
-                    {/* Start Test Button */}
-                    <Button
-                      onClick={() => handleStartTest(test.id)}
-                      className="w-full mt-4 bg-gradient-to-r from-cyber-cyan to-cyber-magenta hover:from-cyber-cyan/80 hover:to-cyber-magenta/80 text-black font-semibold group/btn"
-                    >
-                      Start Test
-                      <ArrowRight className="w-4 h-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {isAuthenticated && tests && tests.length === 0 && (
-          <div className="text-center py-12">
-            <BookOpen className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-muted-foreground mb-2">
-              No Tests Available
-            </h3>
-            <p className="text-muted-foreground">
-              Check back soon for new tests or contact support for more information.
+            <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+              {visible.length} {visible.length === 1 ? "assessment" : "assessments"} displayed
+              {tests.length !== visible.length ? ` out of ${tests.length}` : ""}.
             </p>
-          </div>
+
+            {visible.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {visible.map(test => (
+                  <Card key={test.id} className="flex flex-col border-border bg-card transition-colors hover:border-primary/35">
+                    <CardHeader className="flex-1">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <Badge variant="outline" className="border-primary/30 text-primary">Available</Badge>
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock3 aria-hidden="true" className="h-4 w-4" />{test.duration_minutes} min
+                        </span>
+                      </div>
+                      <CardTitle className="break-words text-lg">{test.title}</CardTitle>
+                      <CardDescription className="break-words leading-6">
+                        {test.description || "No description was provided for this assessment."}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button asChild className="min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                        <Link to={`/test/${test.id}`} aria-label={`Open assessment: ${test.title}`}>
+                          Open assessment <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-border bg-card px-6 py-12 text-center">
+                <BookOpen aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-primary" />
+                <h3 className="text-lg font-semibold">{tests.length ? "No matching assessments" : "No active assessments available"}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {tests.length ? "Try a different title or description." : "No active tests were returned for this account. Check again later."}
+                </p>
+                {tests.length > 0 && (
+                  <Button variant="outline" className="mt-4" onClick={() => { setSearch(""); setSort("newest"); }}>Clear filters</Button>
+                )}
+              </div>
+            )}
+          </section>
         )}
 
-        {/* Information Section */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-background/50 backdrop-blur-sm border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Secure Testing</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Our tests are protected with advanced security measures including screen lock detection and session monitoring.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-background/50 backdrop-blur-sm border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Timed Assessments</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Each test has a specific time limit. The system will automatically submit your answers when time expires.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-background/50 backdrop-blur-sm border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Instant Results</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Get immediate feedback on your performance with detailed score breakdowns and analysis.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        <section aria-label="Assessment information" className="grid gap-4 md:grid-cols-3">
+          {[
+            ["Your account", "Sign in is required. Your access to test attempts is controlled by server permissions."],
+            ["Assessment time", "Each listing shows its configured duration. Confirm the rules and timer inside the test before starting."],
+            ["Results and grading", "Scores and completion depend on the configured grading service. A test listing is not proof of automatic grading."]
+          ].map(([title, description]) => (
+            <div key={title} className="rounded-2xl border border-border bg-card p-5">
+              <h3 className="font-semibold text-foreground">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+            </div>
+          ))}
+        </section>
       </div>
-    </div>
+    </main>
   );
-};
-
-export default Education;
+}
