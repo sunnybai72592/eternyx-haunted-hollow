@@ -202,21 +202,21 @@ CREATE TRIGGER workspace_items_verify_upload BEFORE INSERT ON public.workspace_i
 CREATE POLICY workspace_private_read ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2] AND p.owner_id = (SELECT auth.uid()))
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2] AND p.owner_id = (SELECT auth.uid()))
 );
 CREATE POLICY workspace_private_insert ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2] AND p.owner_id = (SELECT auth.uid()))
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2] AND p.owner_id = (SELECT auth.uid()))
 );
 CREATE POLICY workspace_private_delete ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2] AND p.owner_id = (SELECT auth.uid()))
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2] AND p.owner_id = (SELECT auth.uid()))
 );
