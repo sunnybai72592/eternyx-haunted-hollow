@@ -65,7 +65,7 @@ export function normalizeWorkflowSteps(steps) {
   const ids = new Set();
   return steps.map((step) => {
     if (!step || typeof step !== "object" || Array.isArray(step) ||
-        !VALID_ID.test(step.id) || ids.has(step.id) ||
+        (typeof step.id !== "string" || !VALID_ID.test(step.id)) || ids.has(step.id) ||
         !WORKFLOW_OPERATIONS.some((op) => op.kind === step.kind)) {
       throw new LocalWorkflowError("invalid_step");
     }
