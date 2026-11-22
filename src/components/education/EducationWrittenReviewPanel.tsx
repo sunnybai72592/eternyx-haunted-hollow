@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ClipboardCheck, RefreshCw } from "lucide-react";
+import { AlertCircle, ClipboardCheck, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
+import {
+  checkWrittenReviewDraft, filterWrittenReviewQueue, isWrittenReviewDraftChanged,
+  pendingWrittenReviewChanges, sanitizeWrittenReviewDrafts,
+  summarizeWrittenReviewQueue, writtenReviewAssessments, writtenReviewDate,
+} from "@/lib/educationWrittenReviewWorkbench.mjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,6 +23,12 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
   const [saving, setSaving] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [reviewFilter, setReviewFilter] = useState<"pending" | "reviewed" | "all">("pending");
+  const [search, setSearch] = useState("");
+  const [assessment, setAssessment] = useState("all");
+  const [sort, setSort] = useState<"returned" | "assessment" | "reviewed_recent">("returned");
+  const currentUserRef = useRef(userId);
+  const requestScopeRef = useRef(0);
+  const savingRef = useRef(false);
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["education-written-review-queue", userId],
@@ -25,48 +36,96 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
     queryFn: getWrittenReviewQueue,
     retry: 1,
   });
-  useEffect(() => {
+  // Changing teachers must erase draft marks and review-search text before paint.
+  useLayoutEffect(() => {
+    if (currentUserRef.current === userId) return;
+    currentUserRef.current = userId;
+    requestScopeRef.current += 1;
     setDrafts({});
+    setSaving(null);
+    savingRef.current = false;
     setErrorMessage("");
+    setSearch("");
+    setAssessment("all");
+    setReviewFilter("pending");
+    setSort("returned");
   }, [userId]);
-  const pendingCount = query.data?.filter(item => item.reviewed_points === null).length ?? 0;
-  const reviewedCount = query.data?.filter(item => item.reviewed_points !== null).length ?? 0;
-  const visibleReviews = (query.data ?? []).filter(item =>
-    reviewFilter === "all" || (reviewFilter === "pending"
-      ? item.reviewed_points === null : item.reviewed_points !== null));
+  // A fresh authorized queue may change max marks or remove rows. Keep only
+  // unsaved draft inputs that still refer to returned answer IDs.
+  useEffect(() => {
+    if (!query.data) return;
+    setDrafts(previous => {
+      const sanitized = sanitizeWrittenReviewDrafts(query.data, previous);
+      const keys = Object.keys(sanitized);
+      if (keys.length === Object.keys(previous).length &&
+          keys.every(key => sanitized[key] === previous[key])) return previous;
+      return sanitized;
+    });
+  }, [query.data]);
+
+  const totals = useMemo(() => summarizeWrittenReviewQueue(query.data ?? []), [query.data]);
+  const pendingCount = totals.pending;
+  const reviewedCount = totals.reviewed;
+  const assessments = useMemo(() => writtenReviewAssessments(query.data ?? []), [query.data]);
+  const visibleReviews = useMemo(() => filterWrittenReviewQueue(query.data ?? [], {
+    filter: reviewFilter, search, assessment, sort,
+  }), [query.data, reviewFilter, search, assessment, sort]);
+  const changedCount = pendingWrittenReviewChanges(query.data ?? [], drafts);
+  const visiblePending = visibleReviews.filter(item => item.reviewed_points === null).length;
 
   const save = async (answerId: string, max: number, previous: number | null) => {
-    if (saving) return;
+    if (savingRef.current || !query.data?.some(item => item.answer_id === answerId &&
+      item.points_possible === max && item.reviewed_points === previous)) {
+      setErrorMessage("The review row changed. Refresh the authorized queue before saving.");
+      return;
+    }
     const raw = drafts[answerId] ?? (previous === null ? "" : String(previous));
-    if (!/^(0|[1-9][0-9]{0,3})$/.test(raw)) {
-      setErrorMessage("Enter whole-number points, including 0 if appropriate.");
+    const checked = checkWrittenReviewDraft(raw, max, previous);
+    if (!checked.valid) {
+      setErrorMessage(checked.error || "Check the provisional mark.");
       return;
     }
-    const points = Number(raw);
-    if (!Number.isInteger(points) || points > max) {
-      setErrorMessage("Marks must be between 0 and the question's maximum.");
+    if (!checked.changed) {
+      setErrorMessage("This provisional mark is unchanged.");
       return;
     }
-    if (previous !== null && previous !== points &&
+    if (previous !== null && previous !== checked.points &&
         !window.confirm("Replace this provisional written-review mark? A finalized assessment cannot be regraded here.")) {
       return;
     }
+    const requestScope = requestScopeRef.current;
+    savingRef.current = true;
     setSaving(answerId);
     setErrorMessage("");
     try {
-      await saveWrittenReview(answerId, points);
+      await saveWrittenReview(answerId, checked.points!);
+      if (requestScope !== requestScopeRef.current) return;
       setDrafts(previousDrafts => {
+        // Preserve any edits typed while the server was processing.
+        if (previousDrafts[answerId] !== raw) return previousDrafts;
         const next = { ...previousDrafts };
         delete next[answerId];
         return next;
       });
-      await queryClient.invalidateQueries({ queryKey: ["education-written-review-queue", userId] });
       toast.success("Written response review recorded. Official grade remains pending.");
+      // Do not describe a confirmed server save as failed just because the
+      // separate queue refresh is unavailable.
+      void queryClient.invalidateQueries({ queryKey: ["education-written-review-queue", userId] })
+        .catch(() => setErrorMessage("Review recorded, but refreshing the queue failed. Use Refresh reviews."));
     } catch {
-      setErrorMessage("The review was not confirmed. No official score has been changed.");
+      if (requestScope === requestScopeRef.current)
+        setErrorMessage("The review was not confirmed. No official score has been changed.");
     } finally {
-      setSaving(null);
+      if (requestScope === requestScopeRef.current) {
+        savingRef.current = false;
+        setSaving(null);
+      }
     }
+  };
+
+  const refresh = () => {
+    setErrorMessage("");
+    void query.refetch();
   };
 
   if (!writtenReviewEnabled) return null;
@@ -78,8 +137,9 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
             <CardTitle>Written response reviews</CardTitle>
           </div>
           <CardDescription>
-            Review up to 100 submitted responses belonging to your published assessments.
-            Saved marks are provisional review records, not official results or certificates.
+            Review up to 100 server-authorized submitted written responses from your published assessments.
+            Saved marks are provisional evidence—not official results, certificates, or a request to finalize grades.
+            This is the returned review queue, not a total across every historical submission.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -95,9 +155,20 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
           </p>}
           {query.data && <>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p role="status" className="text-sm text-muted-foreground">
-                {pendingCount} pending · {reviewedCount} reviewed in this queue
-              </p>
+              <div>
+                <p role="status" className="text-sm text-muted-foreground">
+                  {pendingCount} pending · {reviewedCount} reviewed in this queue
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {changedCount} unsaved local mark {changedCount === 1 ? "draft" : "drafts"} ·
+                  {visibleReviews.length} matching returned responses · {visiblePending} matching pending
+                </p>
+              </div>
+              <Button size="sm" variant="outline" disabled={query.isFetching || !!saving}
+                onClick={refresh}>
+                <RefreshCw aria-hidden="true" className="mr-1 h-4 w-4"/>
+                {query.isFetching ? "Refreshing…" : "Refresh reviews"}
+              </Button>
               <div className="flex flex-wrap gap-2" role="group" aria-label="Filter written reviews">
                 {(["pending", "reviewed", "all"] as const).map(filter => (
                   <Button key={filter} size="sm" variant={reviewFilter === filter ? "default" : "outline"}
@@ -107,7 +178,45 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
                 ))}
               </div>
             </div>
-            {query.data.length === 0 && <p className="text-sm text-muted-foreground">No submitted written responses are available for review.</p>}
+            <div className="grid gap-3 rounded-xl border border-border bg-background p-4 sm:grid-cols-3">
+              <div>
+                <label htmlFor="written-review-search" className="mb-2 block text-sm font-medium">Search returned responses</label>
+                <div className="relative">
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground"/>
+                  <input id="written-review-search" type="search" maxLength={120}
+                    value={search} onChange={event => setSearch(event.target.value)}
+                    placeholder="Assessment, question or answer"
+                    className="min-h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm"/>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="written-review-assessment" className="mb-2 block text-sm font-medium">Assessment</label>
+                <select id="written-review-assessment" value={assessment}
+                  onChange={event => setAssessment(event.target.value)}
+                  className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                  <option value="all">All returned assessments</option>
+                  {assessments.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="written-review-sort" className="mb-2 block text-sm font-medium">Order responses</label>
+                <select id="written-review-sort" value={sort}
+                  onChange={event => setSort(event.target.value as typeof sort)}
+                  className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                  <option value="returned">Server-returned order</option>
+                  <option value="assessment">Assessment and question</option>
+                  <option value="reviewed_recent">Recently reviewed first</option>
+                </select>
+              </div>
+            </div>
+            {(search || assessment !== "all" || sort !== "returned") &&
+              <Button size="sm" variant="ghost" onClick={() => {setSearch("");setAssessment("all");setSort("returned");}}>
+                Clear review search and sorting
+              </Button>}
+            {query.data.length === 100 && <p role="note" className="text-xs text-muted-foreground">
+              The authorized review service returned its 100-response limit. This is not the full historical backlog.
+            </p>}
+            {query.data.length === 0 && <p className="text-sm text-muted-foreground">No submitted written responses are available for review.</p>
             {query.data.length > 0 && visibleReviews.length === 0 &&
               <p className="text-sm text-muted-foreground">No responses match this filter.</p>}
           </>}
@@ -119,7 +228,8 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
               </div>
               <p className="whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 text-sm">{entry.response_text}</p>
               <p className="text-xs text-muted-foreground">
-                {entry.reviewed_points === null ? "Not yet reviewed" : `Saved review: ${entry.reviewed_points} / ${entry.points_possible}`}
+                {entry.reviewed_points === null ? "Not yet reviewed" :
+                  `Saved provisional review: ${entry.reviewed_points} / ${entry.points_possible} · ${writtenReviewDate(entry.reviewed_at)}`}
               </p>
               <div className="flex flex-wrap items-end gap-3">
                 <label className="space-y-1 text-sm">
@@ -127,16 +237,29 @@ export default function EducationWrittenReviewPanel({ userId }: { userId: string
                   <input
                     type="number" min={0} max={entry.points_possible} step={1}
                     value={drafts[entry.answer_id] ?? (entry.reviewed_points === null ? "" : String(entry.reviewed_points))}
-                    onChange={event => setDrafts(prev => ({ ...prev, [entry.answer_id]: event.target.value }))}
+                    onChange={event => setDrafts(prev => ({ ...prev, [entry.answer_id]: event.target.value.slice(0, 5) }))}
                     className="min-h-11 w-28 rounded-lg border border-input bg-background px-3"
                     aria-label={`Points for written response ${entry.answer_id}`}
                   />
                 </label>
-                <Button disabled={!!saving || query.isFetching ||
-                    (drafts[entry.answer_id] === undefined && entry.reviewed_points !== null)}
-                  onClick={() => void save(entry.answer_id, entry.points_possible, entry.reviewed_points)}>
-                  {saving === entry.answer_id ? "Recording…" : "Record review"}
-                </Button>
+                {(() => {
+                  const raw = drafts[entry.answer_id] ?? (entry.reviewed_points === null ? "" : String(entry.reviewed_points));
+                  const validation = checkWrittenReviewDraft(raw, entry.points_possible, entry.reviewed_points);
+                  const changed = isWrittenReviewDraftChanged(drafts[entry.answer_id], entry.reviewed_points);
+                  return <>
+                    <Button disabled={!!saving || query.isFetching || !validation.valid || !validation.changed || !changed}
+                      onClick={() => void save(entry.answer_id, entry.points_possible, entry.reviewed_points)}>
+                      {saving === entry.answer_id ? "Recording…" : "Record review"}
+                    </Button>
+                    {changed && <Button type="button" variant="ghost" size="sm" disabled={!!saving}
+                      onClick={() => setDrafts(prev => {
+                        const next={...prev};delete next[entry.answer_id];return next;
+                      })}>Discard local mark</Button>}
+                    {changed && !validation.valid && <p role="alert" className="w-full text-xs text-destructive">
+                      {validation.error}
+                    </p>}
+                  </>;
+                })()}
               </div>
             </article>
           ))}
