@@ -168,7 +168,7 @@ test("20: deadline timestamps are captured only after locking each attempt", () 
 test("21: staging admission excludes unpublished and unverified password-protected exams", () => {
   const hub = read("src/pages/Education.tsx");
   assert.match(sql, /AND t\.is_published IS TRUE/);
-  assert.match(sql, /pg_catalog\.nullif\(pg_catalog\.btrim\(t\.access_password_hash\), ''\) IS NULL/);
+  assert.match(sql, /NULLIF\(pg_catalog\.btrim\(t\.access_password_hash\), ''\) IS NULL/);
   assert.match(hub, /atomicCbtEnabled \? activeTests\.eq\("is_published", true\) : activeTests/);
   assert.match(guide, /password-based test admission/);
 });

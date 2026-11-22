@@ -17,7 +17,7 @@ test("1: all new database changes remain staging-only and are one transaction", 
   assert.match(sql, /STAGING ONLY/);
   assert.equal((sql.match(/^BEGIN;$/gm) || []).length,1);
   assert.equal((sql.match(/^COMMIT;$/gm) || []).length,1);
-  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) || []).length,7);
+  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION public\./gm) || []).length,8);
   assert.match(doc, /NO live Supabase operations/);
 });
 
@@ -43,7 +43,7 @@ test("3: instructor publication request requires approved grant and matching tea
 test("4: ready check excludes unpublished invalid drafts and already started exams",()=>{
   assert.match(sql,/t.is_active IS FALSE AND t.is_published IS FALSE/);
   assert.match(sql,/duration_minutes BETWEEN 1 AND 1440/);
-  assert.match(sql,/nullif\(pg_catalog.btrim\(t.access_password_hash\), ''\) IS NULL/);
+  assert.match(sql,/NULLIF\(pg_catalog.btrim\(t.access_password_hash\), ''\) IS NULL/);
   assert.match(sql,/NOT EXISTS \(SELECT 1 FROM public.user_attempts AS a WHERE a.test_id = t.id\)/);
   assert.match(sql,/v_count NOT BETWEEN 1 AND 100/);
 });
@@ -102,8 +102,12 @@ test("10: only enrolled students receive allowed catalog metadata, never answers
 
 test("11: student question RLS drops legacy active-test-only public access",()=>{
   assert.match(sql,/DROP POLICY IF EXISTS "Users can view questions for their attempts" ON public.questions/);
+  assert.match(sql,/DROP POLICY IF EXISTS "Anyone can view active tests" ON public.tests/);
+  assert.match(sql,/CREATE POLICY "Students can view enrolled published tests"/);
   assert.match(sql,/CREATE POLICY "Students can view enrolled published questions"/);
-  assert.match(sql,/e.test_id = questions.test_id AND e.user_id = \(SELECT auth.uid\(\)\)/);
+  assert.match(sql,/public.education_student_can_read_questions\(questions.test_id\)/);
+  assert.match(sql,/FUNCTION public.education_student_can_read_questions\(p_test_id uuid\)/);
+  assert.match(sql,/e.test_id = p_test_id AND e.user_id = \(SELECT auth.uid\(\)\)/);
   assert.match(sql,/t.is_active IS TRUE AND t.is_published IS TRUE/);
 });
 
