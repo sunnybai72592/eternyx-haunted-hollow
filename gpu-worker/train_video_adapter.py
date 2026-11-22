@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 import tempfile
+from time import perf_counter
 
 import torch
 from diffusers import WanTransformer3DModel
@@ -55,7 +56,7 @@ def read_dataset(index_path, manifest_path):
 
 
 def run(model, base_identity, windows, output, steps, resume=False, seed=17, rank=2, interval=10, expected_digests=None,
-        dataset=None):
+        dataset=None, step_seconds=None):
     if min(steps, interval, rank) < 1 or not windows:
         raise ValueError("Provide encoded windows and positive steps, rank and checkpoint interval")
     digests = [fingerprint(path) for path in windows]
@@ -96,8 +97,11 @@ def run(model, base_identity, windows, output, steps, resume=False, seed=17, ran
             generator.set_state(state["noise_rng"])
             torch.set_rng_state(state["torch_rng"])
         for index in range(completed, steps):
+            started = perf_counter()
             batch = load_file(str(windows[index % len(windows)]))
             loss = train_step(model, optimizer, batch["latents"], batch["text_embeddings"], generator)
+            if step_seconds is not None:
+                step_seconds.append(perf_counter() - started)
             completed = index + 1
             if completed % interval and completed != steps:
                 continue
@@ -125,6 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("--steps", type=int, required=True, help="Total optimizer steps including completed steps")
     parser.add_argument("--checkpoint-every", type=int, default=10)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--timings", type=Path, help="New JSON file for completed optimizer update durations")
     args = parser.parse_args()
     if bool(args.dataset_index) != bool(args.manifest) or bool(args.windows) == bool(args.dataset_index):
         parser.error("Supply ordered windows or both --dataset-index and --manifest")
@@ -132,5 +137,9 @@ if __name__ == "__main__":
     root = args.snapshot.resolve(strict=True) / "transformer"
     base = transformer_identity(root)
     model = WanTransformer3DModel.from_pretrained(root, local_files_only=True, use_safetensors=True)
+    samples = [] if args.timings else None
     run(model, base, windows, args.output, args.steps, args.resume,
-        interval=args.checkpoint_every, expected_digests=digests, dataset=dataset)
+        interval=args.checkpoint_every, expected_digests=digests, dataset=dataset, step_seconds=samples)
+    if args.timings:
+        with args.timings.open("x", encoding="utf-8") as stream:
+            json.dump(samples, stream)
