@@ -6,6 +6,7 @@ on:
       - "gpu-worker/encode_training_manifest.py"
       - "gpu-worker/evaluate_video_adapter.py"
       - "gpu-worker/review_video_evaluation.py"
+      - "gpu-worker/review_training_footage.py"
       - "gpu-worker/test_window_encoding_cpu.py"
       - "gpu-worker/train_video_adapter.py"
       - "gpu-worker/wan_adapter_bundle.py"
