@@ -252,7 +252,7 @@ test("if systemd launched but attestation fails, cleanup stops unit and checks c
     execute(name,args){
       if(name==="ip"){
         n++;
-        if(n>=3)return JSON.stringify([...loopback,{
+        if(n>=2)return JSON.stringify([...loopback,{
           ifname:"veth0",link_type:"ether",flags:["UP"]}]);
       }
       return host.run(name,args);
