@@ -3,6 +3,7 @@ import AutomationWebhookPanel from "@/components/AutomationWebhookPanel";
 import AutomationSchedulePanel from "@/components/AutomationSchedulePanel";
 import AutomationGitHubReadPanel from "@/components/AutomationGitHubReadPanel";
 import AutomationGitHubIssuesPanel from "@/components/AutomationGitHubIssuesPanel";
+import AutomationWorkflowPolicyPanel from "@/components/AutomationWorkflowPolicyPanel";
 import AutomationTemplateGallery from "@/components/AutomationTemplateGallery";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2, FlaskConical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -275,6 +276,7 @@ export default function AutomationCloudPanel({
             </li>)}
           </ol>}
         </div>
+        {selected&&<AutomationWorkflowPolicyPanel key={userId+":"+selected.id} workflowId={selected.id} revision={selected.revision} input={input} />}
         <AutomationWebhookPanel selectedWorkflowId={selectedId} />
         <AutomationGitHubReadPanel />
         <AutomationGitHubIssuesPanel />
