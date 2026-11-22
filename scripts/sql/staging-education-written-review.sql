@@ -97,8 +97,15 @@ BEGIN
   -- Do not grade an in-progress or foreign exam even with a guessed UUID.
   SELECT ua.* INTO v_attempt FROM public.user_attempts AS ua
   JOIN public.user_answers AS a ON a.attempt_id = ua.id
-  WHERE a.id = p_answer_id FOR UPDATE OF ua;
-  IF NOT FOUND OR v_attempt.status NOT IN ('submitted','auto_submitted') THEN
+  JOIN public.tests AS t
+    ON t.id = ua.test_id AND t.teacher_id = v_teacher_id
+  JOIN public.education_publication_requests AS p
+    ON p.test_id = t.id AND p.status = 'approved'
+  WHERE a.id = p_answer_id
+    AND t.is_published IS TRUE
+    AND ua.status IN ('submitted','auto_submitted')
+  FOR UPDATE OF ua;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Completed answer unavailable' USING ERRCODE = '42501';
   END IF;
   SELECT a.* INTO v_answer
