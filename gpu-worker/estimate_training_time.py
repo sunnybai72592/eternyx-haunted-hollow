@@ -138,6 +138,7 @@ def plan(args):
     nonnegative(args.overhead_minutes, "Overhead minutes")
     samples = args.step_seconds
     result_details = {}
+    derived = None
     if args.pilot:
         skip = 1 if args.warmup_steps is None else args.warmup_steps
         receipt, recorded, digest = read_pilot(args.pilot, skip)
@@ -150,10 +151,8 @@ def plan(args):
         if args.auto_overhead:
             derived = measured_overhead(receipt, recorded, skip)
             result_details["observed_overhead"] = derived
-            if any(value < skip for value in [args.steps, *(args.also_steps or [])]):
-                raise ValueError("Target steps cannot be fewer than excluded warm-up updates with auto overhead.")
-    else:
-        derived = None
+            if any(value <= skip for value in [args.steps, *(args.also_steps or [])]):
+                raise ValueError("Target steps must exceed excluded warm-up updates with auto overhead.")
     overhead = args.overhead_minutes + (derived["measured_overhead_minutes"] if derived else 0)
     nonnegative(overhead, "Total overhead minutes")
     result = estimate(args.steps, samples, overhead)
