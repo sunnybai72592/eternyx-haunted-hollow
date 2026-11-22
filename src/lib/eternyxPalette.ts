@@ -20,8 +20,12 @@ export function normalizeEternyxPalette(value: unknown): EternyxPalette {
 
 export function readEternyxPalette(): EternyxPalette {
   if (typeof window === 'undefined') return 'cyan';
-  try { return normalizeEternyxPalette(window.localStorage.getItem(STORAGE_KEY)); }
-  catch { return 'cyan'; }
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (saved !== null) return normalizeEternyxPalette(saved);
+  } catch { /* A blocked storage API must not erase the active page choice. */ }
+  const active = document.documentElement.dataset.eternyxPalette;
+  return normalizeEternyxPalette(active);
 }
 
 export function applyEternyxPalette(value: unknown): EternyxPalette {
@@ -47,8 +51,11 @@ export function useEternyxPalette() {
   const [palette, setPalette] = useState<EternyxPalette>(readEternyxPalette);
   useEffect(() => {
     applyEternyxPalette(readEternyxPalette());
-    const onPalette = (event: Event) =>
-      setPalette(normalizeEternyxPalette((event as CustomEvent).detail));
+    const onPalette = (event: Event) => {
+      const next = normalizeEternyxPalette((event as CustomEvent).detail);
+      applyEternyxPalette(next);
+      setPalette(next);
+    };
     const onStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY || event.key === null) {
         const updated = readEternyxPalette();
