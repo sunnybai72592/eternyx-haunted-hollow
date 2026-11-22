@@ -25,7 +25,9 @@ MAX_REQUEST = 12000
 MAX_OUTPUT = 16384
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$")
 TASK_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$")
-FEATURES = {"ai.video.text_to_video", "ai.video.image_to_video"}
+# The approved local Wan runner currently supports text-to-video ONLY.
+# Do not advertise/queue unsupported jobs that would predictably fail on GPU.
+FEATURES = {"ai.video.text_to_video"}
 STATUSES = {"queued", "processing", "succeeded", "failed", "cancelled"}
 
 def validate_payload(payload):
@@ -36,21 +38,14 @@ def validate_payload(payload):
     if not isinstance(payload.get("prompt"), str) or not 1 <= len(payload["prompt"].strip()) <= 4000:
         raise ValueError("invalid prompt")
     duration = payload.get("durationSeconds")
-    if type(duration) is not int or not 1 <= duration <= 60:
-        raise ValueError("invalid video duration")
+    if type(duration) is not int or not 1 <= duration <= 5:
+        raise ValueError("Wan staging supports only 1–5 seconds")
     if set(payload) - {"featureKey", "prompt", "durationSeconds", "aspectRatio", "negativePrompt", "imageAssetId", "version"}:
         raise ValueError("unexpected fields")
-    if payload.get("aspectRatio", "16:9") not in {"16:9", "9:16", "1:1"}:
-        raise ValueError("aspect ratio unsupported")
+    if payload.get("aspectRatio", "16:9") != "16:9":
+        raise ValueError("Wan staging supports only 16:9")
     if "negativePrompt" in payload and (not isinstance(payload["negativePrompt"], str) or len(payload["negativePrompt"]) > 2000):
         raise ValueError("bad negative prompt")
-    if payload["featureKey"] == "ai.video.image_to_video":
-        if not isinstance(payload.get("imageAssetId"), str) or not re.fullmatch(
-            r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", payload["imageAssetId"], re.I
-        ):
-            raise ValueError("verified image asset id required")
-        # No image resolver is installed: prevent unsupported image-to-video work.
-        raise ValueError("image asset resolver not configured")
     if "imageAssetId" in payload:
         raise ValueError("unexpected image")
     if type(payload.get("version", 1)) is not int or payload.get("version", 1) != 1:
