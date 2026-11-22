@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import AutomationCloudPanel from "@/components/AutomationCloudPanel";
 import { ArrowDown, ArrowUp, Braces, CheckCircle2, ClipboardCopy, Download, Play, Plus, RotateCcw, Trash2, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -235,5 +236,6 @@ export default function AutomationWorkflowStudio() {
       <label htmlFor="automation-config" className="mt-4 block text-sm">Configuration JSON</label>
       <Textarea id="automation-config" rows={6} className="mt-2 font-mono text-xs" maxLength={16000} value={config} onChange={(e) => setConfig(e.target.value)} placeholder='{"version":1,"steps":[...]}' />
     </div>
+    <AutomationCloudPanel steps={steps} input={input} onLoadSteps={(savedSteps) => { setSteps(savedSteps); invalidate(); }} />
   </section>;
 }
