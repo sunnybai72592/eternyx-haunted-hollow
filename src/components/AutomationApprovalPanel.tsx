@@ -156,7 +156,7 @@ export default function AutomationApprovalPanel() {
             </div>}
             {reviewed && available && <div className="space-y-2 rounded-lg border border-primary/20 p-3">
               <p className="text-sm font-medium">Verified original text — review before approval</p>
-              <Textarea readOnly rows={5} className="font-mono text-xs" value={preview.input}/>
+              <Textarea readOnly rows={5} className="font-mono text-xs" value={preview?.input ?? ""}/>
             </div>}
           </li>;
         })}
