@@ -74,7 +74,11 @@ BEGIN
   END IF;
   SELECT t.duration_minutes INTO v_minutes
   FROM public.tests AS t
-  WHERE t.id = p_test_id AND t.is_active IS TRUE;
+  WHERE t.id = p_test_id AND t.is_active IS TRUE
+    AND t.is_published IS TRUE
+    -- Do not bypass instructor access passwords. A separately verified
+    -- enrollment/password service is needed before these exams can open.
+    AND pg_catalog.nullif(pg_catalog.btrim(t.access_password_hash), '') IS NULL;
   IF v_minutes IS NULL OR v_minutes NOT BETWEEN 1 AND 1440 OR
      NOT EXISTS (SELECT 1 FROM public.questions AS q WHERE q.test_id = p_test_id) THEN
     RAISE EXCEPTION 'Assessment unavailable' USING ERRCODE = '22023';
