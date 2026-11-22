@@ -135,8 +135,15 @@ BEGIN
     WHEN TG_OP = 'UPDATE' THEN 'updated' ELSE 'deleted' END;
   v_owner := CASE WHEN TG_OP = 'DELETE' THEN OLD.owner_id ELSE NEW.owner_id END;
   v_entity := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-  v_project := CASE WHEN TG_TABLE_NAME = 'workspace_projects' THEN v_entity
-    WHEN TG_OP = 'DELETE' THEN OLD.project_id ELSE NEW.project_id END;
+  -- Project rows have no project_id column. Separate branches so PL/pgSQL
+  -- never attempts to resolve a missing record field on project INSERT/UPDATE.
+  IF TG_TABLE_NAME = 'workspace_projects' THEN
+    v_project := v_entity;
+  ELSIF TG_OP = 'DELETE' THEN
+    v_project := OLD.project_id;
+  ELSE
+    v_project := NEW.project_id;
+  END IF;
   INSERT INTO public.workspace_activity(owner_id, project_id, entity_id, event_type)
     VALUES (v_owner, v_project, v_entity, v_action);
   -- AFTER triggers ignore the return value.
@@ -176,7 +183,7 @@ ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 5242880,
 -- A file row cannot claim an object that was never uploaded.
 -- This restricted trigger sees the storage catalog but exposes no callable RPC.
 CREATE OR REPLACE FUNCTION public.workspace_verify_file_upload()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $workspace_verify$
 BEGIN
   IF NEW.kind = 'file' AND NOT EXISTS (
     SELECT 1 FROM storage.objects o
@@ -187,7 +194,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$workspace_verify$;
 REVOKE ALL ON FUNCTION public.workspace_verify_file_upload() FROM PUBLIC, anon, authenticated;
 CREATE TRIGGER workspace_items_verify_upload BEFORE INSERT ON public.workspace_items
   FOR EACH ROW EXECUTE FUNCTION public.workspace_verify_file_upload();
@@ -195,21 +202,21 @@ CREATE TRIGGER workspace_items_verify_upload BEFORE INSERT ON public.workspace_i
 CREATE POLICY workspace_private_read ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2] AND p.owner_id = (SELECT auth.uid()))
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2] AND p.owner_id = (SELECT auth.uid()))
 );
 CREATE POLICY workspace_private_insert ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2] AND p.owner_id = (SELECT auth.uid()))
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2] AND p.owner_id = (SELECT auth.uid()))
 );
 CREATE POLICY workspace_private_delete ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'workspace-private'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
+  AND (storage.foldername(storage.objects.name))[1] = (SELECT auth.uid())::text
   AND EXISTS (SELECT 1 FROM public.workspace_projects p
-    WHERE p.id::text = (storage.foldername(name))[2] AND p.owner_id = (SELECT auth.uid()))
+    WHERE p.id::text = (storage.foldername(storage.objects.name))[2] AND p.owner_id = (SELECT auth.uid()))
 );
