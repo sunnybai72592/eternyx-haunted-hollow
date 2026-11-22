@@ -152,6 +152,22 @@ def run_fixture(root, output):
     review_command = [sys.executable, str(Path(__file__).with_name("review_training_footage.py")),
                       str(root), str(manifest_path), str(footage_review)]
     subprocess.run(review_command, check=True)
+    choices = (output or root) / "window-options.html"
+    subprocess.run([sys.executable, str(Path(__file__).with_name("compare_footage_windows.py")),
+                    str(root), str(manifest_path), "testsrc2.mp4", str(choices),
+                    "--starts", "0", "8", "16"], check=True)
+    import base64
+    import re
+    choices_html = choices.read_text()
+    assert choices_html.count("data:image/png;base64,") == 6
+    assert choices_html.count("Too few frames remain") == 1
+    variants = [json.loads(base64.b64decode(blob)) for blob in
+                re.findall(r'data:application/json;base64,([^"]+)', choices_html)]
+    assert len(variants) == 2
+    for variant, offset in zip(variants, (0, 8)):
+        expected = [{**row, "start_frame": offset} if row["file"] == "testsrc2.mp4" else row for row in rows]
+        assert variant == {**manifest, "clips": expected}
+    assert json.loads(manifest_path.read_bytes()) == manifest
     page = footage_review.read_text()
     assert "<figcaption>0.25 s</figcaption>" in page
     assert page.count("data:image/png;base64,") == 9
