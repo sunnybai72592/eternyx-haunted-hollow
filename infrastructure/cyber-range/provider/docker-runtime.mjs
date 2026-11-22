@@ -130,6 +130,10 @@ export class LocalDockerRangeRuntime {
             headers: { authorization: "Bearer " + token },
             signal: AbortSignal.timeout(1300),
           });
+          if (process.env.ETERNYX_RANGE_HOST_SMOKE === "CI_DISPOSABLE_ONLY" &&
+              attempt < 2 && !response.ok) {
+            console.error("Local private gateway probe status:", response.status);
+          }
           if (response.ok) {
             await this.attest(sessionId);
             // The private gateway bearer is never stored in Supabase or logs.
