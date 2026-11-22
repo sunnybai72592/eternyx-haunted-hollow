@@ -193,7 +193,7 @@ test("managed Compose services are labeled and runtime does not inherit Supabase
   assert.equal((compose.match(/org\.eternyx\.range\.ttl_seconds: "900"/g)||[]).length,2);
   assert.match(runtime,/listVerifiedManagedProjects/);
   assert.match(runtime,/assertLocalLaunchAllowed/);
-  assert.match(runtime,/--filter", "label=/);
+  assert.match(runtime,/--filter","label=/);
   assert.match(cli,/--emergency-stop/);
   assert.match(cli,/engageLocalHostHalt\(\)/);
   assert.match(cli,/runOrphanSweep/);
