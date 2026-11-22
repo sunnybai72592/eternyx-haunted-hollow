@@ -105,7 +105,14 @@ test("container hardening, local-only publishing and no Docker socket bind mount
   const compose = await read("infrastructure/cyber-range/compose.yaml");
   const dockerfile = await read("infrastructure/cyber-range/target/Dockerfile");
   const runner = await read("scripts/cyber-range.mjs");
-  assert.match(compose, /127\.0\.0\.1:8765:8080/);
+  assert.match(compose, /127\.0\.0\.1:8765:8081/);
+  assert.match(compose, /gateway:/);
+  const isolatedTarget = compose.split("  gateway:")[0];
+  assert.doesNotMatch(isolatedTarget, /\s+ports:/);
+  const gateway = await read("infrastructure/cyber-range/gateway/server.mjs");
+  assert.match(gateway, /const targetOrigin = "http:\/\/http-range:8080"/);
+  assert.match(gateway, /destination\.origin !== targetOrigin/);
+  assert.match(gateway, /Localhost Host required/);
   assert.match(compose, /internal: true/);
   for (const rule of ["read_only: true", "cap_drop:", "no-new-privileges:true", "pids_limit:", "mem_limit:", "tmpfs:", "restart: \"no\"", "RANGE_MAX_AGE_SECONDS"]) {
     assert.ok(compose.includes(rule), "Missing local range isolation rule: " + rule);
