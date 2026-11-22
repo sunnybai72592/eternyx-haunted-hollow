@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock3, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,7 @@ type Answer = { questionId: string; selectedOptionId?: string; shortAnswer?: str
 export default function TestInterface() {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
   const validTestId = validExamId(testId);
   const enabled = !authLoading && isAuthenticated && !!user?.id && validTestId;
@@ -198,6 +199,7 @@ export default function TestInterface() {
         if (!["submitted", "auto_submitted"].includes(result.status)) {
           throw new Error("The server did not confirm assessment submission.");
         }
+        await queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
         toast.success("Assessment submission recorded.");
         navigate("/test-results/" + attemptId, { replace: true });
         return;
@@ -223,6 +225,7 @@ export default function TestInterface() {
         .select("id").maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("The attempt was not updated. Please check its server status.");
+      await queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
       toast.success("Assessment submission recorded.");
       navigate("/test-results/" + attemptId, { replace: true });
     } catch {
@@ -231,7 +234,7 @@ export default function TestInterface() {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers]);
+  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers, queryClient]);
   submitRef.current = submitExam;
 
   useEffect(() => {
