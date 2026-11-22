@@ -25,6 +25,8 @@ Add an optional `start_frame` column to the annotation CSV. Count from zero on t
 python gpu-worker/compare_footage_windows.py ./clips dataset-v1.json workshop-wide.mp4 options.html --starts 0 8 32
 ```
 
+To explore without choosing frame numbers, replace `--starts 0 8 32` with `--samples 5`. The tool spaces candidates across the probed duration, includes the current selection and removes duplicate offsets. Actual decoding determines completeness. Open the ranked links to inspect the largest pixel changes, or download the CSV for all candidates. Camera shake and cuts can also produce large changes. Use the caption and previews to select the action.
+
 Open the local HTML to compare timestamps, frames and adjacent-frame pixel changes. An incomplete candidate is marked individually. Save the manifest for the window that matches your caption, then use that file for encoding, training and evaluation. The exported copy changes only the selected clip's start frame. The HTML contains footage previews and downloadable copies of the dataset annotations.
 
 ## Inspect the selected windows before encoding

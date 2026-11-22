@@ -119,6 +119,7 @@ def run_fixture(root, output):
                      "rights_ref": "synthetic test generator"})
     for row in rows:
         row["start_frame"] = 4
+        row["duration_seconds"] = 2.0
     manifest = {"version": 1, "clips": rows}
     window = prepare_frames(root, manifest, "testsrc2.mp4")
     held_out = {row["scene"]: prepare_evaluation_frames(root, manifest, row["file"])
@@ -168,6 +169,18 @@ def run_fixture(root, output):
         expected = [{**row, "start_frame": offset} if row["file"] == "testsrc2.mp4" else row for row in rows]
         assert variant == {**manifest, "clips": expected}
     assert json.loads(manifest_path.read_bytes()) == manifest
+    sampled = (output or root) / "sampled-windows.html"
+    subprocess.run([sys.executable, str(Path(__file__).with_name("compare_footage_windows.py")),
+                    str(root), str(manifest_path), "testsrc2.mp4", str(sampled), "--samples", "3"], check=True)
+    sample_html = sampled.read_text()
+    assert "4 of 4 windows complete" in sample_html
+    import csv
+    import io
+    encoded_csv = re.search(r'data:text/csv;base64,([^"]+)', sample_html)[1]
+    measurements = list(csv.DictReader(io.StringIO(base64.b64decode(encoded_csv).decode())))
+    assert [int(row["start_frame"]) for row in measurements] == [0, 4, 8, 15]
+    ranked = sorted(measurements, key=lambda row: (-float(row["mean_adjacent_rgb_change"]), int(row["start_frame"])))
+    assert re.findall(r'href="#frame-([0-9]+)"', sample_html) == [row["start_frame"] for row in ranked]
     page = footage_review.read_text()
     assert "<figcaption>0.25 s</figcaption>" in page
     assert page.count("data:image/png;base64,") == 9
