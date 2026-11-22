@@ -181,6 +181,10 @@ export default function TestInterface() {
       !!saveQueueRef.current && saveQueueScopeRef.current === user?.id + ":" + attemptQuery.data.id));
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
     if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
+    if (atomicCbtEnabled && (!restoredAnswersQuery.isSuccess || !saveQueueRef.current)) {
+      setNotice("Your existing saved answers are not ready. Do not submit until the server has restored the attempt.");
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
     setConfirmSubmit(false);
@@ -199,7 +203,7 @@ export default function TestInterface() {
         if (!["submitted", "auto_submitted"].includes(result.status)) {
           throw new Error("The server did not confirm assessment submission.");
         }
-        await queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
+        void queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
         toast.success("Assessment submission recorded.");
         navigate("/test-results/" + attemptId, { replace: true });
         return;
@@ -225,7 +229,7 @@ export default function TestInterface() {
         .select("id").maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("The attempt was not updated. Please check its server status.");
-      await queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
+      void queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
       toast.success("Assessment submission recorded.");
       navigate("/test-results/" + attemptId, { replace: true });
     } catch {
@@ -234,7 +238,7 @@ export default function TestInterface() {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers, queryClient]);
+  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers, queryClient, restoredAnswersQuery.isSuccess]);
   submitRef.current = submitExam;
 
   useEffect(() => {
