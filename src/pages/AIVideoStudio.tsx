@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import VideoStoryboard from "@/components/VideoStoryboard";
+import LocalVideoEditor from "@/components/LocalVideoEditor";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -203,6 +204,7 @@ const AIVideoStudio = () => {
               A dedicated workspace for text-to-video, image-to-video, video transformation and presenter-style generation.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
+              <Badge variant="outline" className="border-emerald-400/40 bg-emerald-900/20 text-emerald-200">Local CPU project export available</Badge>
               <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">Async job architecture prepared</Badge>
               <Badge variant="outline" className="border-accent/30 bg-accent/10 text-accent">Multi-provider ready</Badge>
               <Badge variant="outline" className="border-slate-600 text-slate-300">Generation disabled</Badge>
@@ -217,6 +219,7 @@ const AIVideoStudio = () => {
           </AlertDescription>
         </Alert>
 
+        <LocalVideoEditor />
         <VideoStoryboard />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
