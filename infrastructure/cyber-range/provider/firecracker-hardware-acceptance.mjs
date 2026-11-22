@@ -179,6 +179,13 @@ export async function runOfflineHardwareAcceptance({
     // InstanceStart; it is not a 900s watchdog expiry test.
     await pause(1000,signal);
     if(signal?.aborted)throw Error("Offline KVM acceptance was cancelled");
+    // A successful InstanceStart followed immediately by a dead service is
+    // not a usable guest. Re-attest after the observation interval as well.
+    const observed=await supervisor.attest(sessionId);
+    if(observed?.jailed!==true||observed.hostNetworkDenied!==true||
+       observed.externalWatchdogArmed!==true||observed.cgroupEnforced!==true||
+       observed.cloudProvisioningAllowed!==false)
+      throw Error("Offline guest stopped or lost isolation during observation");
     evidence={
       accepted:true,sessionId,unit:supervisedVmUnit(sessionId),
       bootApiAccepted:true,offlineNetnsAttested:true,
