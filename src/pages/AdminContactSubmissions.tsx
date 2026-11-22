@@ -140,7 +140,7 @@ export default function AdminContactSubmissions() {
     return <main className="mx-auto flex min-h-[55vh] items-center justify-center px-4 text-sm text-slate-400">Verifying administrator access…</main>;
   }
   if (!user || !isAdmin) {
-    return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-[#0a1221] p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p></Card></main>;
+    return <main className="mx-auto max-w-3xl px-4 py-16"><Card className="border-white/10 bg-card p-8 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" /><h1 className="text-2xl font-semibold text-white">{user ? 'Administrator access only' : 'Sign in required'}</h1><p className="mt-2 text-sm text-slate-400">This workspace is restricted to authorized ETERNYX administrators.</p></Card></main>;
   }
 
   const metrics = [
@@ -164,14 +164,14 @@ export default function AdminContactSubmissions() {
       </header>
 
       <section aria-label="Business enquiry metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map(({ label, value, note, icon: Icon, tone }) => <Card key={label} className="border-white/[0.09] bg-[#0a1322]/90 p-5">
+        {metrics.map(({ label, value, note, icon: Icon, tone }) => <Card key={label} className="border-white/[0.09] bg-card/90 p-5">
           <div className="flex items-center justify-between text-slate-400"><span className="text-xs font-medium">{label}</span><Icon className="h-4 w-4" /></div>
           <p className={`mt-4 text-3xl font-semibold tabular-nums ${tone}`}>{loading && enquiries.length === 0 ? '—' : value}</p>
           <p className="mt-1 text-xs text-slate-500">{note}</p>
         </Card>)}
       </section>
 
-      <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0a1221]/85">
+      <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.09] bg-card/85">
         <div className="flex flex-col gap-4 border-b border-white/[0.08] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/65">Client pipeline</p><h2 className="mt-1 text-xl font-semibold text-white">Enquiry inbox</h2><p className="mt-1 text-xs text-slate-500">{filtered.length} of {enquiries.length} enquiries shown</p></div>
@@ -179,7 +179,7 @@ export default function AdminContactSubmissions() {
           </div>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
             <label className="relative block"><span className="sr-only">Search business enquiries</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, email, company or message…" className="h-11 w-full rounded-xl border border-white/10 bg-black/20 pl-10 pr-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-200/10" /></label>
-            <label className="relative block"><span className="sr-only">Filter enquiries by status</span><Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | EnquiryStatus)} className="h-11 w-full appearance-none rounded-xl border border-white/10 bg-[#0b1424] pl-10 pr-4 text-sm text-slate-200 outline-none transition focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-200/10"><option value="all">All statuses</option>{statuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
+            <label className="relative block"><span className="sr-only">Filter enquiries by status</span><Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | EnquiryStatus)} className="h-11 w-full appearance-none rounded-xl border border-white/10 bg-card pl-10 pr-4 text-sm text-slate-200 outline-none transition focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-200/10"><option value="all">All statuses</option>{statuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
           </div>
         </div>
 
@@ -208,8 +208,8 @@ export default function AdminContactSubmissions() {
                   <p className="mt-3 text-[10px] text-slate-600">Reference: {item.id.slice(0, 8)} · Updated {formatDate(item.updated_at)}</p>
                 </div>
                 <div className="grid w-full shrink-0 gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3 sm:grid-cols-2 xl:w-64 xl:grid-cols-1">
-                  <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Workflow status</span><select value={status} disabled={updatingId === item.id} onChange={(event) => void updateEnquiry(item.id, { status: event.target.value as EnquiryStatus })} className="h-10 w-full rounded-lg border border-white/10 bg-[#0b1424] px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">{statuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                  <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Priority</span><select value={priority} disabled={updatingId === item.id} onChange={(event) => void updateEnquiry(item.id, { priority: event.target.value as EnquiryPriority })} className="h-10 w-full rounded-lg border border-white/10 bg-[#0b1424] px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">{priorities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                  <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Workflow status</span><select value={status} disabled={updatingId === item.id} onChange={(event) => void updateEnquiry(item.id, { status: event.target.value as EnquiryStatus })} className="h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">{statuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                  <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Priority</span><select value={priority} disabled={updatingId === item.id} onChange={(event) => void updateEnquiry(item.id, { priority: event.target.value as EnquiryPriority })} className="h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-sm text-slate-100 outline-none focus:border-cyan-200/40 disabled:opacity-50">{priorities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
                   {updatingId === item.id && <p className="text-[11px] text-cyan-200 sm:col-span-2 xl:col-span-1">Saving update…</p>}
                 </div>
               </div>
