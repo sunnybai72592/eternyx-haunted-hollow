@@ -1,0 +1,53 @@
+name: Automation GitHub Workflow Bridge and Issue Readback SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123040000_automation_github_workflow_tracking.sql'
+      - 'tests/sql/automation-github-workflow-tracking-db-smoke.sql'
+      - '.github/workflows/automation-github-workflow-tracking-sql.yml'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify saved workflow lineage, GitHub issue status readback, quotas and owner boundaries on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start network-isolated disposable PostgreSQL 17
+        run: |
+          docker run --detach --rm --network none --name eternyx-gh-workflows-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-gh-workflows-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-gh-workflows-ci pg_isready -U postgres || {
+            docker logs eternyx-gh-workflows-ci
+            exit 1
+          }
+      - name: Bootstrap two auth identities
+        run: docker exec --interactive eternyx-gh-workflows-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply saved text workflows, approved GitHub issues and Phase 2H migrations
+        run: |
+          for file in \
+            supabase/migrations/20261122220000_automation_manual_control_plane.sql \
+            supabase/migrations/20261123030000_automation_github_issue_approvals.sql \
+            supabase/migrations/20261123040000_automation_github_workflow_tracking.sql; do
+            docker exec --interactive eternyx-gh-workflows-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+          done
+      - name: Verify real workflow lineage, readback, tenant fences and 24-hour quotas
+        run: docker exec --interactive eternyx-gh-workflows-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-github-workflow-tracking-db-smoke.sql
+      - name: Remove disposable PostgreSQL
+        if: always()
+        run: docker rm --force eternyx-gh-workflows-ci || true
