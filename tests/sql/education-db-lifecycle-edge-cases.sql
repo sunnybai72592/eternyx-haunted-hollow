@@ -214,6 +214,10 @@ BEGIN
   IF v_question IS NULL OR v_choice IS NULL THEN
     RAISE EXCEPTION 'Student B cannot see a permitted option';
   END IF;
+  -- Keep only the synthetic option/question UUIDs for post-deadline probes:
+  -- student RLS may deliberately hide option rows after the deadline.
+  PERFORM pg_catalog.set_config('eternyx.edge_b_question',v_question::text,false);
+  PERFORM pg_catalog.set_config('eternyx.edge_b_choice',v_choice::text,false);
   IF public.save_cbt_answer(v_attempt,v_question,v_choice,NULL)->>'status' <> 'saved' THEN
     RAISE EXCEPTION 'Initial objective answer save failed';
   END IF;
@@ -254,15 +258,10 @@ SET ROLE authenticated;
 SET request.jwt.claim.sub = '00000000-0000-4000-8000-000000000005';
 DO $edge$
 DECLARE
-  v_question uuid;
-  v_choice uuid;
+  v_question uuid := pg_catalog.current_setting('eternyx.edge_b_question')::uuid;
+  v_choice uuid := pg_catalog.current_setting('eternyx.edge_b_choice')::uuid;
   v_attempt uuid := pg_catalog.current_setting('eternyx.edge_b_attempt')::uuid;
 BEGIN
-  SELECT q.id, o.id INTO v_question,v_choice
-  FROM public.questions AS q
-  JOIN public.options AS o ON o.question_id=q.id
-  WHERE q.test_id=pg_catalog.current_setting('eternyx.edge_b_draft')::uuid
-  LIMIT 1;
   IF public.save_cbt_answer(v_attempt,v_question,v_choice,NULL)->>'status' <> 'expired' THEN
     RAISE EXCEPTION 'Expired attempt accepted a save';
   END IF;
