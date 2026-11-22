@@ -92,6 +92,7 @@ export default function Education() {
         </header>
 
         {!authLoading && isAuthenticated && (
+          <>
           <section aria-label="Local question-bank authoring" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
             <div>
               <h2 className="font-semibold text-foreground">Create your own question bank</h2>
@@ -121,6 +122,7 @@ export default function Education() {
               </Link>
             </Button>
           </section>
+          </>
         )}
 
         {!authLoading && !isAuthenticated && (
