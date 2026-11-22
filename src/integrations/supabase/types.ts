@@ -2474,7 +2474,32 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      service_admin_attention_queue: {
+        Row: {
+          id: string
+          user_id: string
+          service_key: string
+          title: string
+          description: string
+          contact_email: string
+          company: string | null
+          status: string
+          client_update: string | null
+          expected_outcome: string | null
+          timeframe: string | null
+          constraints: string | null
+          created_at: string
+          updated_at: string
+          priority: string
+          priority_rank: number
+          assigned_admin_id: string | null
+          triage_updated_at: string | null
+          last_customer_activity_at: string | null
+          last_admin_activity_at: string | null
+          needs_follow_up: boolean
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_list_users: {
