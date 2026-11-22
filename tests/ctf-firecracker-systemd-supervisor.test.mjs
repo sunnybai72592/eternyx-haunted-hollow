@@ -6,6 +6,7 @@ import {
   parseSystemdUnitShow,verifySystemdUnitProperties,
   verifyLoopbackOnlyNamespace,SystemdMicrovmSupervisor,
   runSupervisorCommand,verifySupervisorHost,
+  verifyMicrovmProcessNetns,
 } from "../infrastructure/cyber-range/provider/firecracker-systemd-supervisor.mjs";
 
 const session="123e4567-e89b-42d3-a456-426614174001";
@@ -44,7 +45,7 @@ function notFound(){
     Type:"simple",ExecStart:"",Description:""});
 }
 function fakeHost({initial=false,failStart=false,cgroupText="",
-  badNetwork=false,cgroupMember=true,populated=0}={}){
+  badNetwork=false,cgroupMember=true,populated=0,wrongProcessNetns=false}={}){
   let active=initial;const calls=[];
   const host={
     calls,
@@ -65,7 +66,12 @@ function fakeHost({initial=false,failStart=false,cgroupText="",
       if(args[0]==="stop"){active=false;return "";}
       throw Error("Unexpected systemctl action");
     },
-    files:{async readFile(path){
+    files:{async stat(path){
+      if(path==="/run/netns/eternyx-"+project)return{dev:4,ino:101};
+      if(path==="/proc/12001/ns/net")
+        return{dev:4,ino:wrongProcessNetns?102:101};
+      throw Error("unexpected netns stat");
+    },async readFile(path){
       if(path==="/proc/12001/cgroup")
         return "0::"+(cgroupMember?"/system.slice/"+unit:"/other.slice/foreign.service")+"\n";
       if(path.endsWith("/cgroup.procs")||path.endsWith("/cgroup.events")){
@@ -253,6 +259,26 @@ test("namespace must be only loopback before launch and while running",async()=>
   await assert.rejects(makeSupervisor(fakeHost({
     badNetwork:true,initial:true,
   })).attest(session),/non-loopback/);
+});
+
+test("offline network attestation rejects host namespace even when named netns is safe",async()=>{
+  assert.equal(verifyMicrovmProcessNetns({dev:4,ino:101},{dev:4,ino:101}),true);
+  for(const bad of [{dev:4,ino:102},{dev:5,ino:101},
+    {dev:"4",ino:101},null,{}]){
+    assert.throws(()=>verifyMicrovmProcessNetns({dev:4,ino:101},bad),
+      /offline network namespace/);
+  }
+  const badHost=fakeHost({initial:true,wrongProcessNetns:true});
+  await assert.rejects(makeSupervisor(badHost).attest(session),
+    /outside the pinned offline network namespace/);
+  const confused=fakeHost({initial:true});
+  const original=confused.files.stat;
+  confused.files.stat=async path=>{
+    if(path.startsWith("/proc/"))throw Error("permission");
+    return original(path);
+  };
+  await assert.rejects(makeSupervisor(confused).attest(session),
+    /Cannot attest microVM process network namespace/);
 });
 
 test("escaped main process or nested cgroup tasks refuse attestation and teardown",async()=>{
