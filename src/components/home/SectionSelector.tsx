@@ -21,9 +21,9 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
   return (
     <main className={cn("relative isolate overflow-hidden bg-background text-white", className)}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-72 left-[45%] h-[46rem] w-[46rem] -translate-x-1/2 rounded-full bg-cyan-400/[0.13] blur-[130px]" />
-        <div className="absolute right-[-18rem] top-[28rem] h-[38rem] w-[38rem] rounded-full bg-violet-600/[0.13] blur-[130px]" />
-        <div className="absolute bottom-[-18rem] left-[-15rem] h-[34rem] w-[34rem] rounded-full bg-blue-500/[0.09] blur-[120px]" />
+        <div className="absolute -top-72 left-[45%] h-[46rem] w-[46rem] -translate-x-1/2 rounded-full bg-primary/[0.13] blur-[130px]" />
+        <div className="absolute right-[-18rem] top-[28rem] h-[38rem] w-[38rem] rounded-full bg-accent/[0.13] blur-[130px]" />
+        <div className="absolute bottom-[-18rem] left-[-15rem] h-[34rem] w-[34rem] rounded-full bg-primary/[0.09] blur-[120px]" />
         <div className="absolute inset-0 opacity-[0.13]" style={{ backgroundImage: "linear-gradient(hsl(var(--primary)/.12) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)/.12) 1px, transparent 1px)", backgroundSize: "72px 72px", maskImage: "linear-gradient(to bottom, black, transparent 88%)" }} />
       </div>
 
@@ -36,15 +36,15 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
             <ContinueWork />
             <HomeTaskFinder />
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-cyan-200 px-6 font-bold text-slate-950 shadow-[0_10px_34px_hsl(var(--primary)/.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-100">
+              <Button size="lg" onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="h-12 rounded-xl bg-primary px-6 font-bold text-primary-foreground shadow-[0_10px_34px_hsl(var(--primary)/.18)] transition duration-200 motion-safe:hover:-translate-y-0.5 hover:bg-primary/90">
                 Explore the six pillars <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               {isAuthenticated ? (
-                <Button size="lg" variant="outline" onClick={() => navigate("/account")} className="h-12 rounded-xl border-white/15 bg-white/[0.04] px-6 text-white transition hover:border-white/25 hover:bg-white/[0.08]">
+                <Button size="lg" variant="outline" onClick={() => navigate("/account")} className="h-12 rounded-xl border-border/70 bg-card/50 px-6 text-foreground transition hover:border-primary/40 hover:bg-card">
                   Open my account <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : (
-                <Button size="lg" variant="outline" onClick={() => navigate("/auth?mode=signup")} className="h-12 rounded-xl border-white/15 bg-white/[0.04] px-6 text-white transition hover:border-white/25 hover:bg-white/[0.08]">
+                <Button size="lg" variant="outline" onClick={() => navigate("/auth?mode=signup")} className="h-12 rounded-xl border-border/70 bg-card/50 px-6 text-foreground transition hover:border-primary/40 hover:bg-card">
                   Join ETERNYX <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               )}
@@ -57,7 +57,7 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
         <section className="border-t border-white/[0.08] pt-14 sm:pt-16" id="pillars" aria-labelledby="pillars-heading">
           <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[.25em] text-cyan-300 sm:text-xs">The architecture of possibility</p>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[.25em] text-primary sm:text-xs">The architecture of possibility</p>
               <h2 id="pillars-heading" className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Six pillars. One connected vision.</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Every part has a purpose. We're growing the ecosystem in stages and staying clear about what's available today.</p>
             </div>
@@ -68,15 +68,15 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
               const Icon = pillar.icon;
               const isActive = pillar.status === "Existing foundation";
               const accentClasses: Record<string, string> = {
-                cyan: "text-cyan-200 bg-cyan-200/[0.08] border-cyan-200/20",
-                violet: "text-violet-200 bg-violet-200/[0.08] border-violet-200/20",
-                fuchsia: "text-fuchsia-200 bg-fuchsia-200/[0.08] border-fuchsia-200/20",
-                blue: "text-blue-200 bg-blue-200/[0.08] border-blue-200/20",
-                sky: "text-sky-200 bg-sky-200/[0.08] border-sky-200/20",
-                emerald: "text-emerald-200 bg-emerald-200/[0.08] border-emerald-200/20",
+                cyan: "text-primary bg-primary/[0.08] border-primary/20",
+                violet: "text-primary bg-primary/[0.08] border-primary/20",
+                fuchsia: "text-primary bg-primary/[0.08] border-primary/20",
+                blue: "text-primary bg-primary/[0.08] border-primary/20",
+                sky: "text-primary bg-primary/[0.08] border-primary/20",
+                emerald: "text-primary bg-primary/[0.08] border-primary/20",
               };
               return (
-                <Link key={pillar.id} to={pillar.href} className="group relative flex min-h-[238px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-br from-white/[0.055] to-white/[0.015] p-6 transition duration-300 hover:-translate-y-1 hover:border-cyan-200/30 hover:from-cyan-200/[0.07] hover:to-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200">
+                <Link key={pillar.id} to={pillar.href} className="group relative flex min-h-[238px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-br from-white/[0.055] to-white/[0.015] p-6 transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:from-primary/[0.07] hover:to-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                   <div className="mb-5 flex items-start justify-between gap-3">
                     <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl border", accentClasses[pillar.accent] || accentClasses.cyan)}><Icon className="h-6 w-6" /></div>
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider", isActive ? "border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200" : "border-white/10 bg-white/[0.035] text-slate-400")}>
@@ -87,9 +87,9 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-[.2em] text-slate-500">0{index + 1} / 06</p>
                   <h3 className="mb-2 text-lg font-bold text-white">{pillar.title}</h3>
                   <p className="mb-5 flex-1 text-sm leading-6 text-slate-400">{pillar.description}</p>
-                  <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 text-xs font-semibold text-slate-300">
+                  <div className="flex items-center justify-between border-t border-border/40 pt-4 text-xs font-semibold text-slate-300">
                     <span>{pillar.domains.slice(0, 2).join(" · ")}</span>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-cyan-200 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-primary transition motion-safe:group-hover:translate-x-0.5 motion-safe:group-hover:-translate-y-0.5" />
                   </div>
                 </Link>
               );
@@ -99,14 +99,14 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({ className = ""
 
         <VisitorPresence />
 
-        <section className="mt-12 overflow-hidden rounded-2xl border border-cyan-200/15 bg-gradient-to-r from-cyan-200/[0.08] via-blue-300/[0.04] to-violet-300/[0.08] p-6 sm:p-9">
+        <section className="mt-12 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/[0.08] via-accent/[0.04] to-primary/[0.08] p-6 sm:p-9">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-2xl">
-              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.22em] text-cyan-100 sm:text-xs"><Sparkles className="h-4 w-4" /> Built with intention</div>
+              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.22em] text-primary sm:text-xs"><Sparkles className="h-4 w-4" /> Built with intention</div>
               <h2 className="text-xl font-bold text-white sm:text-2xl">A bigger vision. Real progress. No shortcuts.</h2>
               <p className="mt-2 text-sm leading-6 text-slate-300">We distinguish working foundations from planned experiences. Every capability should earn its place through usefulness, transparency, and trust.</p>
             </div>
-            <Button onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="shrink-0 rounded-xl bg-white px-6 font-semibold text-slate-950 hover:bg-cyan-50">Explore the pillars <ArrowRight className="ml-2 h-4 w-4" /></Button>
+            <Button onClick={() => document.getElementById("pillars")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="shrink-0 rounded-xl bg-primary px-6 font-semibold text-primary-foreground hover:bg-primary/90">Explore the pillars <ArrowRight className="ml-2 h-4 w-4" /></Button>
           </div>
         </section>
       </div>
