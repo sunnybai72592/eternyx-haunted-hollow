@@ -129,7 +129,7 @@ SELECT
   ) AS has_updates_since_check
 FROM (
   SELECT
-    r.id, r.service_key, r.title, r.description,
+    r.id, r.user_id, r.service_key, r.title, r.description,
     r.status, r.client_update, r.created_at, r.updated_at,
     r.expected_outcome, r.timeframe, r.constraints,
     greatest(
