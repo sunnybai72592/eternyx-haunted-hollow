@@ -318,3 +318,18 @@ This milestone delivers **six functional improvements in one PR**:
 6. **Private, verified output:** Before publishing, the tool recounts real decoded output frames and verifies dimensions, 16 FPS, expected audio presence and output SHA-256. The create-only directory contains `video.mp4`, `captions.srt`, `manifest.json` and `preview.html`, without exposing source absolute paths.
 
 **Constraints and costs:** This is a genuine CPU-based local video **editor**, not generative AI training, text-to-video synthesis, or a promise of production image quality. No paid GPU, external AI API, cloud hosting, GPU scheduling or subscription enforcement is required. Keep private source media and review pages outside the repo. A dedicated CPU integration CI suite creates and validates real MP4 and WAV fixtures; synthetic FFmpeg test patterns prove editing correctness, not AI-generated video quality.
+
+
+
+## Prepare a v2 local CPU video project from the ETERNYX website
+
+The **AI Video Studio** page now includes a **Local CPU video editor handoff** section above the older text-only storyboard planner. This is a real browser-based project preparer for the offline `render_video_timeline.py` program:
+
+1. Choose up to eight original local MP4 files. The browser reads each file and calculates a SHA-256 locally; it does **not** upload footage or make AI API calls. The original clip player previews only the source footage, not an assembled result.
+2. Pick a source for each shot, set its starting frame and number of frames, optional fade-in/out frame counts, human-authored caption and rights/permission reference. Add, remove or reorder up to eight cuts. Timings are exactly 16 FPS; a full v2 project may contain up to 480 frames (30 seconds).
+3. Optionally choose a WAV, MP3 or M4A soundtrack, enter its rights reference and set a 0–100% volume. Its SHA-256 is included in the manifest. Source clip audio is not copied by the CLI.
+4. Choose landscape/portrait/square output and standard/high resolution. The app builds the exact v2 JSON schema expected by the Python renderer, with a local SRT subtitle preview.
+5. Download **eternyx-video-v2.json**, and put all the **unchanged original media files** together in a `local-video-media` folder in a local checkout of the repository. Run the displayed Python command, using locally installed FFmpeg/FFprobe and libx264. The rendered `eternyx-video-output/video.mp4` exists only **after the local command succeeds**; the website does not claim to render MP4 files or run Python in the browser.
+6. Keep a local backup of the downloaded JSON. The browser editor deliberately keeps selected File objects and object URLs in temporary memory, not in localStorage, Supabase or cloud storage. Reloading clears the media selection. The Python renderer independently validates 16 FPS, real frame counts, hashes, dimensions and codecs; the website cannot assert those properties just by reading a browser File object.
+
+This is a free/offline pathway for owners of suitable local equipment. It is **not** text-to-video synthesis or a remotely connected GPU worker. No paid GPU, AI API or subscription is activated.
