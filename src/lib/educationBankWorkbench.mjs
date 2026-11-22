@@ -120,8 +120,12 @@ export function createBankUndoHistory(initial,limit=30) {
     if(typeof updater!=="function")throw new Error("Draft updater is required.");
     const next=updater(current);
     if(next===current)return status();
-    if(!validateQuestionBankDraft(next).valid)
-      throw new Error("Invalid draft change; previous answer key was retained.");
+    // While typing points/duration, editors may temporarily contain 0 or an
+    // unfinished question. Do not discard keystrokes; readiness validation
+    // remains the authority before export or an instructor server draft.
+    if(!next||typeof next!=="object"||!Array.isArray(next.questions)||
+       next.questions.length>QUESTION_BANK_LIMITS.questions)
+      throw new Error("Invalid draft edit; previous question bank retained.");
     past.push(current);
     if(past.length>limit)past.shift();
     current=next;
