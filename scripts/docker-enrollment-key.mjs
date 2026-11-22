@@ -3,9 +3,9 @@
 // The private key is never transmitted to ETERNYX.
 import { generateKeyPairSync, createPrivateKey, sign } from "node:crypto";
 import { lstatSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, isAbsolute } from "node:path";
 const help="Usage: node scripts/docker-enrollment-key.mjs generate /absolute/private-key.pem OR sign /absolute/private-key.pem /absolute/challenge.txt";
-function requirePath(path){if(!path||!resolve(path).startsWith("/") && process.platform!=="win32") throw new Error("Specify an absolute path.");return resolve(path);}
+function requirePath(path){if(!path || !isAbsolute(path)) throw new Error("Specify an absolute path.");return resolve(path);}
 function checkPrivate(path){
   const stat=lstatSync(path);
   if(!stat.isFile() || stat.isSymbolicLink() || stat.size>8192) throw new Error("Private key must be a small regular file.");
