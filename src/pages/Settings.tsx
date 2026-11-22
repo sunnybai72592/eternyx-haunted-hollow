@@ -82,7 +82,7 @@ const Settings = () => {
   if (isLoading || !isAuthenticated || !profile) {
     return (
       <main className="mx-auto flex min-h-[55vh] max-w-6xl items-center justify-center px-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0a1020]/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-card/80 px-5 py-4 text-sm text-slate-400 shadow-2xl">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           Loading your account preferences…
         </div>
@@ -107,7 +107,7 @@ const Settings = () => {
         </span>
       </div>
 
-      <section className="relative overflow-hidden rounded-[28px] border border-primary/15 bg-[#080f1e] shadow-[0_28px_100px_rgba(0,0,0,.38)]">
+      <section className="relative overflow-hidden rounded-[28px] border border-primary/15 bg-card shadow-[0_28px_100px_rgba(0,0,0,.38)]">
         <div aria-hidden="true" className="absolute inset-0 eternyx-settings-hero-glow" />
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
         <div className="relative flex flex-col gap-5 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
@@ -153,7 +153,7 @@ const Settings = () => {
                 disabled={savingTheme !== null}
                 onClick={() => void handleThemeChange(theme.id)}
                 aria-pressed={active}
-                className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[#07101d] disabled:cursor-wait disabled:opacity-75 ${active ? 'border-primary/40 bg-primary/[0.07] shadow-[0_16px_45px_hsl(var(--primary)/.08)]' : 'border-white/[0.09] bg-[#0a1322]/90 hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#0d192b]'}`}
+                className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[#07101d] disabled:cursor-wait disabled:opacity-75 ${active ? 'border-primary/40 bg-primary/[0.07] shadow-[0_16px_45px_hsl(var(--primary)/.08)]' : 'border-white/[0.09] bg-card/90 hover:-translate-y-0.5 hover:border-white/20 hover:bg-card'}`}
               >
                 <div className="mb-5 overflow-hidden rounded-xl border border-white/10 p-3" style={{ background: theme.swatches[0] }}>
                   <div className="flex items-center justify-between">
@@ -194,7 +194,7 @@ const Settings = () => {
       </section>
 
       <section className="mt-9 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
+        <div className="rounded-2xl border border-white/[0.09] bg-card/85 p-5 sm:p-6">
           <div className="flex items-start gap-3">
             <div className="rounded-xl border border-primary/15 bg-primary/[0.07] p-2.5 text-primary"><ShieldCheck className="h-5 w-5" /></div>
             <div className="min-w-0 flex-1">
@@ -207,7 +207,7 @@ const Settings = () => {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.09] bg-[#0a1322]/85 p-5 sm:p-6">
+        <div className="rounded-2xl border border-white/[0.09] bg-card/85 p-5 sm:p-6">
           <div className="flex items-start gap-3">
             <div className="rounded-xl border border-primary/15 bg-primary/[0.07] p-2.5 text-primary"><Bell className="h-5 w-5" /></div>
             <div className="min-w-0 flex-1">
