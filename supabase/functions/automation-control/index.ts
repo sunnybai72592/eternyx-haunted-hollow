@@ -128,8 +128,9 @@ serve(async (req: Request) => {
       });
       if(error)throw error;
       if(data?.ok!==true)return rpcResponse(data,"incident_report_unavailable");
-      return reply({...data,source:"authenticated_server",
-        executed:false,rawInputsIncluded:false,rawOutputsIncluded:false});
+      return reply({...data,reportSource:data.source,
+        source:"authenticated_server",executed:false,
+        rawInputsIncluded:false,rawOutputsIncluded:false});
     }
     if(request.action==="incidentRecoveryCheck"){
       const {data,error}=await supabase.rpc("automation_incident_recovery_check",{
