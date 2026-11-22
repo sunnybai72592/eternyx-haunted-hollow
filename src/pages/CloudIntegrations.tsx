@@ -113,6 +113,25 @@ export default function CloudIntegrations() {
       </div>
       <p className="mt-4 text-sm text-muted-foreground">See <code>docs/DOCKER_AGENT_TUNNEL.md</code> for SSH, token setup, read-only endpoints, and security restrictions. This is an operator-only bridge, not yet a multi-tenant ETERNYX service.</p>
     </section>
+    <section className="rounded-2xl border border-border bg-card p-5 sm:p-7" aria-labelledby="docker-connections-title">
+      <div className="flex items-center gap-3">
+        <Network className="h-6 w-6 text-cyan-500" />
+        <h2 id="docker-connections-title" className="text-2xl font-semibold">Docker agent connection manager</h2>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">Register multiple trusted Docker servers through separate SSH tunnels, check actual agent reachability, and export one server's real inventory to this page. Configured connections are not automatically considered online.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {[
+          ["Register a verified agent", "node scripts/docker-connections.mjs add lab-east 43872 /ABSOLUTE/TOKEN-FILE"],
+          ["Check live agent health", "node scripts/docker-connections.mjs check-all"],
+          ["List configured hosts", "node scripts/docker-connections.mjs list"],
+          ["Export a server snapshot", "node scripts/docker-connections.mjs snapshot lab-east > cloud-snapshot.json"],
+        ].map(([label, command]) => <div key={label} className="rounded-xl border border-border bg-muted/30 p-4">
+          <p className="text-sm font-medium">{label}</p>
+          <code className="mt-2 block break-all text-xs text-muted-foreground">{command}</code>
+        </div>)}
+      </div>
+      <p className="mt-4 text-sm text-muted-foreground">Credentials remain in private workstation files, not in ETERNYX or its browser. Connection registration, rotation, and removal are local operator actions. See <code>docs/DOCKER_CONNECTION_REGISTRY.md</code> for setup, security, and limitations.</p>
+    </section>
     <section aria-labelledby="connections-title" className="space-y-4">
       <h2 id="connections-title" className="text-2xl font-semibold">Infrastructure workspaces</h2>
       <div className="grid gap-4 sm:grid-cols-2">

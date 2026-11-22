@@ -19,7 +19,8 @@
     "range:audit": "node scripts/cyber-range-isolation-audit.mjs",
     "docker:operator": "node scripts/docker-operator.mjs",
     "docker:agent": "node scripts/docker-readonly-agent.mjs",
-    "docker:agent:client": "node scripts/docker-agent-client.mjs"
+    "docker:agent:client": "node scripts/docker-agent-client.mjs",
+    "docker:connections": "node scripts/docker-connections.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
