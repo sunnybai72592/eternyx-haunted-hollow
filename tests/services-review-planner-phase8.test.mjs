@@ -66,7 +66,7 @@ test('admin triage saves real review plans with optimistic locking', async () =>
 
 test('review queue filters and sorts on the database, never fake local rows', async () => {
   const src = await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(src, /from\('service_admin_clarification_queue'\)/);
+  assert.match(src, /from\('service_admin_followup_queue'\)/);
   assert.match(src, /query\.eq\('review_bucket', reviewBucket\)/);
   assert.match(src, /query\.eq\('next_action_kind', actionFilter\)/);
   assert.match(src, /query\.order\('next_review_on', \{ ascending: true, nullsFirst: false \}\)/);
