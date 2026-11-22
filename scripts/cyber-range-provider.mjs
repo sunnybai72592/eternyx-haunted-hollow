@@ -7,6 +7,7 @@ import { LocalDockerRangeRuntime } from "../infrastructure/cyber-range/provider/
 import { RangeWorkerApi } from "../infrastructure/cyber-range/provider/worker.mjs";
 import { runFencedProviderTick } from "../infrastructure/cyber-range/provider/fenced-worker.mjs";
 import { acquireLocalOperatorLock } from "../infrastructure/cyber-range/provider/process-lock.mjs";
+import { assertNoUnverifiedHostedRuntime } from "../infrastructure/cyber-range/provider/hosted-readiness.mjs";
 
 const usage = () => {
   console.log([
@@ -37,6 +38,7 @@ if (!["--once", "--loop"].includes(flag)) {
   let leaseId = null;
   let api;
   try {
+    assertNoUnverifiedHostedRuntime(process.env);
     localLock = await acquireLocalOperatorLock();
     api = new RangeWorkerApi(
       process.env.RANGE_PROVIDER_API_URL ?? "",
