@@ -195,7 +195,13 @@ export default function ServiceScopeReview({
       await load();
     } catch (reason) {
       console.error('Scope feedback insert failed', reason);
-      setError('Could not save feedback. The database may be limiting repeated or rapid submissions; retry after a short interval.');
+      const detail = reason && typeof reason === 'object' && 'message' in reason
+        ? String(reason.message) : '';
+      setError(/already submitted recently/i.test(detail)
+        ? 'This scope response was already submitted recently. Check the saved feedback before retrying.'
+        : /too many scope responses/i.test(detail)
+          ? 'Scope feedback rate limit reached. Please retry in about a minute.'
+          : 'Could not save feedback. Verify your account and retry.');
     } finally {
       setReplying(false);
     }
@@ -236,7 +242,7 @@ export default function ServiceScopeReview({
                   </div>
                 ))}
               </div>
-              {!isAdmin && currentUser?.id === ownerId && (
+              {!isAdmin && currentUser?.id === ownerId && loadedKey === viewerKey && (
                 <div className="mt-4">
                   <Button variant="outline" type="button" aria-expanded={activeReview === review.id} onClick={() => setActiveReview((id) => id === review.id ? null : review.id)}>
                     <MessageSquareText className="mr-2 h-4 w-4" />{activeReview === review.id ? 'Close feedback' : 'Give feedback'}
@@ -263,7 +269,7 @@ export default function ServiceScopeReview({
       {visibleResponses.length < feedbackCount && (
         <div className="mt-4 text-center"><Button type="button" variant="outline" disabled={loading} onClick={() => setFeedbackLimit((n) => n + 50)}>Load older customer feedback ({feedbackCount - visibleResponses.length} remaining)</Button></div>
       )}
-      {loadedKey === viewerKey && <p className="mt-4 text-xs text-muted-foreground">Showing {visibleReviews.length} of {reviewCount} scope reviews and {visibleResponses.length} of {feedbackCount} responses for loaded reviews.</p>}
+      {loadedKey === viewerKey && viewerId && <p className="mt-4 text-xs text-muted-foreground">Showing {visibleReviews.length} of {reviewCount} scope reviews and {visibleResponses.length} of {feedbackCount} responses for loaded reviews.</p>}
       {isAdmin && viewerId && (
         <form onSubmit={(e) => void publish(e)} className="mt-6 space-y-4 border-t border-border pt-5">
           <h4 className="text-base font-semibold">Publish a new immutable scope review</h4>
