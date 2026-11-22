@@ -14,9 +14,13 @@ def transformer_identity(root):
             if path.is_file() and path.suffix in (".json", ".safetensors")}
 
 
-def write_metadata(directory, base, rank):
+def write_metadata(directory, base, rank, *, dataset=None, step=None):
     metadata = {"version": 1, "base": base, "rank": rank,
                 "sha256": fingerprint(directory / "adapter.safetensors")}
+    if dataset is not None:
+        metadata["training_dataset"] = dataset
+    if step is not None:
+        metadata["training_step"] = step
     (directory / "adapter.json").write_text(json.dumps(metadata, sort_keys=True), encoding="utf-8")
 
 
@@ -48,3 +52,4 @@ def load_for_inference(model, snapshot, directory):
     set_peft_model_state_dict(model, state)
     model.requires_grad_(False)
     model.eval()
+    return metadata

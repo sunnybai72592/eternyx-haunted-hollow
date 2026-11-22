@@ -57,3 +57,5 @@ python gpu-worker/evaluate_video_adapter.py ./wan-snapshot ./training/step-100 .
 ```
 
 The evaluator encodes the opening window and caption of each evaluation clip. Each paired measurement uses identical noise with the adapter disabled and enabled. The JSON records the clip, manifest and adapter hashes, the seed and the scores at three noise levels. A negative mean delta means lower flow prediction error on that clip and seed. Judge visible motion and prompt fidelity separately using rendered clips.
+
+Indexed training checkpoints record the reviewed manifest SHA-256, encoded index SHA-256, number of training windows and completed step. Evaluation copies these fields into the report and requires the original manifest bytes for indexed checkpoints. Keep that manifest alongside the dataset. Older bundles and runs trained from explicit window lists can still be evaluated. Their reports use null for any unavailable training provenance.
