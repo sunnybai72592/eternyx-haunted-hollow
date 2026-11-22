@@ -17,6 +17,7 @@ Five **working**, local exercises:
 
 - User-authored HTML/CSS/JS is placed only inside an iframe with the literal sandbox permission **allow-scripts**. Never add allow-same-origin, allow-top-navigation, allow-popups, allow-forms, or allow-downloads.
 - The iframe document begins with a restrictive CSP: default-src 'none', connect-src 'none', form-action 'none', object-src 'none', frame-src 'none', worker-src 'none'. Inline code is permitted **inside the opaque-origin frame**, for learning, and cannot read the origin of the host application.
+- The CSP blocks many network requests, but an inline document CSP and an iframe sandbox are not a complete network firewall: **same-frame navigation is not consistently blocked in browsers**. Never load secrets into this lab and do not treat it as hostile-code execution infrastructure. A dedicated isolated-origin/container platform is required for untrusted shared exercises.
 - CSS and JavaScript closing tags are escaped before interpolation. DOM payloads are serialized and '<' characters are encoded before embedding in an inline script.
 - The training iframe does not have ETERNYX Supabase credentials or signed-in auth state. Do not mount the frame with a shared origin.
 - HTTP header checks analyze pasted text only. They are a learning checklist, not a vulnerability scanner or evidence that a public origin is protected.
