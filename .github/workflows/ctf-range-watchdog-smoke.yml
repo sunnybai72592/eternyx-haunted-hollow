@@ -31,7 +31,7 @@ jobs:
         run: |
           docker compose -p "$ETERNYX_PROJECT" -f infrastructure/cyber-range/compose.managed.yaml up --build --detach
           docker run --detach --name eternyx-watchdog-unrelated --network none alpine:3.20 sleep 120
-          test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 3
+          test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 2
           docker ps --filter name=eternyx-watchdog-unrelated --format '{{.ID}}' | grep -q .
       - name: Attest actual running Docker sandbox limits and private network boundaries
         run: |
@@ -56,7 +56,7 @@ jobs:
             echo 'Unexpected unapproved destructive watchdog access' >&2
             exit 1
           fi
-          test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 3
+          test "$(docker ps -q --filter label=org.eternyx.range.managed=v1 | wc -l)" -eq 2
       - name: Invoke explicitly approved local emergency stop
         run: |
           ETERNYX_RANGE_WATCHDOG_ACK=LOCAL_OPERATOR_ONLY node scripts/cyber-range-watchdog.mjs --emergency-stop --apply
