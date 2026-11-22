@@ -1,0 +1,94 @@
+name: ETERNYX Education hosted instructor review and final-grade acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "preflight is read-only; review writes one instructor mark; verify only reads final grade"
+        required: true
+        type: choice
+        options:
+          - preflight
+          - review
+          - verify
+        default: preflight
+      approve_instructor_review_write:
+        description: "Authorize one synthetic instructor review mutation in separate staging"
+        type: boolean
+        required: true
+        default: false
+      acknowledge_review_persists:
+        description: "Acknowledge instructor review persists and may affect later official grading"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-education-hosted-instructor-grade-acceptance
+  cancel-in-progress: false
+
+jobs:
+  verify-staging-instructor-grading:
+    name: Real-JWT instructor, students and ledger-backed score acceptance
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 12
+    env:
+      ETERNYX_EDU_REVIEW_MODE: ${{ inputs.run_mode }}
+      ETERNYX_EDU_REVIEW_WRITE_APPROVAL: ${{ inputs.run_mode == 'review' && inputs.approve_instructor_review_write && 'I_APPROVE_SYNTHETIC_INSTRUCTOR_REVIEW_WRITE' || '' }}
+      ETERNYX_EDU_REVIEW_WRITE_ACK: ${{ inputs.run_mode == 'review' && inputs.acknowledge_review_persists && 'I_ACKNOWLEDGE_REVIEW_WILL_PERSIST_IN_STAGING' || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+      ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+      ETERNYX_EDU_REVIEW_TEST_ID: ${{ vars.ETERNYX_EDU_REVIEW_TEST_ID }}
+      ETERNYX_EDU_REVIEW_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_REVIEW_ATTEMPT_ID }}
+      ETERNYX_EDU_REVIEW_ANSWER_ID: ${{ vars.ETERNYX_EDU_REVIEW_ANSWER_ID }}
+      ETERNYX_EDU_REVIEW_AWARDED_POINTS: ${{ vars.ETERNYX_EDU_REVIEW_AWARDED_POINTS }}
+      ETERNYX_EDU_REVIEW_FINAL_SCORE: ${{ vars.ETERNYX_EDU_REVIEW_FINAL_SCORE }}
+      ETERNYX_EDU_REVIEW_FINAL_MAX: ${{ vars.ETERNYX_EDU_REVIEW_FINAL_MAX }}
+    steps:
+      - name: Checkout only reviewed, nonproduction acceptance source
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Fail closed on missing project isolation or review approval
+        run: |
+          node --input-type=module -e '
+            import {validateEducationHostedReviewConfig} from "./scripts/staging/educationHostedReviewConfig.mjs";
+            try {
+              const c=validateEducationHostedReviewConfig(process.env);
+              process.stdout.write("Approved isolated Education "+c.mode+" staging preflight.\n");
+            } catch {
+              process.stderr.write("Refused unsafe project, fixture, account or instructor write approval.\n");
+              process.exitCode=1;
+            }
+          '
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Exercise protected real-JWT review or finalized result reads
+        timeout-minutes: 8
+        run: node scripts/staging/verifyEducationHostedInstructorGrading.mjs
+      - name: Independently verify sanitized, mode-specific staging-only evidence
+        if: always()
+        run: node scripts/staging/verifyEducationHostedInstructorEvidence.mjs
+      - name: Upload minimal short-lived staging acceptance artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-review-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-instructor-final-grade.json
+          if-no-files-found: warn
+          retention-days: 7
