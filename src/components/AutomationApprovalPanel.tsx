@@ -106,6 +106,25 @@ export default function AutomationApprovalPanel() {
         await refresh(); setNotice("Loaded server-verified approval requests.");
       })}><RefreshCcw className="mr-2 size-4" /> Load approval inbox</Button>
       {loaded && <p className="text-xs text-muted-foreground">{pending.length} pending in the latest {approvals.length} requests.</p>}
+      {loaded && <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={busy ||
+          !approvals.some((item) => item.status !== "pending" || Date.parse(item.expires_at) <= Date.now())}
+          onClick={() => {
+            if (!window.confirm("Clear your resolved and expired approval records? Completed cloud run history remains unchanged. Pending events will not be deleted.")) return;
+            void act(async () => {
+              const r = await call("clearResolvedApprovals");
+              if (r.ok !== true || typeof r.deleted !== "number") {
+                throw new Error("Approval history was not cleared.");
+              }
+              setPreview(null); setExecution(null);
+              await refresh();
+              setNotice("Cleared " + r.deleted + " resolved/expired approval records. Completed run history was preserved.");
+            });
+          }}>Clear resolved approval history</Button>
+        <p className="self-center text-xs text-muted-foreground">
+          Original encrypted text is erased upon decision or expiry. Old decision metadata is pruned when you load this inbox.
+        </p>
+      </div>}
       {loaded && approvals.length === 0 && <p className="text-sm text-muted-foreground">No signed approval requests have been received yet.</p>}
       {loaded && <ol className="space-y-3">
         {approvals.map((a) => {
