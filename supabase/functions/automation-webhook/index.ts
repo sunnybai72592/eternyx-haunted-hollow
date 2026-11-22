@@ -72,7 +72,7 @@ serve(async (req: Request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: trigger, error: triggerError } = await client.from("automation_webhook_triggers")
-      .select("id,user_id,workflow_id,credential_ciphertext,credential_iv,enabled,rotated_at")
+      .select("id,user_id,workflow_id,credential_ciphertext,credential_iv,enabled,credential_version")
       .eq("id", envelope.triggerId).maybeSingle();
     if (triggerError) throw triggerError;
     // Do not disclose whether the trigger exists or whether its signature failed.
@@ -105,7 +105,7 @@ serve(async (req: Request) => {
     const { data: recorded, error: recordError } = await client.rpc("automation_record_webhook_run", {
       p_trigger_id: trigger.id, p_user_id: trigger.user_id,
       p_workflow_id: workflow.id, p_revision: workflow.revision,
-      p_rotated_at: trigger.rotated_at, p_request_key: requestId,
+      p_credential_version: trigger.credential_version, p_request_key: requestId,
       p_fingerprint: await fingerprint(trigger.user_id, workflow.id, workflow.revision, trigger.id, envelope.input),
       p_input_lines: envelope.input.length ? envelope.input.split(/\r\n|\n|\r/).length : 0,
       p_output_lines: result.outputLines,
