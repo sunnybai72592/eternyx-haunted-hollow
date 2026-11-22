@@ -170,6 +170,7 @@ export async function runOfflineHardwareAcceptance({
     const wallStartMs=now();
     const status=await supervisor.launchJailer({
       sessionId,manifest,uid,gid,jailerSha256,firecrackerSha256,
+      retainTimeoutResult:expiryDrill,
     });
     // A service may exist even when its receipt is malformed. Any resolved
     // launch must receive unconditional kill and death verification.
