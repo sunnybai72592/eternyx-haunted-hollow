@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 const finder = read("src/components/home/HomeTaskFinder.tsx");
@@ -8,7 +9,7 @@ const resume = read("src/components/home/ContinueWork.tsx");
 const home = read("src/components/home/SectionSelector.tsx");
 
 test("1: empty or irrelevant task searches show real fallback suggestions instead of relying on an absent top result", () => {
-  assert.match(finder, /return ranked\.length \? ranked\.filter/);
+  assert.match(finder, /if \(ranked\.length === 0\) return \[\];/);
   assert.match(finder, /No matching tool found/);
   assert.match(finder, /to="\/explore"/);
   assert.match(finder, /score > 0/);
@@ -64,4 +65,16 @@ test("8: core experience remains: six pillars, live constellation, account signu
   assert.match(home, /navigate\("\/account"\)/);
   const colors = read("src/styles/eternyx-palettes.css");
   for (const p of ["cyan", "violet", "emerald", "bronze", "rose"]) assert.ok(colors.includes(":root[data-eternyx-palette='" + p + "']"));
+});
+
+
+test("9: TypeScript parser detects syntax errors in the homepage task finder", () => {
+  const parsed = ts.createSourceFile(
+    "HomeTaskFinder.tsx", finder, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX
+  );
+  assert.deepEqual(
+    parsed.parseDiagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+    [],
+    "Task finder must be syntactically valid before the production Vite build"
+  );
 });
