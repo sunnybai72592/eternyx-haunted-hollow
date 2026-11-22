@@ -23,10 +23,10 @@ export default function ServiceRequestPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user?.email && !contactEmail) setContactEmail(user.email);
-  }, [user?.email, contactEmail]);
+    if (user?.email) setContactEmail((current) => current || user.email || '');
+  }, [user?.email]);
 
-  const selected = getServiceOffering(serviceKey)!;
+  const selected = getServiceOffering(serviceKey);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
@@ -76,7 +76,7 @@ export default function ServiceRequestPage() {
               <select id="service-category" value={serviceKey} onChange={(event) => setServiceKey(event.target.value as ServiceKey)} disabled={busy} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground">
                 {serviceOfferings.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
               </select>
-              <p className="mt-2 text-xs text-muted-foreground">{selected.scope}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{selected?.scope}</p>
             </div>
             <div>
               <label htmlFor="service-title" className="mb-2 block text-sm font-semibold">Project title *</label>
