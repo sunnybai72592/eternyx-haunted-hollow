@@ -27,6 +27,9 @@ const rpcStatus: Record<string, number> = {
   pending_limit: 429, daily_approval_limit: 429, not_pending: 409,
   expired: 410, trigger_run_limit: 429, trigger_submission_limit: 429,
   preview_limit: 429, template_copy_deleted: 409, unknown_template:404,
+  daily_export_limit:429,daily_quarantine_limit:429,
+  export_too_large:413,lease_active:409,already_disabled:409,
+  stale_schedule:409,revision_exhausted:409,
   daily_bulk_limit:429,stale_workflow:409,duplicate_workflow:400,
   invalid_bulk_items:400,invalid_history_cursor:400,
   policy_daily_limit:429,policy_input_limit:413,policy_output_limit:413,
@@ -93,6 +96,38 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="observability"){
+      const {data:pruned,error:pruneError}=await supabase.rpc(
+        "automation_prune_audit_recovery",{p_user_id:user.id});
+      if(pruneError||pruned?.ok!==true)throw pruneError??Error("audit_cleanup_failed");
+      const {data,error}=await supabase.rpc(
+        "automation_observability_snapshot",{p_user_id:user.id});
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"observability_unavailable");
+      return reply({...data,source:"authenticated_server",
+        automaticRecoveryEnabled:false});
+    }
+    if(request.action==="exportAudit"){
+      const {data,error}=await supabase.rpc("automation_prepare_audit_export",{
+        p_user_id:user.id,p_request_key:request.requestKey,
+        p_workflow_id:request.workflowId,p_channel:request.channel,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"export_unavailable");
+      return reply({...data,source:"authenticated_server",
+        rawCredentialsExported:false,externalActionTriggered:false});
+    }
+    if(request.action==="quarantineSchedule"){
+      const {data,error}=await supabase.rpc("automation_quarantine_schedule",{
+        p_user_id:user.id,p_schedule_id:request.scheduleId,
+        p_expected_revision:request.expectedRevision,
+        p_reason:request.reason,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"quarantine_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticRetryQueued:false,externalActionTriggered:false});
+    }
     if(request.action==="bulkUsage"){
       const {data:pruned,error:pruneError}=await supabase.rpc(
         "automation_prune_bulk_receipts",{p_user_id:user.id});
@@ -137,7 +172,7 @@ serve(async (req: Request) => {
             .select("id,enabled,approval_required,last_used_at,credential_iv,credential_ciphertext")
             .eq("user_id",user.id).eq("workflow_id",request.workflowId).limit(1),
           supabase.from("automation_schedules")
-            .select("id,enabled,interval_minutes,next_run_at,last_run_at,last_status,input_nonce,input_ciphertext")
+            .select("id,enabled,revision,interval_minutes,next_run_at,last_run_at,last_status,attempt_count,lease_expires_at,input_nonce,input_ciphertext")
             .eq("user_id",user.id).eq("workflow_id",request.workflowId).limit(1),
           supabase.from("automation_approval_requests")
             .select("id",{count:"exact",head:true})
@@ -189,6 +224,11 @@ serve(async (req: Request) => {
         }:null,
         schedule:schedule?{
           id:schedule.id,enabled:schedule.enabled,
+          revision:schedule.revision,attemptCount:schedule.attempt_count,
+          leaseActive:typeof schedule.lease_expires_at==="string"&&
+            Date.parse(schedule.lease_expires_at)>Date.now(),
+          expiredLease:typeof schedule.lease_expires_at==="string"&&
+            Date.parse(schedule.lease_expires_at)<=Date.now(),
           intervalMinutes:schedule.interval_minutes,nextRunAt:schedule.next_run_at,
           lastRunAt:schedule.last_run_at,lastStatus:schedule.last_status,
           storedInputDecryptable:scheduleInputDecryptable,
