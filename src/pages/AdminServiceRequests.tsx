@@ -265,14 +265,29 @@ export default function AdminServiceRequests() {
         <div>
           <label htmlFor="service-sort-order" className="mb-1 block text-xs font-semibold">Sort</label>
           <select id="service-sort-order" value={sortOrder} onChange={(event) => { setPage(0); setSortOrder(event.target.value as typeof sortOrder); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
-            <option value="newest">Newest requests</option><option value="priority">Highest priority</option><option value="customer_activity">Recent customer activity</option>
+            <option value="newest">Newest requests</option><option value="priority">Highest priority</option><option value="customer_activity">Recent customer activity</option><option value="next_review">Next scheduled review</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="service-review-bucket" className="mb-1 block text-xs font-semibold">Internal review schedule</label>
+          <select id="service-review-bucket" value={reviewBucket} onChange={(event) => { setPage(0); setReviewBucket(event.target.value as typeof reviewBucket); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="all">All review dates</option>
+            {Object.entries(serviceReviewBucketLabels).map(([value, title]) => <option value={value} key={value}>{title}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="service-next-action-filter" className="mb-1 block text-xs font-semibold">Next internal action</label>
+          <select id="service-next-action-filter" value={actionFilter} onChange={(event) => { setPage(0); setActionFilter(event.target.value as typeof actionFilter); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="all">All next actions</option>
+            {Object.entries(serviceNextActionLabels).map(([value, title]) => <option value={value} key={value}>{title}</option>)}
           </select>
         </div>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={attentionOnly} onChange={(event) => { setPage(0); setAttentionOnly(event.target.checked); }} />Needs follow-up</label>
-        <span className="text-xs text-muted-foreground">Signals are based on saved activity, not unread receipts or response deadlines.</span>
+        <Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
+        <span className="text-xs text-muted-foreground">Follow-up signals reflect recorded customer activity. Review dates are internal UTC targets, not response guarantees.</span>
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
-      <p className="mb-4 text-xs text-muted-foreground">Search and status filters are applied by the database. No first-250 cutoff or invented totals.</p>
+      <p className="mb-4 text-xs text-muted-foreground">All queue filters, review targets and page totals come from the database. Internal UTC review dates are not customer commitments.</p>
       {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The migration may not yet be deployed, or access was denied.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading service requests…</Card>
         : filtered.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-3 h-8 w-8 text-primary" /><p>No requests in this view.</p></Card>
@@ -284,6 +299,8 @@ export default function AdminServiceRequests() {
               <span className="rounded-full border border-border px-3 py-1">Priority: {item.priority}</span>
               <span className="rounded-full border border-border px-3 py-1">{item.assigned_admin_id === user.id ? 'Assigned to you' : item.assigned_admin_id ? 'Assigned to another admin' : 'Unassigned'}</span>
               {item.needs_follow_up && <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.06] px-3 py-1 text-primary"><Bell className="h-3 w-3" />Needs follow-up</span>}
+              <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1"><CalendarClock className="h-3 w-3" />{serviceReviewBucketLabels[item.review_bucket] ?? 'Not scheduled'}{item.next_review_on ? ': ' + item.next_review_on : ''}</span>
+              <span className="rounded-full border border-border px-3 py-1">Next: {serviceNextActionLabels[item.next_action_kind] ?? 'Not planned'}</span>
               {item.last_customer_activity_at && <span>Customer activity: {new Date(item.last_customer_activity_at).toLocaleString()}</span>}
             </div>
             <div className="mt-5 grid gap-4 rounded-xl border border-border p-4 text-sm md:grid-cols-2"><div><p className="font-semibold">Contact</p><p className="mt-2 break-all text-muted-foreground">{item.contact_email}</p>{item.company && <p className="mt-1 text-muted-foreground">{item.company}</p>}</div><div><p className="font-semibold">Project brief</p><p className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-muted-foreground">{item.description}</p></div></div>
@@ -298,6 +315,7 @@ export default function AdminServiceRequests() {
               <div><label className="mb-2 block text-sm font-semibold" htmlFor={'request-update-' + item.id}>Client-visible update</label><Textarea id={'request-update-' + item.id} rows={3} maxLength={1000} value={draft.client_update} onChange={(e) => setDrafts((state) => ({ ...state, [item.id]: { ...draft, client_update: e.target.value } }))} placeholder="Provide actual next steps. Do not include internal notes or secrets." /><p className="mt-1 text-right text-xs text-muted-foreground">{draft.client_update.length}/1,000</p></div>
             </div>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => void copyAdminLink(item.id)}><Link2 className="mr-2 h-4 w-4" />Copy admin link</Button>
               <Button type="button" variant="outline" aria-expanded={openConversation === item.id} onClick={() => setOpenConversation((current) => current === item.id ? null : item.id)}>
                 <MessageCircle className="mr-2 h-4 w-4" />{openConversation === item.id ? 'Close conversation' : 'Customer conversation'}
               </Button>
