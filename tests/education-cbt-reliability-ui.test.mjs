@@ -137,6 +137,6 @@ test("23. This milestone does not enable staging gates or deploy a migration",()
  assert.doesNotMatch(exam,/VITE_CBT_ATOMIC_RPC\s*=\s*"true"/);
  assert.doesNotMatch(catalog,/VITE_EDUCATION_VERIFIED_RESULTS_RPC\s*=\s*"true"/);
  assert.match(guide,/not deployed|NOT DEPLOYED/i);
- assert.match(guide,/server-side/);
+ assert.match(guide,/server.*enforce/i);
  assert.match(guide,/production/i);
 });
