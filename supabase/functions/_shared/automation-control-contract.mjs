@@ -10,6 +10,9 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]
 const fields = {
   list: ["action"],
   templates: ["action"],
+  workflowPolicy: ["action","workflowId"],
+  setWorkflowPolicy: ["action","workflowId","maxInputCharacters","maxOutputCharacters","dailyRunLimit","allowWebhook","allowSchedule"],
+  workflowPreflight: ["action","workflowId","channel","inputCharacters","outputCharacters"],
   installTemplate: ["action","templateId","requestKey"],
   previewWorkflow: ["action","workflowId","input","requestKey"],
   history: ["action"],
@@ -41,12 +44,12 @@ export function parseAutomationControlRequest(value) {
     return { ok: false, reason: "unexpected_field" };
   }
   const action = value.action;
-  if (["save", "run", "toggle", "delete", "createWebhook", "previewWorkflow"].includes(action) &&
+  if (["save", "run", "toggle", "delete", "createWebhook", "previewWorkflow", "workflowPolicy", "setWorkflowPolicy", "workflowPreflight"].includes(action) &&
       value.workflowId !== undefined &&
       (typeof value.workflowId !== "string" || !UUID_RE.test(value.workflowId))) {
     return { ok: false, reason: "invalid_workflow_id" };
   }
-  if (["run", "toggle", "delete", "previewWorkflow"].includes(action) && typeof value.workflowId !== "string") {
+  if (["run", "toggle", "delete", "previewWorkflow", "workflowPolicy", "setWorkflowPolicy", "workflowPreflight"].includes(action) && typeof value.workflowId !== "string") {
     return { ok: false, reason: "missing_workflow_id" };
   }
   if (["createWebhook"].includes(action) && typeof value.workflowId !== "string") {
@@ -87,6 +90,40 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if (action === "workflowPolicy") {
+    return {ok:true,action,workflowId:value.workflowId};
+  }
+  if (action === "setWorkflowPolicy") {
+    if (!Number.isInteger(value.maxInputCharacters) ||
+      value.maxInputCharacters<0||value.maxInputCharacters>12000 ||
+      !Number.isInteger(value.maxOutputCharacters) ||
+      value.maxOutputCharacters<0||value.maxOutputCharacters>30000 ||
+      !Number.isInteger(value.dailyRunLimit) ||
+      value.dailyRunLimit<1||value.dailyRunLimit>30 ||
+      typeof value.allowWebhook!=="boolean" ||
+      typeof value.allowSchedule!=="boolean") {
+      return {ok:false,reason:"invalid_policy"};
+    }
+    return {ok:true,action,workflowId:value.workflowId,
+      maxInputCharacters:value.maxInputCharacters,
+      maxOutputCharacters:value.maxOutputCharacters,
+      dailyRunLimit:value.dailyRunLimit,
+      allowWebhook:value.allowWebhook,allowSchedule:value.allowSchedule};
+  }
+  if (action === "workflowPreflight") {
+    if (!["manual","webhook","scheduled"].includes(value.channel) ||
+      (value.inputCharacters !== undefined &&
+        (!Number.isInteger(value.inputCharacters) || value.inputCharacters<0 ||
+          value.inputCharacters>12000)) ||
+      (value.outputCharacters !== undefined &&
+        (!Number.isInteger(value.outputCharacters) || value.outputCharacters<0 ||
+          value.outputCharacters>30000))) {
+      return {ok:false,reason:"invalid_preflight"};
+    }
+    return {ok:true,action,workflowId:value.workflowId,channel:value.channel,
+      inputCharacters:value.inputCharacters??null,
+      outputCharacters:value.outputCharacters??null};
   }
   if (action === "installTemplate") {
     if (typeof value.templateId !== "string" ||

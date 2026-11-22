@@ -91,6 +91,24 @@ serve(async (req: Request) => {
       return reply({ error: "This workflow is not available" }, 404);
     }
 
+    // Check the same owner policy used by manual and scheduled runs BEFORE
+    // either processing the input or admitting an approval-queue request.
+    const {data:ready,error:policyError}=await client.rpc(
+      "automation_workflow_preflight",{
+        p_user_id:trigger.user_id,p_workflow_id:workflow.id,
+        p_channel:"webhook",p_input_characters:envelope.input.length,
+        p_output_characters:null,
+      });
+    if(policyError)throw policyError;
+    if(ready?.ok!==true || ready.allowed!==true){
+      const reason=typeof ready?.reason==="string"?ready.reason:"policy_unavailable";
+      const status=reason==="policy_daily_limit"?429:
+        reason==="policy_input_limit"?413:
+        reason==="policy_webhook_disabled"?403:409;
+      return reply({error:"Signed webhook execution denied by workflow owner policy",
+        code:reason},status);
+    }
+
     if (trigger.approval_required === true) {
       // Owner-review mode queues an ENCRYPTED signed event; it does not run
       // any operations until the actual account owner approves the request.

@@ -27,12 +27,23 @@ const rpcStatus: Record<string, number> = {
   pending_limit: 429, daily_approval_limit: 429, not_pending: 409,
   expired: 410, trigger_run_limit: 429, trigger_submission_limit: 429,
   preview_limit: 429, template_copy_deleted: 409, unknown_template:404,
+  policy_daily_limit:429,policy_input_limit:413,policy_output_limit:413,
+  policy_webhook_disabled:403,policy_schedule_disabled:403,
+  workflow_paused:409,no_enabled_webhook:409,schedule_not_ready:409,invalid_policy:400,
 };
 
 function failureReason(reason: unknown): string {
   switch (reason) {
     case "workflow_limit": return "This account has reached the 20 saved workflow limit.";
     case "daily_run_limit": return "This account has reached the 30 cloud runs per 24 hours limit.";
+    case "policy_daily_limit": return "This workflow has reached its owner-defined daily execution limit.";
+    case "policy_input_limit": return "The input exceeds this workflow's execution policy.";
+    case "policy_output_limit": return "The output exceeds this workflow's execution policy.";
+    case "policy_webhook_disabled": return "The owner disabled webhook execution for this workflow.";
+    case "policy_schedule_disabled": return "The owner disabled scheduled execution for this workflow.";
+    case "workflow_paused": return "This workflow is paused.";
+    case "no_enabled_webhook": return "No enabled webhook exists for this workflow.";
+    case "schedule_not_ready": return "There is no enabled schedule, or the scheduler is globally disabled.";
     case "stale_workflow": return "The saved workflow changed; reload it and try again.";
     case "idempotency_conflict": return "This request key was already used with different content.";
     case "not_found_or_paused": return "The workflow was not found, is not yours, or is paused.";
@@ -80,6 +91,54 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if (request.action === "workflowPolicy") {
+      const {data,error}=await supabase.rpc("automation_workflow_policy_status",{
+        p_user_id:user.id,p_workflow_id:request.workflowId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"policy_read_failed");
+      const webhookSecretConfigured=/^[0-9a-f]{64}$/i.test(
+        Deno.env.get("AUTOMATION_WEBHOOK_ENCRYPTION_KEY")??"");
+      const scheduleSecretConfigured=/^[0-9a-f]{64}$/i.test(
+        Deno.env.get("AUTOMATION_SCHEDULE_ENCRYPTION_KEY")??"");
+      const approvalSecretConfigured=/^[0-9a-f]{64}$/i.test(
+        Deno.env.get("AUTOMATION_APPROVAL_ENCRYPTION_KEY")??"");
+      return reply({...data,source:"authenticated_server",
+        webhookSecretConfigured,scheduleSecretConfigured,
+        approvalSecretConfigured,
+        webhookSettingsReady:data.webhookPolicyReady===true &&
+          webhookSecretConfigured &&
+          (data.approvalRequiredWebhooks===0||approvalSecretConfigured),
+        scheduleSettingsReady:data.schedulePolicyReady===true&&
+          scheduleSecretConfigured,
+        liveDeliveryVerified:false,
+        note:"Policy configuration and database state only. This does not confirm external delivery or a running scheduler."});
+    }
+    if (request.action === "setWorkflowPolicy") {
+      const {data,error}=await supabase.rpc("automation_set_workflow_policy",{
+        p_user_id:user.id,p_workflow_id:request.workflowId,
+        p_max_input:request.maxInputCharacters,
+        p_max_output:request.maxOutputCharacters,
+        p_daily_limit:request.dailyRunLimit,
+        p_allow_webhook:request.allowWebhook,
+        p_allow_schedule:request.allowSchedule,
+      });
+      if(error)throw error;
+      return rpcResponse(data,"policy_update_failed");
+    }
+    if (request.action === "workflowPreflight") {
+      const {data,error}=await supabase.rpc("automation_workflow_preflight",{
+        p_user_id:user.id,p_workflow_id:request.workflowId,
+        p_channel:request.channel,
+        p_input_characters:request.inputCharacters,
+        p_output_characters:request.outputCharacters,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"preflight_failed");
+      return reply({...data,source:"authenticated_server",executed:false,
+        externalActionTriggered:false,
+        note:"This is a policy snapshot, not a reservation or guarantee of future availability."});
+    }
     if (request.action === "list") {
       const { data, error } = await supabase.from("automation_workflows")
         .select("id,name,steps,revision,active,trigger_kind,created_at,updated_at")
@@ -343,6 +402,13 @@ serve(async (req: Request) => {
         return reply({ error: "Workflow is not available for manual execution" }, 404);
       }
       if (request.input.length > CLOUD_INPUT_LIMIT) return reply({ error: "Input too large" }, 413);
+      const {data:check,error:checkError}=await supabase.rpc("automation_workflow_preflight",{
+        p_user_id:user.id,p_workflow_id:workflow.id,p_channel:"manual",
+        p_input_characters:request.input.length,p_output_characters:null,
+      });
+      if(checkError)throw checkError;
+      if(check?.ok!==true)return rpcResponse(check,"policy_unavailable");
+      if(check.allowed!==true)return rpcResponse({ok:false,reason:check.reason},"policy_denied");
       let result;
       try { result = runLocalWorkflow(request.input, workflow.steps); }
       catch { return reply({ error: "The saved workflow or its input exceeds safety limits" }, 400); }
