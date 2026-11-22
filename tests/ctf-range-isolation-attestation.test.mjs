@@ -207,7 +207,7 @@ test("actual Docker admission/audit implementation is integrated and read-only",
   const packageJson=JSON.parse(await read("package.json"));
   assert.match(code,/await this\.attest\(sessionId\)/);
   assert.match(code,/admitHostLab\(/);
-  assert.match(code,/network", "inspect"/);
+  assert.match(code,/\["network","inspect"/);
   assert.match(code,/async attest\(sessionId\)/);
   assert.match(cmd,/auditHostIsolation\(runtime\)/);
   assert.equal(packageJson.scripts["range:audit"],"node scripts/cyber-range-isolation-audit.mjs");
