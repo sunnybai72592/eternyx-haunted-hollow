@@ -114,6 +114,10 @@ export default function WorkspaceImportPanel({
       projectId = begin.project_id;
       sessionId = begin.session_id;
 
+      if (begin.status === "held") {
+        throw new Error("This import is protected. Its saved work has not been deleted. " +
+          "Inspect it in Recovery Center before releasing the hold.");
+      }
       if (begin.status === "discarding") {
         throw new Error("This import was sealed for disposal. It cannot be resumed. " +
           "Inspect its empty project in Recovery Center before final removal.");
