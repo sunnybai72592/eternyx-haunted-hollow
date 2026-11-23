@@ -33,6 +33,9 @@ on:
       - "scripts/services-phase38-executable-definer-guard.mjs"
       - "scripts/services-phase38-definer-mutation-replay.mjs"
       - "tests/services-phase38-definer-surface.test.mjs"
+      - "scripts/services-phase39-definer-safety.mjs"
+      - "scripts/services-phase39-definer-mutation-replay.mjs"
+      - "tests/services-phase39-definer-safety.test.mjs"
       - ".github/workflows/services-staging-acceptance.yml"
       - ".github/workflows/services-pg17-disposable-replay.yml"
   workflow_dispatch:
@@ -61,7 +64,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
@@ -147,7 +150,13 @@ jobs:
             > "$RUNNER_TEMP/services-phase38-definer-mutations.sql"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
             < "$RUNNER_TEMP/services-phase38-definer-mutations.sql"
-          echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and executable privileged-routine checks (no remote deployment)"
+          # Phase 39: actual nonvolatile definer EXECUTE, unsafe client
+          # search_path and privileged trigger negative controls.
+          node scripts/services-phase39-definer-mutation-replay.mjs --stdout \
+            > "$RUNNER_TEMP/services-phase39-definer-mutations.sql"
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < "$RUNNER_TEMP/services-phase39-definer-mutations.sql"
+          echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and hardened SECURITY DEFINER checks (no remote deployment)"
 
       # No Supabase secrets, no linked project, no production/staging database
       # connection and no artifact upload containing DB rows.
