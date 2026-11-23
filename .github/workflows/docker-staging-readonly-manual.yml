@@ -1,0 +1,83 @@
+name: Docker isolated staging acceptance — MANUAL READ ONLY
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_read_only_staging:
+        description: "I authorize read-only checks against a separately verified isolated staging project; never production"
+        required: true
+        type: boolean
+        default: false
+      confirm_two_test_accounts:
+        description: "Both staging test accounts and their owned workspaces are approved, pre-seeded, and not production/customer accounts"
+        required: true
+        type: boolean
+        default: false
+      staging_project_ref:
+        description: "Independently confirmed 20-character staging Supabase project ref"
+        required: true
+        type: string
+      production_project_ref:
+        description: "Different, independently confirmed production project ref (used only as a deny pin)"
+        required: true
+        type: string
+      release_commit_sha:
+        description: "Exactly the inspected Git commit SHA selected for this manual workflow"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-docker-staging-readonly
+  cancel-in-progress: false
+
+jobs:
+  read-only-staging:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_read_only_staging && inputs.confirm_two_test_accounts }}
+    name: Operator-approved management metadata and two-owner JWT staging checks
+    runs-on: ubuntu-latest
+    environment: docker-staging
+    timeout-minutes: 8
+    env:
+      ETERNYX_DOCKER_STAGING_READONLY_APPROVAL: I_APPROVE_READ_ONLY_STAGING
+      ETERNYX_DOCKER_INPUT_STAGING_REF: ${{ inputs.staging_project_ref }}
+      ETERNYX_DOCKER_INPUT_PRODUCTION_REF: ${{ inputs.production_project_ref }}
+      ETERNYX_DOCKER_INPUT_RELEASE_SHA: ${{ inputs.release_commit_sha }}
+      ETERNYX_DOCKER_CHECKOUT_COMMIT_SHA: ${{ github.sha }}
+      ETERNYX_DOCKER_APPROVED_COMMIT_SHA: ${{ github.sha }}
+      ETERNYX_DOCKER_STAGING_REF: ${{ vars.ETERNYX_DOCKER_STAGING_REF }}
+      ETERNYX_DOCKER_PRODUCTION_REF: ${{ vars.ETERNYX_DOCKER_PRODUCTION_REF }}
+      ETERNYX_DOCKER_STAGING_URL: ${{ vars.ETERNYX_DOCKER_STAGING_URL }}
+      ETERNYX_DOCKER_STAGING_PINNED_HOST: ${{ vars.ETERNYX_DOCKER_STAGING_PINNED_HOST }}
+      ETERNYX_DOCKER_PRODUCTION_HOST: ${{ vars.ETERNYX_DOCKER_PRODUCTION_HOST }}
+      ETERNYX_DOCKER_STAGING_OWNER_A_WORKSPACE: ${{ vars.ETERNYX_DOCKER_STAGING_OWNER_A_WORKSPACE }}
+      ETERNYX_DOCKER_STAGING_OWNER_B_WORKSPACE: ${{ vars.ETERNYX_DOCKER_STAGING_OWNER_B_WORKSPACE }}
+      ETERNYX_DOCKER_PINNED_DEPLOY_MANIFEST_SHA256: ${{ vars.ETERNYX_DOCKER_PINNED_DEPLOY_MANIFEST_SHA256 }}
+      ETERNYX_DOCKER_STAGING_MANIFEST_B64: ${{ secrets.ETERNYX_DOCKER_STAGING_MANIFEST_B64 }}
+      ETERNYX_DOCKER_MANAGEMENT_READ_TOKEN: ${{ secrets.ETERNYX_DOCKER_MANAGEMENT_READ_TOKEN }}
+      ETERNYX_DOCKER_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_DOCKER_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_DOCKER_STAGING_OWNER_A_JWT: ${{ secrets.ETERNYX_DOCKER_STAGING_OWNER_A_JWT }}
+      ETERNYX_DOCKER_STAGING_OWNER_B_JWT: ${{ secrets.ETERNYX_DOCKER_STAGING_OWNER_B_JWT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fail closed before any network request if protected pins disagree
+        run: node scripts/docker-staging-acceptance.mjs --preflight
+      - name: Inspect staging deployment and perform eight read-only account lists
+        timeout-minutes: 4
+        run: node scripts/docker-staging-acceptance.mjs --run
+      - name: Archive sanitized read-only staging observations only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-staging-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/docker-staging-readonly-acceptance.json
+          if-no-files-found: warn
+          retention-days: 7
