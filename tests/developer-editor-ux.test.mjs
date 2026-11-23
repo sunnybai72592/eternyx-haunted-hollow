@@ -30,7 +30,7 @@ test("Tab inserts spaces; Shift+Tab removes indent with selection positions", ()
 test("format JSON and normalize line endings are explicit bounded pure transformations", () => {
   assert.equal(formatProjectJson('{"a":2}'),'{\n  "a": 2\n}\n');
   assert.throws(()=>formatProjectJson("{oops"),/not valid JSON/);
-  assert.throws(()=>formatProjectJson(JSON.stringify({str:"x".repeat(19996)})),/20,000|per-file/);
+  assert.throws(()=>formatProjectJson(JSON.stringify({str:"x".repeat(19996)})),/too large|20,000|per-file/);
   assert.equal(normalizeProjectWhitespace(" a \r\n b\t\r", {trimTrailing:true})," a\n b\n");
   assert.equal(normalizeProjectWhitespace("a  \r\n"),"a  \n");
 });
@@ -74,7 +74,8 @@ test("UI enables quick-open, keyboard save/preview, indentation, formatting, dup
   assert.match(page,/exportJavascriptValidationReport/);
   assert.match(page,/filterProjectFilenames/);
   assert.match(page,/Ctrl\+S/);
-  assert.match(page,/event\.key\.toLowerCase\(\) === "p"/);
+  assert.match(page,/const key = event\.key\.toLowerCase\(\)/);
+  assert.match(page,/quickOpenRef\.current\?\.focus\(\)/);
   assert.match(page,/setSelectionRange\(/);
   assert.match(page,/onClick=\{runPreview\}/);
 });
