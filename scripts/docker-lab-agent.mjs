@@ -21,6 +21,8 @@ import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   from "../src/lib/dockerSignedAgentEngineGate.mjs";
 import {assertSignedAgentPreMutationUnchanged,validateSignedAgentLifecycleEvidence}
   from "../src/lib/dockerSignedAgentLastMomentGate.mjs";
+import {verifyPinnedDockerCliExecutable,signedDockerCliEnvironment}
+  from "../src/lib/dockerSignedCliExecutableGate.mjs";
 import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
 import { verifyPinnedDockerLabPermit } from "../src/lib/dockerLabPermitGuard.mjs";
@@ -51,8 +53,16 @@ function pubFile(path){
   return createPublicKey({key:Buffer.concat([Buffer.from("302a300506032b6570032100","hex"),bytes]),format:"der",type:"spki"});
 }
 function docker(args,ms=8000){
-  const r=spawnSync("docker",args,{shell:false,encoding:"utf8",timeout:ms,maxBuffer:524288,windowsHide:true});
-  if(r.error||r.status!==0)throw new Error("Local Docker command failed.");
+  // Never resolve Docker through operator PATH. Even rootless Docker daemon,
+  // image and container policy pins are ineffective if a local executable can
+  // be substituted. Rehash the root-owned absolute executable on EACH call.
+  const cli=verifyPinnedDockerCliExecutable(process.env);
+  const childEnv=signedDockerCliEnvironment(homedir());
+  const r=spawnSync(cli.path,args,{
+    shell:false,encoding:"utf8",timeout:ms,maxBuffer:524288,
+    windowsHide:true,env:childEnv
+  });
+  if(r.error||r.status!==0)throw new Error("Pinned local Docker CLI command failed.");
   return r.stdout.trim();
 }
 function localContext(){
@@ -60,6 +70,10 @@ function localContext(){
       process.getuid()===0||process.env.GITHUB_ACTIONS==="true"||process.env.CI==="true")
     throw new Error("Signed Docker execution requires a non-root operator Linux host outside CI.");
   const pins=validateSignedAgentEnginePins(process.env);
+  // Admission requires TWO independent operator pins: Engine identity and
+  // the exact installed CLI executable (no PATH-selected docker alias).
+  verifyPinnedDockerCliExecutable(process.env);
+  signedDockerCliEnvironment(homedir());
   validateSignedAgentSocket(lstatSync(pins.socketPath),process.getuid());
   const name=docker(["context","show"]);
   if(name!==pins.context)throw new Error("Selected signed-agent Docker context is not independently approved.");
