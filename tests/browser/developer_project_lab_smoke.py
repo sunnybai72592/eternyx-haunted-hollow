@@ -324,6 +324,18 @@ def actual_preflight(page):
     assert integration_marker not in json.dumps(integration_report)
     assert "index.html" not in json.dumps(integration_report)
     editor.fill(html_before)
+    # 3.6: current dependency graph and metadata-only export are exercised in
+    # the same seven canonical acceptance journeys on mobile and desktop.
+    expect(page.get_by_text("Dependency intelligence & change impact")).to_be_visible()
+    page.locator("#developer-dependency-focus").select_option("index.html")
+    expect(page.get_by_text("reference(s) in view", exact=False)).to_be_visible()
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export filename-free graph summary").click()
+    dependency_report=json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert dependency_report["schema"] == "eternyx-developer-dependencies-v1"
+    assert "fileCount" in dependency_report
+    assert "PRIVATE_MISSING_INTEGRATION" not in json.dumps(dependency_report)
+    assert "index.html" not in json.dumps(dependency_report)
     page.get_by_role("button", name="Save browser copy").click()
 
 def preview_isolation(page):
