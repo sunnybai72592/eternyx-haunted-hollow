@@ -1,0 +1,51 @@
+name: Portable private phone video import and editable draft
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai/portablePhoneIntake.mjs"
+      - "src/lib/ai/portableVideoBundle.mjs"
+      - "src/components/LocalVideoImportPrep.tsx"
+      - "gpu-worker/launch_phone_intake.py"
+      - "gpu-worker/prepare_video_sources.py"
+      - "tests/portable-phone-intake.test.mjs"
+      - ".github/workflows/portable-phone-intake.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai/portablePhoneIntake.mjs"
+      - "src/lib/ai/portableVideoBundle.mjs"
+      - "src/components/LocalVideoImportPrep.tsx"
+      - "gpu-worker/launch_phone_intake.py"
+      - "gpu-worker/prepare_video_sources.py"
+      - "tests/portable-phone-intake.test.mjs"
+      - ".github/workflows/portable-phone-intake.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-phone-input:
+    name: Extract private phone ZIP, transcode real 24/30FPS footage, verify local editable draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Confirm real offline FFmpeg, FFprobe and libx264
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Build actual self-contained ZIP, verify CRC32 and SHA256, render 16FPS H264 then restore draft
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: node --test tests/portable-phone-intake.test.mjs
