@@ -32,7 +32,7 @@ export function educationDeadlineSafety(status,deadline,now=Date.now()){
  */
 export function verifyEducationOwnedSubmission(row,attemptId,ownerId,testId) {
   if(!validExamId(attemptId)||!validExamId(ownerId)||!validExamId(testId)||
-     !row||typeof row!=="object"||
+     !row||typeof row!=="object"||Array.isArray(row)||
      row.id!==attemptId||row.user_id!==ownerId||row.test_id!==testId||
      !["in_progress","submitted","auto_submitted","cheated"].includes(row.status)) {
     throw new Error("The attempt status response could not be verified for this account.");
