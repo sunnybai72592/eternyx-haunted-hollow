@@ -55,7 +55,9 @@ test("fifteen actual calculated right answers pass, wrong answers fail without f
     assert.equal(good.certificateAwarded,false);
     assert.equal(good.externalSystemsAccessed,false);
     const wrong=id==="ipv6-net"?"2001:db8:abcd:2::1":
-      id==="cache-validate"?"no":(BigInt(answer)+1n).toString();
+      id==="cache-validate"?"no":
+      id==="ipv6-entire"?(BigInt(answer)-1n).toString():
+      (BigInt(answer)+1n).toString();
     const bad=gradePracticeAnswer(id,wrong);
     assert.equal(bad.correct,false,id);
     assert.equal(bad.expected,answer);
