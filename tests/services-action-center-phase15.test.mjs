@@ -67,7 +67,7 @@ test('owner deep links query the correct amendment view with its newer fields', 
   assert.doesNotMatch(src, /from\('service_customer_followup_queue'\)/);
   assert.match(src, /const \{ data, error \} = await supabase\.from\('service_customer_amendment_queue'\)/);
   assert.match(src, /amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete'/);
-  assert.match(src, /\.eq\('user_id', userId\)\s*\.eq\('id', selected\)\s*\.maybeSingle\(\)/);
+  assert.match(src, /\.eq\('user_id', userId\)\s*\.eq\('id', selected\)\s*\.abortSignal\(controller\.signal\)\s*\.maybeSingle\(\)/);
   assert.match(src, /setLinkedOwner\(userId\)/);
   assert.match(src, /linkedOwner === userId/);
 });
