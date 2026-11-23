@@ -4,7 +4,7 @@
 
 Route: /labs (public, browser-only). Navigation entry is visible on desktop and mobile. The Cybersecurity Hub and Developer Studio link to the same route, not separate duplicate labs.
 
-Thirty **working**, browser-only exercises (twenty-five existing plus five identity/network defenses):
+Thirty-five **working**, browser-only exercises (thirty existing plus five cryptography/data-safety workstations):
 1. Web developer playground — edit HTML, CSS and JavaScript, explicitly run a restricted iframe preview.
 2. DOM XSS practice — inspect the difference between an HTML sink and a text sink with controlled, local input.
 3. HTTP header clinic — deterministic checks against pasted header text; no outgoing HTTP requests.
@@ -35,8 +35,13 @@ Thirty **working**, browser-only exercises (twenty-five existing plus five ident
 28. IPv4/IPv6 CIDR membership — pure 32-bit/128-bit address containment testing without network probes or firewall enforcement.
 29. HSTS transport policy clinic — local Strict-Transport-Security syntax/expiry and preload prerequisite checks, not a live host evaluation.
 30. DMARC email defense clinic — synthetic p/sp/pct, DKIM/SPF alignment, and aggregate-report count without revealing recipients or querying DNS.
+31. PBKDF2 key derivation — real browser Web Crypto SHA-256 PBKDF2 with a new 16-byte salt and bounded iterations for synthetic passphrases.
+32. AES-GCM authenticated encryption — genuine one-shot AES-256-GCM encrypt/decrypt, random 96-bit nonce and tampered-ciphertext rejection with an ephemeral non-exportable key.
+33. TOTP code calculator — actual RFC 6238/HMAC-SHA1 test codes for a synthetic key and explicit Unix timestamp.
+34. Browser origin comparison — normalized scheme, host and port checks without DNS or URL fetching; excludes query/userinfo values from results.
+35. CSV formula neutralizer — RFC 4180-style quoted single-column output with apostrophe prefixing for common formula-like spreadsheet cells.
 
-**Truthful limits:** The thirty browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
+**Truthful limits:** The thirty-five browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
 
 ## Boundary and threat model
 
@@ -598,3 +603,73 @@ mobile, and screen-reader verification remains necessary before release.
 
 Hosted Labs, Firecracker, local VM dispatch, live security scanning,
 and paid GPU/AI/cloud features remain disabled and unchanged.
+
+
+## Phase 10 — five cryptography and data-defense workstations (35 total)
+
+The next Labs milestone adds five **working**, strictly client-only
+workstations to the 30 previous ones; all 60 open-book client-graded
+practice challenges remain in place. Engines live in
+src/lib/eternyxLabsCryptoDefense.mjs and the responsive
+BrowserCryptoDataDefense React component.
+
+1. **PBKDF2 key derivation.** Real Web Crypto PBKDF2-HMAC-SHA256,
+   256-bit output, 16-byte randomly generated salt, and 1,000–150,000
+   iterations (limited deliberately for a responsive training page).
+   Deterministic test vectors compare with Node's PBKDF2 implementation.
+   A synthetic training passphrase is accepted, but **never use this
+   as a password manager, account verifier or production storage
+   design**. No credentials are stored, transmitted or authenticated.
+2. **AES-256-GCM.** Real Web Crypto generates an ephemeral,
+   *non-exportable* 256-bit AES-GCM key and fresh 96-bit random IV,
+   encrypts an entered synthetic UTF-8 message, decrypts it and
+   checks that a single-bit ciphertext modification fails authenticated
+   decryption. The key is discarded by the one-shot function, so
+   output ciphertext cannot be decrypted later. IV and ciphertext
+   are visible, but no key is exported or saved.
+3. **TOTP.** Real RFC 6238-style time-based one-time codes using Web
+   Crypto HMAC-SHA1, a bounded synthetic secret, an explicit Unix
+   timestamp, and selectable six/eight output digits. Timestamps
+   are used as *training inputs* rather than live login validation;
+   known RFC vectors (59, 1111111109, 1111111111, etc.) are tested.
+   This is not real authenticator enrollment or 2FA verification.
+   Do not paste real 2FA seeds.
+4. **Browser origins.** Compares absolute HTTP/HTTPS URLs by exact
+   scheme, normalized hostname and effective port, using the browser
+   URL parser. Userinfo and query values are never returned; warnings
+   identify the presence of embedded credentials, queries, insecure
+   HTTP and loopback-looking hostnames. No DNS resolution, CORS
+   authorization, registrable-domain analysis, SSRF protection or
+   network requests are performed.
+5. **CSV formula neutralization.** Processes up to 30 synthetic
+   single-line cells, double-quotes each in RFC 4180 style, escapes
+   internal quotes and prefixes an apostrophe for common spreadsheet
+   formula triggers. It produces bounded, in-memory, single-column
+   CSV text only: no file write, import, workbook formula execution
+   or cross-application safety certification. Spreadsheet applications
+   have different import semantics; real imports require validation.
+
+All five tools expose their actual computed results and explicit
+limitations through accessible labelled controls, safe bounded
+error states and mobile-compatible output cards. Async Web Crypto
+responses are rejected after input changes, route/selection changes
+or component unmount.
+
+### Release acceptance checks
+
+    node --test tests/eternyx-labs-crypto-defense.test.mjs
+    node --test tests/eternyx-labs-identity-practice.test.mjs
+    npm test
+    npm run build
+
+Regression tests cover independent PBKDF2 vectors, fresh cryptographic
+salts, AES-GCM ciphertext authentication, actual RFC 6238 OTP outputs,
+origin/default-port and URL privacy behavior, bounded CSV quoting,
+control-character/input attacks and integration with all 35 catalog
+entries. The original three sandboxed preview frames remain restricted
+to allow-scripts and existing 60 challenges are not rewritten.
+
+No hosted Labs activation, external security assessment, paid GPU/AI
+service, live scanning, database writes or authenticated learner
+certificate is introduced. Manual browser and accessibility testing
+is still required after automated CI.

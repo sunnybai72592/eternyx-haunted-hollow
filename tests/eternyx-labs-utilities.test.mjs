@@ -9,16 +9,17 @@ import {
 } from "../src/lib/eternyxLabsUtilities.mjs";
 import {labCatalog} from "../src/lib/eternyxLabs.mjs";
 
-test("thirty distinct Labs workstations include the original browser security utilities",()=>{
+test("thirty-five distinct Labs workstations include the original browser security utilities",()=>{
   assert.deepEqual(labCatalog.map(x=>x.id),[
     "web","xss","headers","sql","access","codec","urls","jwt","redact","sha",
     "subnet","chmod","csp","cors","cookie",
     "dns","http","securitytxt","events","tokens",
     "ipv6","cache","spf","ratelimit","sri",
     "pkce","hmac","cidrcheck","hsts","dmarc",
+    "pbkdf2","aesgcm","totp","origins","csvsafe",
   ]);
-  assert.equal(new Set(labCatalog.map(x=>x.id)).size,30);
-  assert.equal(new Set(labCatalog.map(x=>x.title)).size,30);
+  assert.equal(new Set(labCatalog.map(x=>x.id)).size,35);
+  assert.equal(new Set(labCatalog.map(x=>x.title)).size,35);
 });
 
 test("UTF-8 encodes Unicode to both reversible Base64 and hex without upload",()=>{
