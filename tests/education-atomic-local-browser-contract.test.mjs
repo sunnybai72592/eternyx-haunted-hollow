@@ -94,3 +94,18 @@ test("synthetic Chromium runner is valid Python before invoking any browser",()=
  if(c.error?.code==="ENOENT")return; // Some contributors build on Windows.
  assert.equal(c.status,0,"Synthetic Education browser source must compile");
 });
+
+test("private Education, exam, instructor, and result routes never poll visitor presence",()=>{
+ const source=readFileSync(new URL("../src/components/home/VisitorPresence.tsx",import.meta.url),"utf8");
+ assert.match(source,/privateEducation = path === "\/education"/);
+ assert.match(source,/path\.startsWith\("\/education\/"\)/);
+ assert.match(source,/path === "\/admin\/education"/);
+ assert.match(source,/path\.startsWith\("\/test\/"\)/);
+ assert.match(source,/path\.startsWith\("\/test-results\/"\)/);
+ assert.match(source,/included = allowed && !locked && !restoring && !privateEducation/);
+ assert.match(source,/queryKey: \["visitor-presence", included, privateEducation\]/);
+ assert.match(source,/enabled: !privateEducation && \(included \|\| home\)/);
+ assert.match(script,/path == "\/rest\/v1\/rpc\/is_admin"/);
+ assert.match(script,/fixture\.unexpected_mutations\.clear\(\)/);
+ assert.match(workflow,/src\/components\/home\/VisitorPresence\.tsx/);
+});
