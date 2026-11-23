@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Copy, Download, FileUp, Plus, Redo2, Search, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BookOpen, Copy, Download, FileUp, ListChecks, Plus, Redo2, Search, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import EducationWrittenReviewPanel from "@/components/education/EducationWrittenReviewPanel";
 import { useAuthStore } from "@/store/authStore";
@@ -19,6 +19,11 @@ import {
   createBankUndoHistory, duplicateBankQuestion, duplicatePromptWarnings,
   moveBankQuestion, questionIssueTargets, searchBankQuestions,
 } from "@/lib/educationBankWorkbench.mjs";
+import {
+  auditEducationQuestionBank, buildEducationBankAuditCsv,
+  buildEducationLearnerWorksheetJson, buildEducationLearnerWorksheetText,
+  nextEducationBankQualityIndex,
+} from "@/lib/educationQuestionQuality.mjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -27,6 +32,15 @@ type Choice = { id: string; text: string; correct: boolean };
 type Question = { id: string; type: "multiple_choice" | "true_false" | "short_answer"; text: string; points: number; options: Choice[] };
 type Bank = { version: number; title: string; description: string; duration_minutes: number; questions: Question[] };
 type QuestionType = Question["type"];
+
+function downloadText(content: string, filename: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 function downloadJson(content: string, filename: string) {
   const url = URL.createObjectURL(new Blob([content], { type: "application/json;charset=utf-8" }));
@@ -44,6 +58,7 @@ export default function EducationInstructorStudio() {
   const [mode, setMode] = useState<"edit" | "learner">("edit");
   const [questionSearch, setQuestionSearch] = useState("");
   const [questionTypeFilter, setQuestionTypeFilter] = useState<"all" | QuestionType>("all");
+  const [qualityFilter, setQualityFilter] = useState<"all" | "fix" | "review" | "ready">("all");
   const [historyController] = useState(() => createBankUndoHistory(emptyQuestionBank() as Bank));
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
   const [message, setMessage] = useState("");
@@ -63,6 +78,7 @@ export default function EducationInstructorStudio() {
     setHistoryCounts({ undo: 0, redo: 0 });
     setQuestionSearch("");
     setQuestionTypeFilter("all");
+    setQualityFilter("all");
   };
   const commitBank = (apply: (current: Bank) => Bank) => {
     try {
@@ -110,11 +126,15 @@ export default function EducationInstructorStudio() {
   const readiness = useMemo(() => validateQuestionBank(bank), [bank]);
   const draftCheck = useMemo(() => validateQuestionBankDraft(bank), [bank]);
   const summary = useMemo(() => questionBankSummary(bank), [bank]);
+  const qualityAudit = useMemo(() => auditEducationQuestionBank(bank), [bank]);
   const learnerView = useMemo(() => draftCheck.valid ? learnerQuestionPreview(bank) : [], [bank, draftCheck.valid]);
   const activeIndex = bank.questions.findIndex(q => q.id === activeId);
   const active = activeIndex >= 0 ? bank.questions[activeIndex] : null;
-  const visibleQuestions = useMemo(() => searchBankQuestions(bank, questionSearch, questionTypeFilter),
-    [bank, questionSearch, questionTypeFilter]);
+  const visibleQuestions = useMemo(() =>
+    searchBankQuestions(bank, questionSearch, questionTypeFilter).filter(item =>
+      qualityFilter === "all" ||
+      qualityAudit.items[item.index]?.state === qualityFilter),
+    [bank, questionSearch, questionTypeFilter, qualityFilter, qualityAudit]);
   const duplicateWarnings = useMemo(() => duplicatePromptWarnings(bank), [bank]);
   const issueTargets = useMemo(() => questionIssueTargets(bank, readiness.issues),
     [bank, readiness.issues]);
@@ -187,6 +207,40 @@ export default function EducationInstructorStudio() {
       setMessage("Question duplicated locally with fresh question and option IDs. Verify its answer key before export.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Question duplication failed.");
+    }
+  };
+  const goToQualityIssue = (type: "fix" | "review") => {
+    const index = nextEducationBankQualityIndex(qualityAudit.items, activeIndex, type);
+    if (index < 0) return;
+    setActiveId(bank.questions[index].id);
+    setQuestionSearch("");
+    setQuestionTypeFilter("all");
+    setQualityFilter("all");
+    setMode("edit");
+    setMessage("Jumped to question " + (index + 1) + " needing " +
+      (type === "fix" ? "validation fixes." : "editorial review."));
+  };
+  const downloadLearnerWorksheet = (format: "json" | "txt") => {
+    if (!readiness.valid) return;
+    try {
+      const content = format === "json"
+        ? buildEducationLearnerWorksheetJson(bank)
+        : buildEducationLearnerWorksheetText(bank);
+      downloadText(content,
+        "eternyx-learner-practice-worksheet." + format,
+        format === "json" ? "application/json;charset=utf-8" : "text/plain;charset=utf-8");
+      setMessage("Student practice worksheet downloaded without explicit answer-key flags. Review the question wording before sharing.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not export a student worksheet.");
+    }
+  };
+  const downloadQualityAudit = () => {
+    try {
+      downloadText(buildEducationBankAuditCsv(bank),
+        "eternyx-question-bank-quality-review.csv", "text/csv;charset=utf-8");
+      setMessage("Local question-bank quality review downloaded. This is editorial guidance, not an official certificate.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not export a quality review.");
     }
   };
   const handleExport = (ready: boolean) => {
@@ -447,6 +501,69 @@ export default function EducationInstructorStudio() {
           )}
 
         </section>
+        <section aria-label="Question bank quality review" className="space-y-4 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
+            <h2 className="font-semibold">Question quality review</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Read-only checks of your actual local questions. Fix counts reflect per-question export requirements;
+            review flags identify repeated wording, not cheating, failure or automatic grading.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {([
+              ["Ready", qualityAudit.counts.ready],
+              ["Needs fixing", qualityAudit.counts.fix],
+              ["Review wording", qualityAudit.counts.review],
+              ["Maximum points", qualityAudit.counts.maxPoints],
+            ] as const).map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="mt-1 text-xl font-semibold">{value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {qualityAudit.counts.multipleChoice} multiple-choice · {qualityAudit.counts.trueFalse} true/false ·
+            {qualityAudit.counts.written} written.
+            Validation for the bank title, duration and structure is still required before export.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={qualityAudit.counts.fix === 0}
+              onClick={() => goToQualityIssue("fix")}>Next question to fix</Button>
+            <Button variant="outline" size="sm" disabled={qualityAudit.counts.review === 0}
+              onClick={() => goToQualityIssue("review")}>Next wording to review</Button>
+            <Button variant="outline" size="sm" disabled={qualityAudit.counts.total === 0}
+              onClick={downloadQualityAudit}>
+              <Download aria-hidden="true" className="mr-1 h-4 w-4" />Download quality checklist (.csv)
+            </Button>
+          </div>
+          <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+            <h3 className="text-sm font-semibold">Key-free learner practice worksheets</h3>
+            <p className="text-xs text-muted-foreground">
+              Download only after validating the bank. Student worksheets exclude explicit correct-answer
+              flags and option IDs, but question wording can still reveal hints or answers—review before sharing.
+              These downloads are not live exams, assignments or grading services.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" disabled={!readiness.valid}
+                onClick={() => downloadLearnerWorksheet("json")}>
+                <Download aria-hidden="true" className="mr-1 h-4 w-4" />Learner worksheet JSON
+              </Button>
+              <Button variant="outline" size="sm" disabled={!readiness.valid}
+                onClick={() => downloadLearnerWorksheet("txt")}>
+                <Download aria-hidden="true" className="mr-1 h-4 w-4" />Learner worksheet TXT
+              </Button>
+            </div>
+          </div>
+          {qualityAudit.items.some(item => item.warnings.length > 0) && (
+            <div role="note" className="flex gap-2 text-xs text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Potential duplicate option or question wording requires an instructor's judgment.
+            </div>
+          )}
+        </section>
+
         {duplicateWarnings.length > 0 && <section aria-label="Potential duplicate question prompts"
           className="rounded-xl border border-amber-500/30 bg-card p-4">
           <h2 className="font-semibold">Repeated question wording</h2>
@@ -483,12 +600,21 @@ export default function EducationInstructorStudio() {
                 <option value="true_false">True / False</option>
                 <option value="short_answer">Written</option>
               </select>
+              <label htmlFor="authoring-question-quality" className="block text-sm font-medium">Question quality</label>
+              <select id="authoring-question-quality" value={qualityFilter}
+                onChange={event => setQualityFilter(event.target.value as typeof qualityFilter)}
+                className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                <option value="all">All questions</option>
+                <option value="fix">Needs validation fixes</option>
+                <option value="review">Editorial wording review</option>
+                <option value="ready">No question-level issues</option>
+              </select>
               <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
                 {visibleQuestions.length} of {bank.questions.length} questions shown
               </p>
-              {(questionSearch || questionTypeFilter !== "all") &&
+              {(questionSearch || questionTypeFilter !== "all" || qualityFilter !== "all") &&
                 <Button variant="ghost" size="sm"
-                  onClick={() => { setQuestionSearch(""); setQuestionTypeFilter("all"); }}>
+                  onClick={() => { setQuestionSearch(""); setQuestionTypeFilter("all"); setQualityFilter("all"); }}>
                   Clear question filters
                 </Button>}
             </div>
@@ -511,6 +637,10 @@ export default function EducationInstructorStudio() {
                     (q.id === activeId ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/30")}>
                   <p className="text-xs text-muted-foreground">Question {index + 1} · {q.type.replaceAll("_", " ")} · {q.points} pt</p>
                   <p className="mt-1 break-words text-sm font-medium">{q.text.trim() || "Untitled question"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {qualityAudit.items[index]?.state === "fix" ? "Needs fixing" :
+                      qualityAudit.items[index]?.state === "review" ? "Review wording" : "No question-level issues"}
+                  </p>
                 </button>;
               })}
             </div>}
@@ -547,6 +677,22 @@ export default function EducationInstructorStudio() {
                 <CardHeader><CardTitle>Editing question {activeIndex + 1}</CardTitle>
                   <CardDescription>Changes stay in memory until you explicitly export a JSON file.</CardDescription></CardHeader>
                 <CardContent className="space-y-5">
+                  {qualityAudit.items[activeIndex]?.issues.length > 0 && (
+                    <div role="status" className="rounded-lg border border-destructive/30 p-3 text-sm">
+                      <p className="font-semibold">Question validation issues</p>
+                      <ul className="mt-2 list-inside list-disc space-y-1">
+                        {qualityAudit.items[activeIndex].issues.map((issue, index) => <li key={index}>{issue}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {qualityAudit.items[activeIndex]?.warnings.length > 0 && (
+                    <div role="note" className="rounded-lg border border-amber-500/30 p-3 text-sm">
+                      <p className="font-semibold">Editorial wording warnings</p>
+                      <ul className="mt-2 list-inside list-disc space-y-1">
+                        {qualityAudit.items[activeIndex].warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                      </ul>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" disabled={activeIndex === 0} onClick={() => moveQuestion(-1)}>
                       <ArrowUp aria-hidden="true" className="mr-1 h-4 w-4" />Move up
