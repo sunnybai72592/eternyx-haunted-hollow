@@ -145,7 +145,7 @@ export default function EducationPractice(){
         </div>
         <p className="flex items-start gap-2 text-xs leading-6 text-muted-foreground">
           <ShieldCheck aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-primary"/>
-          No account required. No network request, autosave, localStorage, grading service or AI inference.
+          No account required. Your worksheet and answers are never uploaded, autosaved or sent for grading.
           Your practice is kept in this tab's memory only; export a resume file before refreshing or leaving.
         </p>
       </section>
