@@ -31,6 +31,8 @@ jobs:
         run: npm test
       - name: Validate Automation runtime source and JWT policy inventory (offline only)
         run: node scripts/automation-runtime-readiness.mjs --source-check
+      - name: Inventory Workspace release-critical SQL, smoke tests, and CI wiring (offline only)
+        run: node scripts/workspace-release-readiness.mjs --source-check
       - name: Check utility JavaScript syntax
         run: |
           node --check src/lib/developerStudioUtils.mjs
