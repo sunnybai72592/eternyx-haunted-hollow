@@ -92,7 +92,7 @@ export function assertAccountBoundaries(a,b){
 async function parseBounded(res){
   const hint=res.headers?.get?.("content-length");
   if(hint!==null && hint!==undefined){
-    if(!/^\\d+$/.test(hint)||!Number.isSafeInteger(Number(hint)))fail("invalid_response");
+    if(!/^\d+$/.test(hint)||!Number.isSafeInteger(Number(hint)))fail("invalid_response");
     if(Number(hint)>LIMIT)fail("response_too_large");
   }
   if(!res.body||typeof res.body.getReader!=="function")fail("invalid_response");
