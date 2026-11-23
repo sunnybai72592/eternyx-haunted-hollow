@@ -1,0 +1,79 @@
+name: Education atomic browser integration (synthetic only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/pages/TestInterface.tsx'
+      - 'src/pages/TestResults.tsx'
+      - 'src/pages/Education.tsx'
+      - 'src/components/home/VisitorPresence.tsx'
+      - 'src/lib/education*.mjs'
+      - 'src/lib/education*.ts'
+      - 'tests/browser/education_atomic_local.py'
+      - 'tests/education-atomic-local-browser-contract.test.mjs'
+      - '.github/workflows/education-atomic-browser-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/pages/TestInterface.tsx'
+      - 'src/pages/TestResults.tsx'
+      - 'src/pages/Education.tsx'
+      - 'src/components/home/VisitorPresence.tsx'
+      - 'src/lib/education*.mjs'
+      - 'src/lib/education*.ts'
+      - 'tests/browser/education_atomic_local.py'
+      - 'tests/education-atomic-local-browser-contract.test.mjs'
+      - '.github/workflows/education-atomic-browser-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: education-atomic-local-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Real React CBT UI in offline synthetic Chrome
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VITE_SUPABASE_URL: https://offline-education.invalid
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_local_browser_fixture_nonproduction
+      VITE_CBT_ATOMIC_RPC: "true"
+      VITE_EDUCATION_INSTRUCTOR_RPC: "true"
+      VITE_EDUCATION_PUBLICATION_RPC: "true"
+      VITE_EDUCATION_WRITTEN_REVIEW_RPC: "true"
+      VITE_EDUCATION_VERIFIED_RESULTS_RPC: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Validate exact local-only browser source and Python syntax
+        run: |
+          node --test tests/education-atomic-local-browser-contract.test.mjs
+          python3 -m py_compile tests/browser/education_atomic_local.py
+      - name: Install locked frontend dependencies (no remote secrets)
+        run: npm ci
+      - name: Build isolated atomic CBT UI with fake host and no production credentials
+        run: npm run build
+      - name: Run real desktop and mobile Chrome against intercepted synthetic API
+        timeout-minutes: 5
+        run: |
+          python3 -m venv "$RUNNER_TEMP/education-atomic-browser"
+          "$RUNNER_TEMP/education-atomic-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
+          npm run preview -- --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/education-atomic-preview.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:4173/ >/dev/null
+          "$RUNNER_TEMP/education-atomic-browser/bin/python" tests/browser/education_atomic_local.py
+      - name: Upload check names only, never private answers or browser snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-atomic-synthetic-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-atomic-local-browser.json
+          if-no-files-found: warn
+          retention-days: 7

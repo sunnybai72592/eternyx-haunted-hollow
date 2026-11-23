@@ -28,7 +28,13 @@ async function loadPresence(contribute: boolean, signal: AbortSignal): Promise<S
 }
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
-  const home = useLocation().pathname === "/";
+  const path = useLocation().pathname;
+  const home = path === "/";
+  // Protected exams, assessment history and instructor work must never
+  // contribute a network-presence event or poll the visitor map.
+  const privateEducation = path === "/education" ||
+    path.startsWith("/education/") || path === "/admin/education" ||
+    path.startsWith("/test/") || path.startsWith("/test-results/");
   const restoring = useAuthStore(state => state.isLoading || (!!state.user && !state.profile));
   const analytics = useAuthStore(state => state.profile?.preferences?.analytics);
   const locked = analytics === false || navigator.doNotTrack === "1" ||
@@ -43,11 +49,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
-  const included = allowed && !locked && !restoring;
+  const included = allowed && !locked && !restoring && !privateEducation;
   const query = useQuery({
-    queryKey: ["visitor-presence", included],
+    queryKey: ["visitor-presence", included, privateEducation],
     queryFn: ({ signal }) => loadPresence(included, signal),
-    enabled: included || home, refetchInterval: 30000, refetchIntervalInBackground: false,
+    enabled: !privateEducation && (included || home), refetchInterval: 30000, refetchIntervalInBackground: false,
     networkMode: "always", staleTime: 0, retry: false,
   });
   function toggle() {
