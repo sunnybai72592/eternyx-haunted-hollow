@@ -1,0 +1,33 @@
+{
+  "schema": "eternyx-docker-deployment-expectations-v1",
+  "stagingProjectRef": "REPLACE_STAGING_REF",
+  "productionProjectRef": "REPLACE_PRODUCTION_REF",
+  "releaseCommitSha": "REPLACE_GIT_COMMIT_SHA",
+  "pinnedSourceSnapshotSha256": "REPLACE_SNAPSHOT_SHA256",
+  "expected": [
+    {
+      "slug": "docker-control",
+      "version": 0,
+      "verifyJwt": true,
+      "bundleSha256": null
+    },
+    {
+      "slug": "docker-enrollment",
+      "version": 0,
+      "verifyJwt": true,
+      "bundleSha256": null
+    },
+    {
+      "slug": "docker-heartbeat",
+      "version": 0,
+      "verifyJwt": false,
+      "bundleSha256": null
+    },
+    {
+      "slug": "docker-command-dispatch",
+      "version": 0,
+      "verifyJwt": false,
+      "bundleSha256": null
+    }
+  ]
+}
