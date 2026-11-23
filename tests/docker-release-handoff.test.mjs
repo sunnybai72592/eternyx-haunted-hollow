@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {generateKeyPairSync,createHash} from "node:crypto";
-import {mkdtempSync,writeFileSync,chmodSync,rmSync} from "node:fs";
+import {mkdtempSync,writeFileSync,chmodSync,rmSync,readFileSync} from "node:fs";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
 import {spawnSync} from "node:child_process";
@@ -246,7 +246,7 @@ test("CLI end-to-end prepares, signs, countersigns and verifies with real owner-
 });
 test("offline CLI has no mutation, deployment, Docker Engine or HTTP network code",()=>{
  const cli=new URL("../scripts/docker-release-handoff.mjs",import.meta.url);
- const source=(await import("node:fs")).readFileSync(cli,"utf8");
+ const source=readFileSync(cli,"utf8");
  assert.doesNotMatch(source,/fetch\(|execFileSync|spawnSync|Deno\.Command|docker\.sock|supabase functions deploy/);
  assert.match(source,/ETERNYX_DOCKER_RELEASE_REVIEW_ENABLED/);
 });
