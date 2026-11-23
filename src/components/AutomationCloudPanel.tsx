@@ -13,6 +13,7 @@ import AutomationClosureGovernancePanel from "@/components/AutomationClosureGove
 import AutomationReopenGovernancePanel from "@/components/AutomationReopenGovernancePanel";
 import AutomationLifecycleReadinessPanel from "@/components/AutomationLifecycleReadinessPanel";
 import AutomationCaseCoveragePanel from "@/components/AutomationCaseCoveragePanel";
+import AutomationAuditPackagePanel from "@/components/AutomationAuditPackagePanel";
 import AutomationTemplateGallery from "@/components/AutomationTemplateGallery";
 import { Archive, Cloud, CloudOff, LockKeyhole, PauseCircle, Play, RefreshCcw, Save, Trash2, FlaskConical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -305,6 +306,7 @@ export default function AutomationCloudPanel({
         {loaded&&<AutomationReopenGovernancePanel key={userId} disabled={busy}/>}
         {loaded&&<AutomationLifecycleReadinessPanel key={userId} disabled={busy}/>}
         {loaded&&<AutomationCaseCoveragePanel key={userId} disabled={busy}/>}
+        {loaded&&<AutomationAuditPackagePanel key={userId} disabled={busy}/>}
         <AutomationWebhookPanel selectedWorkflowId={selectedId} />
         <AutomationGitHubReadPanel />
         <AutomationGitHubIssuesPanel />
