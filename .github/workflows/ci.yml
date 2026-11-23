@@ -92,8 +92,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      MIRROR_PATH: ${{ runner.temp }}/eternyx-combined-sql-mirror-${{ github.run_id }}-${{ github.run_attempt }}
-      REPLAY_PLAN: ${{ runner.temp }}/eternyx-combined-sql-mirror-${{ github.run_id }}-${{ github.run_attempt }}/ordered-replay.txt
+      MIRROR_PATH: /tmp/eternyx-combined-sql-mirror-${{ github.run_id }}-${{ github.run_attempt }}
+      REPLAY_PLAN: /tmp/eternyx-combined-sql-mirror-${{ github.run_id }}-${{ github.run_attempt }}/ordered-replay.txt
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js 22 for the offline planner
