@@ -96,9 +96,11 @@ test("receipt acknowledgement refuses mismatched claim, outcome or fake independ
 });
 test("production Edge verifies actual signature BEFORE consuming a signed nonce",()=>{
  const edge=readFileSync(new URL("../supabase/functions/docker-command-dispatch/index.ts",import.meta.url),"utf8");
- assert.ok(edge.indexOf("verifySignedDockerAgentAction(input,agent)")>=0);
- assert.ok(edge.indexOf("verifySignedDockerAgentAction(input,agent)")<
-   edge.indexOf('db.rpc("docker_command_consume_nonce"'));
+ const handler=readFileSync(new URL("../supabase/functions/_shared/docker-dispatch-handler.mjs",import.meta.url),"utf8");
+ assert.match(edge,/createDockerDispatchHandler/);
+ assert.ok(handler.indexOf("verifySignedDockerAgentAction(input,agent,clock,crypt)")>=0);
+ assert.ok(handler.indexOf("verifySignedDockerAgentAction(input,agent,clock,crypt)")<
+   handler.indexOf('context.rpc("docker_command_consume_nonce"'));
  assert.match(edge,/DOCKER_REMOTE_LAB_ENABLED/);
  assert.doesNotMatch(edge,/Deno\.Command|docker\.sock|spawnSync/);
 });

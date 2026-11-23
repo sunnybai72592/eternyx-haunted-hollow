@@ -90,10 +90,12 @@ test("agent recovery cannot run Docker and normal execution reserves the claim b
 });
 test("Edge acknowledges only server-stored agent-reported outcomes",()=>{
  const source=readFileSync(new URL("../supabase/functions/docker-command-dispatch/index.ts",import.meta.url),"utf8");
- assert.match(source,/alreadyRecorded:data\.reused===true/);
- assert.match(source,/independentExecutionAudit:false/);
- assert.match(source,/docker_command_consume_nonce/);
- assert.match(source,/verifySignedDockerAgentAction/);
+ const handler=readFileSync(new URL("../supabase/functions/_shared/docker-dispatch-handler.mjs",import.meta.url),"utf8");
+ assert.match(source,/createDockerDispatchHandler/);
+ assert.match(handler,/alreadyRecorded:data\.reused===true/);
+ assert.match(handler,/independentExecutionAudit:false/);
+ assert.match(handler,/docker_command_consume_nonce/);
+ assert.match(handler,/verifySignedDockerAgentAction/);
  const verifier=readFileSync(new URL("../supabase/functions/_shared/docker-action-verifier.mjs",import.meta.url),"utf8");
  assert.match(verifier,/crypt.subtle.verify/);
 });

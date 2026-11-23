@@ -79,12 +79,16 @@ test("SQL claims are one-time, account bound, owner read only, fail closed",()=>
 test("dispatch Edge has disabled gate, verifies signature before nonce and SQL, no Docker command access",()=>{
   const file=readFileSync(new URL("../supabase/functions/docker-command-dispatch/index.ts",import.meta.url),"utf8");
   assert.match(file,/DOCKER_REMOTE_LAB_ENABLED/);
-  assert.ok(file.indexOf("verifySignedDockerAgentAction(")<file.indexOf('db.rpc("docker_command_consume_nonce"'));
+  const handler=readFileSync(new URL("../supabase/functions/_shared/docker-dispatch-handler.mjs",import.meta.url),"utf8");
+  assert.ok(handler.indexOf("verifySignedDockerAgentAction(input,agent,clock,crypt)")>=0);
+  assert.ok(handler.indexOf("verifySignedDockerAgentAction(input,agent,clock,crypt)")<
+    handler.indexOf('context.rpc("docker_command_consume_nonce"'));
   const verifier=readFileSync(new URL("../supabase/functions/_shared/docker-action-verifier.mjs",import.meta.url),"utf8");
   assert.match(verifier,/crypt.subtle.verify/);
   assert.match(verifier,/bytesFromBase64url\(input.signature,64\)/);
   assert.match(file,/serverSigningKey/);
-  assert.match(file,/verifySignedDockerAgentAction/);
+  assert.match(file,/createDockerDispatchHandler/);
+  assert.match(handler,/verifySignedDockerAgentAction/);
   assert.doesNotMatch(file,/docker\.sock|spawnSync|Deno\.Command|ssh:\/\/|fetch\(.+container/);
 });
 test("agent requires explicit execution flag, pinned signed permit, isolation guard and local audit",()=>{
