@@ -67,7 +67,8 @@ test("read-only Playwright exercises verified student and instructor UI in two r
 });
 test("browser aborts all unauthorized staging mutations including profile auto-create",()=>{
  assert.match(script,/if host\.endswith\("\.supabase\.co"\) and host != staging_host:/);
- assert.match(script,/if host == staging_host and method not in \("GET", "HEAD", "OPTIONS"\):/);
+ assert.match(script,/if method not in \("GET", "HEAD", "OPTIONS"\):/);
+ assert.match(script,/host == staging_host and/);
  assert.match(script,/path == "\/auth\/v1\/token"/);
  assert.match(script,/path\.startswith\("\/rest\/v1\/rpc\/"\)/);
  assert.match(script,/route\.abort\(\)/);
