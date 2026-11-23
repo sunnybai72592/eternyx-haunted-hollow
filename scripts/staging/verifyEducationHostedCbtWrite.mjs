@@ -11,6 +11,7 @@ import {
   isExplicitAuthorizationDenial, isDeniedOrNoVisibleRow,
 } from "./educationHostedMutationDenial.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
+import {HANDOFF_PATH,makeJourneyHandoff} from "./educationJourneyHandoff.mjs";
 import {
   validateEducationHostedCbtConfig,
   CBT_STAGING_CASES,
@@ -372,4 +373,16 @@ if(!config || !twoVerified || !signedOut ||
   (config.mode==="preflight" && (writesAttempted||attemptCreated)) ||
   (config.mode==="write" && (!writesAttempted||!attemptCreated))) {
   process.exitCode=1;
+}
+
+if(process.exitCode!==1 && config?.mode==="write" &&
+   process.env.ETERNYX_EDU_RELEASE_MODE==="journey"){
+  try{
+    // Private same-run handoff: only after all 46 cases and signout pass.
+    const handoff=makeJourneyHandoff(process.env,attemptId,essayAnswerId);
+    writeFileSync(HANDOFF_PATH,JSON.stringify(handoff)+"\n",{mode:0o600,flag:"wx"});
+  }catch{
+    process.stderr.write("Education single-attempt staging handoff refused.\n");
+    process.exitCode=1;
+  }
 }

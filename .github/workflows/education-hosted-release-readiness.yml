@@ -8,8 +8,13 @@ on:
         options:
           - preflight
           - rehearsal
+          - journey
         default: preflight
       approve_read_only:
+        required: true
+        type: boolean
+        default: false
+      approve_single_attempt_journey:
         required: true
         type: boolean
         default: false
@@ -53,21 +58,22 @@ jobs:
     timeout-minutes: 40
     env:
       ETERNYX_EDU_RELEASE_MODE: ${{ inputs.run_mode }}
+      ETERNYX_EDU_JOURNEY_APPROVAL: ${{ inputs.run_mode == 'journey' && inputs.approve_single_attempt_journey && 'I_APPROVE_SINGLE_STAGING_EXAM_FULL_JOURNEY' || '' }}
       ETERNYX_EDU_RELEASE_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_RELEASE_CHECKS' || '' }}
-      ETERNYX_EDU_RELEASE_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_full_rehearsal && 'I_ACKNOWLEDGE_STAGING_EXAM_REVIEW_AND_GRADE_ARE_IRREVERSIBLE' || '' }}
+      ETERNYX_EDU_RELEASE_IRREVERSIBLE_ACK: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.acknowledge_full_rehearsal && 'I_ACKNOWLEDGE_STAGING_EXAM_REVIEW_AND_GRADE_ARE_IRREVERSIBLE' || '' }}
       ETERNYX_EDU_STAGING_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_READ_ONLY' || '' }}
       ETERNYX_EDU_RESULTS_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY' || '' }}
       ETERNYX_EDU_DB_META_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_DB_METADATA_READ_ONLY' || '' }}
-      ETERNYX_EDU_WRITE_MODE: ${{ inputs.run_mode == 'rehearsal' && 'write' || 'preflight' }}
-      ETERNYX_EDU_CBT_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_cbt_write && 'I_APPROVE_FRESH_EDUCATION_STAGING_CBT_ATTEMPT' || '' }}
-      ETERNYX_EDU_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_no_retake && 'I_ACKNOWLEDGE_STAGING_ATTEMPT_CANNOT_BE_RETAKEN' || '' }}
-      ETERNYX_EDU_REVIEW_MODE: ${{ inputs.run_mode == 'rehearsal' && 'review' || 'preflight' }}
-      ETERNYX_EDU_REVIEW_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_instructor_review && 'I_APPROVE_SYNTHETIC_INSTRUCTOR_REVIEW_WRITE' || '' }}
-      ETERNYX_EDU_REVIEW_WRITE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_review_persists && 'I_ACKNOWLEDGE_REVIEW_WILL_PERSIST_IN_STAGING' || '' }}
-      ETERNYX_EDU_FINALIZE_MODE: ${{ inputs.run_mode == 'rehearsal' && 'finalize' || 'preflight' }}
-      ETERNYX_EDU_FINALIZE_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_final_grade && 'I_APPROVE_ONE_SYNTHETIC_STAGING_FINAL_GRADE' || '' }}
-      ETERNYX_EDU_FINALIZE_IMMUTABLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_immutable_grade && 'I_ACKNOWLEDGE_OFFICIAL_GRADE_BECOMES_IMMUTABLE' || '' }}
-      ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ inputs.run_mode == 'rehearsal' && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
+      ETERNYX_EDU_WRITE_MODE: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && 'write' || 'preflight' }}
+      ETERNYX_EDU_CBT_WRITE_APPROVAL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.approve_cbt_write && 'I_APPROVE_FRESH_EDUCATION_STAGING_CBT_ATTEMPT' || '' }}
+      ETERNYX_EDU_IRREVERSIBLE_ACK: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.acknowledge_no_retake && 'I_ACKNOWLEDGE_STAGING_ATTEMPT_CANNOT_BE_RETAKEN' || '' }}
+      ETERNYX_EDU_REVIEW_MODE: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && 'review' || 'preflight' }}
+      ETERNYX_EDU_REVIEW_WRITE_APPROVAL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.approve_instructor_review && 'I_APPROVE_SYNTHETIC_INSTRUCTOR_REVIEW_WRITE' || '' }}
+      ETERNYX_EDU_REVIEW_WRITE_ACK: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.acknowledge_review_persists && 'I_ACKNOWLEDGE_REVIEW_WILL_PERSIST_IN_STAGING' || '' }}
+      ETERNYX_EDU_FINALIZE_MODE: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && 'finalize' || 'preflight' }}
+      ETERNYX_EDU_FINALIZE_WRITE_APPROVAL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.approve_final_grade && 'I_APPROVE_ONE_SYNTHETIC_STAGING_FINAL_GRADE' || '' }}
+      ETERNYX_EDU_FINALIZE_IMMUTABLE_ACK: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.acknowledge_immutable_grade && 'I_ACKNOWLEDGE_OFFICIAL_GRADE_BECOMES_IMMUTABLE' || '' }}
+      ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
       ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
       ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
       ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}

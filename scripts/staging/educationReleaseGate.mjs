@@ -9,8 +9,9 @@ import { validateEducationHostedReviewConfig, REVIEW_STAGE_CASES } from "./educa
 import { validateEducationTrustedFinalizerConfig, TRUSTED_FINALIZER_CASES } from "./educationTrustedFinalizerConfig.mjs";
 import { validateEducationResultsReadConfig, RESULTS_CASES } from "./educationHostedResultsConfig.mjs";
 import { assertEducationDbEvidence, DATABASE_CHECKS } from "./educationHostedDbMetadata.mjs";
+import {checkJourneyApproval} from "./educationJourneyHandoff.mjs";
 
-const requiredModes = Object.freeze(["preflight", "rehearsal"]);
+const requiredModes = Object.freeze(["preflight", "rehearsal", "journey"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function refuse() { throw new Error("Education staging release gate blocked: incomplete approval, isolated fixture or proof"); }
 
@@ -21,7 +22,7 @@ export function validateEducationReleaseConfig(env) {
   const read = validateEducationReadOnlyConfig(env);
   const cbt = validateEducationHostedCbtConfig(env);
   const results = validateEducationResultsReadConfig(env);
-  if (cbt.mode !== (mode === "rehearsal" ? "write" : "preflight") ||
+  if (cbt.mode !== (mode === "preflight" ? "preflight" : "write") ||
       read.projectRef !== cbt.projectRef || read.projectRef !== results.projectRef ||
       read.fixture.attemptId === results.fixture.finalA ||
       read.fixture.attemptId === results.fixture.runningA ||
@@ -36,6 +37,7 @@ export function validateEducationReleaseConfig(env) {
 
   if (env.ETERNYX_EDU_RELEASE_IRREVERSIBLE_ACK !==
       "I_ACKNOWLEDGE_STAGING_EXAM_REVIEW_AND_GRADE_ARE_IRREVERSIBLE") refuse();
+  if(mode==="journey") checkJourneyApproval(env);
   const review = validateEducationHostedReviewConfig(env);
   const finalizer = validateEducationTrustedFinalizerConfig(env);
   if (review.mode !== "review" || finalizer.mode !== "finalize" ||
@@ -64,9 +66,18 @@ export const EDUCATION_RELEASE_STAGES = Object.freeze({
     Object.freeze({id:"trusted-finalize", filename:"education-trusted-finalization.json", suite:"education-hosted-trusted-finalization", mode:"finalize", cases:TRUSTED_FINALIZER_CASES.finalize}),
     Object.freeze({id:"verified-results", filename:"education-hosted-final-results.json", suite:"education-hosted-final-results", cases:RESULTS_CASES}),
   ]),
+  journey: Object.freeze([
+    Object.freeze({id:"owner-read", filename:"education-hosted-readonly.json", suite:"education-hosted-readonly", cases:EDUCATION_READ_CASES}),
+    Object.freeze({id:"cbt-write", filename:"education-hosted-cbt-write.json", suite:"education-hosted-cbt-student-write", mode:"write", cases:CBT_STAGING_CASES.write}),
+    Object.freeze({id:"instructor-review", filename:"education-hosted-instructor-final-grade.json", suite:"education-hosted-instructor-final-grade", mode:"review", cases:REVIEW_STAGE_CASES.review}),
+    Object.freeze({id:"trusted-finalize", filename:"education-trusted-finalization.json", suite:"education-hosted-trusted-finalization", mode:"finalize", cases:TRUSTED_FINALIZER_CASES.finalize}),
+    Object.freeze({id:"verified-results", filename:"education-hosted-final-results.json", suite:"education-hosted-final-results", cases:RESULTS_CASES}),
+  ]),
 });
 
-export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbEvidence) {
+export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbEvidence, linkedJourney=false) {
+  if(mode==="journey" && linkedJourney!==true) refuse();
+  if(mode!=="journey" && linkedJourney!==false) refuse();
   // Mandatory direct release-bound audit evidence, not only a green CI step.
   assertEducationDbEvidence(dbEvidence,provenance);
   const stages = EDUCATION_RELEASE_STAGES[mode];
@@ -90,8 +101,8 @@ export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbE
         (e.writes_performed !== false || e.staged_sql_deployed_by_test !== false ||
          e.distinct_authenticated_students !== true)) refuse();
     if (stage.id.startsWith("cbt-") &&
-        (e.education_writes_attempted !== (mode === "rehearsal") ||
-         e.synthetic_attempt_confirmed !== (mode === "rehearsal") ||
+        (e.education_writes_attempted !== (mode !== "preflight") ||
+         e.synthetic_attempt_confirmed !== (mode !== "preflight") ||
          e.hosted_sql_deployed_by_test !== false ||
          e.distinct_authenticated_students !== true)) refuse();
     if (stage.id === "instructor-review" &&
@@ -114,7 +125,9 @@ export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbE
     environment:"isolated-supabase-staging", mode,
     source_sha:provenance.sha, github_run_id:String(provenance.runId),
     github_run_attempt:String(provenance.attempt),
-    outcome:mode === "rehearsal" ? "staging_rehearsal_passed" : "read_only_preflight_passed",
+    outcome:mode==="journey" ? "staging_single_attempt_journey_passed" :
+      mode === "rehearsal" ? "staging_rehearsal_passed" : "read_only_preflight_passed",
+    single_new_attempt_lifecycle_verified:mode==="journey",
     verified_stages:reviewed,
     database_metadata_gate:Object.freeze({status:"passed",checks:DATABASE_CHECKS.length}),
     production_tested:false,
