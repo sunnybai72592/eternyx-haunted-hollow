@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, PenLine, RotateCcw, ShieldCheck, WandSparkles, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -34,24 +35,28 @@ const AIWritingStudio = () => {
   const [draft, setDraft] = useState<AIWritingRequestDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const ai = useAIStudioChat();
   const metrics = measureWritingText(input);
   const preview = draft ? formatWritingRequestForCopy(draft) : "";
 
   const invalidate = () => {
+    ai.invalidate();
     setDraft(null);
     setError(null);
     setNotice(null);
   };
+
+  const currentDraft = () => buildAIWritingRequest(
+    operation, input,
+    operation === "translate" ? { targetLanguage } : { instructions },
+  );
 
   const prepare = () => {
     setError(null);
     setNotice(null);
     setDraft(null);
     try {
-      setDraft(buildAIWritingRequest(
-        operation, input,
-        operation === "translate" ? { targetLanguage } : { instructions },
-      ));
+      setDraft(currentDraft());
     } catch (e) {
       const message = e instanceof AIWritingDraftError
         ? ({
@@ -62,6 +67,31 @@ const AIWritingStudio = () => {
           }[e.code])
         : "The request could not be prepared.";
       setError(message);
+    }
+  };
+
+  const askAI = () => {
+    try {
+      const request = currentDraft();
+      setDraft(request);
+      setError(null);
+      setNotice(null);
+      void ai.run(request.featureKey, formatWritingRequestForCopy(request));
+    } catch (failure) {
+      setError(failure instanceof AIWritingDraftError
+        ? "Correct the writing request before sending it to AI."
+        : "The writing request could not be prepared.");
+    }
+  };
+
+  const copyAIResult = async () => {
+    if (!ai.result) return;
+    try {
+      await navigator.clipboard.writeText(ai.result);
+      setNotice("AI-generated text copied.");
+      setError(null);
+    } catch {
+      setError("Clipboard access is unavailable. Select the AI response and copy it manually.");
     }
   };
 
@@ -101,16 +131,18 @@ const AIWritingStudio = () => {
           <div className="flex items-center gap-3 text-violet-200"><PenLine className="h-7 w-7" />CREATIVE WRITING WORKSPACE</div>
           <h1 className="mt-4 text-3xl font-bold sm:text-5xl">AI Writing Studio</h1>
           <p className="mt-4 max-w-3xl text-slate-300">
-            Prepare drafting, rewriting, summarization and translation requests. Explore local text tools without activating a paid AI service.
+            Draft, rewrite, summarize and translate locally—or explicitly send a bounded request to the existing ETERNYX AI Chat service.
           </p>
-          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Local workspace · AI generation disabled</Badge>
+          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Local tools · optional AI Chat generation</Badge>
         </section>
 
         <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
           <ShieldCheck className="h-4 w-4" />
           <AlertDescription>
-            AI writing is not enabled: no provider, model, safety policy or cost approval has been activated.
-            Preparing a request and tidying text happen entirely in your browser. No AI job, charge or credit reservation is created.
+            Local preparation and whitespace cleanup never send data. Only clicking Generate with AI Chat sends your
+            text to the configured external AI provider through ETERNYX's authenticated chat backend and stores it
+            in your chat history. The existing ai.chat entitlement and credits apply; studio-specific billing is not enabled.
+            Do not submit confidential text without authorization. Requests are limited to 4,000 characters including task instructions.
           </AlertDescription>
         </Alert>
 
@@ -121,7 +153,7 @@ const AIWritingStudio = () => {
                 <CardTitle className="text-white">{feature.title}</CardTitle>
                 <CardDescription className="text-slate-400">{feature.description}</CardDescription>
               </CardHeader>
-              <CardContent><Badge variant="outline">Planned · not enabled</Badge></CardContent>
+              <CardContent><Badge variant="outline">Dedicated studio backend planned · AI Chat bridge available by entitlement</Badge></CardContent>
             </Card>
           ))}
         </section>
@@ -228,6 +260,26 @@ const AIWritingStudio = () => {
                 </p>
               </div>
             )}
+            <section className="space-y-3 rounded-xl border border-violet-400/20 bg-slate-950 p-4" aria-label="AI writing execution">
+              <h3 className="font-semibold text-white">Generate a real AI writing response</h3>
+              <p className="text-sm text-slate-400">
+                Optional network action: submits the full prepared request to ETERNYX AI Chat.
+                Uses existing chat credits, saves a chat session and may contact the configured Groq provider.
+                No automatic retry or background submission. Your local tools remain available without AI.
+              </p>
+              <Button type="button" disabled={!input.trim() || ai.loading} onClick={askAI}>
+                <WandSparkles className="mr-2 h-4 w-4" />{ai.loading ? "Generating with AI…" : "Generate with AI Chat"}
+              </Button>
+              {ai.loading && <p role="status" className="text-sm text-cyan-200">AI request in progress. Do not close this page until it finishes; changing text discards the displayed response but does not cancel billing.</p>}
+              {ai.error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{ai.error}</AlertDescription></Alert>}
+              {ai.result && (
+                <div className="space-y-3">
+                  <Badge variant="outline">Real AI response · verify before use</Badge>
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-sm text-slate-200">{ai.result}</pre>
+                  <Button type="button" variant="outline" onClick={copyAIResult}><ClipboardCopy className="mr-2 h-4 w-4" />Copy AI response</Button>
+                </div>
+              )}
+            </section>
           </CardContent>
         </Card>
       </div>

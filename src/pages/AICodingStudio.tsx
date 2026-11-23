@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, Code2, FileCheck2, RotateCcw, ScanSearch, ShieldCheck, WandSparkles, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,7 +34,9 @@ const AICodingStudio = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const ai = useAIStudioChat();
   const invalidate = () => {
+    ai.invalidate();
     setInspection(null);
     setDraft(null);
     setError(null);
@@ -70,6 +73,18 @@ const AICodingStudio = () => {
       setError(describe(e));
     }
   };
+  const askAI = () => {
+    try {
+      const request = prepareCodingRequest(source, language, task, context);
+      setDraft(request);
+      setError(null);
+      setNotice(null);
+      void ai.run(request.featureKey, formatCodingRequest(request));
+    } catch (failure) {
+      setError(describe(failure));
+    }
+  };
+
   const tidy = () => {
     try {
       setSource(removeLocalTrailingWhitespace(source));
@@ -116,16 +131,18 @@ const AICodingStudio = () => {
           <div className="flex items-center gap-3 text-violet-200"><Code2 className="h-7 w-7" />LOCAL CODE WORKSPACE</div>
           <h1 className="mt-4 text-3xl font-bold sm:text-5xl">AI Coding Studio</h1>
           <p className="mt-4 max-w-3xl text-slate-300">
-            Inspect code text, validate and format JSON, and prepare provider-neutral coding requests entirely in your browser.
+            Inspect and format code locally, or request an actual AI explanation or review using ETERNYX AI Chat.
           </p>
-          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Local inspection ready · AI disabled</Badge>
+          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Local inspection · optional AI Chat review</Badge>
         </section>
 
         <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
           <ShieldCheck className="h-4 w-4" />
           <AlertDescription>
-            AI code review and generation are not enabled. Local inspection detects a few simple text patterns; it does not compile,
-            execute, analyze security, or guarantee correctness. Source code stays in this browser. Do not paste credentials or secrets.
+            Local inspection detects a few text patterns but does not compile, execute, or verify security.
+            Local inspection stays in your browser. Only clicking Review / Explain with AI sends the prepared code to
+            ETERNYX AI Chat and its external provider, and saves a chat session. AI chat credits and entitlements apply.
+            Do not paste credentials, secrets, or proprietary code without permission. Maximum AI message: 4,000 characters including instructions.
           </AlertDescription>
         </Alert>
 
@@ -136,7 +153,7 @@ const AICodingStudio = () => {
                 <CardTitle className="text-white">{feature.title}</CardTitle>
                 <CardDescription className="text-slate-400">{feature.description}</CardDescription>
               </CardHeader>
-              <CardContent><Badge variant="outline">Planned · not enabled</Badge></CardContent>
+              <CardContent><Badge variant="outline">Dedicated studio backend planned · AI Chat bridge available by entitlement</Badge></CardContent>
             </Card>
           ))}
         </section>
@@ -219,7 +236,7 @@ const AICodingStudio = () => {
 
         <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
           <CardHeader>
-            <CardTitle className="text-white">Future AI coding request</CardTitle>
+            <CardTitle className="text-white">AI coding request</CardTitle>
             <CardDescription className="text-slate-400">
               Prepare and copy a code explanation or review request without sending it to an AI service.
             </CardDescription>
@@ -257,6 +274,26 @@ const AICodingStudio = () => {
                 <p className="text-xs text-amber-200">Copying text does not submit or execute code. No AI output or credit charge is claimed.</p>
               </div>
             )}
+            <section className="space-y-3 rounded-xl border border-violet-400/20 bg-slate-950 p-4" aria-label="AI code review execution">
+              <h3 className="font-semibold text-white">Ask ETERNYX AI about your code</h3>
+              <p className="text-sm text-slate-400">
+                Optional network action: sends the prepared source and instructions to the authenticated AI Chat backend.
+                Uses ai.chat credits and chat history; does not run, compile, deploy or modify any code.
+                The chat backend accepts at most 4,000 characters including instructions, not the full 50,000-character local workspace.
+              </p>
+              <Button type="button" disabled={!source.trim() || ai.loading} onClick={askAI}>
+                <WandSparkles className="mr-2 h-4 w-4" />{ai.loading ? "Reviewing with AI…" : task === "review" ? "Review with AI Chat" : "Explain with AI Chat"}
+              </Button>
+              {ai.loading && <p role="status" className="text-sm text-cyan-200">AI request in progress. Editing the source invalidates the displayed response but cannot cancel an in-flight credit charge.</p>}
+              {ai.error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{ai.error}</AlertDescription></Alert>}
+              {ai.result && (
+                <div className="space-y-3">
+                  <Badge variant="outline">Real AI response · not executed or verified</Badge>
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-sm text-slate-200">{ai.result}</pre>
+                  <Button type="button" variant="outline" onClick={() => copy(ai.result!, "AI response")}><ClipboardCopy className="mr-2 h-4 w-4" />Copy AI response</Button>
+                </div>
+              )}
+            </section>
           </CardContent>
         </Card>
       </div>

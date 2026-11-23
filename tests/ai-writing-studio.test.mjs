@@ -67,13 +67,15 @@ test("copied prompt reflects the task without claiming AI generation", () => {
   assert.match(writing.formatWritingRequestForCopy(writing.buildAIWritingRequest("translate", "Hi", { targetLanguage: "Arabic" })), /Target language: Arabic/);
 });
 
-test("workspace invalidates stale drafts and does not misrepresent paid/provider availability", () => {
+test("workspace invalidates stale drafts while keeping AI Chat execution explicit and optional", () => {
   assert.match(page, /setDraft\(null\)/);
   assert.match(page, /setInput\(e.target.value\); invalidate\(\)/);
   assert.match(page, /setOperation\(task.id\); invalidate\(\)/);
   assert.match(page, /setTargetLanguage\(e.target.value as AIWritingTargetLanguage\); invalidate\(\)/);
   assert.match(page, /setInstructions\(e.target.value\); invalidate\(\)/);
-  assert.match(page, /AI generation disabled/);
+  assert.match(page, /Local tools · optional AI Chat generation/);
+  assert.match(page, /Only clicking Generate with AI Chat sends/);
+  assert.match(page, /ai\.run\(request\.featureKey, formatWritingRequestForCopy\(request\)\)/);
   assert.match(page, /No content was sent to a provider/);
   assert.doesNotMatch(page + builderSource, /supabase\.functions\.invoke|ai-generation-job-enqueue|fetch\(/);
 });
