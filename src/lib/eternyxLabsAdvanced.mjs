@@ -12,7 +12,7 @@ const IPV6_MAX=(1n<<128n)-1n;
 
 function parseIpv6(ip){
   if(typeof ip!=="string"||ip.length>39||!/^[0-9a-fA-F:]+$/.test(ip)||
-     ip.includes(":::")||ip.includes(":::")||ip.split("::").length>2)
+     ip.includes(":::")||ip.split("::").length>2)
     throw Error("Enter a valid IPv6 address without brackets or IPv4-mapped notation.");
   const compressed=ip.includes("::");
   const [left,right]=compressed?ip.split("::"):[ip,""];
@@ -81,7 +81,7 @@ export function inspectCachePolicyLocally(value,{sensitive=false}={}){
   for(const [label,val] of [["max-age",maxAge],["s-maxage",sMaxAge]]){
     if(val!==undefined&&(val===null||!/^(0|[1-9][0-9]{0,9})$/.test(val)||
         Number(val)>315360000))
-      warnings.push(label+" must be a bounded nonnegative number of seconds.");
+      throw Error(label+" must be a bounded nonnegative number of seconds.");
   }
   const noStore=tokens.has("no-store"),isPublic=tokens.has("public"),
     isPrivate=tokens.has("private"),noCache=tokens.has("no-cache");
@@ -117,7 +117,7 @@ export function inspectSpfRecordLocally(value){
   const warnings=[];
   const mechanisms=[];
   for(const term of terms){
-    const m=term.match(/^([+~?-]?)([a-zA-Z][a-zA-Z0-9]*)(?::([^\s]{1,200}))?(?:\/(\d{1,3}))?$/);
+    const m=term.match(/^([+~?-]?)([a-zA-Z][a-zA-Z0-9]*)(?::([^\s/]{1,200}))?(?:\/(\d{1,3}))?$/);
     if(!m)throw Error("Malformed SPF training mechanism.");
     const qualifier=m[1]||"+",key=m[2].toLowerCase(),arg=m[3]??null,prefix=m[4];
     if(!["all","ip4","ip6","include","a","mx","ptr","exists","redirect","exp"].includes(key))
