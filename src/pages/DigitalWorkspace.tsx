@@ -12,6 +12,7 @@ import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklis
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import WorkspaceBackupAudit from "@/components/workspace/WorkspaceBackupAudit";
 import WorkspaceReadinessPanel from "@/components/workspace/WorkspaceReadinessPanel";
+import WorkspaceTeamsPanel from "@/components/workspace/WorkspaceTeamsPanel";
 import WorkspaceRecoveryCenter from "@/components/workspace/WorkspaceRecoveryCenter";
 import WorkspaceRecoveryForkPanel from "@/components/workspace/WorkspaceRecoveryForkPanel";
 import WorkspaceReconciliationJournal from "@/components/workspace/WorkspaceReconciliationJournal";
@@ -660,6 +661,7 @@ export default function DigitalWorkspace() {
                   else setNotice(message);
                 });
               }} />
+            <WorkspaceTeamsPanel owner={owner} disabled={busy || loading} />
             <WorkspaceBackupAudit disabled={busy || loading} />
             <WorkspaceReadinessPanel owner={owner} disabled={busy || loading} />
             {forkTarget && <WorkspaceRecoveryForkPanel key={owner + ":" + forkTarget.sessionId}
