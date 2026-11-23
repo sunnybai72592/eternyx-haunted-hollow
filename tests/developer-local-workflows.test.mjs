@@ -37,7 +37,7 @@ test("local file import rejects traversal, invalid UTF-8, binary data and bytes 
   await assert.rejects(()=>readDeveloperLocalTextFiles([file("bad.txt",Uint8Array.of(0xff,0xfe))]),/valid UTF-8/);
   await assert.rejects(()=>readDeveloperLocalTextFiles([file("bad.txt",Uint8Array.of(1,0,3))]),/binary data/);
   await assert.rejects(()=>readDeveloperLocalTextFiles([file("large.txt",new Uint8Array(80001))]),/80 KB/);
-  await assert.rejects(()=>readDeveloperLocalTextFiles([file("one.txt",new Uint8Array(70000)),file("two.txt",new Uint8Array(70000))]),/120 KB/);
+  await assert.rejects(()=>readDeveloperLocalTextFiles(Array.from({length:7},(_,i)=>file("batch"+i+".txt",utf8("x".repeat(18000))))),/120 KB/);
   await assert.rejects(()=>readDeveloperLocalTextFiles([]),/1 and 12/);
 });
 
@@ -90,7 +90,7 @@ test("restore is single-file only, checkpoint-compatible and project-ID constrai
   assert.equal(restored.files.find(f=>f.name==="app.js").content,saved.files.find(f=>f.name==="app.js").content);
   assert.equal(edited.files.find(f=>f.name==="index.html").content,"Changed");
   assert.throws(()=>restoreSavedDeveloperFile(edited,createDeveloperProject("starter","other"),"index.html"),/different project/);
-  assert.throws(()=>restoreSavedDeveloperFile(edited,saved,"not-file.js"),/not in saved/);
+  assert.throws(()=>restoreSavedDeveloperFile(edited,saved,"not-file.js"),/not in the saved/);
 });
 
 test("four preview presets resolve to real dimensions, without changing project source",()=>{
