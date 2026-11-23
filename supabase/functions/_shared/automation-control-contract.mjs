@@ -47,6 +47,7 @@ const fields = {
   incidentAuditTrace: ["action","incidentId"],
   incidentLifecycleCheck: ["action","incidentId"],
   incidentReadinessReport: ["action"],
+  incidentCoveragePage: ["action","pageSize","beforeCreatedAt","beforeId"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -121,6 +122,26 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="incidentCoveragePage"){
+    if(value.pageSize!==undefined&&
+       (!Number.isInteger(value.pageSize)||value.pageSize<1||value.pageSize>20)){
+       return {ok:false,reason:"invalid_coverage_page"};
+    }
+    const beforeTime=value.beforeCreatedAt!==undefined;
+    const beforeId=value.beforeId!==undefined;
+    if(beforeTime!==beforeId)return {ok:false,reason:"invalid_coverage_cursor"};
+    if(beforeTime&&(
+       typeof value.beforeCreatedAt!=="string"||
+       value.beforeCreatedAt.length>45||
+       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value.beforeCreatedAt)||
+       Number.isNaN(Date.parse(value.beforeCreatedAt))||
+       typeof value.beforeId!=="string"||!UUID_RE.test(value.beforeId))){
+      return {ok:false,reason:"invalid_coverage_cursor"};
+    }
+    return {ok:true,action,pageSize:value.pageSize??20,
+      beforeCreatedAt:value.beforeCreatedAt??null,
+      beforeId:value.beforeId??null};
   }
   if(action==="incidentReadinessReport")return {ok:true,action};
   if(["incidentReopenPreflight","incidentReopenHistory","incidentAuditTrace","incidentLifecycleCheck"].includes(action)){
