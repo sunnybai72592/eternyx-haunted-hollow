@@ -147,6 +147,27 @@ export function parseReadonlyResult(raw,surface){
     serviceSecretsVerified:false,runtimeFlowsVerified:false,
     productionReady:false,deploymentAuthorized:false};
 }
+export function verifyCatalogEvidence(result,source){
+  if(!result||!source||
+     result.schema!=="eternyx-four-backend-pg-catalog-v1"||
+     source.schema!=="eternyx-four-backend-source-surface-v1"||
+     source.allRuntimeRpcDefinitionsPresent!==true||
+     result.rpcCount!==source.rpcCount||
+     result.tableCount!==source.tableCount||
+     result.tenantTablesWithRls!==source.tableCount||
+     result.allReferencedRpcsPresent!==true||
+     result.allReferencedTablesPresent!==true||
+     result.allReferencedTablesRlsEnabled!==true||
+     result.transactionReadOnly!==true||
+     result.sourceBound!==true||
+     result.stagingDbSource!=="operator_approved_readonly_psql"||
+     result.serviceSecretsVerified!==false||
+     result.runtimeFlowsVerified!==false||
+     result.productionReady!==false||
+     result.deploymentAuthorized!==false)
+    deny("catalog_evidence_unverified");
+  return true;
+}
 export async function main(argv=process.argv.slice(2),root=ROOT){
   if(argv.length===1&&argv[0]==="--source"){
     const report=await inspectSourceCompleteness(root);
