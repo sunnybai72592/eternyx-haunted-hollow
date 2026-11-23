@@ -78,7 +78,12 @@ test('persisted outcome SQL fails on extra winners, missing winners or journal l
   assert.match(verify,/Concurrent distinct Bravo/);
   assert.match(verify,/lower\(btrim\(summary\)\)='concurrent same summary'/);
   assert.match(verify,/event_kind='amendment_submitted'/);
-  assert.match(verify,/journal exposes uncommitted or rejected writes/);
+  assert.match(verify,/SET ROLE authenticated;/);
+  assert.match(verify,/DO \$check_a_journal\$/);
+  assert.match(verify,/DO \$check_b_journal\$/);
+  assert.match(verify,/owner A journal exposes uncommitted or cross-account writes/);
+  assert.match(verify,/owner B journal exposes uncommitted or cross-account writes/);
+  assert.match(verify,/RESET ROLE;/);
   const cleanup=concurrencySql('cleanup');
   assert.match(cleanup,/DELETE FROM public\.service_requests/);
   assert.match(cleanup,/DELETE FROM auth\.users/);
