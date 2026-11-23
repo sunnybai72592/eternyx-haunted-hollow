@@ -48,6 +48,9 @@ const fields = {
   incidentLifecycleCheck: ["action","incidentId"],
   incidentReadinessReport: ["action"],
   incidentCoveragePage: ["action","pageSize","beforeCreatedAt","beforeId"],
+  incidentAuditPackageInbox: ["action","incidentId"],
+  incidentAuditPackageCreate: ["action","incidentId","incidentRevision","evidenceId","requestKey"],
+  incidentAuditPackageReview: ["action","packageId","decision","note","acknowledgedSource","acknowledgedNoDeployment","acknowledgedNoCryptoProof","requestKey"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -122,6 +125,45 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="incidentAuditPackageInbox"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
+      return {ok:false,reason:"invalid_incident_id"};
+    }
+    return {ok:true,action,incidentId:value.incidentId};
+  }
+  if(action==="incidentAuditPackageCreate"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
+       !Number.isInteger(value.incidentRevision)||
+       value.incidentRevision<1||value.incidentRevision>2147483647||
+       typeof value.evidenceId!=="string"||!UUID_RE.test(value.evidenceId)||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+       return {ok:false,reason:"invalid_audit_package"};
+    }
+    return {ok:true,action,incidentId:value.incidentId,
+      incidentRevision:value.incidentRevision,evidenceId:value.evidenceId,
+      requestKey:value.requestKey};
+  }
+  if(action==="incidentAuditPackageReview"){
+    if(typeof value.packageId!=="string"||!UUID_RE.test(value.packageId)||
+       !["needs_attention","reviewed_for_manual_release_checklist"].includes(value.decision)||
+       typeof value.note!=="string"||value.note.trim().length<12||
+       value.note.trim().length>500||
+       typeof value.acknowledgedSource!=="boolean"||
+       typeof value.acknowledgedNoDeployment!=="boolean"||
+       typeof value.acknowledgedNoCryptoProof!=="boolean"||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)||
+       (value.decision==="reviewed_for_manual_release_checklist"&&
+        (!value.acknowledgedSource||!value.acknowledgedNoDeployment||
+         !value.acknowledgedNoCryptoProof))){
+       return {ok:false,reason:"invalid_audit_review"};
+    }
+    return {ok:true,action,packageId:value.packageId,
+      decision:value.decision,note:value.note.trim(),
+      acknowledgedSource:value.acknowledgedSource,
+      acknowledgedNoDeployment:value.acknowledgedNoDeployment,
+      acknowledgedNoCryptoProof:value.acknowledgedNoCryptoProof,
+      requestKey:value.requestKey};
   }
   if(action==="incidentCoveragePage"){
     if(value.pageSize!==undefined&&
