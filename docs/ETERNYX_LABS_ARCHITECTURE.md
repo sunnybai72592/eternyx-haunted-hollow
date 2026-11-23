@@ -180,7 +180,7 @@ The earlier Firecracker hardware/approval requirements remain separate.
 
 ## Local practice challenges — answer-checked, not trusted certification
 
-An additional **practice and check** section on /labs contains 15 real
+An additional **practice and check** section on /labs contains 30 real
 deterministic scenarios across five tracks. It is separate from the fifteen
 free workstations and does not change the number of workstations:
 
@@ -283,7 +283,7 @@ No tool visits a host, queries DNS, uploads private logs, reads account data,
 activates public customer Labs, launches paid VMs/GPUs, uses an external AI
 model, modifies sessions or claims an automatically certified vulnerability.
 
-The existing fifteen open-book, answer-checked practice questions remain
+The existing thirty open-book, answer-checked practice questions remain
 separate from the **twenty workstation** count. Their progress is still
 in-memory only. Existing sandboxed preview frames retain the same permissions.
 
@@ -300,3 +300,59 @@ missing/expired security.txt fields, bounded synthetic event windows, token
 generation using cryptographic randomness, and no network or storage APIs.
 Manual desktop/mobile walkthroughs and independent security review are
 still needed for any production-critical use.
+
+
+## Phase 5 — thirty real, locally checked defensive practice scenarios
+
+The browser-only Labs practice center expands from five to **ten tracks**,
+with three answer-checked challenges per track (**30 total**, separate
+from the 20 functional workstations). The initial 15 CIDR, UNIX permission,
+CSP, CORS and cookie questions are preserved.
+
+The five new tracks and their *actual calculation sources* are:
+
+- **DNS** — A-record counts, CNAME-owner conflict warnings and distinct
+  owner-name counts from the bounded offline DNS record parser.
+- **HTTP framing** — UTF-8 request body length, Transfer-Encoding plus
+  Content-Length warning counts, and request header count.
+- **Security.txt** — contact count, expiry warning and missing required
+  metadata warning count using a fixed UTC sample time (2026-11-23).
+- **Event correlation** — synthetic three-failure/ten-minute windows,
+  ERROR-severity count and number of allowed event records.
+- **Token generation mathematics** — raw source-bit count and fixed hex
+  or unpadded base64url length for selectable byte counts. The training
+  answer uses a synthetic injected byte source for deterministic testing;
+  it **does not create a reusable real secret or claim that its fixture
+  is cryptographically random**. The real random-token workstation
+  continues to use Web Crypto.
+
+The UI offers ten keyboard-accessible tracks, three selectable questions
+per track, inline hints, actual calculated answers and corrections, next
+navigation, a reset button and a unique correct-case counter. Multiple
+correct submissions of one question cannot inflate progress. Input
+normalization is bounded and rejects malformed formats.
+
+This is an **open-book client-side teaching system**, not a secure exam.
+The expected answers are derived from browser-shipped pure functions; no
+exam seal, course certificate, verified student history, fake XP,
+account leaderboard or persistently trusted achievements are created.
+Progress is in-memory React state only. No data is sent to Supabase or
+another backend, and no localStorage/sessionStorage is used.
+
+### Verification and limits
+
+Run:
+
+    node --test tests/eternyx-labs-practice.test.mjs
+    node --test tests/eternyx-labs-advanced-practice.test.mjs
+    npm test
+    npm run build
+
+The new tests require all fifteen additional answers to match the actual
+DNS, HTTP, security.txt, event and token-length calculation engines,
+reject wrong and hostile answer formats, protect the existing first
+fifteen questions and verify a total of thirty unique locally checked
+challenges. Manual responsive browser review remains necessary.
+
+No cloud, GPU, paid AI API, network scan, account secret, remote target,
+public hosted Labs enablement or Firecracker VM launch is introduced.
