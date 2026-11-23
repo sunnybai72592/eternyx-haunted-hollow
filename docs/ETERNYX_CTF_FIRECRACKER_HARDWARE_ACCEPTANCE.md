@@ -1434,3 +1434,108 @@ committed handoffs, missing layers, replayed session IDs, altered sidecars,
 wrong external SHA pins, false hardware claims and CLI refusal behavior.
 Only fabricated, disposable local inputs are used; no KVM instance,
 network, paid services or public Labs are started.
+
+
+## Portable, canonical and independently pinned offline case receipt
+
+The complete read-only case auditor now supports a small **portable archive
+receipt** for transferring the *verification summary only* to an independently
+managed audit register. It does not transfer raw host journal evidence, kernel
+or guest images, private keys, guest transcripts, root-owned file paths or any
+signed source records.
+
+The receipt is deterministic: identical verified source evidence and human
+decision produce **the same exact JSON bytes and SHA-256** regardless of the
+time the command is run or the order of input object keys. A newline is part
+of the canonical UTF-8 encoding; no run timestamp or ephemeral filesystem path
+is included.
+
+### Export to a separately controlled archive (read-only case access)
+
+First obtain the independently pinned **operator and reviewer Ed25519 SPKI
+fingerprints**, original case-checkpoint SHA-256 and supplemental runtime
+addendum SHA-256 from an approved source outside the case directory.
+
+\`\`\`bash
+sudo node scripts/cyber-range-portable-audit.mjs --emit \
+  --session UUID \
+  --operator-sha EXTERNAL_OPERATOR_SPKI_SHA256 \
+  --reviewer-sha EXTERNAL_REVIEWER_SPKI_SHA256 \
+  --checkpoint-sha EXTERNAL_CASE_CHECKPOINT_SHA256 \
+  --addendum-sha EXTERNAL_RUNTIME_ADDENDUM_SHA256 \
+  > private-archive.json
+\`\`\`
+
+The program does **not** write any files; the shell redirection above is an
+explicit administrator action. Protect the exported metadata as an internal
+record because it includes a session ID, signer fingerprints, outcome and
+cryptographic digests. Move it only through approved **offline** procedures.
+
+The JSON wrapper contains \`receipt\` and \`receiptSha256\`. **The SHA is
+computed over the canonical newline-terminated JSON of the nested \`receipt\`,
+not over the wrapper file.** Record \`receiptSha256\` *independently* on a
+tamper-resistant audit ledger or approved paper record. A hash stored only
+inside the same JSON wrapper is not an external trust anchor.
+
+### Recheck saved archive metadata, with fresh private-case re-verification
+
+Provide the same four independently controlled identity/evidence pins, plus
+the **fifth external pin** retained from the archive receipt:
+
+\`\`\`bash
+sudo node scripts/cyber-range-portable-audit.mjs --verify \
+  --session UUID \
+  --operator-sha EXTERNAL_OPERATOR_SPKI_SHA256 \
+  --reviewer-sha EXTERNAL_REVIEWER_SPKI_SHA256 \
+  --checkpoint-sha EXTERNAL_CASE_CHECKPOINT_SHA256 \
+  --addendum-sha EXTERNAL_RUNTIME_ADDENDUM_SHA256 \
+  --archive-sha INDEPENDENTLY_RECORDED_RECEIPT_SHA256 \
+  < private-archive.json
+\`\`\`
+
+The verifier reads **at most 4096 bytes from stdin** (no user-controlled
+filesystem path), requires exact canonical wrapper bytes and schema, reruns
+all original case verification layers, recomputes the receipt from those
+freshly verified results, checks the exact stored receipt bytes, and compares
+the SHA-256 to the independent external pin. A missing file, swapped archive,
+modified disposition, changed digest, malformed JSON, out-of-mode sidecar or
+missing external pin causes the command to fail, without partial success.
+
+This provides archive *consistency* with a separately pinned hash, not a
+signature on the export itself and not protection against compromise of the
+external record. The original operator/reviewer signatures remain the only
+cryptographic signer's evidence. It cannot verify the authenticity of the
+underlying physical KVM host.
+
+### Fixed safety scope and schema
+
+Only exact allowlisted keys, decision categories and reason codes are
+serializable. Unknown extra fields are rejected (rather than copied into
+the export). The receipt lists the session/mode, signer fingerprints,
+two pinned source-chain hashes, bounded file counts, committed/legacy import
+lineage, fixed verification coverage, controlled review outcome, and explicit
+unresolved independent proof gaps.
+
+All portable report and verification statuses retain
+\`physicalHostAttested:false\`,
+\`independentHostEvidenceVerified:false\`,
+\`productionReady:false\`, \`publicLabsEnabled:false\` and
+\`privateSigningKeyRead:false\`.
+The only supported outcomes are \`archival-file-review-only\`,
+\`follow-up-required\` and \`evidence-rejected\`. Nothing in the export or
+verification CLI starts a VM, contacts any network, enables hosted Labs or
+uses a paid AI/GPU service.
+
+### No-cost regression suite
+
+\`\`\`bash
+node --test tests/ctf-firecracker-portable-audit-receipt.test.mjs
+npm test
+npm run build
+\`\`\`
+
+Coverage includes all three offline evidence modes and all three human
+decision categories, canonical reproducibility, legacy-versus-committed
+imports, changed reviewer decisions, wrong external pins, malformed wrappers,
+oversized input, injected private text, unexpected claims and safety flags.
+The suite operates on fabricated metadata, not real hardware acceptance.
