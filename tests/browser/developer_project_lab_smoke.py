@@ -397,6 +397,37 @@ def actual_preflight(page):
       localStorage.setItem('eternyx:developer-local-tests:v1', value);
       window.dispatchEvent(new Event('eternyx:developer-tests-saved'));
     }""", saved_before)
+    # 3.9: prioritized source-derived release triage and actual run-to-run deltas.
+    page.get_by_role("button", name="Run with saved test plan").click()
+    triage = page.get_by_label("Integration reliability triage")
+    expect(triage.get_by_text("Integration reliability triage", exact=False).first).to_be_visible(timeout=20000)
+    with page.expect_download() as download:
+        page.get_by_role("button", name="Export redacted diagnostic summary").click()
+    baseline_triage=json.loads(Path(download.value.path()).read_text(encoding="utf-8"))
+    assert baseline_triage["schema"] == "eternyx-developer-release-triage-v1"
+    assert baseline_triage["releaseDecision"] == "HOLD_HOSTED_RELEASE"
+    assert baseline_triage["productionVerified"] is False
+    assert "app.js" not in json.dumps(baseline_triage)
+    # A new dangling HTML resource is actually discovered and cannot be
+    # hidden behind a previous clean source/plan snapshot.
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html", exact=True).click()
+    html_before_triage = editor.input_value()
+    editor.fill(html_before_triage + '\n<script src="./PRIVATE_TRIAGE_MISSING_948.js"></script>')
+    expect(page.get_by_role("button", name="Export redacted diagnostic summary")).to_be_disabled()
+    page.get_by_role("button", name="Run with saved test plan").click()
+    expect(triage.get_by_text("unresolved-local-reference", exact=False).first).to_be_visible(timeout=20000)
+    expect(triage.get_by_text("Since prior explicit run:", exact=False)).to_be_visible()
+    with page.expect_download() as download:
+        page.get_by_role("button", name="Export redacted diagnostic summary").click()
+    new_triage=json.loads(Path(download.value.path()).read_text(encoding="utf-8"))
+    assert new_triage["counts"]["unresolved-local-reference"] > baseline_triage["counts"]["unresolved-local-reference"]
+    assert "PRIVATE_TRIAGE_MISSING_948" not in json.dumps(new_triage)
+    assert "index.html" not in json.dumps(new_triage)
+    assert new_triage["productionVerified"] is False
+    page.get_by_role("button", name="Show all diagnostic findings").click()
+    expect(triage.get_by_text("baseline-not-available", exact=False).first).to_be_visible()
+    editor.fill(html_before_triage)
+    page.get_by_role("button", name="Save browser copy").click()
 
 def preview_isolation(page):
     assert page.locator('iframe[title="Isolated project preview"]').count() == 0
