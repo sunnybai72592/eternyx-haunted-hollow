@@ -39,6 +39,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Prove staging browser host/method deny rules with synthetic requests
+        run: |
+          python3 -m py_compile tests/browser/education_hosted_readonly.py tests/education_hosted_browser_guard_unit.py
+          python3 tests/education_hosted_browser_guard_unit.py
       - name: Install pinned frontend dependencies without staging credentials
         run: npm ci
       - name: Validate isolated staging credentials, role and final-result fixture offline
