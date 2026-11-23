@@ -5,7 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { WORKSPACE_BACKUP_MAX_DOCUMENT_BYTES } from "@/lib/workspaceFullBackup.mjs";
 import { sha256Hex } from "@/lib/workspaceImportRecovery.mjs";
 import { createWorkspaceRecoveryFork, parsePortableWorkspaceArchive } from "@/lib/workspaceRecoveryFork.mjs";
-import { compareWorkspaceRecoveryRecords, fetchWorkspaceRecoveryComparison } from "@/lib/workspaceRecoveryCompare.mjs";
+import { compareWorkspaceRecoveryRecords } from "@/lib/workspaceRecoveryCompare.mjs";
+import { fetchWorkspaceReviewSnapshot } from "@/lib/workspaceReconciliationReader.mjs";
+import WorkspaceReviewedReconciliation from "@/components/workspace/WorkspaceReviewedReconciliation";
 
 type Target = { sessionId: string; sourceHash: string; projectId: string; projectName: string };
 type Preview = {
@@ -23,6 +25,18 @@ export default function WorkspaceRecoveryForkPanel({
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
   const [name, setName] = useState("");
   const [comparison, setComparison] = useState<Preview | null>(null);
+  const [sourceArchive, setSourceArchive] = useState<{tasks: Array<{
+    title:string;details?:string;status:string;priority?:string;
+    checklist?:Array<{title:string;done:boolean}>}>;items:Array<{
+    title:string;kind:string;note_text?:string|null;target_url?:string|null}>}|null>(null);
+  const [reviewSnapshot, setReviewSnapshot] = useState<{
+    tasks:Array<{id:string;owner_id:string;project_id:string;title:string;status:string;
+      details?:string;priority?:string;due_on?:string|null}>;
+    items:Array<{id:string;owner_id:string;project_id:string;title:string;kind:string;
+      note_text?:string|null;target_url?:string|null}>;
+    steps:Array<{id:string;task_id:string;owner_id:string;title:string;done:boolean}>;
+  }|null>(null);
+  const [snapshotFingerprint, setSnapshotFingerprint] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -34,6 +48,9 @@ export default function WorkspaceRecoveryForkPanel({
     setRaw(null);
     setSourceBytes(null);
     setComparison(null);
+    setSourceArchive(null);
+    setReviewSnapshot(null);
+    setSnapshotFingerprint("");
     setNotice("");
     setError("");
     if (!file) return;
@@ -53,11 +70,15 @@ export default function WorkspaceRecoveryForkPanel({
       if (archive.forkMarker) {
         throw new Error("This source is already a recovery copy. Please select the original import file.");
       }
-      const current = await fetchWorkspaceRecoveryComparison(supabase, owner, target.projectId);
+      const current = await fetchWorkspaceReviewSnapshot(supabase, owner, target.projectId);
       const snapshot = compareWorkspaceRecoveryRecords(archive.parsed,
-        current.tasks, current.items.filter(item => item.kind === "note" || item.kind === "link"));
+        current.snapshot.tasks,
+        current.snapshot.items.filter(item => item.kind === "note" || item.kind === "link"));
       if (!active.current) return;
       setComparison(snapshot);
+      setReviewSnapshot(current.snapshot);
+      setSnapshotFingerprint(current.fingerprint);
+      setSourceArchive(archive.parsed);
       setRaw(content);
       setSourceBytes(bytes);
       setName(file.name);
@@ -163,8 +184,21 @@ export default function WorkspaceRecoveryForkPanel({
       </p>
       <Button size="sm" type="button" disabled={busy || disabled} onClick={() => void download()}>
         <Download className="mr-1 h-4 w-4" aria-hidden="true" />
-        Download separately restorable recovery copy
+        Download full ORIGINAL archive as separate recovery copy
       </Button>
     </div>}
+    {comparison && sourceArchive && reviewSnapshot && raw && sourceBytes && snapshotFingerprint &&
+      <WorkspaceReviewedReconciliation
+        target={target} owner={owner}
+        rawSource={raw} sourceBytes={sourceBytes}
+        sourceArchive={sourceArchive}
+        snapshot={reviewSnapshot}
+        initialFingerprint={snapshotFingerprint}
+        disabled={disabled || busy}
+        onDone={(message) => {
+          setNotice(message);
+          onClose(message);
+        }} />
+    }
   </section>;
 }
