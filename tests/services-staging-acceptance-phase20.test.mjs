@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  validateStagingConfig, runStagingReadiness,
+  validateStagingConfig, runStagingReadiness, assertAnonymousIsolation,
 } from '../scripts/services-live-readonly-preflight.mjs';
 
 const read = (path) => readFile(new URL('../' + path, import.meta.url), 'utf8');
@@ -109,6 +109,9 @@ function fakeFactory(options = {}) {
             in(field,values) { this.conditions.push((r)=>values.includes(r[field])); return this; },
             async limit(size) {
               calls.push({actor,table,columns:this.columns});
+              if (actor === 'anonymous' && options.anonResult) return typeof options.anonResult === 'function' ? options.anonResult(table) : options.anonResult;
+              if (actor === 'user-A' && table === 'service_requests' && options.nullOwnerResponse)
+                return {data:null,error:null,status:200};
               if (options.missingJournal && table === 'service_request_journal')
                 return {data:null,error:{code:'PGRST205'}};
               let input = records[table] ?? [];
@@ -118,7 +121,7 @@ function fakeFactory(options = {}) {
                   r.owner === actor
                     || (options.leakCustomerB && actor === 'user-B' && table === 'service_requests' && r.owner === 'user-A'));
               }
-              return {data:input.filter((r)=>this.conditions.every((check)=>check(r))).slice(0,size),error:null};
+              return {data:input.filter((r)=>this.conditions.every((check)=>check(r))).slice(0,size),error:null,status:200};
             },
           };
           return query;
@@ -135,7 +138,12 @@ test('live gate checks actual owned fixtures across all Services sources without
   assert.ok(factory.calls.some((x)=>x.table==='service_request_journal'));
   assert.ok(factory.calls.some((x)=>x.table==='service_brief_amendments'));
   assert.ok(factory.calls.some((x)=>x.table==='service_request_triage'));
-  assert.ok(factory.calls.some((x)=>x.actor==='anonymous'));
+  const anonymousSources = factory.calls.filter((x)=>x.actor==='anonymous').map((x)=>x.table);
+  assert.deepEqual(anonymousSources, [
+    'service_requests', 'service_customer_amendment_queue',
+    'service_admin_amendment_queue', 'service_brief_amendments',
+    'service_request_journal', 'service_request_triage',
+  ]);
   assert.equal(factory.calls.some((x)=>x.columns==='*'),false);
 });
 
@@ -202,4 +210,57 @@ test('the Phase 20 release notes preserve the separate SQL-history and real-data
   assert.match(doc,/not production.ready/i);
   assert.match(doc,/Auth sessions/i);
   assert.match(doc,/READ_ONLY_STAGING_ACCEPTANCE/);
+});
+
+test('anonymous privacy evidence accepts empty HTTP success or an explicit SQL permission denial', () => {
+  assert.doesNotThrow(() => assertAnonymousIsolation({data:[],error:null,status:200},'service_requests'));
+  assert.doesNotThrow(() => assertAnonymousIsolation({data:[],error:null,status:206},'service_requests'));
+  assert.doesNotThrow(() => assertAnonymousIsolation({data:null,error:{code:'42501'},status:403},'service_requests'));
+  assert.doesNotThrow(() => assertAnonymousIsolation({data:null,error:{code:'42501'},status:401},'service_requests'));
+});
+
+test('network errors, missing relations, ambiguous results and leaked anonymous rows all fail closed', () => {
+  const failures = [
+    {data:null,error:{code:'PGRST205'},status:404},
+    {data:null,error:{code:'57014'},status:504},
+    {data:null,error:{code:'42501'},status:500},
+    {data:null,error:{code:'PGRST301'},status:401},
+    {data:null,error:null,status:200},
+    {data:undefined,error:null,status:200},
+    {data:[{id:A_ID}],error:null,status:200},
+    {data:[],error:null,status:503},
+    null,
+  ];
+  for (const result of failures) {
+    assert.throws(() => assertAnonymousIsolation(result,'service_requests'), /Acceptance failed/);
+  }
+});
+
+test('real acceptance rejects a missing anonymous journal instead of showing a false PASS', async () => {
+  const factory = fakeFactory({anonResult:(table) => table === 'service_request_journal'
+    ? {data:null,error:{code:'PGRST205'},status:404}
+    : {data:[],error:null,status:200}});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /anonymous access was not a verified permission denial/);
+});
+
+test('real acceptance supports provable anonymous SQL permission denial', async () => {
+  const factory = fakeFactory({anonResult:{data:null,error:{code:'42501'},status:403}});
+  assert.equal(await runStagingReadiness(validateStagingConfig(config()),factory.client),true);
+});
+
+test('malformed owner SELECT success is never interpreted as an empty inbox', async () => {
+  const factory = fakeFactory({nullOwnerResponse:true});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /required staging query failed for service_requests/);
+});
+
+test('operator notes keep migration history and production sign-off independently blocked', async () => {
+  const notes=await read('docs/ETERNYX_SERVICES_STAGING_EVIDENCE_PHASE24.md');
+  assert.match(notes,/no new migration/i);
+  assert.match(notes,/Phase 13 before Phase 14/);
+  assert.match(notes,/independent catalog/i);
+  assert.match(notes,/connection timeout/i);
+  assert.match(notes,/permission denial/i);
+  assert.match(notes,/does not restore database connectivity/i);
 });
