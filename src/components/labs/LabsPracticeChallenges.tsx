@@ -63,7 +63,7 @@ export default function LabsPracticeChallenges(){
         </p>
         <h2 id="labs-practice-title" className="text-2xl font-bold sm:text-3xl">Security and defensive operations challenge lab</h2>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Thirty hands-on questions across ten tracks. Answers are checked against the
+          {PRACTICE_CASES.length} hands-on questions across {PRACTICE_TRACKS.length} tracks. Answers are checked against the
           actual offline Labs calculators, with explanations and retries. This is open-book,
           client-side practice—not a trusted exam, credential, or account-linked achievement.
         </p>
@@ -120,8 +120,9 @@ export default function LabsPracticeChallenges(){
 
           <form className="space-y-3" onSubmit={event=>{event.preventDefault();grade();}}>
             <label htmlFor="labs-practice-answer" className="block text-sm font-semibold">
-              {active.kind==="ipv4"?"Your IPv4 address":active.kind==="integer"?"Your whole-number answer":
-                active.kind==="octal"?"Your octal mode":active.kind==="boolean"?"Choose Yes or No":"Your whole-number answer"}
+              {active.kind==="ipv4"?"Your IPv4 address":active.kind==="ipv6"?"Your IPv6 address":
+                active.kind==="bigint"?"Your exact decimal integer":active.kind==="octal"?"Your octal mode":
+                active.kind==="boolean"?"Choose Yes or No":"Your whole-number answer"}
             </label>
             {active.kind==="boolean"
               ?<select id="labs-practice-answer" required value={answer}
@@ -133,6 +134,8 @@ export default function LabsPracticeChallenges(){
               :<input id="labs-practice-answer" required type="text" autoComplete="off"
                   spellCheck={false} maxLength={64}
                   placeholder={active.kind==="ipv4"?"e.g. 192.168.10.0":
+                    active.kind==="ipv6"?"e.g. 2001:db8::":
+                    active.kind==="bigint"?"e.g. 340282366920938463463374607431768211456":
                     active.kind==="octal"?"e.g. 750":"e.g. 4"}
                   value={answer}
                   onChange={event=>{setAnswer(event.target.value);setResult(null);setFeedbackError(null);}}

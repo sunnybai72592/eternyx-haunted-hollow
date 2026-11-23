@@ -19,12 +19,12 @@ const cases=[
 ];
 const tracks=["dns","http","securitytxt","events","tokens"];
 
-test("ten tracks contain exactly thirty unique scenarios including fifteen defensive cases",()=>{
- assert.equal(PRACTICE_TRACKS.length,10);
- assert.equal(PRACTICE_CASES.length,30);
- assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,30);
- assert.deepEqual(PRACTICE_TRACKS.slice(5).map(t=>t.id),tracks);
- assert.deepEqual(PRACTICE_CASES.slice(15).map(c=>c.id),cases.map(c=>c[0]));
+test("fifteen tracks contain forty-five unique scenarios preserving previous defensive cases",()=>{
+ assert.equal(PRACTICE_TRACKS.length,15);
+ assert.equal(PRACTICE_CASES.length,45);
+ assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,45);
+ assert.deepEqual(PRACTICE_TRACKS.slice(5,10).map(t=>t.id),tracks);
+ assert.deepEqual(PRACTICE_CASES.slice(15,30).map(c=>c.id),cases.map(c=>c[0]));
  for(const track of PRACTICE_TRACKS){
   const group=PRACTICE_CASES.filter(c=>c.track===track.id);
   assert.equal(group.length,3,track.id);
@@ -118,9 +118,9 @@ test("malformed and attack-like answer formats are rejected without falsely reco
 });
 test("cross-track progress is unique, derived from correct answers and never stored or certified",()=>{
  const first=summarizePracticeProgress();
- assert.equal(first.total,30);
+ assert.equal(first.total,45);
  assert.equal(first.passed,0);
- assert.equal(first.byTrack.length,10);
+ assert.equal(first.byTrack.length,15);
  const mixed=summarizePracticeProgress([
   "dns-count","dns-count","dns-owners","http-conflict","events-errors","tokens-b64",
  ]);
@@ -128,26 +128,26 @@ test("cross-track progress is unique, derived from correct answers and never sto
  assert.equal(mixed.byTrack.find(t=>t.id==="dns").passed,2);
  assert.equal(mixed.byTrack.find(t=>t.id==="tokens").passed,1);
  assert.equal(mixed.byTrack.find(t=>t.id==="subnet").passed,0);
- assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(c=>c.id))).passed,30);
+ assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(c=>c.id))).passed,45);
  for(const flag of ["saved","authenticated","certificateAwarded"])
   assert.equal(mixed[flag],false);
  assert.throws(()=>summarizePracticeProgress(["unknown-case"]));
  assert.throws(()=>summarizePracticeProgress(PRACTICE_CASES.map(c=>c.id).concat(["fake"])));
 });
-test("UI correctly shows ten tracks, thirty questions, safe examples and no network or durable score",async()=>{
+test("UI correctly shows fifteen tracks, forty-five questions, safe examples and no network or durable score",async()=>{
  const [ui,page,engine,ops]=await Promise.all([
   readFile(new URL("../src/components/labs/LabsPracticeChallenges.tsx",import.meta.url),"utf8"),
   readFile(new URL("../src/pages/EternyxLabs.tsx",import.meta.url),"utf8"),
   readFile(new URL("../src/lib/eternyxLabsPractice.mjs",import.meta.url),"utf8"),
   readFile(new URL("../src/lib/eternyxLabsOperations.mjs",import.meta.url),"utf8"),
  ]);
- assert.match(ui,/Thirty hands-on questions across ten tracks/);
+ assert.match(ui,/\{PRACTICE_CASES.length\} hands-on questions across \{PRACTICE_TRACKS.length\} tracks/);
  assert.match(ui,/PRACTICE_TRACKS\.map/);
  assert.match(ui,/gradePracticeAnswer\(activeId,answer\)/);
  assert.match(ui,/setPassed\(new Set\(\)\)/);
  assert.match(ui,/Current tab only/);
  assert.match(ui,/role="alert"/);
- assert.match(page,/Practice 30 answer-checked challenges/);
+ assert.match(page,/Practice 45 answer-checked challenges/);
  assert.match(ops,/getRandomValues/);
  assert.match(engine,/bytes\.fill\(0xa5\)/);
  assert.doesNotMatch(engine,/\bfetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|createServer|WebSocket|navigator\.sendBeacon/);
