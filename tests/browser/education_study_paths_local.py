@@ -4,6 +4,7 @@ Uses only 127.0.0.1 preview; all other network destinations are aborted.
 No Supabase credentials, authentic learner content, screenshots or traces.
 """
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 from playwright.sync_api import expect, sync_playwright
@@ -13,10 +14,17 @@ REPORT=Path("test-results/education-study-paths-local-browser.json")
 CHECKS=(
     "author_real_lesson_and_export_path",
     "unanswered_lesson_cannot_be_marked_complete",
+    "uncompleted_lesson_cannot_record_manual_revision",
     "activity_reflection_enables_manual_completion",
+    "manual_review_records_exact_utc_due_date",
+    "review_due_counts_derive_from_manual_record",
     "private_resume_roundtrip_restores_progress",
+    "private_v2_resume_restores_review_schedule",
     "safe_csv_export_neutralizes_formulas",
+    "course_only_exports_exclude_private_learning_data",
+    "revision_calendar_csv_excludes_private_notes",
     "privileged_key_import_fails_closed",
+    "reopened_lesson_invalidates_review_schedule",
     "no_private_study_data_sent_to_external_hosts",
 )
 SENSITIVE="=WEBSERVICE"
@@ -79,6 +87,8 @@ def exercise(browser,label,viewport,out):
         expect(page.get_by_text("A reference electrode provides a stable potential",exact=False)).to_be_visible()
         check(out,label,"unanswered_lesson_cannot_be_marked_complete",
               page.get_by_role("button",name="Mark lesson complete").is_disabled())
+        check(out,label,"uncompleted_lesson_cannot_record_manual_revision",
+              page.get_by_role("button",name="Reviewed today — schedule next review").is_disabled())
 
         page.locator("#study-activity").fill(SENSITIVE+'("https://example.invalid")')
         page.locator("#study-reflection").fill("Stable reference points help comparisons.")
@@ -88,6 +98,26 @@ def exercise(browser,label,viewport,out):
         expect(page.get_by_role("button",name="Reopen lesson")).to_be_visible()
         check(out,label,"activity_reflection_enables_manual_completion",
               page.get_by_role("progressbar",name="Manually completed lessons").get_attribute("aria-valuenow")=="1")
+        expect(page.get_by_text("Needs schedule",exact=True)).to_be_visible()
+        page.locator("#study-revision-interval").select_option("7")
+        page.locator("#study-review-confidence").select_option("comfortable")
+        page.get_by_role("button",name="Reviewed today — schedule next review").click()
+        expect(page.get_by_text("Reviews recorded: 1",exact=False)).to_be_visible()
+        with page.expect_download() as result:
+            page.get_by_role("button",name="Save study resume (.json)").click()
+        verified=json.loads(Path(result.value.path()).read_text(encoding="utf8"))
+        r=verified["revision"][0]
+        today=date.today()
+        check(out,label,"manual_review_records_exact_utc_due_date",
+              verified["version"]==2 and
+              r["last_reviewed_on"]==today.isoformat() and
+              r["next_due_on"]==(today+timedelta(days=7)).isoformat() and
+              r["interval_days"]==7 and r["confidence"]=="comfortable" and
+              r["review_count"]==1)
+        check(out,label,"review_due_counts_derive_from_manual_record",
+              page.get_by_text("Due now",exact=True).is_visible() and
+              page.get_by_text("Due in 7 days",exact=True).is_visible() and
+              page.get_by_text("Next review:",exact=False).is_visible())
 
         with page.expect_download() as result:
             page.get_by_role("button",name="Save study resume (.json)").click()
@@ -104,6 +134,11 @@ def exercise(browser,label,viewport,out):
               saved["records"][0]["completed"] is True and
               saved["records"][0]["flagged"] is True and
               page.locator("#study-private-note").input_value()=="@SUM(1,2) Private observation notes")
+        check(out,label,"private_v2_resume_restores_review_schedule",
+              saved["version"]==2 and
+              saved["revision"][0]["interval_days"]==7 and
+              page.locator("#study-revision-interval").input_value()=="7" and
+              page.get_by_text("Reviews recorded: 1",exact=False).is_visible())
 
         with page.expect_download() as result:
             page.get_by_role("button",name="Export private notes (.csv)").click()
@@ -111,6 +146,23 @@ def exercise(browser,label,viewport,out):
         check(out,label,"safe_csv_export_neutralizes_formulas",
               "'=WEBSERVICE" in csv and "'@SUM" in csv and
               '"Not graded"' in csv and "Official grade" not in csv)
+        with page.expect_download() as result:
+            page.get_by_role("button",name="Share course only (.json)").click()
+        share=Path(result.value.path()).read_text(encoding="utf8")
+        with page.expect_download() as result:
+            page.get_by_role("button",name="Share course outline (.txt)").click()
+        outline=Path(result.value.path()).read_text(encoding="utf8")
+        check(out,label,"course_only_exports_exclude_private_learning_data",
+              json.loads(share)==pack and
+              all(marker not in share and marker not in outline for marker in
+                  [SENSITIVE,"Private observation notes","comfortable","next_due_on","last_reviewed_on"]))
+        with page.expect_download() as result:
+            page.get_by_role("button",name="Export private revision plan (.csv)").click()
+        calendar=Path(result.value.path()).read_text(encoding="utf8")
+        check(out,label,"revision_calendar_csv_excludes_private_notes",
+              "comfortable" in calendar and
+              r["next_due_on"] in calendar and
+              SENSITIVE not in calendar and "Private observation notes" not in calendar)
 
         forged=json.loads(json.dumps(pack))
         forged["lessons"][0]["correct_answer"]="SECRET"
@@ -122,6 +174,12 @@ def exercise(browser,label,viewport,out):
         expect(page.get_by_text("Import rejected.",exact=False)).to_be_visible()
         check(out,label,"privileged_key_import_fails_closed",
               page.get_by_role("button",name="Reopen lesson").is_visible())
+        page.get_by_role("button",name="Reopen lesson").click()
+        expect(page.get_by_text("Reviews recorded: 0",exact=False)).to_be_visible()
+        check(out,label,"reopened_lesson_invalidates_review_schedule",
+              page.get_by_role("button",name="Mark lesson complete").is_visible() and
+              page.get_by_role("button",name="Reviewed today — schedule next review").is_disabled() and
+              page.locator("#study-revision-interval").input_value()=="7")
 
         check(out,label,"no_private_study_data_sent_to_external_hosts",
               leaked==[])
@@ -144,7 +202,7 @@ def main():
             finally:
                 browser.close()
         assert len(outcomes)==len(CHECKS)*2
-        print("PASS: 14 real desktop/mobile local Study Paths browser checks; no external study-data egress.")
+        print("PASS: 28 real desktop/mobile Study Paths and revision browser checks; no external study-data egress.")
     except Exception:
         print("BLOCKED: local Study Paths authoring, progress, export or import browser checks.")
         raise SystemExit(1)
