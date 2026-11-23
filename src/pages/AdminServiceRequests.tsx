@@ -160,6 +160,8 @@ export default function AdminServiceRequests() {
     setTotal(0);
     setDrafts({});
     setCheckingId(null);
+    setSaving(null);
+    setFeedback(null);
     setOpenConversation(null);
     setOpenScope(null);
     setOpenTriage(null);
