@@ -1,4 +1,4 @@
-name: Automation three-core-function isolated staging release
+name: ETERNYX four missing backend functions isolated staging release
 
 on:
   workflow_dispatch:
@@ -19,6 +19,14 @@ on:
           - NOT_REVIEWED
           - STAGING_SCHEMA_SECRETS_AND_ROLLBACK_REVIEWED
         default: NOT_REVIEWED
+      verified_ctf_secret_review:
+        description: "Reviewed a new staging-only CTF_FLAG_SECRET of at least 32 UTF-8 bytes and CTF rollback readiness."
+        type: choice
+        required: true
+        options:
+          - NOT_REVIEWED
+          - STAGING_CTF_FLAG_SECRET_REVIEWED
+        default: NOT_REVIEWED
 
 permissions:
   contents: read
@@ -28,8 +36,8 @@ concurrency:
 
 jobs:
   release-staging-core:
-    if: "${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_STAGING_CORE_FUNCTION_RELEASE' && inputs.database_and_secret_review == 'STAGING_SCHEMA_SECRETS_AND_ROLLBACK_REVIEWED' }}"
-    name: Verify staging schema then deploy ONLY the three core Automation Edge Functions
+    if: "${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_STAGING_CORE_FUNCTION_RELEASE' && inputs.database_and_secret_review == 'STAGING_SCHEMA_SECRETS_AND_ROLLBACK_REVIEWED' && inputs.verified_ctf_secret_review == 'STAGING_CTF_FLAG_SECRET_REVIEWED' }}"
+    name: Prove staging Automation + CTF schemas then publish exactly four backend functions
     environment: automation-staging
     runs-on: ubuntu-latest
     timeout-minutes: 18
@@ -56,6 +64,7 @@ jobs:
           set -euo pipefail
           node scripts/automation-staging-core-release.mjs --check-target > /dev/null
           node scripts/automation-staging-core-release.mjs --check-source > "$RUNNER_TEMP/automation-core-source.json"
+          node scripts/eternyx-missing-backend-release.mjs --check-source > "$RUNNER_TEMP/eternyx-four-function-source.json"
       - name: Query the actual STAGING migration journal through authenticated TLS and READ ONLY transaction
         env:
           ETERNYX_AUTOMATION_STAGING_PGPASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_PGPASSWORD }}"
@@ -66,6 +75,7 @@ jobs:
           set -euo pipefail
           bash scripts/automation-staging-db-readonly.sh > "$RUNNER_TEMP/automation-staging-db-evidence.json"
           bash scripts/automation-staging-functions-catalog.sh > "$RUNNER_TEMP/automation-staging-catalog-evidence.json"
+          bash scripts/eternyx-staging-ctf-catalog.sh > "$RUNNER_TEMP/eternyx-ctf-staging-catalog.json"
       - name: Refuse release unless true read-only staging database and seven RPC/four RLS prerequisites are present
         shell: bash
         run: |
@@ -79,6 +89,16 @@ jobs:
           validateStageProbe(db,target);
           validateCatalogReport(catalog);
           console.log("Staging read-only database, required Automation schema, RPC presence and tenant RLS prerequisites verified.");
+          NODE
+      - name: Refuse deployment unless verified CTF solves, attempt rate limit, RLS, and service-only RPC are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module - "$RUNNER_TEMP/eternyx-ctf-staging-catalog.json" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import {verifyCtfCatalog} from "./scripts/eternyx-missing-backend-release.mjs";
+          verifyCtfCatalog(JSON.parse(readFileSync(process.argv[2],"utf8")));
+          console.log("Isolated staging CTF schema, RLS and server-only verification RPC verified; secret values never read by CI.");
           NODE
       - name: Install reviewed Supabase CLI v3.1.0
         uses: supabase/setup-cli@v1
@@ -100,7 +120,7 @@ jobs:
           inspectStageProject(data,target.stagingRef);
           console.log("Management API independently confirms the isolated, healthy staging project in the expected organization.");
           NODE
-      - name: Deploy ONLY automation-control, automation-webhook and automation-scheduler-worker to approved staging
+      - name: Deploy exactly four reviewed missing backend functions to isolated staging
         shell: bash
         timeout-minutes: 6
         env:
@@ -113,6 +133,8 @@ jobs:
           supabase functions deploy automation-control --remote="$target" --yes
           supabase functions deploy automation-webhook --remote="$target" --yes --no-verify-jwt
           supabase functions deploy automation-scheduler-worker --remote="$target" --yes --no-verify-jwt
+          # Verified CTF is always user-authenticated; never disable the gateway JWT check.
+          supabase functions deploy ctf-verified --remote="$target" --yes
       - name: Verify active deployed versions and exact JWT policies from staging Management API
         shell: bash
         env:
@@ -121,19 +143,22 @@ jobs:
           set -euo pipefail
           node --input-type=module - "$RUNNER_TEMP/automation-staging-core-deployed.json" <<'NODE'
           import {writeFileSync} from "node:fs";
-          import {validateTarget,fetchStageManagement,verifyDeployedCore} from "./scripts/automation-staging-core-release.mjs";
+          import {validateTarget,fetchStageManagement} from "./scripts/automation-staging-core-release.mjs";
+          import {verifyFourInventory} from "./scripts/eternyx-missing-backend-release.mjs";
           const target=validateTarget(process.env);
           const raw=await fetchStageManagement(
             "https://api.supabase.com/v1/projects/"+target.stagingRef+"/functions",
             process.env.SUPABASE_ACCESS_TOKEN,
           );
-          const inventory=verifyDeployedCore(raw);
+          const inventory=verifyFourInventory(raw);
           writeFileSync(process.argv[2],JSON.stringify({
             schema:"eternyx-automation-staging-core-inventory-v1",
             target:"isolated_staging",
             stagingRef:target.stagingRef,
             coreFunctions:inventory,
             stagedFunctionsActive:true,
+            verifiedCtfFunctionPresent:true,
+            ctfFlagSecretConfirmedByOperatorOnly:true,
             liveBusinessFlowsVerified:false,
             secretsValidatedByRuntime:false,
             webhooksActivated:false,
@@ -141,7 +166,7 @@ jobs:
             productionDeployment:false,
             productionReleaseAuthorized:false,
           },null,2)+"\n",{mode:0o600,flag:"wx"});
-          console.log("Three staging core functions ACTIVE with expected JWT policies. Real user flows remain unverified.");
+          console.log("Four staging backend functions ACTIVE with expected JWT policies. Real user flows and runtime secrets remain unverified.");
           NODE
       - name: Exercise five negative-only staging HTTP denials after deployed function inventory succeeds
         shell: bash
