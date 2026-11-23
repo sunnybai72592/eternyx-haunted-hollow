@@ -14,6 +14,7 @@ import {
 } from "@/lib/developerProjectTests.mjs";
 import { developerLinePosition } from "@/lib/developerLocalWorkflows.mjs";
 import { DEVELOPER_HTML_QUALITY_KINDS, recommendedDeveloperQualityTests } from "@/lib/developerProjectQuality.mjs";
+import { developerIntegrationAdvice, recommendedDeveloperIntegrationTests } from "@/lib/developerProjectIntegration.mjs";
 
 type Project = ReturnType<typeof normalizeDeveloperProject>;
 type TestCase = ReturnType<typeof normalizeDeveloperTestSuite>[number];
@@ -82,6 +83,18 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
       setCases(next);
       tell("Added " + suggested.length + " real HTML quality checks. Run tests explicitly; the plan is not automatically saved.");
     } catch (cause) { tell(cause instanceof Error ? cause.message : "Could not add quality checks.", true); }
+  };
+
+  const addIntegration = () => {
+    try {
+      const recommended = recommendedDeveloperIntegrationTests(project, cases);
+      if (!recommended.length) { tell("All available cross-file integration checks are in your current plan."); return; }
+      const available = MAX_DEVELOPER_TESTS - cases.length;
+      if (available <= 0) throw new Error("The 16-check limit is reached. Remove unused checks first.");
+      const added = recommended.slice(0, available);
+      setCases(normalizeDeveloperTestSuite([...cases, ...added]));
+      tell("Added " + added.length + " cross-file reference checks" + (added.length < recommended.length ? "; more checks require free slots." : ".") + " Run explicitly; nothing was saved.");
+    } catch (cause) { tell(cause instanceof Error ? cause.message : "Could not add integration checks.", true); }
   };
 
   const removeTest = (id: string) => {
@@ -159,7 +172,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
   return <Card className="min-w-0 border-slate-800 bg-slate-900/70 text-white">
     <CardHeader>
       <CardTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-cyan-300"/>Local project test suite</CardTitle>
-      <CardDescription className="text-slate-400">Real, explicit checks against current project files: presence, literal text, JSON values/array lengths, HTML IDs/quality rules, and CSS selectors. Every run also checks real parser-backed JS preflight. Nothing executes project JavaScript or calls a backend.</CardDescription>
+      <CardDescription className="text-slate-400">Real, explicit checks against current project files: presence, literal text, JSON values/array lengths, HTML/CSS quality and cross-file reference integrity. Every run also checks real parser-backed JS preflight. Nothing executes project JavaScript or calls a backend.</CardDescription>
     </CardHeader>
     <CardContent className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -191,9 +204,9 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
         <div className="mt-2 max-h-48 space-y-1 overflow-auto" aria-label="Local test results">
           {report.results.filter(result => !showFailuresOnly || result.status === "failed").map(result => <div key={result.index}
             className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 p-2 text-xs">
-            <span className={result.status === "passed" ? "text-emerald-200" : "text-rose-200"}>
+            <div className="min-w-0 flex-1"><span className={result.status === "passed" ? "text-emerald-200" : "text-rose-200"}>
               #{result.index} {result.kind} · {result.status} · {result.reason}
-            </span>
+            </span>{result.status === "failed" && <p className="mt-1 text-slate-300">Next step: {developerIntegrationAdvice(result.reason)}</p>}</div>
             {result.line > 0 && project.files.some(file => file.name.toLowerCase() === result.file.toLowerCase()) &&
               <Button size="sm" variant="outline" disabled={stale} onClick={() => jump(result.file, result.line)}>
                 Open test location
@@ -208,6 +221,10 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
           <Button size="sm" variant="outline" disabled={!project.files.some(f => f.name.toLowerCase() === "index.html") ||
             cases.length >= MAX_DEVELOPER_TESTS} onClick={addRecommended}>
             Add HTML quality checks
+          </Button>
+          <Button size="sm" variant="outline" disabled={cases.length >= MAX_DEVELOPER_TESTS ||
+            !recommendedDeveloperIntegrationTests(project, cases).length} onClick={addIntegration}>
+            Add integration checks
           </Button>
         </div>
         <div role="group" aria-label="Configured local tests" className="max-h-48 space-y-2 overflow-auto">
@@ -259,7 +276,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
           placeholder='{"schema":"eternyx-developer-local-tests-v1","tests":[...]}' />
         <Button size="sm" variant="outline" disabled={!importText.trim()} onClick={importPlan}>Verify and import test plan</Button>
       </div>
-      <p className="text-xs leading-5 text-slate-500">Test plans can contain literals from your code. Saving stores the full plan in this browser; portable plan exports can expose expected strings. Result exports omit expected values, source and test IDs. HTML and CSS quality checks use bounded source heuristics, not a DOM/CSS parser or accessibility certification. This does not verify runtime behavior, external services, authentication or release readiness.</p>
+      <p className="text-xs leading-5 text-slate-500">Test plans can contain literals from your code. Saving stores the full plan in this browser; portable plan exports can expose expected strings. Result exports omit expected values, source and test IDs. HTML, CSS and integration checks use bounded source heuristics, not DOM/CSS/JS module resolution or accessibility certification. Existing script src, stylesheet links, CSS @import and JS import statements are not loaded by this isolated preview, even if their filenames resolve. This does not verify runtime behavior, external services, authentication or release readiness.</p>
     </CardContent>
   </Card>;
 }
