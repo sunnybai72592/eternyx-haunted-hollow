@@ -102,7 +102,8 @@ jobs:
           ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
           ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
           ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
-        run: "$RUNNER_TEMP/education-browser/bin/python" tests/browser/education_hosted_readonly.py
+        run: |
+          "$RUNNER_TEMP/education-browser/bin/python" tests/browser/education_hosted_readonly.py
       - name: Upload sanitized browser acceptance evidence even on a failed test
         if: always()
         uses: actions/upload-artifact@v4
