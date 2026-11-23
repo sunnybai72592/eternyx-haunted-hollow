@@ -165,18 +165,23 @@ test("manual workflow must verify exact healthy stage project and core functions
     "INSPECT_ONLY","ONE_TEMPORARY_WORKFLOW","STAGING_TEST_ACCOUNTS_REVIEWED",
     "I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN",
     "validateTwoOwnerGate","inspectStageProject","verifyDeployedCore",
-    "--inspect","--execute --confirm-isolated-staging",
+    "automation-staging-fresh-auth.mjs", "mode=\"--inspect\"", "mode=\"--execute\"",
     "checkTwoOwnerEvidence","automation-two-owner-verified.json",
-    "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_JWT",
-    "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_JWT",
+    "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_EMAIL",
+    "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD",
+    "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_EMAIL",
+    "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_PASSWORD",
     "vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY",
     "secrets.ETERNYX_AUTOMATION_STAGING_MANAGEMENT_TOKEN",
   ])assert.ok(w.includes(marker),marker);
   assert.doesNotMatch(w,/^\s+(?:push|pull_request|schedule):/m);
   assert.doesNotMatch(w,/supabase db push|functions deploy|migration repair|supabase secrets set/);
   const guardIndex=w.indexOf("Independently verify the exact separate staging project");
-  const firstSecretIndex=w.indexOf("secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_JWT");
+  const firstSecretIndex=w.indexOf("secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD");
   assert.ok(firstSecretIndex>guardIndex,"staging identity proof must run before owner JWTs enter a step");
   assert.match(w,/inputs\.run_mode == 'ONE_TEMPORARY_WORKFLOW' && inputs\.write_approval == 'I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN'/);
+  assert.doesNotMatch(w,/secrets\.ETERNYX_AUTOMATION_STAGING_OWNER_[AB]_JWT/);
+  assert.match(w,/authMethod,"fresh_staging_password_signin"/);
+  assert.match(w,/freshSessions,2/);
   assert.doesNotMatch(w,/SUPABASE_SERVICE_ROLE_KEY|SUPABASE_DB_PASSWORD/);
 });
