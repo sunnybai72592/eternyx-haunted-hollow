@@ -227,7 +227,7 @@ const definitions=[
     "The calculated 256 addresses do not imply that every address is usable by a host."],
   ["ipv6-entire","ipv6","The complete IPv6 space",
     "What is the exact decimal number of addresses in this IPv6 /0?",
-    "::1/0","bigint",{cidr:"::1/0",field:"addressCount"},
+    "IPv6 address/prefix: ::1/0","bigint",{cidr:"::1/0",field:"addressCount"},
     "An IPv6 /0 contains 2 to the power of 128 possible addresses.",
     "This requires exact big-integer arithmetic; JavaScript Number loses precision here."],
   ["cache-private","cache","Private response with no-store",
