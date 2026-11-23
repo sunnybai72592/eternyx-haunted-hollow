@@ -3,7 +3,7 @@ import { parseWorkspaceArchiveV3 } from "./workspaceChecklistArchive.mjs";
 import { WORKSPACE_BACKUP_MAX_DOCUMENT_BYTES } from "./workspaceFullBackup.mjs";
 import { sha256Hex } from "./workspaceImportRecovery.mjs";
 
-export const WORKSPACE_RECONCILIATION_VERSION = 1;
+export const WORKSPACE_RECONCILIATION_VERSION = 2;
 export const WORKSPACE_RECONCILIATION_MAX_TASKS = 1000;
 export const WORKSPACE_RECONCILIATION_MAX_ITEMS = 1000;
 export const WORKSPACE_RECONCILIATION_PAGE_SIZE = 25;
@@ -155,7 +155,7 @@ export async function createWorkspaceReviewedReconciliation({
       status:"active",created_at:createdAt },
     tasks,items,
     reviewed_reconciliation: {
-      version:2,
+      version:WORKSPACE_RECONCILIATION_VERSION,
       fork_id:forkId,
       created_at:createdAt,
       source_sha256:sourceSha256,
