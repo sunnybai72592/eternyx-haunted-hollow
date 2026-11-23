@@ -21,6 +21,7 @@ on:
       - 'tests/sql/workspace-import-review-discard-db-smoke.sql'
       - 'tests/sql/workspace-import-protection-db-smoke.sql'
       - 'tests/sql/workspace-reconciliation-receipts-db-smoke.sql'
+      - 'tests/sql/workspace-release-drill-db-smoke.sql'
       - 'tests/sql/workspace-revisions-bootstrap.sql'
       - 'tests/sql/workspace-revisions-db-smoke.sql'
       - '.github/workflows/workspace-revisions-postgres.yml'
@@ -84,6 +85,8 @@ jobs:
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-import-protection-db-smoke.sql
       - name: Verify immutable private reconciliation preparation receipts and cross-owner isolation
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-reconciliation-receipts-db-smoke.sql
+      - name: Run Phase 16 synthetic complete restore, interruption and tenant-isolation drill
+        run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-release-drill-db-smoke.sql
       - name: Dispose PostgreSQL
         if: always()
         run: docker rm --force eternyx-workspace-test || true
