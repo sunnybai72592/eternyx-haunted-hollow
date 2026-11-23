@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
+import ProjectRecoveryPanel from "@/components/developer/ProjectRecoveryPanel";
+import { exportDeveloperPreflight, runDeveloperPreflight } from "@/lib/developerProjectPreflight.mjs";
 import { replaceDeveloperFileText } from "@/lib/developerProjectInspection.mjs";
 import { duplicateDeveloperFile, editorCursorInfo, editorTabChange, exportJavascriptValidationReport, filterProjectFilenames, formatProjectJson, normalizeProjectWhitespace, validateProjectJavascript } from "@/lib/developerEditorUtils.mjs";
 import {
@@ -55,11 +57,15 @@ export default function DeveloperProjectLab() {
   const [jsValidation, setJsValidation] = useState<{ filesChecked: number; issues: Array<{file:string;line:number;column:number;code:number;message:string}>; truncated:boolean } | null>(null);
   const [jsSource, setJsSource] = useState("");
   const [validatingJs, setValidatingJs] = useState(false);
+  const [preflight, setPreflight] = useState<Awaited<ReturnType<typeof runDeveloperPreflight>> | null>(null);
+  const [preflightSource, setPreflightSource] = useState("");
+  const [preflightRunning, setPreflightRunning] = useState(false);
   const [selection, setSelection] = useState<{ file: string; index: number; length: number } | null>(null);
   const file = project.files.find((item) => item.name === activeFile) || project.files[0];
   const currentSource = JSON.stringify(project.files);
   const fileMatches = useMemo(() => filterProjectFilenames(project, quickOpen), [project, quickOpen]);
   const jsStale = jsValidation !== null && jsSource !== currentSource;
+  const preflightStale = preflight !== null && preflightSource !== currentSource;
   const dirty = savedCopy !== JSON.stringify(project);
   const previewStale = previewHtml !== null && previewSource !== currentSource;
   const findings = useMemo(() => checkDeveloperProject(project), [project]);
@@ -114,6 +120,8 @@ export default function DeveloperProjectLab() {
     setQuickOpen("");
     setJsValidation(null);
     setJsSource("");
+    setPreflight(null);
+    setPreflightSource("");
     setCursor(editorCursorInfo(next.files[0].content, 0));
   };
   const update = (fn: (old: Project) => Project) => {
@@ -266,6 +274,26 @@ export default function DeveloperProjectLab() {
     } catch { alert("JavaScript parser could not load in this browser.", true); }
     finally { setValidatingJs(false); }
   };
+  const handleRecovery = (restored: Project) => {
+    applyProject(restored);
+    alert("Restored a verified local backup. Save browser copy explicitly to keep this version.");
+  };
+  const checkPreflight = async () => {
+    if (preflightRunning) return;
+    const source = currentSource;
+    setPreflightRunning(true);
+    try {
+      const report = await runDeveloperPreflight(project);
+      setPreflight(report);
+      setPreflightSource(source);
+      alert(report.errors ? "Preflight found " + report.errors + " blocking issue(s). This is not a deployment certification." : "Preflight completed with no blocking issues from checked rules. Runtime behavior is still unverified.");
+    } catch { alert("Project preflight failed; no result was certified.", true); }
+    finally { setPreflightRunning(false); }
+  };
+  const downloadPreflight = () => {
+    if (!preflight || preflightStale) { alert("Rerun preflight on the current project before exporting.", true); return; }
+    download("eternyx-preflight-report.json", exportDeveloperPreflight(preflight));
+  };
   const exportJsReport = async () => {
     try {
       const report = await exportJavascriptValidationReport(project);
@@ -363,6 +391,25 @@ export default function DeveloperProjectLab() {
 
       <ProjectInspectionPanel project={project} baseline={savedBaseline} activeFile={file.name}
         onJump={jumpToMatch} onReplace={replaceActiveText} />
+      <ProjectRecoveryPanel project={project} dirty={dirty} onRestore={handleRecovery} />
+      <Card className="border-slate-800 bg-slate-900/70 text-white">
+        <CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-cyan-300" />Unified project preflight</CardTitle>
+          <CardDescription className="text-slate-400">Check current HTML/JSON structure, known restricted-preview compatibility rules and real JavaScript parser syntax together. Runs only when requested; does not run user code or deploy anything.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" disabled={preflightRunning} onClick={() => void checkPreflight()}>{preflightRunning ? "Checking project…" : "Run project preflight"}</Button>
+            <Button size="sm" variant="outline" disabled={!preflight || preflightStale || preflightRunning} onClick={downloadPreflight}><Download className="mr-2 h-4 w-4" />Export metadata-only preflight</Button>
+            {preflightStale && <span role="status" className="text-xs text-amber-200">Project changed. Previous preflight is stale.</span>}
+          </div>
+          {preflight && <div className="rounded-lg border border-slate-700 p-3 text-sm">
+            <p className="font-semibold">{preflight.previewReadiness === "no-blocking-issues-found" && !preflightStale ? "No blocking issues found by these rules" : "Review required or results stale"}</p>
+            <p className="mt-1 text-slate-300">{preflight.filesChecked} files checked · {preflight.jsFilesChecked} JavaScript files parsed · {preflight.errors} errors · {preflight.warnings} warnings{preflight.truncated ? " · issues truncated" : ""}</p>
+            {preflight.staticFindings.length > 0 && <p className="mt-2 text-xs text-slate-400">Static findings: {preflight.staticFindings.map(issue => issue.rule).slice(0, 10).join(", ")}{preflight.staticFindings.length > 10 ? "…" : ""}</p>}
+            {preflight.syntaxFindings.length > 0 && <p className="mt-2 text-xs text-rose-200">JS parse issues: {preflight.syntaxFindings.slice(0, 5).map(issue => issue.file + " line " + issue.line).join("; ")}</p>}
+          </div>}
+          <p className="text-xs leading-5 text-slate-500">A clean result is limited to checked structural and JavaScript syntax rules. It does not establish deployment readiness, backend integrity, production authorization, browser safety or functional correctness.</p>
+        </CardContent>
+      </Card>
       <Card className="border-slate-800 bg-slate-900/70 text-white">
         <CardHeader><CardTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-cyan-300" />JavaScript syntax validation</CardTitle>
           <CardDescription className="text-slate-400">Explicit, local TypeScript parser checks for .js files. No code execution, compilation, type checking or external requests; source text stays in this browser.</CardDescription></CardHeader>
