@@ -8,6 +8,11 @@ import { useAuthStore } from "@/store/authStore";
 import { examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
 import { createEducationAnswerSaveQueue } from "@/lib/educationAnswerSaveQueue.mjs";
 import {
+  createEducationExamAnswer, educationChoiceSelectionStatus,
+  projectEducationExamReviewAnswers, restoreEducationExamAnswers,
+  validateEducationExamDetails, validateEducationExamOptions,
+} from "@/lib/educationExamResponseIntegrity.mjs";
+import {
   createEducationExamReview, educationReviewSummaryMessage,
   nextEducationReviewIndex, toggleEducationReviewFlag,
 } from "@/lib/educationExamReview.mjs";
@@ -65,7 +70,9 @@ export default function TestInterface() {
         .select("id,question_text,question_type,points,order_index")
         .eq("test_id", testId!).order("order_index", { ascending: true });
       if (questionError) throw questionError;
-      return { ...test, questions: questions ?? [] } as Exam;
+      // Validate server-returned exam metadata BEFORE startCbtAttempt runs:
+      // malformed/duplicated questions must never open an attempt timer.
+      return validateEducationExamDetails(test, questions ?? [], testId!) as Exam;
     },
   });
 
@@ -101,11 +108,7 @@ export default function TestInterface() {
         .select("question_id,selected_option_id,short_answer_text")
         .eq("attempt_id", attemptQuery.data!.id);
       if (error) throw error;
-      return (data ?? []).flatMap(row => row.question_id ? [{
-        questionId: row.question_id,
-        selectedOptionId: row.selected_option_id || undefined,
-        shortAnswer: row.short_answer_text || undefined,
-      }] : []);
+      return restoreEducationExamAnswers(data ?? [], testQuery.data?.questions ?? []) as Answer[];
     },
   });
 
@@ -139,10 +142,33 @@ export default function TestInterface() {
     setAnswers(new Map(restoredAnswersQuery.data.map(answer => [answer.questionId, answer])));
   }, [user?.id, attemptQuery.data?.id, restoredAnswersQuery.data]);
 
-  const review = useMemo(() => createEducationExamReview(
-    testQuery.data?.questions ?? [], answers, flaggedQuestions,
-  ), [testQuery.data?.questions, answers, flaggedQuestions]);
   const question = testQuery.data?.questions[questionIndex];
+  const optionsQuery = useQuery<ExamOption[]>({
+    queryKey: ["education-question-options", user?.id, attemptQuery.data?.id, question?.id],
+    enabled: enabled && attemptQuery.data?.status === "in_progress" && !!question &&
+      ["multiple_choice", "true_false"].includes(question.question_type),
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("options").select("id,option_text")
+        .eq("question_id", question!.id).order("id", { ascending: true });
+      if (error) throw error;
+      return validateEducationExamOptions(data ?? [], question!) as ExamOption[];
+    },
+  });
+
+  const choiceStatus = educationChoiceSelectionStatus(
+    question ? answers.get(question.id) : null,
+    optionsQuery.isSuccess ? optionsQuery.data : null,
+  );
+  // This is only a UI projection. Do NOT mutate, clear or overwrite the
+  // raw saved response merely because a question's old choice disappeared.
+  const reviewedAnswers = useMemo(() =>
+    projectEducationExamReviewAnswers(
+      answers, question, optionsQuery.isSuccess ? optionsQuery.data : null,
+    ), [answers, question, optionsQuery.isSuccess, optionsQuery.data]);
+  const review = useMemo(() => createEducationExamReview(
+    testQuery.data?.questions ?? [], reviewedAnswers, flaggedQuestions,
+  ), [testQuery.data?.questions, reviewedAnswers, flaggedQuestions]);
   const jumpToReviewQuestion = (index: number) => {
     if (submitting || !testQuery.data?.questions[index]) return;
     setQuestionIndex(index);
@@ -157,18 +183,6 @@ export default function TestInterface() {
     setFlaggedQuestions(previous => toggleEducationReviewFlag(
       previous, question.id, testQuery.data?.questions ?? []));
   };
-  const optionsQuery = useQuery<ExamOption[]>({
-    queryKey: ["education-question-options", user?.id, question?.id],
-    enabled: enabled && !!attemptQuery.data && !!question &&
-      ["multiple_choice", "true_false"].includes(question.question_type),
-    retry: 1,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("options").select("id,option_text")
-        .eq("question_id", question!.id).order("id", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
 
   // All browser writes are serialized; a newer in-flight edit is always
   // persisted after an older request. Failed latest text remains retryable.
@@ -338,9 +352,16 @@ export default function TestInterface() {
 
   const updateAnswer = (value: string) => {
     if (!question || !canEdit) return;
-    const nextAnswer: Answer = question.question_type === "short_answer"
-      ? { questionId: question.id, shortAnswer: value }
-      : { questionId: question.id, selectedOptionId: value };
+    let nextAnswer: Answer;
+    try {
+      nextAnswer = createEducationExamAnswer(
+        question, value, optionsQuery.isSuccess ? optionsQuery.data : null,
+      ) as Answer;
+    } catch {
+      setNotice("The response does not match this question's current choices or length limit. Reload choices or retry.");
+      return;
+    }
+    setNotice("");
     setAnswers(previous => new Map(previous).set(question.id, nextAnswer));
     if (atomicCbtEnabled) {
       if (!saveQueueRef.current) return;
@@ -367,7 +388,14 @@ export default function TestInterface() {
   if (!validTestId) return <p role="alert" className="p-8">Invalid assessment ID.</p>;
   if (testQuery.error || attemptQuery.error || (atomicCbtEnabled && restoredAnswersQuery.error)) {
     return <div role="alert" className="mx-auto max-w-xl space-y-4 p-8">
-      <p>Assessment or attempt could not be loaded. It may be unavailable or your account may lack access.</p>
+      <p>Assessment or attempt could not be loaded or safely verified. It may be unavailable,
+        your answer records may need server review, or your account may lack access.
+        No new exam will be started when question metadata is invalid.</p>
+      <Button variant="outline" onClick={() => {
+        if (testQuery.error) void testQuery.refetch();
+        else if (attemptQuery.error) void attemptQuery.refetch();
+        else if (restoredAnswersQuery.error) void restoredAnswersQuery.refetch();
+      }}>Retry assessment loading</Button>
       <Button variant="outline" asChild><Link to="/education">Back to Education</Link></Button>
     </div>;
   }
@@ -457,17 +485,40 @@ export default function TestInterface() {
         <CardContent>
           {["multiple_choice", "true_false"].includes(question.question_type) ? (
             optionsQuery.isPending ? <p role="status">Loading choices…</p> :
-            optionsQuery.error ? <p role="alert">Choices could not be loaded.</p> :
+            optionsQuery.error ? <div role="alert" className="flex flex-wrap items-center gap-3">
+              <p>Choices could not be loaded or safely verified. No response can be selected yet.</p>
+              <Button variant="outline" size="sm" onClick={() => void optionsQuery.refetch()}>
+                Retry loading choices
+              </Button>
+            </div> :
             !optionsQuery.data?.length ? <p role="alert">No options are configured for this question.</p> :
-            <RadioGroup disabled={!canEdit} value={selected?.selectedOptionId || ""} onValueChange={updateAnswer}>
+            <>
+            {choiceStatus === "unavailable" && <Alert variant="destructive">
+              <AlertTriangle aria-hidden="true" className="h-4 w-4"/>
+              <AlertDescription>
+                Your previously saved choice is no longer among this question's available options.
+                It is not counted as a valid current answer. Select one of the displayed choices to correct it.
+                We will not silently overwrite your saved response.
+              </AlertDescription>
+            </Alert>}
+            <RadioGroup disabled={!canEdit}
+              value={choiceStatus === "valid" ? selected?.selectedOptionId || "" : ""}
+              onValueChange={updateAnswer}>
               {optionsQuery.data.map(option => <div key={option.id} className="flex min-h-11 items-center gap-3">
                 <RadioGroupItem id={"exam-option-" + option.id} value={option.id} />
                 <Label htmlFor={"exam-option-" + option.id} className="cursor-pointer break-words">{option.option_text}</Label>
               </div>)}
             </RadioGroup>
+            </>
           ) : question.question_type === "short_answer" ? (
-            <Textarea aria-label="Your short answer" disabled={!canEdit} maxLength={5000}
-              value={selected?.shortAnswer || ""} onChange={event => updateAnswer(event.target.value)} className="min-h-32" />
+            <div className="space-y-2">
+              <Textarea aria-label="Your short answer" disabled={!canEdit} maxLength={5000}
+                value={selected?.shortAnswer || ""} onChange={event => updateAnswer(event.target.value)} className="min-h-32" />
+              <p role="status" className="text-xs text-muted-foreground">
+                {(selected?.shortAnswer || "").length} of 5,000 characters used.
+                Only non-whitespace text counts as an answered written question.
+              </p>
+            </div>
           ) : <p role="alert">This question type is not supported in the assessment interface.</p>}
         </CardContent>
       </Card>
