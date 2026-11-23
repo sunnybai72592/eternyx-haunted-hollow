@@ -66,7 +66,9 @@ function scanFile(file, kind) {
     // Literal static imports/re-exports on one line and literal dynamic imports.
     // Arbitrary expressions, comments and template strings are not evaluated.
     for (const match of source.matchAll(/(?:^|[;\n])\s*(?:import|export)\s+(?:[^;\n]{0,150}?\s+from\s*)?(["'])([^"'\r\n]{1,120})\1/gm)) {
-      collect(match[2], match.index);
+      // The static-import pattern can consume the previous newline; report the
+      // token position rather than the start of its regex match.
+      collect(match[2], match.index + match[0].search(/\b(?:import|export)\b/));
     }
     for (const match of source.matchAll(/\bimport\s*\(\s*(["'])([^"'\r\n]{1,120})\1\s*\)/g)) {
       collect(match[2], match.index);
