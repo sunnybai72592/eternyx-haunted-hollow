@@ -10,6 +10,7 @@ import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
 import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
 import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklist";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
+import WorkspaceRecoveryCenter from "@/components/workspace/WorkspaceRecoveryCenter";
 import WorkspaceGlobalSearch from "@/components/workspace/WorkspaceGlobalSearch";
 import WorkspaceTaskFocus from "@/components/workspace/WorkspaceTaskFocus";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,8 @@ export default function DigitalWorkspace() {
   const [items, setItems] = useState<Item[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [resumeFingerprint, setResumeFingerprint] = useState<string | null>(null);
+  const [recoveryRefreshKey, setRecoveryRefreshKey] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
@@ -140,6 +143,8 @@ export default function DigitalWorkspace() {
     setItems([]);
     setActivity([]);
     setProjectId(null);
+    setResumeFingerprint(null);
+    setRecoveryRefreshKey(0);
     setLoadedOwner(null);
     setError("");
     setNotice("");
@@ -662,12 +667,33 @@ export default function DigitalWorkspace() {
               </Button>
             </form>
             <WorkspaceImportPanel owner={owner} disabled={busy || loading}
+              resumeFingerprint={resumeFingerprint}
+              onResumeConsumed={() => setResumeFingerprint(null)}
               onImported={(id, message, failed) => {
                 setProjectId(id);
+                setRecoveryRefreshKey(value => value + 1);
                 void load(owner).then(() => {
                   if (failed) setError(message);
                   else setNotice(message);
                 });
+              }} />
+            <WorkspaceRecoveryCenter owner={owner} disabled={busy || loading}
+              projects={projects} refreshKey={recoveryRefreshKey}
+              onOpen={(id) => {
+                setShowArchived(true);
+                setSearch("");
+                setProjectId(id);
+                window.setTimeout(() =>
+                  document.getElementById("workspace-project-panel")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+              }}
+              onResume={(fingerprint) => {
+                setResumeFingerprint(fingerprint);
+                (document.getElementById("workspace-import-file") as HTMLInputElement | null)?.click();
+              }}
+              onDiscarded={() => {
+                setRecoveryRefreshKey(value => value + 1);
+                void load(owner);
               }} />
             <div className="space-y-3 border-t border-border pt-4">
               <label htmlFor="workspace-project-search" className="text-sm font-medium">Find a project</label>
