@@ -16,7 +16,7 @@ const seed=sqlLines([
 "INSERT INTO auth.users(id) VALUES ('"+aUser+"'),('"+bUser+"');",
 'INSERT INTO public.service_requests(id,user_id,service_key,title,description,contact_email) VALUES',
 " ('"+aRequest+"','"+aUser+"','security-review','Concurrent test A','Entirely synthetic first request used only for the SQL concurrency test.','synthetic-a@invalid.example'),",
-" ('"+bRequest+"','"+bUser+"','security-review','Entirely synthetic second request used only for the SQL concurrency test.','synthetic-b@invalid.example');",
+" ('"+bRequest+"','"+bUser+"','security-review','Concurrent test B','Entirely synthetic second request used only for the SQL concurrency test.','synthetic-b@invalid.example');",
 "SELECT set_config('request.jwt.claim.sub','"+aUser+"',true);",
 'INSERT INTO public.service_brief_amendments(request_id,author_id,category,summary,details) VALUES',
 " ('"+aRequest+"','"+aUser+"','requirements','Synthetic preseed one','Completely synthetic first approved preseed amendment for SQL test.'),",
