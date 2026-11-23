@@ -139,7 +139,8 @@ def normalize_one(source, output, *, start_seconds=0, seconds=60, cinematic=Fals
             "prepared_bytes": output.stat().st_size}
 
 
-def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60, cinematic=False):
+def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60, cinematic=False,
+            clip_starts=None, clip_seconds=None):
     if folder.is_symlink() or not folder.is_dir():
         raise ValueError("Input must be a real local directory, not a symlink")
     if destination.exists() or destination.is_symlink():
@@ -156,17 +157,32 @@ def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60, cin
     if len({name.casefold() for name in selected}) != len(selected):
         raise ValueError("Duplicate source filenames are not permitted")
     originals = [(name, source_path(folder, name)) for name in selected]
+    # Optional per-shot ranges are used by the direct phone-movie launcher.
+    # The conversion-only CLI retains its existing global start/length.
+    if clip_starts is not None:
+        if (not isinstance(clip_starts, (list, tuple)) or
+                len(clip_starts) != len(originals) or
+                any(type(t) is not int or not 0 <= t < MAX_INPUT_DURATION for t in clip_starts)):
+            raise ValueError("Each selected clip requires a valid exact start offset")
+    if clip_seconds is not None:
+        if (not isinstance(clip_seconds, (list, tuple)) or
+                len(clip_seconds) != len(originals) or
+                any(type(t) is not int or not 1 <= t <= MAX_OUTPUT_SECONDS for t in clip_seconds)):
+            raise ValueError("Each selected clip requires a valid exact duration")
     # Stage the entire batch; no partial output leaks if a later source fails.
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-video-prepare-", dir=destination.parent))
     try:
         rows = []
         for i, (name, path) in enumerate(originals, 1):
             target = stage / f"clip-{i:02d}.mp4"
-            info = normalize_one(path, target, start_seconds=start_seconds, seconds=seconds, cinematic=cinematic)
+            shot_start = start_seconds if clip_starts is None else clip_starts[i - 1]
+            shot_seconds = seconds if clip_seconds is None else clip_seconds[i - 1]
+            info = normalize_one(path, target, start_seconds=shot_start,
+                                 seconds=shot_seconds, cinematic=cinematic)
             rows.append({
                 "source_filename": name, "source_sha256": sha256(path),
                 "prepared_filename": target.name, **info,
-                "start_seconds": start_seconds, "seconds_limit": seconds,
+                "start_seconds": shot_start, "seconds_limit": shot_seconds,
             })
         report = {
             "version": 1, "kind": "local_cpu_video_import",
