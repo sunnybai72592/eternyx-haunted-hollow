@@ -5,6 +5,7 @@
  * worker ticks, schedules, credentials in logs or automatic retries.
  */
 import {randomUUID} from "node:crypto";
+import {ETERNYX_PRODUCTION_REF} from "./automation-staging-db-readonly.mjs";
 import {fileURLToPath} from "node:url";
 import path from "node:path";
 import {getWorkflowPreset,runLocalWorkflow} from "../src/lib/automationWorkflow.mjs";
@@ -27,7 +28,9 @@ export function validateConfiguration(env,mode,confirmed){
   if(!["inspect","execute"].includes(mode))fail("mode_invalid");
   const staging=get(env.ETERNYX_STAGING_PROJECT_REF,"staging_ref");
   const production=get(env.ETERNYX_PRODUCTION_PROJECT_REF,"production_ref");
-  if(!PROJECT_REF.test(staging)||!PROJECT_REF.test(production)||staging===production){
+  if(!PROJECT_REF.test(staging)||!PROJECT_REF.test(production)||
+     production!==ETERNYX_PRODUCTION_REF||staging===ETERNYX_PRODUCTION_REF||
+     staging===production){
     fail("project_boundary");
   }
   if(env.ETERNYX_STAGING_ENVIRONMENT_CLASS!=="isolated-test-project")fail("not_isolated");
@@ -87,12 +90,35 @@ export function assertAccountBoundaries(a,b){
   }
 }
 async function parseBounded(res){
-  const len=Number(res.headers?.get?.("content-length")??"0");
-  if(len>LIMIT)fail("response_too_large");
-  const text=await res.text();
-  if(text.length>LIMIT)fail("response_too_large");
+  const hint=res.headers?.get?.("content-length");
+  if(hint!==null && hint!==undefined){
+    if(!/^\\d+$/.test(hint)||!Number.isSafeInteger(Number(hint)))fail("invalid_response");
+    if(Number(hint)>LIMIT)fail("response_too_large");
+  }
+  if(!res.body||typeof res.body.getReader!=="function")fail("invalid_response");
+  const reader=res.body.getReader();
+  const chunks=[];
+  let total=0;
   try{
-    const result=JSON.parse(text);
+    for(;;){
+      const item=await reader.read();
+      if(item.done)break;
+      if(!(item.value instanceof Uint8Array))fail("invalid_response");
+      total+=item.value.byteLength;
+      if(total>LIMIT)fail("response_too_large");
+      chunks.push(item.value);
+    }
+  }catch(e){
+    if(e instanceof Error && /^staging_[a-z_]+$/.test(e.message))throw e;
+    fail("invalid_response");
+  }finally{
+    await reader.cancel().catch(()=>undefined);
+  }
+  try{
+    const bytes=new Uint8Array(total);
+    let offset=0;
+    for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+    const result=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
     if(!result||typeof result!=="object"||Array.isArray(result))fail("invalid_response");
     return result;
   }catch{fail("invalid_response");}
@@ -157,10 +183,12 @@ export async function runAcceptance(config,{fetcher=fetch,uuid=randomUUID}={}){
   if(!correctUuid(identifier))fail("invalid_generated_uuid");
   const name="ETERNYX staging acceptance "+identifier.slice(0,8);
   let createdId=null;
+  let saveAttempted=false;
   let error=null;
   let runId=null;
   let cleanupVerified=false;
   try{
+    saveAttempted=true;
     const saved=await transport.action(config.jwtA,{action:"save",name,steps:TEST_STEPS});
     if(saved.ok!==true||!correctUuid(saved.workflow_id))fail("save_not_confirmed");
     createdId=saved.workflow_id;
@@ -195,7 +223,23 @@ export async function runAcceptance(config,{fetcher=fetch,uuid=randomUUID}={}){
       fail("persisted_history_unverified");
     }
     // The final report never stores or prints IDs, JWTs, raw inputs or outputs.
-  }catch(e){error=e;}
+  }catch(e){
+    error=e;
+    // A server can commit "save" even when the HTTP response is lost.
+    // Discover only the newly created, *exactly named* owner-A workflow.
+    // Never delete an ambiguous match or a preexisting workflow.
+    if(saveAttempted&&!createdId){
+      try{
+        const visible=safeList(await transport.action(config.jwtA,{action:"list"}));
+        const before=new Set(beforeA.workflows.map(w=>w.id));
+        const candidates=visible.filter(w=>w.name===name&&!before.has(w.id));
+        if(candidates.length===1)createdId=candidates[0].id;
+        if(candidates.length>1)error=Error("staging_ambiguous_created_workflow");
+      }catch{
+        error=Error("staging_ambiguous_save_cleanup_unavailable");
+      }
+    }
+  }
   if(createdId){
     try{
       const deleted=await transport.action(config.jwtA,{action:"delete",workflowId:createdId});
