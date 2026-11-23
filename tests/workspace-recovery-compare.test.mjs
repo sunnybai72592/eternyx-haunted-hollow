@@ -48,9 +48,10 @@ function fakeClient(rows, fail=false) {
         async range(start,end) {
           calls.push({table,scope:{...scope},selected,start,end});
           if(fail) return {data:null,error:{message:"Connection error"}};
-          return {data:rows[table].filter(row =>
+          const owned=rows[table].filter(row =>
             row.owner_id===scope.owner_id && row.project_id===scope.project_id
-          ).slice(start,end+1),error:null};
+          );
+          return {data:owned.slice(start,end+1),error:null,count:owned.length};
         },
       };
       return q;
@@ -72,6 +73,8 @@ test("read-only comparison pages all owner/project rows, never foreign data",asy
   assert.ok(client.calls.every(c=>c.scope.owner_id===owner &&
     c.scope.project_id===project));
   assert.ok(client.calls.every(c=>!c.selected.includes("owner_id")));
+  assert.ok(client.calls.every(c=>c.selected.startsWith("id,")));
+  assert.ok(result.tasks.every(t=>!("id" in t)));
 });
 
 test("failed page does not generate a false success comparison",async()=>{
@@ -79,4 +82,62 @@ test("failed page does not generate a false success comparison",async()=>{
     fakeClient({workspace_tasks:[],workspace_items:[]},true),owner,project),/failed to read/);
   await assert.rejects(fetchWorkspaceRecoveryComparison(
     fakeClient({workspace_tasks:[],workspace_items:[]}),owner,project,501),/authenticated/);
+});
+
+
+test("comparison rejects silent server page truncation instead of fake matches",async()=>{
+  const entries=Array.from({length:5},(_,i)=>({
+    owner_id:owner,project_id:project,...baseTask,id:"task-"+i,
+  }));
+  const client=fakeClient({workspace_tasks:entries,workspace_items:[]});
+  const original=client.from.bind(client);
+  client.from=(table)=>{
+    const query=original(table);
+    const range=query.range.bind(query);
+    query.range=async(start,end)=>{
+      const response=await range(start,end);
+      return { ...response,data:response.data?.slice(0,1) };
+    };
+    return query;
+  };
+  await assert.rejects(fetchWorkspaceRecoveryComparison(client,owner,project,2),
+    /page was truncated/);
+});
+
+test("comparison rejects repeated identity across pages and inconsistent server counts",async()=>{
+  const rows={workspace_tasks:[
+    { owner_id:owner,project_id:project,...baseTask,id:"one" },
+    { owner_id:owner,project_id:project,...baseTask,id:"two" },
+    { owner_id:owner,project_id:project,...baseTask,id:"three" },
+  ],workspace_items:[]};
+  const client=fakeClient(rows);
+  const original=client.from.bind(client);
+  client.from=(table)=>{
+    const q=original(table);
+    const range=q.range.bind(q);
+    q.range=async(start,end)=>{
+      const reply=await range(start,end);
+      if(table==="workspace_tasks" && start===2)
+        return { ...reply,data:[rows.workspace_tasks[0]] };
+      return reply;
+    };
+    return q;
+  };
+  await assert.rejects(fetchWorkspaceRecoveryComparison(client,owner,project,2),
+    /repeated or invalid/);
+
+  const changed=fakeClient(rows);
+  const other=changed.from.bind(changed);
+  changed.from=(table)=>{
+    const q=other(table);
+    const range=q.range.bind(q);
+    q.range=async(start,end)=>{
+      const reply=await range(start,end);
+      if(table==="workspace_tasks" && start>=2) return {...reply,count:4};
+      return reply;
+    };
+    return q;
+  };
+  await assert.rejects(fetchWorkspaceRecoveryComparison(changed,owner,project,2),
+    /changed while reading/);
 });
