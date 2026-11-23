@@ -1,4 +1,4 @@
-import {mkdirSync,lstatSync,openSync,closeSync,writeSync,fsyncSync,readFileSync,unlinkSync,readdirSync,constants} from "node:fs";
+import {mkdirSync,lstatSync,fstatSync,openSync,closeSync,writeSync,fsyncSync,readFileSync,unlinkSync,readdirSync,constants} from "node:fs";
 import {homedir} from "node:os";
 import {join} from "node:path";
 export const labJournalDir=join(homedir(),".eternyx","docker-lab-journal");
@@ -19,15 +19,81 @@ function privateFile(path){
   if(process.platform!=="win32" && ((st.mode&0o077)!==0||st.uid!==process.getuid()))throw Error("Lab journal file must be 0600 and operator-owned.");
   return path;
 }
-function writeDurable(fd,data){writeSync(fd,JSON.stringify({at:new Date().toISOString(),...data})+"\n");fsyncSync(fd);}
+// File fsync alone does not necessarily persist a newly created directory
+// entry. Journal and lock creation must also sync the owning directory.
+function syncJournalDirectory(dir){
+ if(process.platform==="win32")return; // Agent execution requires Linux.
+ const dfd=openSync(dir,constants.O_RDONLY|(constants.O_DIRECTORY||0)|(constants.O_NOFOLLOW||0));
+ try{
+  const st=fstatSync(dfd);
+  if(!st.isDirectory()||st.uid!==process.getuid()||(st.mode&0o077)!==0)
+   throw Error("Cannot sync an untrusted signed-agent journal directory.");
+  fsyncSync(dfd);
+ }finally{closeSync(dfd);}
+}
+function writeDurable(fd,data){
+ const bytes=Buffer.from(JSON.stringify({at:new Date().toISOString(),...data})+"\n");
+ if(writeSync(fd,bytes)!==bytes.length)
+  throw Error("Short durable signed-agent journal write; evidence requires manual review.");
+ fsyncSync(fd);
+ return bytes;
+}
+function assertSameFile(before,after){
+ if(!after.isFile()||after.isSymbolicLink()||
+    before.dev!==after.dev||before.ino!==after.ino||
+    before.size!==after.size||before.mtimeMs!==after.mtimeMs||
+    before.ctimeMs!==after.ctimeMs||
+    (process.platform!=="win32"&&
+      (after.uid!==process.getuid()||(after.mode&0o077)!==0)))
+  throw Error("Signed-agent journal file identity or bytes changed.");
+}
+function safeJournalRead(path){
+ privateFile(path);
+ const before=lstatSync(path);
+ if(before.size<1)throw Error("Empty or incomplete signed-agent journal.");
+ const fd=openSync(path,constants.O_RDONLY|(constants.O_NOFOLLOW||0)|(constants.O_NONBLOCK||0));
+ try{
+  assertSameFile(before,fstatSync(fd));
+  const raw=readFileSync(fd);
+  assertSameFile(before,fstatSync(fd));
+  assertSameFile(before,lstatSync(path));
+  if(raw.length!==before.size||raw.length>16384)
+   throw Error("Signed-agent journal changed during read.");
+  return raw.toString("utf8");
+ }finally{closeSync(fd);}
+}
 export function lockLabAgent(agentId,dir=labJournalDir){
   if(!UUID.test(agentId||""))throw Error("Invalid lab agent identity.");
-  const path=join(directory(dir),"agent-"+agentId.toLowerCase()+".lock");
+  const owner=agentId.toLowerCase();
+  const path=join(directory(dir),"agent-"+owner+".lock");
   // No automatic stale-lock clearing: an interrupted process requires human review.
   const fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|(constants.O_NOFOLLOW||0),0o600);
-  try{writeDurable(fd,{event:"active",agentId});}finally{closeSync(fd);}
+  let bytes;
+  try{bytes=writeDurable(fd,{event:"active",agentId:owner});}finally{closeSync(fd);}
+  syncJournalDirectory(dir);
+  const original=lstatSync(privateFile(path));
+  if(!original.isFile()||original.size!==bytes.length)
+   throw Error("Signed-agent lock creation is not durably verifiable.");
   let released=false;
-  return ()=>{if(released)return;privateFile(path);unlinkSync(path);released=true;};
+  return ()=>{
+   if(released)return;
+   // Validate exact original lock, not a replacement at the same pathname.
+   // This is invoked only by the agent's existing explicit recovery-lock policy.
+   privateFile(path);
+   const before=lstatSync(path);
+   assertSameFile(original,before);
+   const reader=openSync(path,constants.O_RDONLY|(constants.O_NOFOLLOW||0)|(constants.O_NONBLOCK||0));
+   try{
+    assertSameFile(original,fstatSync(reader));
+    if(!readFileSync(reader).equals(bytes))
+     throw Error("Original signed-agent lock bytes changed; keep manual hold.");
+    assertSameFile(original,fstatSync(reader));
+    assertSameFile(original,lstatSync(path));
+   }finally{closeSync(reader);}
+   unlinkSync(path);
+   syncJournalDirectory(dir);
+   released=true;
+  };
 }
 export function reserveLabClaim({agentId,claimId,operation,containerId},dir=labJournalDir){
   if(!UUID.test(agentId||"")||!UUID.test(claimId||"")||!ACTIONS.has(operation)||!FULL.test(containerId||""))throw Error("Invalid lab claim.");
@@ -35,12 +101,15 @@ export function reserveLabClaim({agentId,claimId,operation,containerId},dir=labJ
   const fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|(constants.O_NOFOLLOW||0),0o600);
   try{writeDurable(fd,{event:"reserved",agentId:agentId.toLowerCase(),claimId:claimId.toLowerCase(),operation,containerId});}
   finally{closeSync(fd);}
+  // Reserve is NOT durable until the filename itself is synced as well.
+  // Any error leaves the new file untouched and the agent/container locked.
+  syncJournalDirectory(dir);
   return path;
 }
 export function readLabClaim(claimId,dir=labJournalDir){
   if(!UUID.test(claimId||""))throw Error("Invalid lab claim ID.");
-  const path=privateFile(join(directory(dir),"claim-"+claimId.toLowerCase()+".jsonl"));
-  const raw=readFileSync(path,"utf8");
+  const path=join(directory(dir),"claim-"+claimId.toLowerCase()+".jsonl");
+  const raw=safeJournalRead(path);
   const lines=raw.trim().split("\n");
   if(!raw.endsWith("\n")||lines.length>8)throw Error("Invalid journal length or incomplete write.");
   let entries;
@@ -91,8 +160,14 @@ export function appendLabEvent(claimId,event,dir=labJournalDir){
   if(event==="receipt_accepted"&&!current.outcome)throw Error("No outcome to acknowledge.");
   if(!["attempted","completed","failed","guard_denied","receipt_accepted"].includes(event))throw Error("Invalid lab journal event.");
   const path=privateFile(join(directory(dir),"claim-"+claimId.toLowerCase()+".jsonl"));
+  const before=lstatSync(path);
   const fd=openSync(path,constants.O_WRONLY|constants.O_APPEND|(constants.O_NOFOLLOW||0));
-  try{writeDurable(fd,{event});}finally{closeSync(fd);}
+  try{
+   assertSameFile(before,fstatSync(fd));
+   if(before.size+Buffer.byteLength(JSON.stringify({at:new Date().toISOString(),event})+"\n")>16384)
+    throw Error("Signed-agent journal would exceed its strict length cap.");
+   writeDurable(fd,{event});
+  }finally{closeSync(fd);}
   return readLabClaim(claimId,dir);
 }
 export function listLabClaims(dir=labJournalDir){
