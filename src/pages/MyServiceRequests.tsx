@@ -327,7 +327,7 @@ export default function MyServiceRequests() {
         'LATEST CUSTOMER UPDATE', item.client_update || 'No update yet',
         '',
         'This is an enquiry record, not a quote, contract or proof of delivery.',
-      ].join('\\n');
+      ].join('\n');
       if (useAuthStore.getState().user?.id !== userId) return;
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const objectUrl = URL.createObjectURL(blob);
