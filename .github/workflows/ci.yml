@@ -33,7 +33,7 @@ jobs:
         run: node scripts/automation-runtime-readiness.mjs --source-check
       - name: Inventory Workspace release-critical SQL, smoke tests, and CI wiring (offline only)
         run: node scripts/workspace-release-readiness.mjs --source-check
-      - name: Build guarded offline Automation staging rollout manifest
+      - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Check utility JavaScript syntax
         run: |
