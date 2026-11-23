@@ -1,8 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Download, FileWarning, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { normalizeDeveloperProject } from "@/lib/developerProjectLab.mjs";
+import {
+  DEVELOPER_RELEASE_PLAN_STORAGE_KEY, runDeveloperCombinedReleaseReview,
+  exportDeveloperReleaseEvidencePack,
+} from "@/lib/developerProjectReleaseIntegration.mjs";
 import { developerLinePosition } from "@/lib/developerLocalWorkflows.mjs";
 import {
   runDeveloperLocalReleaseHandoff, exportDeveloperLocalReleaseHandoff,
@@ -10,6 +14,7 @@ import {
 
 type Project = ReturnType<typeof normalizeDeveloperProject>;
 type Report = Awaited<ReturnType<typeof runDeveloperLocalReleaseHandoff>>;
+type SavedPlanReport = Awaited<ReturnType<typeof runDeveloperCombinedReleaseReview>>["savedPlan"];
 type JumpTarget = { file: string; index: number; length: number; line?: number; column?: number };
 
 const CHECK_LABELS: Record<string, string> = {
@@ -39,13 +44,34 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
   onJump: (target: JumpTarget) => void;
 }) {
   const [running, setRunning] = useState(false);
-  const [lastRun, setLastRun] = useState<{ signature: string; report: Report } | null>(null);
+  const [lastRun, setLastRun] = useState<{ signature: string; report: Report; savedPlan?: SavedPlanReport; planRaw?: string } | null>(null);
+  const [planVersion, setPlanVersion] = useState(0);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
   const [issuesOnly, setIssuesOnly] = useState(true);
   const signature = useMemo(() => JSON.stringify([project.id, project.name, project.files, baseline ? [baseline.id, baseline.name, baseline.files] : null]),
     [project.id, project.name, project.files, baseline]);
+  useEffect(() => {
+    const bump = () => setPlanVersion(count => count + 1);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === DEVELOPER_RELEASE_PLAN_STORAGE_KEY || event.key === null) bump();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", bump);
+    window.addEventListener("eternyx:developer-tests-saved", bump);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", bump);
+      window.removeEventListener("eternyx:developer-tests-saved", bump);
+    };
+  }, []);
   const report = lastRun?.report ?? null;
   const stale = Boolean(lastRun && lastRun.signature !== signature);
+  const planStale = useMemo(() => {
+    if (!lastRun?.savedPlan) return false;
+    try { return localStorage.getItem(DEVELOPER_RELEASE_PLAN_STORAGE_KEY) !== lastRun.planRaw; }
+    catch { return true; }
+  }, [lastRun, planVersion]);
+  const combinedStale = stale || planStale;
   const tell = (message: string, error = false) => setFeedback({ message, error });
 
   const run = async () => {
@@ -62,6 +88,45 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
       setLastRun(null);
       tell("Local release review could not complete. No release evidence was recorded.", true);
     } finally { setRunning(false); }
+  };
+
+  const runSavedPlan = async () => {
+    if (running) return;
+    setRunning(true);
+    const startedSignature = signature;
+    try {
+      const raw = localStorage.getItem(DEVELOPER_RELEASE_PLAN_STORAGE_KEY) || "[]";
+      const next = await runDeveloperCombinedReleaseReview(project, raw, baseline);
+      // Reject a plan modified during the asynchronous parser/preflight.
+      if (localStorage.getItem(DEVELOPER_RELEASE_PLAN_STORAGE_KEY) !== raw) {
+        throw new Error("Saved plan changed during the review. Run it again.");
+      }
+      setLastRun({ signature: startedSignature, report: next.local, savedPlan: next.savedPlan, planRaw: raw });
+      tell(next.savedPlan.status === "passed"
+        ? "Saved project plan executed. Review coverage and the independent local release checks below."
+        : "Saved test plan or changed-file coverage requires review. Remote release remains on hold.");
+    } catch (cause) {
+      setLastRun(null);
+      tell(cause instanceof Error ? cause.message : "Saved plan review could not complete.", true);
+    } finally { setRunning(false); }
+  };
+
+  const exportCombined = () => {
+    if (!lastRun?.savedPlan || running || combinedStale) {
+      tell("Rerun both checks against current source, baseline and saved test plan before exporting.", true);
+      return;
+    }
+    try {
+      if (localStorage.getItem(DEVELOPER_RELEASE_PLAN_STORAGE_KEY) !== lastRun.planRaw) {
+        tell("Saved test plan changed. Combined evidence is stale.", true);
+        setPlanVersion(count => count + 1);
+        return;
+      }
+      download(exportDeveloperReleaseEvidencePack(lastRun.report, lastRun.savedPlan));
+      tell("Exported a filename-free local evidence pack. Staging, backend and production remain NOT VERIFIED.");
+    } catch {
+      tell("Could not export the combined evidence pack. Rerun both local checks.", true);
+    }
   };
 
   const exportReport = () => {
@@ -97,8 +162,18 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
         <Button type="button" size="sm" variant="outline" disabled={!report || stale || running} onClick={exportReport}>
           <Download className="mr-2 h-4 w-4"/>Export redacted handoff
         </Button>
+        <Button type="button" size="sm" variant="outline" disabled={running} onClick={() => void runSavedPlan()}>
+          <CheckCircle2 className="mr-2 h-4 w-4"/>{running ? "Reviewing local files…" : "Run with saved test plan"}
+        </Button>
+        <Button type="button" size="sm" variant="outline"
+          disabled={!lastRun?.savedPlan || combinedStale || running} onClick={exportCombined}>
+          <Download className="mr-2 h-4 w-4"/>Export combined local evidence
+        </Button>
         {stale && <span role="status" className="text-xs text-amber-200">
           Project or baseline changed. Release review is stale; rerun required.
+        </span>}
+        {planStale && <span role="status" className="text-xs text-amber-200">
+          Saved test plan changed. Combined evidence is stale; rerun required.
         </span>}
       </div>
       {feedback && <p role={feedback.error ? "alert" : "status"}
@@ -106,8 +181,55 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
       <div className="rounded-md border border-amber-500/30 p-3 text-xs text-amber-100">
         Hosted staging, protected backend and production are <strong>NOT VERIFIED</strong> here.
         The explicit offline review never executes project JavaScript, sends network traffic, deploys,
-        runs the editable custom test suite or changes accounts. Release decision: HOLD.
+        runs the editable custom test suite unless explicitly requested, or changes accounts. Release decision: HOLD.
       </div>
+      {lastRun?.savedPlan && <div className="space-y-3 rounded-lg border border-cyan-700/45 p-3" aria-label="Saved test plan release review">
+        <p className="text-sm font-semibold text-cyan-100">Opt-in saved test plan evidence</p>
+        <p role="status" className={(combinedStale || lastRun.savedPlan.status !== "passed"
+          ? "text-amber-200" : "text-emerald-200") + " text-xs"}>
+          {combinedStale ? "Saved plan evidence is stale; rerun required" :
+            lastRun.savedPlan.status === "passed" ? "Saved plan assertions passed" : "Saved plan requires review"}
+          {" · "}{lastRun.savedPlan.passedAssertions}/{lastRun.savedPlan.assertionCount} assertions passed
+          {" · "}{lastRun.savedPlan.coverage.testedFileCount}/{lastRun.savedPlan.coverage.fileCount} files referenced by the plan
+        </p>
+        <p className="text-xs text-slate-300">
+          {lastRun.savedPlan.coverage.baselineCompared ?
+            lastRun.savedPlan.coverage.uncoveredChangedFileCount + " changed, " +
+            lastRun.savedPlan.coverage.uncoveredAffectedFileCount +
+            " potentially affected, and " + lastRun.savedPlan.coverage.deletedFileCount +
+            " deleted file(s) need coverage review." :
+            "No saved project baseline is loaded; changed-file coverage is unverified."}
+        </p>
+        {lastRun.savedPlan.coverage.baselineCompared &&
+          (lastRun.savedPlan.coverage.uncoveredChangedFileCount > 0 ||
+            lastRun.savedPlan.coverage.uncoveredAffectedFileCount > 0 ||
+            lastRun.savedPlan.coverage.deletedFileCount > 0) &&
+          <p className="break-all text-xs text-amber-200">
+            Review impacted files: {[
+              ...lastRun.savedPlan.coverage.uncoveredChanged,
+              ...lastRun.savedPlan.coverage.uncoveredAffected,
+              ...lastRun.savedPlan.coverage.deleted,
+            ].filter((file, index, files) => files.indexOf(file) === index).join(", ")}
+          </p>}
+        {lastRun.savedPlan.failures.length > 0 && <div className="max-h-48 space-y-2 overflow-auto"
+          aria-label="Saved plan assertion failures">
+          {lastRun.savedPlan.failures.map((item, index) =>
+            <div key={item.file + ":" + item.kind + ":" + index}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-700 p-2">
+              <p className="break-all text-xs text-amber-100">
+                {item.kind} · {item.reason} · {item.file}{item.line > 0 ? " · line " + item.line : ""}
+              </p>
+              {item.line > 0 && project.files.some(file => file.name === item.file) &&
+                <Button type="button" size="sm" variant="outline" disabled={combinedStale}
+                  onClick={() => jumpTo(item.file, item.line)}>Open failed assertion</Button>}
+            </div>)}
+        </div>}
+        <p className="text-xs text-slate-400">
+          This includes only the explicitly saved plan for this project, not unsaved assertions.
+          Passing checks prove neither linked-file runtime loading nor hosted integration.
+          The portable combined report exports counts and built-in check kinds only.
+        </p>
+      </div>}
       {report ? <>
         <p role="status" className={(stale || report.localVerdict !== "local-checks-passed" ?
           "text-amber-200" : "text-emerald-200") + " text-sm font-medium"}>
@@ -157,7 +279,8 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
         Run the review explicitly to create a source-derived snapshot. No report or release status is fabricated on page load.
       </p>}
       <p className="text-xs leading-5 text-slate-500">
-        The local smoke uses exactly two default entry assertions, not your currently edited/saved custom test plan.
+        The default local smoke uses two entry assertions. "Run with saved test plan" separately
+        executes the explicitly saved per-project assertions without mutating the plan.
         Static HTML/CSS and dependency findings are bounded heuristics; imported modules and linked resources
         are not loaded as original statements in this isolated preview. Review the editable custom suite separately.
         Redacted exports contain fixed check IDs, counts and statuses only, never filenames, source, line details or assertion literals.
