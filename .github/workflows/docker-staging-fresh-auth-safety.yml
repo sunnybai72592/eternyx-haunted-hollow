@@ -1,0 +1,52 @@
+name: Docker fresh staging Auth acceptance safeguards (OFFLINE ONLY)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-staging-fresh-auth-safety.yml'
+      - '.github/workflows/docker-staging-fresh-auth-manual.yml'
+      - 'src/lib/dockerFreshStagingAccounts.mjs'
+      - 'src/lib/dockerHostedAuthProbe.mjs'
+      - 'src/lib/dockerStagingAcceptance.mjs'
+      - 'scripts/docker-staging-fresh-auth-acceptance.mjs'
+      - 'tests/docker-fresh-staging-auth.test.mjs'
+      - 'docs/DOCKER_STAGING_FRESH_AUTH.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-staging-safety:
+    name: Offline pinned account identities, Auth session lifetimes and read-only Docker boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Verify existing read-only JWT checks plus new explicit Auth-session integration
+        run: |
+          node --test \
+            tests/docker-staging-acceptance.test.mjs \
+            tests/docker-hosted-auth-probe.test.mjs \
+            tests/docker-fresh-staging-auth.test.mjs
+      - name: Validate importable Auth session provider and runner syntax
+        run: |
+          node --check src/lib/dockerFreshStagingAccounts.mjs
+          node --check src/lib/dockerStagingAcceptance.mjs
+          node --check scripts/docker-staging-fresh-auth-acceptance.mjs
+      - name: Assert no automatic live Auth-session workflow dispatch
+        run: |
+          node -e '
+            const fs=require("fs");
+            const src=fs.readFileSync(".github/workflows/docker-staging-fresh-auth-manual.yml","utf8");
+            if (!src.includes("workflow_dispatch:") || /\n\s+(push|pull_request|schedule):/.test(src) ||
+                !src.includes("confirm_staging_auth_session_creation:") ||
+                !src.includes("environment: docker-staging")) process.exit(1);
+          '
