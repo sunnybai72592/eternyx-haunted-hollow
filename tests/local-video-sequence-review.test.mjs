@@ -195,7 +195,7 @@ test("the new preview is wired to real local timeline sources and jump-to-edit c
   assert.match(component,/onEnded/);
   assert.match(component,/Play sequence/);
   assert.match(component,/Edit shot/);
-  assert.match(component,/previewIsRenderedVideo/===false? /canExport/:/canExport/);
+  assert.match(component,/canExport/);
   assert.match(component,/Browser seeking may not align/);
   assert.doesNotMatch(component,/fetch\(|supabase\.functions\.invoke|enqueueAIJob/);
 });
