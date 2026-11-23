@@ -65,7 +65,6 @@ test("direct worker execution without private IPC and nonce does not create a jo
    encoding:"utf8",timeout:5000
   });
   assert.notEqual(p.status,0);
-  assert.deepEqual((awaitDir=>awaitDir)([]),[]);
   assert.ok(!existsSync(join(root,"claim-44444444-4444-4444-8444-444444444444.jsonl")));
  }finally{rmSync(root,{recursive:true,force:true});}
 });
