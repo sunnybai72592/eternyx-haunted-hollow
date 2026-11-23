@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Download, FilePlus2, FolderOpen, Play, RotateCcw, Save, ShieldCheck, Trash2, Upload, WandSparkles, FileJson, FileCheck2, Files, ListFilter, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -219,7 +219,7 @@ export default function DeveloperProjectLab() {
   const trackCursor = (target: HTMLTextAreaElement) => {
     setCursor(editorCursorInfo(target.value, target.selectionStart, target.selectionEnd));
   };
-  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Tab") return;
     event.preventDefault();
     const target = event.currentTarget;
