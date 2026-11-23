@@ -123,7 +123,7 @@ test('Phase37 disposable runner asserts an initial safe role and five deliberate
  assert.match(sql,/GRANT USAGE ON SEQUENCE public\.services_phase37_disposable_seq/);
  assert.match(sql,/DROP SEQUENCE public\.services_phase37_disposable_seq/);
  assert.match(sql,/DROP ROLE services_staging_auditor/);
- assert.match(sql,/check.*never production/gi);
+ assert.match(sql,/DISPOSABLE container-only synthetic role/);
 });
 
 test('Phase37 CI executes local privilege tests and isolated real PG17 mutation suite, never Supabase',async()=>{
