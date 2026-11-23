@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, CheckCircle2, ClipboardCopy, FolderKanban, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Archive, CheckCircle2, ClipboardCopy, Download, FolderKanban, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
-import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mjs";
+import {
+  workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
+  selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
+} from "@/lib/workspaceTeamTaskOperations.mjs";
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
   assertWorkspaceTeamState,requireWorkspacePreferredTeam,
   verifyWorkspaceTeamCompletePage,isWorkspaceActionCurrent,
+  verifyWorkspaceTeamSpacePage,
 } from "@/lib/workspaceTeamAccess.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -48,6 +52,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [revealedToken,setRevealedToken]=useState<{token:string;role:string;expires:string}|null>(null);
   const [draft,setDraft]=useState<Draft>(freshDraft);
   const [taskFilter,setTaskFilter]=useState("all");
+  const [taskQuery,setTaskQuery]=useState("");
+  const [taskSort,setTaskSort]=useState("updated");
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
   const [verifiedSpaceId,setVerifiedSpaceId]=useState<string|null>(null);
@@ -72,9 +78,12 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const editor=teamCanEdit(currentRole,selected?.status);
   const canInvite=teamCanInvite(currentRole,selected?.status);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
+  const today=workspaceTeamLocalDay(new Date());
+  const taskSummary=useMemo(()=>workspaceTeamTaskSummary(tasks,today),[tasks,today]);
   const visibleTasks=useMemo(
-    ()=>tasks.filter(task=>workspaceTeamTaskMatchesFilter(task,taskFilter,owner)),
-    [tasks,taskFilter,owner]);
+    ()=>selectWorkspaceTeamTasks(tasks,{
+      filter:taskFilter,search:taskQuery,sort:taskSort,owner,today,
+    }),[tasks,taskFilter,taskQuery,taskSort,owner,today]);
   const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
   const assureOwner=async(expectedOwner:string)=>{
@@ -96,13 +105,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setDiscussionTaskId(null);setDraft(freshDraft());setLiveRevision(0);
   };
   const loadSpaces=async(expectedOwner:string,token:number,prefer?:string|null)=>{
-    const {data,error:queryError}=await supabase.from("workspace_team_spaces")
-      .select("*").order("created_at",{ascending:false}).limit(150);
+    const {data,count,error:queryError}=await supabase.from("workspace_team_spaces")
+      .select("*",{count:"exact"}).order("created_at",{ascending:false}).limit(150);
     if(queryError)throw new Error(queryError.message);
     // Data API results cannot be reused after a mid-request Auth change.
     await assureOwner(expectedOwner);
     if(ownerRef.current!==expectedOwner || spacesEpoch.current!==token)return null;
-    const rows=(data??[]) as Space[];
+    const rows=verifyWorkspaceTeamSpacePage(data,count) as Space[];
     // Treat this as one verified server snapshot. It MUST be passed through
     // to details, not silently replaced by a stale React render closure.
     rows.forEach(assertWorkspaceTeamState);
@@ -179,7 +188,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setSpaceListVerified(false);
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
-    setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
+    setDiscussionTaskId(null);setLiveRevision(0);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
     setLoading(true);
@@ -200,7 +210,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
-    setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
+    setDiscussionTaskId(null);setLiveRevision(0);
     if(!selectedId)return;
     setLoading(true);
     void (async()=>{
@@ -337,6 +348,28 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(current())setError(errorMessage(failure));
     }finally{
       if(current()){actionBusyRef.current=false;setBusy(false);}
+    }
+  };
+  const exportTaskView=()=>{
+    if(!selected||!currentRole||verifiedSpaceId!==selected.id||
+      disabled||busy||loading||!spaceListVerified||!visibleTasks.length)return;
+    try {
+      // Export only the currently authorized team's visible, filtered rows.
+      const csv=buildWorkspaceTeamTasksCsv(visibleTasks,owner,selected.id);
+      const objectUrl=URL.createObjectURL(new Blob([csv],{
+        type:"text/csv;charset=utf-8",
+      }));
+      const link=document.createElement("a");
+      link.href=objectUrl;
+      link.download="eternyx-team-tasks-"+today+".csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+      setNotice("Exported "+visibleTasks.length+" visible team tasks to CSV.");
+      setError("");
+    }catch(failure){
+      setError(errorMessage(failure));
     }
   };
   const createTeam=(event:FormEvent)=>{
@@ -593,19 +626,57 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-3">
-        <h4 className="text-sm font-semibold">Shared team tasks ({tasks.length}/500)</h4>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold">Shared team tasks ({taskSummary.total}/500)</h4>
+          <Button size="sm" type="button" variant="outline"
+            disabled={disabled||busy||loading||!currentRole||!visibleTasks.length}
+            onClick={exportTaskView}>
+            <Download className="mr-1 h-3.5 w-3.5"/> Export visible CSV
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"
+          aria-label="Live team task summary">
+          <p className="rounded-md border border-border p-2">Outstanding <strong>{taskSummary.outstanding}</strong></p>
+          <p className="rounded-md border border-border p-2">Overdue <strong>{taskSummary.overdue}</strong></p>
+          <p className="rounded-md border border-border p-2">Next 7 days <strong>{taskSummary.upcoming}</strong></p>
+          <p className="rounded-md border border-border p-2">Completed <strong>{taskSummary.done}</strong></p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1 text-xs">Search team tasks
+            <Input type="search" value={taskQuery} maxLength={120}
+              placeholder="Search title or details" aria-label="Search shared team tasks"
+              onChange={event=>setTaskQuery(event.target.value)}/>
+          </label>
+          <label className="space-y-1 text-xs">Sort tasks
+            <select value={taskSort} aria-label="Sort shared team tasks"
+              onChange={event=>setTaskSort(event.target.value)}
+              className="min-h-10 w-full rounded-md border border-border bg-background px-2">
+              <option value="updated">Recently updated</option>
+              <option value="due">Earliest due first</option>
+              <option value="priority">Highest priority first</option>
+              <option value="title">Title A–Z</option>
+            </select>
+          </label>
+        </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Team task filters">
           {([
             ["all","All"],
             ["mine","Assigned to me"],
             ["unassigned","Unassigned"],
             ["outstanding","Outstanding"],
+            ["overdue","Overdue"],
+            ["upcoming","Next 7 days"],
+            ["done","Completed"],
           ] as const).map(([value,label])=><Button key={value} size="sm" type="button"
             variant={taskFilter===value?"default":"outline"}
             onClick={()=>setTaskFilter(value)}>
             {label}{value==="mine"?" ("+tasks.filter(t=>t.assignee_id===owner).length+")":""}
           </Button>)}
         </div>
+        <p className="text-xs text-muted-foreground" role="status">
+          Showing {visibleTasks.length} of {tasks.length} authorized team tasks.
+          Exports include only these visible, filtered records.
+        </p>
         {editor&&<form className="grid gap-2 sm:grid-cols-2" onSubmit={saveTask}>
           <div className="sm:col-span-2">
             <label htmlFor="team17-task-title" className="text-xs">Task title</label>
@@ -664,6 +735,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                 {" "+(task.assignee_id?teamMemberLabel(task.assignee_id,owner):"Unassigned")} ·
                 {task.due_on?" due "+task.due_on:" no due date"}
               </p>
+              {workspaceTeamTaskDueBucket(task,today)==="overdue"&&
+                <p className="text-xs text-amber-400">Overdue</p>}
             </div>
             <Button size="sm" type="button"
               variant={discussionTaskId===task.id?"default":"outline"}

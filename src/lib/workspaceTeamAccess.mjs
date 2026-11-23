@@ -110,3 +110,18 @@ export function isWorkspaceActionCurrent(expectedOwner,currentOwner,expectedEpoc
     expectedOwner===currentOwner&&Number.isSafeInteger(expectedEpoch)&&
     expectedEpoch>0&&expectedEpoch===currentEpoch;
 }
+
+
+// Phase 32: a 150-row team-directory limit is not a complete membership
+// listing without PostgREST's exact row count. Never invent revocation.
+export function verifyWorkspaceTeamSpacePage(rows,count,limit=150){
+  if(!Array.isArray(rows)||!Number.isSafeInteger(limit)||limit<=0||
+     !Number.isSafeInteger(count)||count<0||count>limit||
+     rows.length!==count||
+     rows.some(row=>!row||typeof row.id!=="string"||!row.id||
+       typeof row.owner_id!=="string"||!row.owner_id||
+       !["active","archived"].includes(row.status))||
+     new Set(rows.map(row=>row.id)).size!==rows.length)
+    throw Error("Workspace team directory incomplete; cannot verify membership");
+  return rows;
+}
