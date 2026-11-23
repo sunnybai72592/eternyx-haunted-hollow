@@ -51,6 +51,7 @@ export default function ServiceDeskReadiness({
   const [results, setResults] = useState<CheckResult[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const visibleResults = viewerId && resultsKey === viewerKey ? results : [];
   const completed = !!viewerId && resultsKey === viewerKey;
   const passed = visibleResults.filter((item) => item.available).length;
@@ -65,6 +66,7 @@ export default function ServiceDeskReadiness({
     setResultsKey(null);
     setCheckedAt(null);
     setError('');
+    setNotice('');
     return () => {
       requestVersion.current++;
       controllerRef.current?.abort();
@@ -84,6 +86,7 @@ export default function ServiceDeskReadiness({
 
     setRunning(true);
     setError('');
+    setNotice('');
     setResultsKey(null);
     setResults([]);
     setCheckedAt(null);
@@ -188,11 +191,33 @@ export default function ServiceDeskReadiness({
     } finally {
       window.clearTimeout(timeoutId);
       if (seq === requestVersion.current && viewerKeyRef.current === viewerKey) {
+        if (controller.signal.aborted) setError('The availability checks timed out; no successful readiness result was claimed.');
         controllerRef.current = null;
         setRunning(false);
       }
     }
   }, [viewerId, viewerKey, mode, running]);
+
+  const copySummary = async () => {
+    if (!completed || !viewerId || !checkedAt) return;
+    const safeLines = [
+      'ETERNYX SERVICES — READ-ONLY AVAILABILITY SUMMARY',
+      'Mode: ' + mode,
+      'Checked (device time): ' + checkedAt,
+      'Query responses: ' + passed + '/' + visibleResults.length,
+      'These are query results, NOT proof of RLS isolation or database migration state.',
+      ...visibleResults.map((item) => item.title + ': ' + (item.available ? 'Queryable' : 'Unavailable') +
+        (item.reason ? ' — ' + item.reason : '')),
+    ];
+    try {
+      await navigator.clipboard.writeText(safeLines.join('\\n'));
+      if (viewerKeyRef.current === viewerKey) {
+        setNotice('Availability summary copied without account IDs, query contents or secrets.');
+      }
+    } catch {
+      if (viewerKeyRef.current === viewerKey) setNotice('Copy was blocked. You can review the results here instead.');
+    }
+  };
 
   return (
     <section aria-label="Service feature availability" className="mb-6 rounded-xl border border-border bg-card/30 p-4">
@@ -224,6 +249,11 @@ export default function ServiceDeskReadiness({
           </div>
           {!viewerId && <p className="mt-3 text-xs text-muted-foreground">Sign in before checking private Services data.</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+          {completed && <Button type="button" size="sm" variant="outline"
+            onClick={() => void copySummary()} disabled={running}>
+            Copy safe summary
+          </Button>}
+          {notice && <p role="status" className="mt-3 text-xs text-muted-foreground">{notice}</p>}
           {completed && checkedAt && (
             <p className="mt-3 text-xs text-muted-foreground">
               Checked at {new Date(checkedAt).toLocaleString()} (device time). This is a point-in-time API check, not an RLS audit or production uptime guarantee.
