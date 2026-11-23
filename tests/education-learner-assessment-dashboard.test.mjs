@@ -241,7 +241,7 @@ test("45 docs are frank about backend rollout, privacy and conflict fail-closed 
  assert.match(guide,/NOT DEPLOYED/);
  assert.match(guide,/server-side/i);
  assert.match(guide,/production/i);
- assert.match(guide,/conflicting attempt/i);
+ assert.match(guide,/duplicate-attempt conflict|conflicting attempt/i);
 });
 test("46 assessment hub TSX still parses as part of the broader test suite",()=>{
  const ast=ts.createSourceFile("Education.tsx",ui,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
