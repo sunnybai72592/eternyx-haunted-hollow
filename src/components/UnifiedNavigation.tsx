@@ -160,7 +160,7 @@ export const UnifiedNavigation = ({ className = '' }: NavigationProps) => {
       maxXp: 18000,
       unlocked: true,
       children: [
-        { name: 'Cyber Arsenal', path: '/arsenal', description: 'Advanced hacking toolkit' },
+        { name: 'Cybersecurity Hub', path: '/cybersecurity', description: 'Verified security workbenches and scoped assessment' },
         { name: 'Network Scanner', path: '/tools/network-scanner', description: 'Deep network analysis' },
         { name: 'Code Analyzer', path: '/tools/code-analyzer', description: 'Static code security' },
         { name: 'Exploit Framework', path: '/tools/exploit-framework', description: 'Penetration testing suite' }

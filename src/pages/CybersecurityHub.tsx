@@ -17,6 +17,8 @@ type Destination = {
   icon: React.ComponentType<{ className?: string }>;
   category: string;
   kind: "Workbench" | "Learning";
+  mode: "Local review" | "Provider-backed" | "Account workspace" | "Limited telemetry" | "Local lab" | "Deployment-gated" | "Learning resources";
+  limitation: string;
 };
 
 const domains = [
@@ -84,6 +86,8 @@ const destinations: Destination[] = [
     icon: Bug,
     category: "Security intelligence",
     kind: "Workbench",
+    mode: "Provider-backed",
+    limitation: "NVD research requires a working authenticated backend; it does not inspect a live target.",
   },
   {
     name: "Black Hat Pentesting",
@@ -92,6 +96,8 @@ const destinations: Destination[] = [
     icon: Crosshair,
     category: "Authorized offensive security",
     kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "Sign-in required. Engagement metadata and evidence are recorded; active tests require separate authorization.",
   },
   {
     name: "Web application security readiness",
@@ -100,6 +106,8 @@ const destinations: Destination[] = [
     icon: ShieldCheck,
     category: "Application security",
     kind: "Workbench",
+    mode: "Local review",
+    limitation: "Offline analysis of pasted configuration only; no live request, crawler, or exploit test.",
   },
   {
     name: "STRIDE threat modeling",
@@ -108,6 +116,8 @@ const destinations: Destination[] = [
     icon: Workflow,
     category: "Architecture security",
     kind: "Workbench",
+    mode: "Local review",
+    limitation: "Local STRIDE model and export; not a discovered or verified deployment weakness.",
   },
   {
     name: "Assessment & remediation",
@@ -116,6 +126,8 @@ const destinations: Destination[] = [
     icon: FileCheck2,
     category: "Security governance",
     kind: "Workbench",
+    mode: "Local review",
+    limitation: "Local findings register and export; it is not an automatic scanner or shared persistent case system.",
   },
   {
     name: "AWS IAM policy review",
@@ -124,6 +136,8 @@ const destinations: Destination[] = [
     icon: LockKeyhole,
     category: "Cloud security",
     kind: "Workbench",
+    mode: "Local review",
+    limitation: "Analyzes pasted policies offline; does not access an AWS account or verify effective permissions.",
   },
   {
     name: "Incident response playbooks",
@@ -132,6 +146,8 @@ const destinations: Destination[] = [
     icon: Siren,
     category: "Security operations",
     kind: "Workbench",
+    mode: "Local review",
+    limitation: "Manual coordination and local report export; no automatic containment or live incident feed.",
   },
   {
     name: "Platform security events",
@@ -140,14 +156,18 @@ const destinations: Destination[] = [
     icon: Activity,
     category: "Platform monitoring",
     kind: "Workbench",
+    mode: "Limited telemetry",
+    limitation: "Only selected ETERNYX authorization events may be stored; administrator access is restricted.",
   },
   {
     name: "ETERNYX Labs",
-    description: "Five functional browser-based practices for web development, XSS, headers, SQL parameterization, and access control.",
+    description: "Ten browser-based development and security workstations, including XSS, headers, SQL parameterization, and access-control exercises.",
     href: "/labs",
     icon: BookOpen,
     category: "Hands-on learning",
     kind: "Learning",
+    mode: "Local lab",
+    limitation: "Browser workstations run locally; they do not expose a live remote vulnerable service.",
   },
   {
     name: "Security knowledge hub",
@@ -156,11 +176,124 @@ const destinations: Destination[] = [
     icon: BookOpen,
     category: "Learning",
     kind: "Learning",
+    mode: "Learning resources",
+    limitation: "Educational content, not operational detection or certification.",
+  },
+  {
+    name: "API security configuration review",
+    description: "Analyze pasted OpenAPI 3.x, CORS, JWT, headers and authorization settings with exportable findings.",
+    href: "/developer-studio/api-security",
+    icon: Globe2,
+    category: "API security",
+    kind: "Workbench",
+    mode: "Local review",
+    limitation: "Offline review of supplied JSON/configuration; no API traffic or credential testing.",
+  },
+  {
+    name: "CI/CD pipeline security review",
+    description: "Review workflow configuration for unsafe permissions and supply-chain practices.",
+    href: "/developer-studio/cicd-security",
+    icon: Workflow,
+    category: "DevSecOps",
+    kind: "Workbench",
+    mode: "Local review",
+    limitation: "Static analysis of pasted CI workflows; does not execute pipelines or access repositories.",
+  },
+  {
+    name: "PostgreSQL RLS policy review",
+    description: "Review supplied SQL policies for likely row-level security gaps and export a report.",
+    href: "/developer-studio/rls-security",
+    icon: LockKeyhole,
+    category: "Database security",
+    kind: "Workbench",
+    mode: "Local review",
+    limitation: "Offline SQL heuristics, not a live database RLS or tenant-isolation test.",
+  },
+  {
+    name: "Zero-day response checklist",
+    description: "Prepare patching, containment, visibility, and recovery procedures.",
+    href: "/zero-day-protection",
+    icon: ShieldAlert,
+    category: "Security readiness",
+    kind: "Workbench",
+    mode: "Local review",
+    limitation: "Manual checklist only; no live zero-day protection or detection.",
+  },
+  {
+    name: "Local AES encryption utility",
+    description: "Encrypt and decrypt text locally in the browser using AES-256-GCM.",
+    href: "/quantum-encryption",
+    icon: KeyRound,
+    category: "Cryptography",
+    kind: "Workbench",
+    mode: "Local review",
+    limitation: "Historical route name: classical local encryption, not quantum or post-quantum cryptography.",
+  },
+  {
+    name: "AI security question assistant",
+    description: "Ask defensive security questions through the access-controlled backend assistant.",
+    href: "/ai-powered-security",
+    icon: Shield,
+    category: "Security guidance",
+    kind: "Workbench",
+    mode: "Provider-backed",
+    limitation: "Backend configuration required; not a malware scanner, live threat detector, or SOC.",
+  },
+  {
+    name: "Server-verified CTF casefiles",
+    description: "Practice forensic challenges with authenticated server-side flag verification.",
+    href: "/labs/verified",
+    icon: Fingerprint,
+    category: "Hands-on learning",
+    kind: "Learning",
+    mode: "Provider-backed",
+    limitation: "Sign-in and deployed CTF backend required; this is not an internet-exposed vulnerable target.",
+  },
+  {
+    name: "Local HTTP cyber range",
+    description: "Explore isolated, intentional vulnerabilities using an opt-in local Docker runtime.",
+    href: "/labs/range",
+    icon: Network,
+    category: "Hands-on learning",
+    kind: "Learning",
+    mode: "Local lab",
+    limitation: "Requires local Docker and supervised opt-in; no public hosted attack range.",
+  },
+  {
+    name: "Hosted range session readiness",
+    description: "Inspect authenticated cyber-range reservations and provider readiness.",
+    href: "/labs/sessions",
+    icon: LockKeyhole,
+    category: "Range operations",
+    kind: "Workbench",
+    mode: "Deployment-gated",
+    limitation: "Public hosted session start/access remains disabled until independently approved and deployed.",
+  },
+  {
+    name: "Authenticated DNS analysis",
+    description: "Inspect DNS records with the existing backend analyzer and its stated coverage limits.",
+    href: "/cybersecurity/dns",
+    icon: Radar,
+    category: "Domain security",
+    kind: "Workbench",
+    mode: "Provider-backed",
+    limitation: "Sign-in and a deployed DNS Edge Function required; reports do not prove domain security.",
   },
 ];
 
+
+const journey = [
+  { number: "01", title: "Research the exposure", href: "/vulnerability-scanner", detail: "Review published CVE evidence; do not mistake a public record for a confirmed target vulnerability." },
+  { number: "02", title: "Document the threat", href: "/cybersecurity/threat-modeling", detail: "Map the relevant assets, trust boundaries, and hypotheses before testing." },
+  { number: "03", title: "Authorize the engagement", href: "/black-hat-pentesting", detail: "Record ownership, written scope, permitted methods, and evidence in your private engagement." },
+  { number: "04", title: "Record remediation", href: "/cybersecurity/assessment-remediation", detail: "Register verified findings, assign an owner, and export a report for retest." },
+] as const;
+
+const modes = ["All execution types", "Local review", "Provider-backed", "Account workspace", "Limited telemetry", "Local lab", "Deployment-gated", "Learning resources"] as const;
+
 const CybersecurityHub = () => {
   const [query, setQuery] = useState("");
+  const [modeFilter, setModeFilter] = useState<(typeof modes)[number]>("All execution types");
   const normalizedQuery = query.trim().toLowerCase();
 
   const filteredDomains = useMemo(
@@ -172,10 +305,11 @@ const CybersecurityHub = () => {
 
   const filteredDestinations = useMemo(
     () => destinations.filter((destination) =>
-      [destination.name, destination.description, destination.category, destination.kind]
+      (modeFilter === "All execution types" || destination.mode === modeFilter) &&
+      [destination.name, destination.description, destination.category, destination.kind, destination.mode, destination.limitation]
         .join(" ").toLowerCase().includes(normalizedQuery),
     ),
-    [normalizedQuery],
+    [normalizedQuery, modeFilter],
   );
 
   return (
@@ -323,7 +457,13 @@ const CybersecurityHub = () => {
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Security workbenches</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">Focused tools and workflows with clearly defined purposes.</p>
             </div>
-            <span className="text-xs text-slate-500">{filteredDestinations.length} destinations</span>
+            <div className="flex flex-col gap-1.5 sm:items-end">
+              <label htmlFor="cyber-execution-filter" className="text-xs text-slate-400">Filter by execution type</label>
+              <select id="cyber-execution-filter" aria-label="Filter security workbenches by execution type" value={modeFilter} onChange={(event) => setModeFilter(event.target.value as (typeof modes)[number])} className="h-10 rounded-lg border border-white/15 bg-card px-3 text-sm text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                {modes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+              </select>
+              <span className="text-xs text-slate-500">{filteredDestinations.length} of {destinations.length} destinations</span>
+            </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -337,10 +477,14 @@ const CybersecurityHub = () => {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className="rounded-xl border border-violet-300/15 bg-violet-300/[0.08] p-2.5 text-violet-200"><Icon className="h-5 w-5" /></span>
-                    <Badge variant="outline" className="border-white/10 text-[10px] font-medium text-slate-400">{destination.kind}</Badge>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <Badge variant="outline" className="border-white/10 text-[10px] font-medium text-slate-400">{destination.kind}</Badge>
+                      <Badge variant="outline" className={destination.mode === "Deployment-gated" ? "border-amber-300/30 text-amber-200" : "border-cyan-300/20 text-cyan-200"}>{destination.mode}</Badge>
+                    </div>
                   </div>
                   <h3 className="mt-4 font-semibold text-white">{destination.name}</h3>
                   <p className="mt-2 flex-1 text-xs leading-5 text-slate-400">{destination.description}</p>
+                  <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-5 text-amber-100/80">{destination.limitation}</p>
                   <div className="mt-4 flex items-center justify-between text-[11px] text-slate-500">
                     <span>{destination.category}</span>
                     <ArrowRight className="h-4 w-4 text-cyan-300 transition-transform group-hover:translate-x-1" />
@@ -350,9 +494,26 @@ const CybersecurityHub = () => {
             })}
             {filteredDestinations.length === 0 && (
               <div className="col-span-full rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-400">
-                No workbenches match “{query}”. Try a different search.
+                No workbenches match the current search and execution filter. Clear the search or select another execution type.
               </div>
             )}
+          </div>
+        </section>
+
+        <section aria-labelledby="cyber-journey-heading" className="space-y-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Connected workflow</p>
+            <h2 id="cyber-journey-heading" className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">From evidence to remediation</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">A guided route across existing workbenches. These tools do not automatically share a completed case or run unauthorized tests; transfer verified evidence deliberately.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {journey.map((step) => (
+              <Link key={step.number} to={step.href} className="group rounded-2xl border border-cyan-300/15 bg-card/80 p-5 transition-colors hover:border-cyan-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                <div className="flex items-center justify-between text-xs font-bold text-cyan-200"><span>{step.number} / STEP</span><ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
+                <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
+                <p className="mt-2 text-xs leading-5 text-slate-400">{step.detail}</p>
+              </Link>
+            ))}
           </div>
         </section>
 

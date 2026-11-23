@@ -111,7 +111,6 @@ const VulnerabilityScanner = lazy(() => import("./pages/VulnerabilityScanner"));
 
 
 // Enhanced platform pages
-const CyberArsenal = lazy(() => import("./pages/enhanced/CyberArsenal"));
 const SubscriptionHub = lazy(() => import("./pages/enhanced/SubscriptionHub"));
 const KnowledgeHub = lazy(() => import("./pages/enhanced/KnowledgeHub"));
 
@@ -269,7 +268,7 @@ const AppContent = () => {
                         <Route path="/integrations/docker-enrollment" element={<RequireAuth><DockerEnrollment /></RequireAuth>} />
                         <Route path="/integrations/docker-control" element={<RequireAuth><DockerControlReview /></RequireAuth>} />
                         <Route path="/automation" element={<EcosystemPillarPage pillarId="automation" />} />
-                        <Route path="/arsenal" element={<CyberArsenal />} />
+                        <Route path="/arsenal" element={<Navigate to="/cybersecurity" replace />} />
                         <Route path="/subscriptions" element={<SubscriptionHub />} />
                         <Route path="/knowledge" element={<KnowledgeHub />} />
                         <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
