@@ -27,7 +27,7 @@ This PR adds a deterministic integrity layer for *the actual returned answer dat
 
 ## Security and limitations
 
-**Server-side RLS, authentication, examination ownership, final grade ledger validation and deadline enforcement remain authoritative.** Frontend membership validation is defense in depth. The UI does not add an instructor privilege or perform a cross-user lookup.
+**Authoritative server-side RLS, authentication, examination ownership, final grade ledger validation and deadline enforcement remain required.** Frontend membership validation is defense in depth. The UI does not add an instructor privilege or perform a cross-user lookup.
 
 The joined `questions` record might be hidden by existing RLS. **Restricted does not automatically mean missing or incorrect**; the client simply cannot independently attest to its membership. The relevant answer can be displayed for the owner to examine, but the file exports are paused. This is intentionally stricter than the previous behavior.
 
