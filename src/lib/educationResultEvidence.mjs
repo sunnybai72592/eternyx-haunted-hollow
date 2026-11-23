@@ -65,15 +65,17 @@ export function normalizeEducationResultEvidence(rows,testId,revealGrades=false)
       correct=answer.is_correct??null;
       awarded=answer.points_awarded??null;
     }
-    const visibleAnswer=typeof written==="string"&&written.length>0?written:
-      selected?"Selected option recorded":"No answer";
+    const responseKind=typeof written==="string"&&written.length>0
+      ?"written":selected?"choice":"blank";
+    const visibleAnswer=responseKind==="written"?written:
+      responseKind==="choice"?"Selected option recorded":"No answer";
     return Object.freeze({
       id:answer.question_id,
       question_text:known?prompt:"Question metadata restricted",
       points:known?question.points:null,
       is_correct:correct,points_awarded:awarded,
       user_answer:visibleAnswer,response_number:index+1,
-      metadata_available:known,
+      response_kind:responseKind,metadata_available:known,
     });
   });
 }
@@ -91,9 +93,10 @@ export function summarizeEducationResultEvidence(rows){
       throw new Error("Invalid result evidence row.");
     if(row.metadata_available)counts.verifiedQuestionMetadata++;
     else counts.restrictedQuestionMetadata++;
-    if(row.user_answer==="Selected option recorded")counts.selectedOptions++;
-    else if(row.user_answer==="No answer")counts.blankResponses++;
-    else counts.writtenResponses++;
+    if(row.response_kind==="choice")counts.selectedOptions++;
+    else if(row.response_kind==="blank")counts.blankResponses++;
+    else if(row.response_kind==="written")counts.writtenResponses++;
+    else throw new Error("Invalid stored answer presentation type.");
   }
   return Object.freeze(counts);
 }
@@ -122,7 +125,8 @@ export function buildEducationVisibleResultCsv({
      typeof scope!=="string"||scope.length>160||
      answers.some(row=>!row||!validExamId(row.id)||row.metadata_available!==true||
        !Number.isSafeInteger(row.response_number)||row.response_number<1||
-       typeof row.question_text!=="string"||typeof row.user_answer!=="string"))
+       typeof row.question_text!=="string"||typeof row.user_answer!=="string"||
+       !["written","choice","blank"].includes(row.response_kind)))
     throw new Error("The displayed private answers cannot be safely exported.");
   const numbers=new Set();
   for(const answer of answers){
