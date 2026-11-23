@@ -27,11 +27,11 @@ const cases=[
   ["cookie-weak","4"],
   ["cookie-session","1"],
 ];
-test("exactly forty-five graded practice cases span fifteen tracks and each has three live scenarios",()=>{
-  assert.equal(PRACTICE_TRACKS.length,15);
-  assert.equal(PRACTICE_CASES.length,45);
+test("exactly sixty graded practice cases span twenty tracks and each has three live scenarios",()=>{
+  assert.equal(PRACTICE_TRACKS.length,20);
+  assert.equal(PRACTICE_CASES.length,60);
   assert.deepEqual(PRACTICE_CASES.slice(0,15).map(c=>c.id),cases.map(c=>c[0]));
-  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,45);
+  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,60);
   for(const track of PRACTICE_TRACKS)
     assert.equal(PRACTICE_CASES.filter(c=>c.track===track.id).length,3);
   for(const c of PRACTICE_CASES){
@@ -130,7 +130,7 @@ test("trim and common octal/binary notation are normalized, but malicious and ma
 test("per-track progress is actual unique correct cases, idempotent and never saved",()=>{
   const empty=summarizePracticeProgress();
   assert.deepEqual([empty.passed,empty.total,empty.saved,empty.authenticated,empty.certificateAwarded],
-    [0,45,false,false,false]);
+    [0,60,false,false,false]);
   const duplicate=summarizePracticeProgress([
     "subnet-network","subnet-network","subnet-hosts","cors-wildcard",
   ]);
@@ -153,7 +153,7 @@ test("React challenge practice is accessible, session-only, and based on the gra
   assert.match(page,/LabsPracticeChallenges/);
   assert.match(page,/href="#labs-practice"/);
   assert.match(ui,/id="labs-practice"/);
-  assert.match(ui,/gradePracticeAnswer\(activeId,answer\)/);
+  assert.match(ui,/gradePracticeAnswerAsync\(caseId,submittedAnswer\)/);
   assert.match(ui,/summarizePracticeProgress\(passed\)/);
   assert.match(ui,/role="alert"/);
   assert.match(ui,/aria-live="polite"/);

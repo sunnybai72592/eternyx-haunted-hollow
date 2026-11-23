@@ -537,3 +537,64 @@ accessibility checks should be performed before release.
 Public hosted Labs and paid GPU/cloud/AI infrastructure remain disabled.
 This change launches no Firecracker or Docker instance, introduces no
 credential manager, authenticates no user or email, and scans no host.
+
+
+## Phase 9 — sixty open-book Labs practice challenges, including real Web Crypto grading
+
+Fifteen new interactive questions cover the five identity/network workstations,
+bringing Labs to **60 unique questions across 20 tracks** while preserving
+the 30 functional browser-only workstations and their underlying tools.
+
+1. **OAuth PKCE:** the exact RFC 7636 S256 known vector, a second synthetic
+   verifier-to-challenge calculation and the verifier's character count.
+   PKCE answers are checked using a *real asynchronous Web Crypto SHA-256*
+   digest, never a fabricated string or pre-approved score. Code challenges
+   are Base64url and case-sensitive.
+2. **HMAC-SHA256:** an independently verified canonical hex digest, a
+   tampered-message failure and an unchanged-message verification. Each
+   answer uses the actual Web Crypto sign/verify engine on explicit
+   synthetic learning keys and text; no real webhook or credential is
+   contacted or authenticated.
+3. **IPv4/IPv6 CIDR:** three real containment examples, including the
+   mathematical upper address of an IPv4 /24 and exact 128-bit /48
+   IPv6 inclusion, computed by the production learning calculator.
+   This is not permission to access a host or a firewall/ACL test.
+4. **HSTS:** parse one-year max-age, count zero-duration/subdomain warnings
+   and inspect includeSubDomains, using the existing static HSTS linter.
+5. **DMARC:** count monitoring/rollout/reporting warnings, read a rollout
+   percentage and count aggregate-report destinations while never
+   displaying their mail addresses or querying DNS.
+
+The original synchronous grading API continues serving the earlier
+45 calculator-based cases, preserving existing tests and integrations.
+A new **gradePracticeAnswerAsync** entry point handles every question
+and uses Web Crypto for the six PKCE/HMAC questions. Crypto-unavailable
+browsers receive an explicit error rather than an unverified pass.
+
+The React UI awaits each answer and guards it with a request-generation
+counter. Editing an answer, changing questions or tracks, resetting the
+session or unmounting the page invalidates any pending asynchronous
+answer so stale results **cannot** add credit. Accurate per-track and
+total progress remain **in page memory only**. No durable LMS data,
+certification, account progress, XP, user identity, ranking, API
+credential, database write, external request or paid service is created.
+
+### Release gate
+
+    node --test tests/eternyx-labs-identity-practice.test.mjs
+    node --test tests/eternyx-labs-identity.test.mjs
+    node --test tests/eternyx-labs-practice.test.mjs
+    node --test tests/eternyx-labs-advanced-practice.test.mjs
+    node --test tests/eternyx-labs-five-advanced-practice.test.mjs
+    npm test
+    npm run build
+
+The new suite checks 15 independently derived correct values and
+plausible wrong values, the RFC PKCE known vector, cross-checked HMAC
+signatures, malformed/hostile submissions, no-crypto refusal,
+asynchronous stale-result fencing, unchanged first 45 cases, exact
+60-case progress and the original restricted iframes. Manual keyboard,
+mobile, and screen-reader verification remains necessary before release.
+
+Hosted Labs, Firecracker, local VM dispatch, live security scanning,
+and paid GPU/AI/cloud features remain disabled and unchanged.
