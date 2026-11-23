@@ -40,12 +40,15 @@ def guard_request(route, staging_host, violations):
         violations.append("foreign_supabase_host")
         route.abort()
         return
-    if host == staging_host and method not in ("GET", "HEAD", "OPTIONS"):
+    # Never send unintended writes to ANY host. In addition to the staging
+    # Supabase API, this blocks hidden third-party and preview backend writes.
+    if method not in ("GET", "HEAD", "OPTIONS"):
         path = url.path
-        allowed_auth = method == "POST" and path == "/auth/v1/token"
-        allowed_rpc = method == "POST" and path.startswith("/rest/v1/rpc/") and (
-            path[len("/rest/v1/rpc/"):] in READ_RPCS
-        )
+        allowed_auth = (host == staging_host and
+                        method == "POST" and path == "/auth/v1/token")
+        allowed_rpc = (host == staging_host and method == "POST" and
+                       path.startswith("/rest/v1/rpc/") and
+                       path[len("/rest/v1/rpc/"):] in READ_RPCS)
         if not (allowed_auth or allowed_rpc):
             violations.append("unexpected_remote_write")
             route.abort()
