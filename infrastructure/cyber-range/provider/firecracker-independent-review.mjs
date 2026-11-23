@@ -36,6 +36,9 @@ import {
   createSignedRuntimeAddendum,verifySignedRuntimeAddendum,
   canonicalRuntimeAddendumBytes,
 } from "./firecracker-runtime-addendum.mjs";
+import {
+  publishOfflineEvidence,assertNoOfflineStageResidue,
+} from "./firecracker-offline-atomic-publish.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -338,25 +341,10 @@ export async function signIndependentReviewCase({
   const report=createIndependentReview({
     ...source,...keys,operatorFingerprint,reviewerFingerprint,reviewerAck,
   });
-  const path=join(source.folder,"review-verdict.json");
-  const data=JSON.stringify(report)+"\n";
-  if(Buffer.byteLength(data)>MAX_RECEIPT)
-    throw Error("Oversized offline reviewer endorsement");
-  const file=await open(path,constants.O_WRONLY|constants.O_CREAT|
-    constants.O_EXCL|constants.O_NOFOLLOW,0o600);
-  try{
-    const before=await file.stat();
-    if(!before.isFile()||before.uid!==owner||before.nlink!==1||
-       (before.mode&0o077)!==0||before.size!==0)
-      throw Error("Unsafe offline reviewer verdict file");
-    await file.writeFile(data,"utf8");
-    await file.sync();
-    if((await file.stat()).size!==Buffer.byteLength(data))
-      throw Error("Incomplete offline reviewer verdict");
-  }finally{await file.close();}
-  const directory=await open(source.folder,
-    constants.O_RDONLY|constants.O_DIRECTORY);
-  try{await directory.sync();}finally{await directory.close();}
+  const serialized=Buffer.from(JSON.stringify(report)+"\n","utf8");
+  await publishOfflineEvidence({
+    folder:source.folder,name:"review-verdict.json",data:serialized,owner,
+  });
   return Object.freeze({sessionId,reviewerVerdictRecorded:true,
     productionReady:false});
 }
@@ -411,22 +399,9 @@ export async function signIndependentReviewDisposition({
   const serialized=Buffer.from(JSON.stringify(report)+"\n","utf8");
   if(serialized.length>MAX_RECEIPT)
     throw Error("Offline reviewer disposition unexpectedly oversized");
-  const file=await open(join(source.folder,"review-disposition.json"),
-    constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|
-    constants.O_NOFOLLOW,0o600);
-  try{
-    const created=await file.stat();
-    if(!created.isFile()||created.uid!==owner||created.nlink!==1||
-       (created.mode&0o077)!==0||created.size!==0)
-      throw Error("Unsafe independently signed disposition file");
-    await file.writeFile(serialized);
-    await file.sync();
-    if((await file.stat()).size!==serialized.length)
-      throw Error("Incomplete disposition write");
-  }finally{await file.close();}
-  const folder=await open(source.folder,
-    constants.O_RDONLY|constants.O_DIRECTORY);
-  try{await folder.sync();}finally{await folder.close();}
+  await publishOfflineEvidence({
+    folder:source.folder,name:"review-disposition.json",data:serialized,owner,
+  });
   return Object.freeze({
     sessionId,decision,recordedOffline:true,productionReady:false,
     publicLabsEnabled:false,
@@ -523,21 +498,10 @@ export async function sealIndependentCaseCheckpoint({
   if(acknowledgment!==CASE_CHECKPOINT_ACK)
     throw Error("Separate case checkpoint sealing acknowledgment is mandatory");
   const {folder,checkpoint}=await loadedVerifiedCheckpoint(options);
-  const path=join(folder,CASE_CHECKPOINT_FILE);
-  const file=await open(path,constants.O_WRONLY|constants.O_CREAT|
-    constants.O_EXCL|constants.O_NOFOLLOW,0o600);
-  try{
-    const initial=await file.stat();
-    if(!initial.isFile()||initial.uid!==(options.owner??0)||
-       initial.nlink!==1||(initial.mode&0o077)!==0||initial.size!==0)
-      throw Error("Untrusted new private case checkpoint file");
-    await file.writeFile(checkpoint.bytes);
-    await file.sync();
-    if((await file.stat()).size!==checkpoint.bytes.length)
-      throw Error("Incomplete offline case checkpoint write");
-  }finally{await file.close();}
-  const directory=await open(folder,constants.O_RDONLY|constants.O_DIRECTORY);
-  try{await directory.sync();}finally{await directory.close();}
+  await publishOfflineEvidence({
+    folder,name:CASE_CHECKPOINT_FILE,data:checkpoint.bytes,
+    owner:options.owner??0,
+  });
   return Object.freeze({
     sessionId:checkpoint.doc.sessionId,
     checkpointSha256:checkpoint.checkpointSha256,
@@ -660,22 +624,10 @@ export async function signIndependentRuntimeAddendum({
     ...data,...data.keys,
     acknowledgment,
   });
-  const file=await open(join(data.folder,RUNTIME_ADDENDUM_FILE),
-    constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW|
-    constants.O_WRONLY,0o600);
-  try{
-    const before=await file.stat();
-    if(!before.isFile()||before.uid!==owner||before.nlink!==1||
-       (before.mode&0o077)!==0||before.size!==0)
-      throw Error("Untrusted new offline runtime addendum file");
-    await file.writeFile(addendum.bytes);
-    await file.sync();
-    if((await file.stat()).size!==addendum.bytes.length)
-      throw Error("Incomplete runtime addendum write");
-  }finally{await file.close();}
-  const directory=await open(data.folder,
-    constants.O_RDONLY|constants.O_DIRECTORY);
-  try{await directory.sync();}finally{await directory.close();}
+  await publishOfflineEvidence({
+    folder:data.folder,name:RUNTIME_ADDENDUM_FILE,
+    data:addendum.bytes,owner,
+  });
   return Object.freeze({
     sessionId,addendumSha256:addendum.addendumSha256,
     checkpointSha256:data.checkpoint.checkpointSha256,
