@@ -184,6 +184,8 @@ test("REAL full private phone movie: 30FPS MOV + 24FPS MP4 -> 16FPS prepared cli
     assert.equal(receipt.profile,"portrait");
     assert.equal(receipt.video.sha256,hash(readFileSync(join(out,"video.mp4"))));
     assert.equal(finished.video_sha256,receipt.video.sha256);
+    if(process.env.ETERNYX_TEST_MOVIE_BROWSER==="1")
+      run("python3",[join(root,"tests/offline-movie-browser.py"),join(out,"watch.html")]);
     assert.equal(receipt.shots.length,2);
     assert.deepEqual(receipt.shots.map(s=>s.caption),moviePlan.shots.map(s=>s.caption));
     assert.deepEqual(receipt.shots.map(s=>s.rights_ref),moviePlan.shots.map(s=>s.rights_ref));
@@ -518,4 +520,27 @@ test("cinematic plan remains strictly bounded, while legacy options are unchange
   assert.match(ui,/value="cinematic"/);
   assert.match(ui,/24 FPS/);
   assert.match(ui,/720p/);
+});
+
+test("offline Chrome reviews a two-shot cinematic movie at native 24 FPS", {
+  skip: process.env.ETERNYX_TEST_MOVIE_BROWSER !== "1",
+}, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "eternyx-cinematic-review-"));
+  try {
+    const files = ["first.mov", "second.mov"].map(name => getFixture(dir, name, 24, 1));
+    const bundle = await buildPortablePhoneMovie({
+      files, start: 0, seconds: 1,
+      moviePlan: plan(files, {quality: "cinematic"}),
+      pythonSources,
+    });
+    const {folder} = extract(await bundle.blob.arrayBuffer(), dir);
+    run("sh", ["finish-phone-movie-macos-linux.sh"], {cwd: folder});
+    const output = join(folder, "phone-movie-output");
+    const receipt = JSON.parse(readFileSync(join(output, "manifest.json"), "utf8"));
+    assert.equal(receipt.video.fps, "24/1");
+    assert.equal(receipt.video.frame_count, 48);
+    run("python3", [join(root, "tests/offline-movie-browser.py"), join(output, "watch.html")]);
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
 });
