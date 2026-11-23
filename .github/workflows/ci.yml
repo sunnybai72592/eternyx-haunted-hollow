@@ -50,6 +50,11 @@ jobs:
           node --check scripts/workspace-team-staging-storage.mjs
           node --check src/lib/workspaceStorageAcceptance.mjs
           node --check tests/workspace-storage-acceptance.test.mjs
+      - name: Verify Phase 25 disposable revocation runner syntax offline
+        run: |
+          node --check scripts/workspace-team-staging-revocation.mjs
+          node --check src/lib/workspaceRevocationAcceptance.mjs
+          node --check tests/workspace-staging-revocation.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
