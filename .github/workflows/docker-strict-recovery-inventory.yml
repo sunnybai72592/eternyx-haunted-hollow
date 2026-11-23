@@ -1,0 +1,35 @@
+name: Docker signed-agent strict recovery inventory (offline, no Docker)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-strict-recovery-inventory.yml'
+      - 'src/lib/dockerStrictRecoveryInventory.mjs'
+      - 'scripts/docker-lab-recovery.mjs'
+      - 'tests/docker-strict-recovery-inventory.test.mjs'
+      - 'docs/DOCKER_STRICT_RECOVERY_INVENTORY.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-recovery:
+    name: Verify full fsynced claim and lock inventory without Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check strict read-only recovery source
+        run: |
+          node --check src/lib/dockerStrictRecoveryInventory.mjs
+          node --check scripts/docker-lab-recovery.mjs
+          node --check tests/docker-strict-recovery-inventory.test.mjs
+      - name: Run production durable journal and strict inventory regressions
+        run: |
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-lab-recovery.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
