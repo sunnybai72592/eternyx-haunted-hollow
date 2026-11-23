@@ -17,6 +17,8 @@ on:
       - "scripts/services-pg17-catalog-verdict-regressions.mjs"
       - "scripts/services-staging-release-evidence.mjs"
       - "tests/services-pg17-catalog-verdict-phase32.test.mjs"
+      - "docs/sql/eternyx/services-phase33-disposable-write-abuse.sql"
+      - "tests/services-pg17-write-abuse-phase33.test.mjs"
       - ".github/workflows/services-pg17-disposable-replay.yml"
   workflow_dispatch:
 
@@ -44,7 +46,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
@@ -109,7 +111,11 @@ jobs:
             > "$RUNNER_TEMP/services-phase32-catalog-regressions.sql"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
             < "$RUNNER_TEMP/services-phase32-catalog-regressions.sql"
-          echo "PASS: isolated Services PG17 migrations, four-actor RLS and Phase 27 catalog mutation checks (no remote deployment)"
+          # Execute real SQL write-path attacks and owner/admin limits.
+          # The synthetic A/B/admin/anon fixtures and all writes roll back.
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < docs/sql/eternyx/services-phase33-disposable-write-abuse.sql
+          echo "PASS: isolated Services PG17 migrations, role RLS, catalog mutations and write-abuse checks (no remote deployment)"
 
       # No Supabase secrets, no linked project, no production/staging database
       # connection and no artifact upload containing DB rows.
