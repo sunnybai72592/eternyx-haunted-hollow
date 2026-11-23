@@ -32,9 +32,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 24
     steps:
+      # The repository contains an orphaned eternyx-backend gitlink; checkout
+      # credential removal invokes a recursive submodule command and fails.
+      # Keep default token handling for this short-lived, read-only job.
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
