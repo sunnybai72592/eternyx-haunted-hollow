@@ -17,11 +17,19 @@ import { readActiveConversation, rememberConversation } from '@/lib/activeConver
 
 import { readDnsExplanation, clearDnsExplanation } from "@/lib/dnsExplanation";
 
+interface ChatDocumentEvidence {
+  segment: number;
+  excerpt: string;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  /** Returned by the current AI response only; not persisted in chat_history. */
+  evidence?: ChatDocumentEvidence[];
+  documentContextUsed?: boolean;
 }
 
 interface Document {
@@ -167,6 +175,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.currentTarget.value = '';
     if (!file || !userId) return;
 
     // Determine file type
@@ -178,10 +187,15 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
       return;
     }
 
-    const maxBytes = isPDF ? 12 * 1024 * 1024 : 20 * 1024 * 1024;
+    const maxBytes = isPDF ? 12 * 1024 * 1024 : 6 * 1024 * 1024;
     if (!file.size || file.size > maxBytes) {
-      toast.error(isPDF ? 'Choose a PDF up to 12 MiB.' : 'Choose a nonempty image up to 20 MiB.');
+      toast.error(isPDF ? 'Choose a PDF up to 12 MiB.' : 'Choose an image up to 6 MiB.');
       return;
+    }
+    if (isImage && !window.confirm(
+      'This image will be uploaded to your account storage and its content sent to an external vision provider for OCR. Provider processing may incur a cost. Continue?',
+    )) {
+      return; // No upload, OCR request or provider call without explicit consent.
     }
 
     setUploadingFile(true);
@@ -227,6 +241,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
           storagePath: uploadData.path,
           fileType,
           mimeType: file.type,
+          ocrConsent: isImage,
         },
       });
 
@@ -291,6 +306,8 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
         const status = chatError.context?.status;
         if (status === 402) throw new Error('Your account has insufficient chat credits.');
         if (status === 401) throw new Error('Please sign in again to continue chatting.');
+        if (status === 422) throw new Error('No matching text found in this document. Try a more specific question. No AI generation was requested.');
+        if (status === 409) throw new Error('This document is not ready or the request needs review. Check its processing status.');
         throw new Error(chatError.message);
       }
       if (typeof data?.response !== 'string' || !data.response.trim() || !data.sessionId) throw new Error('No response from Eternyx AI');
@@ -301,12 +318,27 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
         setCurrentSessionId(data.sessionId);
       }
 
-      // Add AI response to UI
+      // Show only evidence returned for this authenticated document request;
+      // never treat model-generated citations as verified source excerpts.
+      const returnedEvidence: ChatDocumentEvidence[] =
+        selectedDocument && Array.isArray(data.evidence)
+          ? data.evidence.filter((value: unknown): value is ChatDocumentEvidence => {
+              if (typeof value !== 'object' || value === null) return false;
+              const entry = value as Record<string, unknown>;
+              return Number.isSafeInteger(entry.segment) &&
+                (entry.segment as number) >= 1 && (entry.segment as number) <= 605 &&
+                typeof entry.excerpt === 'string' && entry.excerpt.length <= 700;
+            }).slice(0, 5)
+          : [];
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: data.response,
         timestamp: new Date(),
+        ...(selectedDocument ? {
+          evidence: returnedEvidence,
+          documentContextUsed: data.contextUsed === true,
+        } : {}),
       };
       setMessages((prev) => [...prev, aiMsg]);
 
@@ -333,9 +365,13 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   };
 
   function exportMessages() {
-    const transcript = messages.map(message =>
-      (message.role === 'user' ? 'You' : 'Eternyx AI') + '\n' + message.content
-    ).join('\n\n');
+    const transcript = messages.map(message => {
+      const evidence = message.evidence?.length
+        ? '\n\nRetrieved document segments (not independent citation checks):\n' +
+          message.evidence.map(item => '[Segment ' + item.segment + ']\n' + item.excerpt).join('\n\n')
+        : '';
+      return (message.role === 'user' ? 'You' : 'Eternyx AI') + '\n' + message.content + evidence;
+    }).join('\n\n');
     const url = URL.createObjectURL(new Blob([activeTitle + '\n\n' + transcript + '\n'], { type: 'text/plain;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
@@ -449,6 +485,12 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                     </label>
                   </div>
 
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Text-layer PDFs: up to 12 MiB. Scanned PDFs are not automatically OCR'd.
+                    For an authorized scanned page, export it as PNG, JPEG, or WebP (up to 6 MiB) and
+                    select that image to run optional vision OCR. You will be asked to confirm
+                    external processing and possible provider costs before upload.
+                  </p>
                   <ScrollArea className="h-48 lg:h-96 rounded-lg border border-border/50 p-4">
                     <div className="space-y-2">
                       {documents.map((doc) => (
@@ -553,6 +595,31 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                           }`}
                         >
                           <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</p>
+                          {msg.role === 'assistant' && msg.documentContextUsed === false && (
+                            <p className="mt-2 border-t border-border/40 pt-2 text-xs text-amber-600">
+                              No matching document text was retrieved. Do not treat this response as evidence from the uploaded file.
+                            </p>
+                          )}
+                          {msg.role === 'assistant' && !!msg.evidence?.length && (
+                            <details className="mt-3 rounded-md border border-border/50 p-2 text-xs">
+                              <summary className="cursor-pointer font-semibold">
+                                View retrieved document evidence ({msg.evidence.length} segments)
+                              </summary>
+                              <p className="mt-2 text-muted-foreground">
+                                These excerpts come from the selected document, not from model-generated citations.
+                                Segment numbers are chunk indices, not verified PDF page numbers.
+                                Evidence for previous conversations is not currently retained in chat history.
+                              </p>
+                              <div className="mt-2 max-h-72 space-y-2 overflow-auto">
+                                {msg.evidence.map(item => (
+                                  <div key={item.segment} className="rounded border border-border/40 p-2">
+                                    <p className="font-semibold">Document segment {item.segment}</p>
+                                    <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.excerpt}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
                         </div>
                       </div>
                     ))}

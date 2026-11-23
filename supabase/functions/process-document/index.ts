@@ -3,7 +3,7 @@ import { authenticateUser } from "../_shared/user-auth.ts";
 import { recordAuthorizationEvent } from "../_shared/security-events.ts";
 import { extractTextFromPDF } from "../_shared/pdf-text-extract.ts";
 import {
-  PDFIngestError, MAX_PDF_BYTES, MAX_PDF_EXTRACTED_CHARACTERS,
+  PDFIngestError, MAX_PDF_BYTES, MAX_IMAGE_OCR_BYTES, MAX_PDF_EXTRACTED_CHARACTERS,
   validOwnedDocumentPath, matchesDeclaredImageBytes,
 } from "../_shared/pdf-ingest-guards.ts";
 
@@ -56,6 +56,7 @@ async function extractTextFromImage(imageBase64: string, mimeType: string): Prom
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
     method: "POST",
+    signal: AbortSignal.timeout(20_000),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "openai/gpt-6-astra",
@@ -77,11 +78,18 @@ async function extractTextFromImage(imageBase64: string, mimeType: string): Prom
     throw new Error("Unable to extract text from the image");
   }
 
-  return data.output_text ?? (data.output || [])
-    .flatMap((item: any) => item.content || [])
-    .filter((item: any) => item.type === "output_text")
-    .map((item: any) => item.text)
-    .join("");
+  const text = typeof data.output_text === "string"
+    ? data.output_text
+    : (Array.isArray(data.output) ? data.output : [])
+      .flatMap((item: any) => Array.isArray(item?.content) ? item.content : [])
+      .filter((item: any) => item?.type === "output_text" && typeof item?.text === "string")
+      .map((item: any) => item.text)
+      .join("");
+  if (!text.trim()) throw new Error("The OCR provider did not return readable text");
+  if (text.length > MAX_PDF_EXTRACTED_CHARACTERS) {
+    throw new Error("OCR output exceeds the processing limit");
+  }
+  return text;
 }
 
 serve(async (req) => {
@@ -91,7 +99,7 @@ serve(async (req) => {
   const { user, supabase } = await authenticateUser(req);
   if (!user || !supabase) return reply({ error: "Authentication required" }, 401);
 
-  let body: { documentId?: unknown; storagePath?: unknown };
+  let body: { documentId?: unknown; storagePath?: unknown; ocrConsent?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -106,7 +114,7 @@ serve(async (req) => {
     // Never let the caller choose an arbitrary Storage object to process.
     const { data: document, error: documentError } = await supabase
       .from("ai_documents")
-      .select("id, user_id, storage_path, file_type, mime_type, file_size")
+      .select("id, user_id, storage_path, file_type, mime_type, file_size, status")
       .eq("id", body.documentId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -145,8 +153,17 @@ serve(async (req) => {
     if (fileType === "image" && !["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
       return reply({ error: "Only JPEG, PNG, and WebP images are supported" }, 415);
     }
+    if (document.status === "ready") {
+      return reply({ success: true, documentId: document.id, alreadyProcessed: true });
+    }
+    if (document.status !== "uploaded" && document.status !== "failed") {
+      return reply({ error: "Document is already being processed or is not eligible for processing" }, 409);
+    }
+    if (fileType === "image" && body.ocrConsent !== true) {
+      return reply({ error: "Explicit image OCR consent is required", code: "OCR_CONSENT_REQUIRED" }, 403);
+    }
 
-    const maxBytes = fileType === "pdf" ? MAX_PDF_BYTES : 20 * 1024 * 1024;
+    const maxBytes = fileType === "pdf" ? MAX_PDF_BYTES : MAX_IMAGE_OCR_BYTES;
     if (!Number.isSafeInteger(document.file_size) || document.file_size < 1 ||
         document.file_size > maxBytes) {
       return reply({ error: "Document size exceeds the processing limit or is invalid" }, 413);
@@ -169,12 +186,20 @@ serve(async (req) => {
       return reply({ error: "Image content does not match its declared type" }, 415);
     }
 
-    const { error: processingError } = await supabase
+    // Compare-and-set prevents overlapping requests from both calling the
+    // external vision provider for the same user-owned document.
+    const { data: processingRecord, error: processingError } = await supabase
       .from("ai_documents")
       .update({ status: "processing", error_message: null })
       .eq("id", document.id)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .in("status", ["uploaded", "failed"])
+      .select("id")
+      .maybeSingle();
     if (processingError) throw new Error("Unable to update document processing status");
+    if (!processingRecord) {
+      return reply({ error: "Document is already being processed" }, 409);
+    }
 
     let extractedText = "";
     if (fileType === "pdf") {
