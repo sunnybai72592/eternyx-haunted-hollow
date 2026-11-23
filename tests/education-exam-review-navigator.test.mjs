@@ -130,7 +130,8 @@ test("21 review summary is truthful and has clear singular/plural counts",()=>{
  assert.equal(educationReviewSummaryMessage(null),"Exam review unavailable.");
 });
 test("22 learner UI derives answer completion from active question IDs",()=>{
- assert.match(ui,/createEducationExamReview\(\s*testQuery\.data\?\.questions \?\? \[\], answers, flaggedQuestions/);
+ assert.match(ui,/createEducationExamReview\(\s*testQuery\.data\?\.questions \?\? \[\], reviewedAnswers, flaggedQuestions/);
+ assert.match(ui,/projectEducationExamReviewAnswers\(/);
  assert.match(ui,/const answered = review\.answered/);
  assert.match(ui,/const progress = count > 0 \? answered \/ count \* 100 : 0/);
  assert.doesNotMatch(ui,/const answered = answeredExamCount\(answers\)/);
