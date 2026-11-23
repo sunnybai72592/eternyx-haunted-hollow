@@ -114,5 +114,7 @@ test("real cross-page project linking, cancellation and report export are wired"
   assert.match(component,/abortRef\.current\?\.abort\(\)/);
   assert.match(component,/exportProjectApiReport\(results\)/);
   assert.match(component,/window\.confirm\("Run "/);
-  assert.match(component,/mode=/); // no separate proxy or bypass
+  const runner = readFileSync(new URL("../src/lib/projectApiSuite.mjs", import.meta.url), "utf8");
+  assert.match(runner,/credentials: "omit"/);
+  assert.match(runner,/redirect: "error"/);
 });
