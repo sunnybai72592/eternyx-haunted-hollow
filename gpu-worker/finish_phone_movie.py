@@ -50,7 +50,7 @@ def verified_variant(path, expected_codec, frames, size, subtitles=False, fps=re
 
 
 
-def make_preview_assets(folder, receipt):
+def make_preview_assets(folder, receipt, outputs):
     """Generate real image and human captions, no server or remote scripts."""
     video = folder / "video.mp4"
     width, height = receipt["video"]["width"], receipt["video"]["height"]
@@ -65,30 +65,47 @@ def make_preview_assets(folder, receipt):
         raise ValueError("Real final video poster failed PNG/dimension verification")
     poster = folder / "poster.png"
     poster.write_bytes(frame)
+    transcript = []
     captions = ["WEBVTT", ""]
     for shot in receipt["shots"]:
         start = renderer.timeline_stamp(shot["timeline_start_frame"], receipt["fps"]).replace(",", ".")
         end = renderer.timeline_stamp(shot["timeline_start_frame"] + shot["frames"], receipt["fps"]).replace(",", ".")
-        captions.extend([start + " --> " + end, escape(shot["caption"]), ""])
+        caption = escape(shot["caption"])
+        captions.extend([start + " --> " + end, caption, ""])
+        transcript.append(f"<li><time>{start}</time> – <time>{end}</time><br>{caption}</li>")
     vtt = folder / "captions.vtt"
     vtt.write_text("\n".join(captions) + "\n", encoding="utf8")
     watch = folder / "watch.html"
-    watch.write_text("""<!doctype html><html lang="en"><meta charset="utf-8">
+    embedded = "video-subtitled.mp4" in outputs
+    primary = "video-subtitled.mp4" if embedded else "video.mp4"
+    sources = [f'<source src="{primary}" type="video/mp4">']
+    if "video.webm" in outputs:
+        sources.append('<source src="video.webm" type="video/webm">')
+    track = ('' if embedded else '<track kind="captions" src="captions.vtt" '
+             'srclang="en" label="Human-authored captions" default>')
+    labels = {
+        "video.mp4": "MP4 master", "video-subtitled.mp4": "MP4 with selectable captions",
+        "video.webm": "WebM movie", "captions.srt": "SRT captions",
+        "captions.vtt": "WebVTT captions", "poster.png": "Movie poster",
+    }
+    downloads = [f'<li><a href="{name}" download>{label}</a></li>'
+                 for name, label in labels.items() if name in outputs or name in (vtt.name, poster.name)]
+    watch.write_text(f"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ETERNYX offline video playback</title>
-<style>body{font:1rem/1.5 system-ui;max-width:50rem;margin:2rem auto;padding:1rem}
-video{width:100%;height:auto;max-height:75vh;background:#000}</style>
-<main><h1>Verified finished movie</h1>
-<p>Locally rendered original footage. No cloud playback or generated scenes.</p>
-<video controls playsinline preload="metadata" poster="poster.png">
-<source src="video.mp4" type="video/mp4">
-<track kind="captions" src="captions.vtt" srclang="en"
-label="Human-authored captions" default>
-Browser MP4 playback not supported.</video>
-<p><a href="captions.srt">Editable SRT</a> ·
-<a href="manifest.json">Local SHA-256 receipt</a></p>
-<p>Some browsers limit file:// caption tracks; choose the selectable-caption
-MP4 in Studio for broader subtitle compatibility.</p></main></html>
+<title>Eternyx movie playback</title>
+<style>
+:root{{color-scheme:light dark}}body{{font:1rem/1.5 system-ui;max-width:52rem;margin:auto;padding:1rem}}
+video{{display:block;width:100%;height:auto;max-height:75vh;background:#000}}
+li{{margin-block:.4rem;overflow-wrap:anywhere}}time{{font-variant-numeric:tabular-nums}}
+</style>
+<main><h1>Finished movie</h1>
+<p>{width} × {height} · {receipt["fps"]} FPS · {receipt["video"]["duration_seconds"]:g} s</p>
+<video controls playsinline preload="metadata" poster="poster.png" width="{width}" height="{height}">
+{"".join(sources)}{track}
+<a href="{primary}">Open the movie</a></video>
+<details><summary>Timed transcript</summary><ol>{"".join(transcript)}</ol></details>
+<h2>Download files</h2><ul>{"".join(downloads)}</ul>
+<p><a href="manifest.json">Local SHA-256 receipt</a></p></main></html>
 """, encoding="utf8")
     result = {}
     for asset in (poster, vtt, watch):
@@ -140,7 +157,7 @@ def produce_deliverables(folder, receipt, mode):
         ], timeout=90)
         outputs["video-subtitled.mp4"] = verified_variant(
             target, "h264", frames, size, subtitles=True, fps=fps)
-    outputs.update(make_preview_assets(folder, receipt))
+    outputs.update(make_preview_assets(folder, receipt, outputs))
     return outputs
 
 
