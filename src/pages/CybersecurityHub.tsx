@@ -120,6 +120,16 @@ const destinations: Destination[] = [
     limitation: "Local STRIDE model and export; not a discovered or verified deployment weakness.",
   },
   {
+    name: "Security case intelligence & version review",
+    description: "Review private case snapshots, triage overdue findings, and compare remediation changes between versions.",
+    href: "/cybersecurity/case-intelligence",
+    icon: Activity,
+    category: "Security governance",
+    kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "Authenticated, owner-scoped snapshot reviews only. Priority points reflect analyst inputs; no live scanning, SOC, or independently verified risk scoring.",
+  },
+  {
     name: "Private assessment cases",
     description: "Work from attested pentest scope, manage analyst findings and remediation, and save versioned private evidence snapshots.",
     href: "/cybersecurity/cases",
