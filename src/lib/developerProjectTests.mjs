@@ -1,5 +1,8 @@
 import { checkProjectFileName, normalizeDeveloperProject } from "./developerProjectLab.mjs";
 import { runDeveloperPreflight } from "./developerProjectPreflight.mjs";
+import { DEVELOPER_HTML_QUALITY_KINDS, DEVELOPER_CSS_QUALITY_KINDS,
+  checkDeveloperHtmlQuality, checkDeveloperCssSelector, isSafeDeveloperCssSelector,
+} from "./developerProjectQuality.mjs";
 
 export const DEVELOPER_TEST_SUITE_SCHEMA = "eternyx-developer-local-tests-v1";
 export const DEVELOPER_TEST_REPORT_SCHEMA = "eternyx-developer-local-test-results-v1";
@@ -8,7 +11,8 @@ export const MAX_DEVELOPER_TESTS = 16;
 export const MAX_TEST_SUITE_BYTES = 9000;
 export const TEST_KINDS = Object.freeze([
   "file-exists", "file-nonempty", "text-contains", "text-absent",
-  "json-valid", "json-path-equals", "html-anchor-exists",
+  "json-valid", "json-path-equals", "json-array-length", "html-anchor-exists",
+  ...DEVELOPER_HTML_QUALITY_KINDS, ...DEVELOPER_CSS_QUALITY_KINDS,
 ]);
 
 const PROJECT_ID = /^[a-z0-9-]{1,64}$/i;
@@ -39,15 +43,29 @@ export function normalizeDeveloperTestCase(testCase) {
   if (["text-contains", "text-absent"].includes(testCase.kind) && !expected.length) {
     throw new Error("Text assertion must contain 1–120 literal characters.");
   }
-  if (testCase.kind === "json-valid" || testCase.kind === "json-path-equals") {
+  if (["json-valid", "json-path-equals", "json-array-length"].includes(testCase.kind)) {
     if (!file.toLowerCase().endsWith(".json")) throw new Error("JSON checks require a .json file.");
   }
-  if (testCase.kind === "json-path-equals") {
+  if (testCase.kind === "json-path-equals" || testCase.kind === "json-array-length") {
     if (!JSON_PATH.test(path)) throw new Error("JSON path supports up to four simple safe object keys.");
+    if (testCase.kind === "json-array-length") {
+      if (!/^(0|[1-9]\d{0,4})$/.test(expected)) {
+        throw new Error("JSON array length expects a nonnegative integer up to 99999.");
+      }
+    } else {
     let scalar;
     try { scalar = JSON.parse(expected); }
     catch { throw new Error("JSON expected value must be a valid JSON scalar."); }
     if (scalar !== null && typeof scalar === "object") throw new Error("JSON expected value must be a scalar.");
+    }
+  }
+  if (DEVELOPER_HTML_QUALITY_KINDS.includes(testCase.kind)) {
+    if (file.toLowerCase() !== "index.html") throw new Error("HTML quality checks require index.html.");
+  }
+  if (DEVELOPER_CSS_QUALITY_KINDS.includes(testCase.kind)) {
+    if (!file.toLowerCase().endsWith(".css") || !isSafeDeveloperCssSelector(expected)) {
+      throw new Error("CSS selector checks require a .css file and safe literal selector.");
+    }
   }
   if (testCase.kind === "html-anchor-exists") {
     if (file.toLowerCase() !== "index.html" || !SAFE_ANCHOR.test(expected)) {
@@ -87,7 +105,7 @@ function checkOne(file, testCase) {
     return { ok, reason: ok ? "assertion-met" : (contains ? "forbidden-text-present" : "required-text-missing"),
       line: index >= 0 ? file.content.slice(0, index).split("\n").length : 0 };
   }
-  if (testCase.kind === "json-valid" || testCase.kind === "json-path-equals") {
+  if (["json-valid", "json-path-equals", "json-array-length"].includes(testCase.kind)) {
     let value;
     try { value = JSON.parse(file.content); }
     catch { return { ok: false, reason: "invalid-json", line: 1 }; }
@@ -98,8 +116,19 @@ function checkOne(file, testCase) {
       }
       value = value[segment];
     }
+    if (testCase.kind === "json-array-length") {
+      const pass = Array.isArray(value) && value.length === Number(testCase.expected);
+      return { ok: pass, reason: pass ? "json-array-length-matched" :
+        (Array.isArray(value) ? "json-array-length-different" : "json-value-not-array"), line: 0 };
+    }
     const pass = scalarEqual(value, JSON.parse(testCase.expected));
     return { ok: pass, reason: pass ? "json-value-matched" : "json-value-different", line: 0 };
+  }
+  if (DEVELOPER_HTML_QUALITY_KINDS.includes(testCase.kind)) {
+    return checkDeveloperHtmlQuality(file.content, testCase.kind);
+  }
+  if (DEVELOPER_CSS_QUALITY_KINDS.includes(testCase.kind)) {
+    return checkDeveloperCssSelector(file.content, testCase.expected);
   }
   if (testCase.kind === "html-anchor-exists") {
     const ids = /\bid\s*=\s*(["'])([^"']+)\1/gi;
