@@ -7,6 +7,7 @@ import {supabase} from "@/integrations/supabase/client";
 import {
   verifiedHandoffAssessment,verifiedHandoffHistory,
   handoffAssessmentCsv,handoffAssessmentJson,handoffHistoryExport,
+  verifyHandoffPreflight,
 } from "@/lib/automationAuditHandoff.mjs";
 type Assessment=ReturnType<typeof verifiedHandoffAssessment>;
 type History=ReturnType<typeof verifiedHandoffHistory>;
@@ -67,47 +68,69 @@ export default function AutomationAuditHandoffPanel({
   const [ackDeployment,setAckDeployment]=useState(false);
   const [ackWorker,setAckWorker]=useState(false);
   const request=useRef<{signature:string;key:string}|null>(null);
+  // In-flight responses from a former case/refresh/selection must never
+  // replace current private state or show the former case's receipt history.
+  const scope=useRef({incidentId,refreshKey,version:0,packageId:""});
+  if(scope.current.incidentId!==incidentId||scope.current.refreshKey!==refreshKey){
+    scope.current={incidentId,refreshKey,version:scope.current.version+1,packageId:""};
+  }
+  const matches=(version:number,packageId?:string)=>
+    scope.current.version===version&&scope.current.incidentId===incidentId&&
+    scope.current.refreshKey===refreshKey&&
+    (packageId===undefined||scope.current.packageId===packageId);
   useEffect(()=>{
     setAssessment(null);setRaw(null);setSelected("");
     setHistory(null);setHistoryRaw(null);setNote("");
     setAckReview(false);setAckCI(false);setAckDeployment(false);setAckWorker(false);
-    request.current=null;
+    request.current=null;setBusy(false);
   },[incidentId,refreshKey]);
   async function perform(fn:()=>Promise<void>){
+    const version=scope.current.version;
     setBusy(true);setError("");setNotice("");
     try{await fn();}
-    catch(e){setError(e instanceof Error?e.message:"Manual handoff operation failed.");}
-    finally{setBusy(false);}
+    catch(e){if(matches(version))setError(e instanceof Error?e.message:"Manual handoff operation failed.");}
+    finally{if(matches(version))setBusy(false);}
   }
   async function load(){
+    const version=scope.current.version;
     const res=await call("incidentAuditHandoffAssessment",{incidentId});
     if(res.ok!==true||res.source!=="authenticated_server"||
        res.incidentId!==incidentId||res.externalExecutionTriggered!==false){
       throw Error("Cannot verify current owner case handoff source.");
     }
     const checked=verifiedHandoffAssessment(res);
+    if(!matches(version))return;
     setAssessment(checked);setRaw(res);setHistory(null);setHistoryRaw(null);
-    setSelected(v=>checked.packages.some(p=>p.packageId===v)
-      ?v:(checked.packages[0]?.packageId??""));
+    const chosen=checked.packages.some(p=>p.packageId===scope.current.packageId)
+      ?scope.current.packageId:(checked.packages[0]?.packageId??"");
+    scope.current.packageId=chosen;
+    setSelected(chosen);
     setNotice("Read current source snapshots, actual last decisions and stored handoff metadata.");
   }
   async function loadHistory(){
-    if(!selected)throw Error("Select a stored package.");
-    const res=await call("incidentAuditHandoffHistory",{packageId:selected});
+    const version=scope.current.version;
+    const packageId=selected;
+    if(!packageId||scope.current.packageId!==packageId)throw Error("Select a stored package.");
+    const res=await call("incidentAuditHandoffHistory",{packageId});
     if(res.ok!==true||res.source!=="authenticated_server"||
-       res.packageId!==selected||res.releaseVerified!==false||
+       res.packageId!==packageId||res.releaseVerified!==false||
        res.externalExecutionTriggered!==false){
       throw Error("Owner handoff receipt history not verified.");
     }
-    const checked=verifiedHandoffHistory(res,selected);
+    const checked=verifiedHandoffHistory(res,packageId);
     if(checked.incidentId!==incidentId)throw Error("Handoff history relates to another case.");
+    if(!matches(version,packageId))return;
     setHistory(checked);setHistoryRaw(res);
     setNotice("Loaded immutable owner handoff receipts. Private rationales are omitted from export.");
   }
   async function attest(){
-    const p=assessment?.packages.find(p=>p.packageId===selected);
-    if(!p||!assessment?.caseConsistent||!p.eligibleForManualHandoff||
-       !p.latestReviewId||p.incidentRevision!==assessment.incidentRevision){
+    const version=scope.current.version;
+    const packageId=selected;
+    const p=assessment?.packages.find(p=>p.packageId===packageId);
+    if(!p||!raw||!assessment?.caseConsistent||!p.eligibleForManualHandoff||
+       p.manualHandoffCurrent||!p.latestReviewId||
+       p.incidentRevision!==assessment.incidentRevision||
+       !matches(version,packageId)){
       throw Error("A current, owner-reviewed evidence package is required.");
     }
     if(note.trim().length<12||note.trim().length>500){
@@ -116,7 +139,24 @@ export default function AutomationAuditHandoffPanel({
     if(!ackReview||!ackCI||!ackDeployment||!ackWorker){
       throw Error("Accept all four manual handoff limitations.");
     }
-    if(!window.confirm("Record a PRIVATE, NON-DEPLOYING owner handoff receipt bound to the latest review? This does NOT check CI, verify live services, release anything or run a workflow."))return;
+    // Re-read the actual owner state before confirmation, not merely the
+    // snapshot that may have been inspected minutes ago. SQL rechecks again
+    // under its transaction lock before creating a receipt.
+    const latest=await call("incidentAuditHandoffAssessment",{incidentId});
+    if(!matches(version,packageId))return;
+    if(latest.ok!==true||latest.source!=="authenticated_server"||
+      latest.incidentId!==incidentId||latest.externalExecutionTriggered!==false){
+      throw Error("Fresh owner handoff preflight is not authenticated.");
+    }
+    try{verifyHandoffPreflight(raw,latest,packageId);}
+    catch(e){
+      const checked=verifiedHandoffAssessment(latest);
+      setAssessment(checked);setRaw(latest);setHistory(null);setHistoryRaw(null);
+      setAckReview(false);setAckCI(false);setAckDeployment(false);setAckWorker(false);
+      request.current=null;
+      throw e;
+    }
+    if(!window.confirm("Fresh owner source and latest review were checked. Record a PRIVATE, NON-DEPLOYING receipt? No CI, deployment, external service or workflow action is verified or executed."))return;
     const content=note.trim();
     const signature=JSON.stringify([
       p.packageId,p.latestReviewId,assessment.incidentRevision,content,
@@ -139,6 +179,7 @@ export default function AutomationAuditHandoffPanel({
        res.externalExecutionTriggered!==false){
       throw Error("Handoff receipt was not verified. A retry preserves the same request UUID.");
     }
+    if(!matches(version,packageId))return;
     request.current=null;setNote("");
     setAckReview(false);setAckCI(false);setAckDeployment(false);setAckWorker(false);
     await load();
@@ -149,7 +190,7 @@ export default function AutomationAuditHandoffPanel({
     className="space-y-3 rounded-xl border border-primary/20 p-4">
     <h5 id="eternyx-2u-handoff-heading"
       className="flex items-center gap-2 font-semibold">
-      <FileClock className="size-4 text-primary"/> Current audit review & independent handoff
+      <FileClock className="size-4 text-primary"/> Current audit review & owner-only handoff
     </h5>
     <p className="text-xs leading-5 text-muted-foreground">
       A source-backed package can be passed to a separate manual release
@@ -163,7 +204,7 @@ export default function AutomationAuditHandoffPanel({
         disabled={busy||disabled} onClick={()=>void perform(load)}>
         <RefreshCcw className="mr-2 size-4"/> Check current handoff readiness
       </Button>
-      {raw&&<>
+      {raw&&assessment?.incidentId===incidentId&&<>
         <Button type="button" size="sm" variant="outline" disabled={busy||disabled}
           onClick={()=>file("eternyx-audit-handoff-assessment.json",
             handoffAssessmentJson(raw),"application/json;charset=utf-8")}>
@@ -181,11 +222,15 @@ export default function AutomationAuditHandoffPanel({
         {" "}{assessment.eligibleForManualHandoffCount} with currently
         positive owner reviews and
         {" "}{assessment.currentManualHandoffCount} matching stored handoff
-        receipts. **No external release checks are verified.**
+        receipts. <strong>No external release checks are verified.</strong>
       </p>
+      <p>Last source assessment: {time(assessment.generatedAt)}. A new
+        authenticated source check is required before every new receipt.</p>
       <label className="block">Package for manual review
         <select value={selected} disabled={busy||disabled}
-          onChange={e=>{setSelected(e.target.value);setHistory(null);setHistoryRaw(null);
+          onChange={e=>{scope.current.version+=1;
+            scope.current.packageId=e.target.value;
+            setSelected(e.target.value);setHistory(null);setHistoryRaw(null);
             setNote("");setAckReview(false);setAckCI(false);
             setAckDeployment(false);setAckWorker(false);}}
           className="mt-1 w-full rounded border border-input bg-background p-2">
@@ -224,14 +269,14 @@ export default function AutomationAuditHandoffPanel({
           onClick={()=>void perform(loadHistory)}>
           View private handoff receipts
         </Button>
-        {historyRaw&&<Button size="sm" type="button" variant="outline"
+        {historyRaw&&history?.packageId===selected&&<Button size="sm" type="button" variant="outline"
           disabled={busy||disabled}
           onClick={()=>file("eternyx-audit-handoff-history.json",
             handoffHistoryExport(historyRaw,selected),"application/json;charset=utf-8")}>
           <Download className="mr-2 size-4"/> Export receipts without notes
         </Button>}
       </div>}
-      {history&&<ol className="max-h-52 space-y-2 overflow-y-auto">
+      {history&&history.packageId===selected&&<ol className="max-h-52 space-y-2 overflow-y-auto">
         {history.rows.length===0&&<li>No handoff receipt recorded for this package.</li>}
         {history.rows.map(item=><li key={item.id}
           className="rounded border border-border/70 p-2">
@@ -244,7 +289,7 @@ export default function AutomationAuditHandoffPanel({
         </li>)}
       </ol>}
     </div>}
-    {active?.eligibleForManualHandoff&&<div className="space-y-3 rounded border border-border/70 p-3">
+    {active?.eligibleForManualHandoff&&!active.manualHandoffCurrent&&<div className="space-y-3 rounded border border-border/70 p-3">
       <p className="text-sm font-semibold">
         Record a non-executing, version-bound human handoff
       </p>
@@ -271,6 +316,7 @@ export default function AutomationAuditHandoffPanel({
         <ClipboardCheck className="mr-2 size-4"/> Record owner handoff receipt
       </Button>
       <p className="text-xs text-muted-foreground">
+        The app will recheck this package before asking for confirmation.
         Limited to four handoff receipts per package and twenty new receipts
         per owner per rolling day. No actions are executed, and no release
         permit is created.
