@@ -141,7 +141,7 @@ export function formatLocalAgentPlan(plan: AgentPlan): string {
   });
   lines.push(
     "",
-    "No AI planning, background task, web access, connected-app action, payment or credit reservation was performed.",
+    "This export describes local draft state only. AI text suggestions may have been requested separately; no agent executed, approved external work, contacted connected apps, or scheduled tasks.",
     "This document does not authorize execution. Every future external action needs a separately enforced server-side approval boundary.",
   );
   return lines.join("\n");

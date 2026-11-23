@@ -20,6 +20,7 @@ test("the studio chat bridge supports only explicitly reviewed text-capable feat
   assert.deepEqual([...request.STUDIO_CHAT_FEATURES], [
     "ai.writing.generate", "ai.writing.translate", "ai.coding.assist", "ai.coding.review",
     "ai.documents.analyze", "ai.documents.extract", "ai.research.summarize", "ai.audio.summarize",
+    "ai.agents.plan", "ai.agents.review",
   ]);
   for (const key of request.STUDIO_CHAT_FEATURES) {
     const message = request.prepareStudioChatMessage(key, "  Sample source  ");
