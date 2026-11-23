@@ -27,7 +27,7 @@ test('customer requests are owner-filtered and paginated by Supabase', async () 
   assert.match(src, /new URLSearchParams\(location\.search\)\.get\('request'\)/);
   assert.match(src, /\.eq\('user_id', userId\)/);
   assert.match(src, /\.eq\('id', selected\)/);
-  assert.match(src, /visibleLinkedRequest && !visibleRows\.some/);
+  assert.match(src, /visibleLinkedRequest && \(selectedPanel !== null \|\| !visibleRows\.some/);
   assert.match(src, /Opened by private link/);
   assert.match(src, /encodeURIComponent\(id\)/);
   assert.match(src, /navigator\.clipboard\.writeText/);
