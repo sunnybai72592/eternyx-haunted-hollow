@@ -1,0 +1,43 @@
+name: Docker signed agent pinned CLI executable (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-cli-executable-phase35.yml'
+      - 'src/lib/dockerSignedCliExecutableGate.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'tests/docker-signed-cli-executable-pin.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_CLI_EXECUTABLE_PHASE35.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-cli:
+    name: Prove no PATH-selected or unpinned Docker CLI can execute
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check pinned actual agent and executable gate
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerSignedCliExecutableGate.mjs
+          node --check tests/docker-signed-cli-executable-pin.test.mjs
+      - name: Verify actual root-owned CLI pin and all prior Docker safety regressions offline
+        run: |
+          node --test tests/docker-signed-cli-executable-pin.test.mjs
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
