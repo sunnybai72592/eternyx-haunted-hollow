@@ -91,7 +91,7 @@ export function verifiedHandoffAssessment(raw){
     if(i>0&&Date.parse(p.capturedAt)>Date.parse(raw.packages[i-1].capturedAt)){
       throw Error("Audit packages are not in descending creation order.");
     }
-    if(ready)eligible++;
+    if(p.eligibleForManualHandoff)eligible++;
     if(p.manualHandoffCurrent)current++;
     return {
       packageId:p.packageId,incidentRevision:p.incidentRevision,
