@@ -22,11 +22,11 @@ test('customer requests hide previous account rows before cleanup effects run', 
 test('request filter changes and account transitions discard stale fetch completions', async () => {
   const source = await read('src/pages/MyServiceRequests.tsx');
   assert.match(source, /const generation = \+\+requestGeneration\.current/);
-  assert.match(source, /if \(generation !== requestGeneration\.current\) return/);
-  assert.match(source, /return \(\) => \{ requestGeneration\.current \+= 1; \}/);
+  assert.match(source, /if \(generation !== requestGeneration\.current \|\| useAuthStore\.getState\(\)\.user\?\.id !== userId\) return/);
+  assert.match(source, /requestGeneration\.current \+= 1;\s*requestAbortRef\.current\?\.abort\(\)/);
   assert.match(source, /\.eq\('user_id', userId\)/);
   assert.match(source, /setRowsOwner\(userId\)/);
-  assert.match(source, /if \(page > 0 && page \* 20 >= size\)/);
+  assert.match(source, /if \(page > 0 && page \* 20 >= result\.count\)/);
   assert.match(source, /No requests match this view/);
 });
 

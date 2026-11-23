@@ -15,6 +15,7 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import { runServiceCountBudget } from '@/lib/serviceCountBudget';
+import { readServicePageWithinBudget } from '@/lib/servicePageReadBudget';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
@@ -51,6 +52,7 @@ export default function AdminServiceRequests() {
   const [adminAccessRetry, setAdminAccessRetry] = useState(0);
   const authorized = !!user && authorizedFor === user.id;
   const fetchGeneration = useRef(0);
+  const adminListAbortRef = useRef<AbortController | null>(null);
   const [checking, setChecking] = useState(true);
   const [rows, setRows] = useState<ServiceRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -93,14 +95,24 @@ export default function AdminServiceRequests() {
   const [openJournal, setOpenJournal] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [loadErrorDetail, setLoadErrorDetail] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id || authorizedFor !== user.id) return;
+    const actor = user.id;
     const generation = ++fetchGeneration.current;
+    adminListAbortRef.current?.abort();
+    const controller = new AbortController();
+    adminListAbortRef.current = controller;
     setLoading(true);
     setLoadError(false);
+    setLoadErrorDetail('');
+    setRows([]);
+    setDrafts({});
+    setTotal(0);
+    try {
     let query = supabase.from('service_admin_amendment_queue')
       .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_customer_answer_at,needs_my_check_extended,needs_follow_up_extended,customer_answers_since_check,amendment_count,pending_amendment_count,last_amendment_submitted_at,needs_my_check_complete,needs_follow_up_complete', { count: 'exact' });
     if (filter !== 'all') query = query.eq('status', filter);
@@ -128,35 +140,61 @@ export default function AdminServiceRequests() {
     if (sortOrder === 'next_review') query = query.order('next_review_on', { ascending: true, nullsFirst: false });
     if (sortOrder === 'amendments') query = query.order('pending_amendment_count', { ascending: false });
     if (sortOrder === 'clarifications') query = query.order('awaiting_admin_review_count', { ascending: false });
-    const { data, error, count } = await query
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (generation !== fetchGeneration.current) return;
-    if (error) {
-      setLoadError(true);
-      setRows([]);
-      setTotal(0);
-      setDrafts({});
-      console.error('Admin service requests query failed:', error);
-    } else {
-      if (page > 0 && page * PAGE_SIZE >= (count ?? 0)) {
-        setPage(Math.max(0, Math.ceil((count ?? 0) / PAGE_SIZE) - 1));
+      const result = await readServicePageWithinBudget<ServiceRow>(
+        (signal) => query.order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+          .abortSignal(signal),
+        () => generation === fetchGeneration.current
+          && useAuthStore.getState().user?.id === actor && authorizedFor === actor,
+        controller.signal,
+      );
+      if (generation !== fetchGeneration.current) return;
+      if (useAuthStore.getState().user?.id !== actor || authorizedFor !== actor) return;
+      if (result.kind === 'canceled') return;
+      if (result.kind === 'unavailable') {
+        setLoadError(true);
+        setLoadErrorDetail(result.message);
         setRows([]);
-        setLoading(false);
+        setDrafts({});
+        setTotal(0);
         return;
       }
-      const next = (data ?? []) as ServiceRow[];
-      setRows(next);
-      setTotal(count ?? 0);
-      setDrafts(Object.fromEntries(next.map((item) => [item.id, { status: item.status, client_update: item.client_update ?? '' }])));
+      if (page > 0 && page * PAGE_SIZE >= result.count) {
+        setPage(Math.max(0, Math.ceil(result.count / PAGE_SIZE) - 1));
+        setRows([]);
+        setDrafts({});
+        return;
+      }
+      setRows(result.data);
+      setTotal(result.count);
+      setDrafts(Object.fromEntries(result.data.map((item) => [
+        item.id, { status: item.status, client_update: item.client_update ?? '' },
+      ])));
+    } catch {
+      if (generation !== fetchGeneration.current) return;
+      if (useAuthStore.getState().user?.id !== actor || authorizedFor !== actor) return;
+      setLoadError(true);
+      setLoadErrorDetail('The administrator request-list read failed. Its results were not treated as an empty queue.');
+      setRows([]);
+      setDrafts({});
+      setTotal(0);
+    } finally {
+      if (generation === fetchGeneration.current
+        && useAuthStore.getState().user?.id === actor && authorizedFor === actor) {
+        adminListAbortRef.current = null;
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }, [user?.id, authorizedFor, page, filter, activeSearch, activeSearchField, priorityFilter, assignmentFilter, attentionOnly, sortOrder, reviewBucket, actionFilter, mineCheckOnly, clarificationFilter, pendingAmendmentsOnly]);
 
   useEffect(() => {
     let active = true;
     fetchGeneration.current += 1;
+    adminListAbortRef.current?.abort();
+    setLoading(false);
+    setLoadError(false);
+    setLoadErrorDetail('');
     setAuthorizedFor(null);
     setAdminAccessError(false);
     setRows([]);
@@ -203,6 +241,7 @@ export default function AdminServiceRequests() {
       controller.abort();
       window.clearTimeout(authTimeout);
       fetchGeneration.current += 1;
+      adminListAbortRef.current?.abort();
     };
   }, [user?.id, authLoading, adminAccessRetry]);
 
@@ -711,7 +750,7 @@ export default function AdminServiceRequests() {
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
       <p className="mb-4 text-xs text-muted-foreground">All queue filters, review targets and page totals come from the database. Internal UTC review dates are not customer commitments.</p>
-      {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The database query failed. Connectivity, API exposure or a migration may be unavailable. This is not proof the queue is empty. Use the read-only feature checks above.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
+      {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The database query failed. Connectivity, API exposure or a migration may be unavailable. This is not proof the queue is empty. Use the read-only feature checks above.</p><p role="status" className="mt-2 text-sm text-muted-foreground">{loadErrorDetail}</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading service requests…</Card>
         : filtered.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-3 h-8 w-8 text-primary" /><p>No requests in this view.</p></Card>
         : <div className="space-y-5">{filtered.map((item) => {

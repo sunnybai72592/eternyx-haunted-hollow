@@ -14,6 +14,7 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import { runServiceCountBudget } from '@/lib/serviceCountBudget';
+import { readServicePageWithinBudget } from '@/lib/servicePageReadBudget';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
@@ -39,6 +40,7 @@ export default function MyServiceRequests() {
   const user = useAuthStore((state) => state.user);
   const userId = user?.id ?? null;
   const requestGeneration = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
   const location = useLocation();
   const selectedPanel = readRequestPanel(location.search, 'customer');
   const createdId = (location.state as { createdId?: string } | null)?.createdId;
@@ -46,6 +48,7 @@ export default function MyServiceRequests() {
   const [rowsOwner, setRowsOwner] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [loadErrorDetail, setLoadErrorDetail] = useState('');
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<'all' | ServiceRequestStatus>('all');
@@ -134,8 +137,16 @@ export default function MyServiceRequests() {
   const load = useCallback(async () => {
     if (!userId) return;
     const generation = ++requestGeneration.current;
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
     setLoading(true);
     setLoadError(false);
+    setLoadErrorDetail('');
+    setRows([]);
+    setRowsOwner(null);
+    setTotal(0);
+    try {
     let query = supabase.from('service_customer_amendment_queue')
       .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete', { count: 'exact' })
       .eq('user_id', userId);
@@ -152,26 +163,50 @@ export default function MyServiceRequests() {
       : sortOrder === 'request_updated'
         ? query.order('updated_at', { ascending: false }).order('created_at', { ascending: false })
         : query.order('created_at', { ascending: false });
-    const { data, error, count } = await sorted.order('id', { ascending: false })
-      .range(page * 20, (page + 1) * 20 - 1);
-    if (generation !== requestGeneration.current) return;
-    if (error) {
-      console.error('Could not load owned service requests:', error);
-      setLoadError(true);
-      setRows([]);
-      setTotal(0);
-    } else {
-      const size = count ?? 0;
-      if (page > 0 && page * 20 >= size) { setPage(Math.max(0, Math.ceil(size / 20) - 1)); setLoading(false); return; }
-      setRows((data ?? []) as RequestRow[]);
+      const result = await readServicePageWithinBudget<RequestRow>(
+        (signal) => sorted.order('id', { ascending: false })
+          .range(page * 20, (page + 1) * 20 - 1).abortSignal(signal),
+        () => generation === requestGeneration.current && useAuthStore.getState().user?.id === userId,
+        controller.signal,
+      );
+      if (generation !== requestGeneration.current || useAuthStore.getState().user?.id !== userId) return;
+      if (result.kind === 'canceled') return;
+      if (result.kind === 'unavailable') {
+        setLoadError(true);
+        setLoadErrorDetail(result.message);
+        setRows([]);
+        setRowsOwner(null);
+        setTotal(0);
+        return;
+      }
+      if (page > 0 && page * 20 >= result.count) {
+        setRows([]);
+        setRowsOwner(null);
+        setPage(Math.max(0, Math.ceil(result.count / 20) - 1));
+        return;
+      }
+      setRows(result.data);
       setRowsOwner(userId);
-      setTotal(size);
+      setTotal(result.count);
+    } catch {
+      if (generation !== requestGeneration.current || useAuthStore.getState().user?.id !== userId) return;
+      setLoadError(true);
+      setLoadErrorDetail('The private request-list read failed. No empty inbox was inferred.');
+      setRows([]);
+      setRowsOwner(null);
+      setTotal(0);
+    } finally {
+      if (generation === requestGeneration.current && useAuthStore.getState().user?.id === userId) {
+        requestAbortRef.current = null;
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }, [userId, page, filter, activeSearch, updatesOnly, answersOnly, pendingReviewsOnly, sortOrder]);
 
   useEffect(() => {
     requestGeneration.current += 1;
+    requestAbortRef.current?.abort();
+    setLoading(false);
     setRows([]);
     setRowsOwner(null);
     setTotal(0);
@@ -197,11 +232,15 @@ export default function MyServiceRequests() {
     setLinkedRetry(0);
     setNotice('');
     setLoadError(false);
+    setLoadErrorDetail('');
   }, [userId]);
 
   useEffect(() => {
     void load();
-    return () => { requestGeneration.current += 1; };
+    return () => {
+      requestGeneration.current += 1;
+      requestAbortRef.current?.abort();
+    };
   }, [load]);
 
   useEffect(() => {
@@ -544,7 +583,7 @@ export default function MyServiceRequests() {
           {(!selectedPanel || selectedPanel === 'journal') && <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />}
         </Card>
       )}
-      {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The database request failed. The connection, API exposure, or migration might be unavailable; this is not an empty inbox. Use the read-only feature checks above and retry. No results are simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
+      {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The database request failed. The connection, API exposure, or migration might be unavailable; this is not an empty inbox. Use the read-only feature checks above and retry. No results are simulated.</p><p role="status" className="mt-2 text-sm text-muted-foreground">{loadErrorDetail}</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
         : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
         : <div className="space-y-4">{visibleRows.map((item) => {
