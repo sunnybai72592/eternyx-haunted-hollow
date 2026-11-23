@@ -4,6 +4,9 @@
  * project's identity via Supabase's GET-only Management API.
  * No project creation, SQL, credential printing, or production mutation.
  */
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
 const fail=(code)=>{throw Error('services_phase41_'+code)};
 const PROD='wcncuarekaofmfurbtbh';
 const REF=/^[a-z]{20}$/;
@@ -109,7 +112,8 @@ export async function proveRegisteredStagingProject(env=process.env,fetchFn=fetc
   fail('management_api_unavailable');
  }
 }
-if(process.argv[1]&&import.meta.url==='file://'+process.argv[1]){
+const invoked=process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url);
+if(invoked){
  try{
   if(process.argv.length!==2)fail('args_invalid');
   const result=await proveRegisteredStagingProject();
