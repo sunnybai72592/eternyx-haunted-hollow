@@ -170,7 +170,7 @@ test('Phase 21 contains no schema writes and separates timeout correlation from 
   const docs=await read('docs/ETERNYX_SERVICES_DB_LOAD_SHEDDING_PHASE21.md');
   assert.match(docs,/no new SQL migration/i);
   assert.match(docs,/customer A[\s\S]*customer B[\s\S]*administrator/i);
-  assert.match(docs,/not proven.*cause/i);
+  assert.match(docs,/not\s+proven[\s\S]*cause/i);
   assert.match(docs,/Phase 13 before Phase 14/i);
   assert.match(docs,/read receipts/i);
   const audit=await read('docs/sql/eternyx/services-phase21-db-load-audit.sql');
