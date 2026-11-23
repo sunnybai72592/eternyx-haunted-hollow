@@ -131,6 +131,25 @@ test('Phase35 rejects partial, stale, foreign, duplicate, malformed and unverifi
  blocked(repeatedName,'history_invalid');
 });
 
+test('Phase35 accepts real legacy UUID-style migration names and unnamed history entries',()=>{
+ const input=evidence();
+ input.managedMigrations.push(
+  {version:'20261113183501',name:'aa6dd177-9260-4ee3-9940-8bd2800a649e'},
+  {version:'20250828011356',name:''});
+ const r=reconcileServicesHistory(input,moment);
+ assert.equal(r.historyEntryCount,13);
+ assert.equal(r.missingTwoSourceMigrationsWithNoObservedObjects,true);
+});
+
+test('Phase35 six-marker SQL stays strictly SELECT-only and touches no business rows',async()=>{
+ const sql=await readFile(new URL('../docs/sql/eternyx/services-phase35-readonly-schema-markers.sql',import.meta.url),'utf8');
+ const active=sql.replace(/--[^\\r\\n]*/g,'');
+ assert.match(active,/^\\s*SELECT\\s+/i);
+ assert.doesNotMatch(active,/\\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|GRANT|REVOKE|COPY|EXECUTE|DO|CALL)\\b/i);
+ assert.doesNotMatch(active,/\\b(?:FROM|JOIN)\\s+(?:public|auth)\\./i);
+ for(const key of ['phase1_requests','phase12_customer_followup_queue','phase13_amendments','phase13_customer_queue','phase13_admin_queue','phase14_journal']) assert.ok(sql.includes(key));
+});
+
 test('Phase35 accepts nonproduction reference ONLY as unverified and never authorizes deployment',()=>{
  const r=reconcileServicesHistory(evidence({projectRef:other}),moment);
  assert.equal(r.targetClass,'unverified_nonproduction_reference');
