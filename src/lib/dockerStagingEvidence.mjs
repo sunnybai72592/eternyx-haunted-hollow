@@ -34,7 +34,7 @@ const digest=statement=>createHash("sha256").update(
  JSON.stringify(validateDockerStagingStatement(statement))).digest("hex");
 const message=hash=>Buffer.from("ETERNYX_DOCKER_STAGING_OPERATOR_SIGNATURE_V1\n"+hash);
 export function signDockerStagingStatement(statement,privatePem){
- const privateKey=createPrivateKey(privatePem);
+ const privateKey=privatePem?.type==="private"?privatePem:createPrivateKey(privatePem);
  if(privateKey.asymmetricKeyType!=="ed25519")throw Error("Ed25519 signing key required.");
  const hash=digest(statement);
  return {version:1,statement,sha256:hash,
@@ -47,7 +47,7 @@ export function verifyDockerStagingEnvelope(envelope,pinnedPublicKey,now=Date.no
    throw Error("Invalid signed staging report envelope.");
  const hash=digest(envelope.statement);
  if(hash!==envelope.sha256)throw Error("Signed staging evidence digest mismatch.");
- const key=createPublicKey(pinnedPublicKey);
+ const key=pinnedPublicKey?.type==="public"?pinnedPublicKey:createPublicKey(pinnedPublicKey);
  if(key.asymmetricKeyType!=="ed25519")throw Error("Pinned Ed25519 public key required.");
  const bytes=Buffer.from(envelope.signature,"base64url");
  if(bytes.length!==64||bytes.toString("base64url")!==envelope.signature||
