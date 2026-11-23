@@ -165,7 +165,7 @@ export function countersignHostCrashEvidence(authored,reviewerPrivateKey,authorP
    decodedSignature(authored.authorSignature)))throw Error("Host evidence author signature invalid.");
  const reviewer=key(reviewerPrivateKey,"private");
  if(fp(author)===fp(reviewer))throw Error("Host evidence reviewer cannot reuse author key.");
- return {schema:"eternyx-docker-host-crash-dual-review-v1",...authored,
+ return {...authored,schema:"eternyx-docker-host-crash-dual-review-v1",
   reviewerSignature:sign(null,reviewerPayload(authored.candidateSha256,authored.authorSignature),
    reviewer).toString("base64url")};
 }
