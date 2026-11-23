@@ -1,0 +1,58 @@
+name: Security Case Ledger — Disposable PostgreSQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "scripts/sql/staged-security-case-ledger.sql"
+      - "tests/sql/security-case-ledger-bootstrap.sql"
+      - "tests/sql/security-case-ledger-db-smoke.sql"
+      - ".github/workflows/security-case-ledger-sql.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-postgres:
+    name: Check staged ledger RLS and history in networkless PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated ephemeral PostgreSQL (no published ports)
+        run: |
+          set -euo pipefail
+          local_password="$(openssl rand -hex 32)"
+          docker run --detach --rm --network none \
+            --name eternyx-security-case-ledger-ci \
+            -e POSTGRES_PASSWORD="$local_password" postgres:17-alpine
+          unset local_password
+          # The postgres image briefly starts a temporary init server that then stops.
+          # Require multiple successful real SQL sessions across the restart window.
+          consecutive=0
+          for attempt in $(seq 1 60); do
+            if docker exec eternyx-security-case-ledger-ci \
+                 psql -U postgres -d postgres -Atqc 'select 1' 2>/dev/null | grep -qx 1; then
+              consecutive=$((consecutive + 1))
+              if [ "$consecutive" -ge 3 ]; then break; fi
+            else
+              consecutive=0
+            fi
+            sleep 1
+          done
+          [ "$consecutive" -ge 3 ] || { docker logs eternyx-security-case-ledger-ci; exit 1; }
+          docker exec eternyx-security-case-ledger-ci psql -U postgres -d postgres -Atqc 'select 1' | grep -qx 1
+      - name: Bootstrap synthetic auth and private storage
+        run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/security-case-ledger-bootstrap.sql
+      - name: Apply existing engagement and evidence migrations
+        run: |
+          set -euo pipefail
+          docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261111210000_pentest_engagement_management.sql
+          docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261111220000_pentest_evidence_and_audit.sql
+      - name: Apply proposed ledger SQL ONLY inside disposable PostgreSQL
+        run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staged-security-case-ledger.sql
+      - name: Exercise two real database roles, revoked scopes and immutable history
+        run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/security-case-ledger-db-smoke.sql
+      - name: Destroy disposable PostgreSQL
+        if: always()
+        run: docker rm -f eternyx-security-case-ledger-ci || true
