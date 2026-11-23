@@ -72,67 +72,6 @@ def decision(model,label,previous,t,total,temporal=0,spatial=0):
     return result
 
 
-def metrics(model,label,sources,start_fn,horizon):
-    """Free-run multiple steps; ground truth is NEVER a prediction input."""
-    if not 1<=horizon<=8:raise ValueError("Evaluate only one to eight causal frames")
-    errors=still=correct=jitter=spatial_gap=0.
-    observations=joins=0
-    for source in sources:
-        frames=source["frames"]
-        observed=source["observed"]
-        start=start_fn(source)
-        if not 2<=start or start+horizon>len(frames):
-            raise ValueError("Evaluation frame range violates source boundaries")
-        prev=observed[start-2][:]
-        total=len(frames)
-        for t in range(start,start+horizon):
-            chosen=decision(model,label,prev,t,total,
-                            temporal=metrics.temporal,spatial=metrics.spatial)
-            for tile,pred in enumerate(chosen):
-                dx,dy=motion.MASK[pred]
-                err=motion.patch_error(frames[t-1],frames[t],tile,dx,dy)
-                z=motion.patch_error(frames[t-1],frames[t],tile,0,0)
-                errors+=err
-                still+=z
-                correct+=int(pred==observed[t-1][tile])
-                before=motion.MASK[prev[tile]]
-                jitter+=(abs(dx-before[0])+abs(dy-before[1]))/2
-                observations+=1
-                for near in neighbors(tile):
-                    if near>tile:
-                        bx,by=motion.MASK[chosen[near]]
-                        spatial_gap+=(abs(dx-bx)+abs(dy-by))/2
-                        joins+=1
-            prev=chosen
-    if not observations or not joins:
-        raise ValueError("No causal tile motion observations or neighboring tile pairs")
-    result={
-        "steps":horizon,"observations":observations,
-        "predicted_warp_mae":round(errors/observations,8),
-        "zero_shift_mae":round(still/observations,8),
-        "shift_accuracy":round(correct/observations,8),
-        "temporal_jitter":round(jitter/observations,8),
-        "spatial_disagreement":round(spatial_gap/joins,8),
-        "interpretation":"Source-frame block-match diagnostics, not generated-video perceptual quality.",
-    }
-    result["selection_objective"]=round(
-        result["predicted_warp_mae"]+
-        OBJECTIVE_JITTER*result["temporal_jitter"]+
-        OBJECTIVE_SPATIAL*result["spatial_disagreement"],8)
-    return result
-
-
-def score(model,label,sources,start_fn,horizon,temporal,spatial):
-    # Avoid shared global state and maintain deterministic evaluation calls.
-    original=metrics
-    return _score(model,label,sources,start_fn,horizon,temporal,spatial)
-
-
-def _score(model,label,sources,start_fn,horizon,temporal,spatial):
-    # The explicit configuration is passed per call; never mutate trained weights.
-    return evaluate(model,label,sources,start_fn,horizon,temporal,spatial)
-
-
 def evaluate(model,label,sources,start_fn,horizon,temporal,spatial):
     if type(temporal) is not int or type(spatial) is not int or \
        temporal<0 or spatial<0 or temporal+spatial>100:
