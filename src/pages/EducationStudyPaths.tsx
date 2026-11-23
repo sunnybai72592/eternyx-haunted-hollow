@@ -3,7 +3,7 @@ import type {ChangeEvent} from "react";
 import {Link} from "react-router-dom";
 import {
   ArrowLeft,ArrowDown,ArrowUp,BookOpen,CheckCircle2,Download,
-  FileUp,Flag,Plus,RotateCcw,ShieldCheck,Trash2,
+  FileUp,Flag,Plus,RotateCcw,ShieldCheck,Trash2,CalendarDays,Share2,
 } from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Card,CardContent,CardHeader,CardTitle} from "@/components/ui/card";
@@ -11,9 +11,15 @@ import {Alert,AlertDescription} from "@/components/ui/alert";
 import {
   STUDY_MAX_LESSONS,STUDY_FILE_LIMIT,STUDY_ACTIVITY_LIMIT,STUDY_NOTE_LIMIT,
   emptyStudyDraft,emptyStudyLesson,authorStudyPath,buildStudyPathJson,
-  parseStudyFile,emptyStudyRecords,changeStudyRecord,summarizeStudyPath,
-  buildStudySessionJson,buildStudyProgressCsv,
+  emptyStudyRecords,changeStudyRecord,summarizeStudyPath,buildStudyProgressCsv,
 } from "@/lib/educationStudyPaths.mjs";
+import {
+  blankStudyRevision,parseStudyJourneyFile,buildStudyJourneySessionJson,
+  setStudyRevisionInterval,recordStudyManualReview,reconcileStudyRevisions,
+  studyRevisionInsights,revisionStatus,buildStudyRevisionCalendarCsv,
+  buildStudySharePathJson,buildStudyShareOutline,
+  STUDY_REVISION_INTERVALS,
+} from "@/lib/educationStudyRevision.mjs";
 
 type Lesson={
   number:number;title:string;objective:string;reading:string;
@@ -22,8 +28,12 @@ type Lesson={
 type Draft={title:string;description:string;lessons:Lesson[]};
 type Path={format:string;version:number;title:string;description:string;lessons:Lesson[]};
 type Record={number:number;activity:string;reflection:string;note:string;flagged:boolean;completed:boolean};
+type Revision={number:number;interval_days:number;review_count:number;
+  last_reviewed_on:string|null;next_due_on:string|null;
+  confidence:"unrated"|"needs_practice"|"developing"|"comfortable"};
+type ReviewConfidence=Exclude<Revision["confidence"],"unrated">;
 type ViewMode="learn"|"author";
-type LessonFilter="all"|"remaining"|"completed"|"flagged";
+type LessonFilter="all"|"remaining"|"completed"|"flagged"|"due"|"unscheduled";
 
 function saveFile(content:string,name:string,mime:string){
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
@@ -39,6 +49,8 @@ export default function EducationStudyPaths(){
   const [draftIndex,setDraftIndex]=useState(0);
   const [path,setPath]=useState<Path|null>(null);
   const [records,setRecords]=useState<Record[]>([]);
+  const [revision,setRevision]=useState<Revision[]>([]);
+  const [reviewConfidence,setReviewConfidence]=useState<ReviewConfidence>("developing");
   const [current,setCurrent]=useState(1);
   const [filter,setFilter]=useState<LessonFilter>("all");
   const [message,setMessage]=useState("");
@@ -46,11 +58,17 @@ export default function EducationStudyPaths(){
   const [loading,setLoading]=useState(false);
   const lesson=path?.lessons[current-1]??null;
   const record=records[current-1]??null;
+  const revisionRow=revision[current-1]??null;
+  // Local UTC date is a transparent snapshot, not a timer or background reminder.
+  const [asOfUtc]=useState(()=>new Date().toISOString().slice(0,10));
   const authorLesson=draft.lessons[draftIndex]??null;
   const authorValid=useMemo(()=>{
     try{return !!authorStudyPath(draft);}catch{return false;}
   },[draft]);
   const progress=useMemo(()=>path?summarizeStudyPath(path,records):null,[path,records]);
+  const insights=useMemo(()=>path?
+    studyRevisionInsights(path,records,revision,asOfUtc):null,
+    [path,records,revision,asOfUtc]);
   const shownLessons=useMemo(()=>{
     if(!path)return [];
     return path.lessons.filter(l=>{
@@ -59,9 +77,12 @@ export default function EducationStudyPaths(){
       return filter==="all" ||
         (filter==="remaining"&&!r.completed) ||
         (filter==="completed"&&r.completed) ||
-        (filter==="flagged"&&r.flagged);
+        (filter==="flagged"&&r.flagged) ||
+        (filter==="due"&&r.completed&&revision[l.number-1]?.next_due_on!==null&&
+          (revision[l.number-1]?.next_due_on??"")<=asOfUtc) ||
+        (filter==="unscheduled"&&r.completed&&revision[l.number-1]?.review_count===0);
     });
-  },[path,records,filter]);
+  },[path,records,revision,filter,asOfUtc]);
 
   const importFile=async(e:ChangeEvent<HTMLInputElement>)=>{
     const file=e.target.files?.[0];if(!file)return;
@@ -70,9 +91,10 @@ export default function EducationStudyPaths(){
       setLoading(true);setError("");setMessage("");
       if(file.size===0||file.size>STUDY_FILE_LIMIT)
         throw new Error("Invalid local file size");
-      const imported=parseStudyFile(await file.text());
+      const imported=parseStudyJourneyFile(await file.text());
       setPath(imported.path as Path);
       setRecords(imported.records as Record[]);
+      setRevision(imported.revision as Revision[]);
       setCurrent(1);setFilter("all");setMode("learn");
       setMessage("Study path imported. Your learning notes remain in this browser tab unless you export them.");
     }catch{
@@ -120,6 +142,7 @@ export default function EducationStudyPaths(){
       const valid=authorStudyPath(draft);
       setPath(valid as Path);
       setRecords(emptyStudyRecords(valid) as Record[]);
+      setRevision(blankStudyRevision(valid) as Revision[]);
       setCurrent(1);setFilter("all");setMode("learn");
       setError("");setMessage("Your authored lessons are ready for local, ungraded study.");
     }catch{setError("Complete the path title and each lesson's objective, reading, activity and reflection before studying.");}
@@ -127,14 +150,19 @@ export default function EducationStudyPaths(){
   const updateRecord=(key:"activity"|"reflection"|"note"|"flagged"|"completed",value:string|boolean)=>{
     if(!path)return;
     try{
-      setRecords(old=>changeStudyRecord(path,old,current,key,value) as Record[]);
+      const changed=changeStudyRecord(path,records,current,key,value) as Record[];
+      const reconciled=reconcileStudyRevisions(path,changed,revision) as Revision[];
+      setRecords(changed);
+      setRevision(reconciled);
       setError("");
     }catch{setError("That update was rejected. A lesson needs both activity and reflection responses before completion.");}
   };
   const exportSession=(kind:"resume"|"csv")=>{
     if(!path)return;
     try{
-      const content=kind==="resume"?buildStudySessionJson(path,records):buildStudyProgressCsv(path,records);
+      const content=kind==="resume"
+        ?buildStudyJourneySessionJson(path,records,revision)
+        :buildStudyProgressCsv(path,records);
       saveFile(content,kind==="resume"?"eternyx-study-resume.json":"eternyx-study-progress.csv",
         kind==="resume"?"application/json;charset=utf-8":"text/csv;charset=utf-8");
       setError("");setMessage(kind==="resume"?
@@ -144,7 +172,7 @@ export default function EducationStudyPaths(){
   };
   const clearSession=()=>{
     if(!path||!window.confirm("Clear this local study session? Export your resume JSON before clearing."))return;
-    setPath(null);setRecords([]);setCurrent(1);setFilter("all");
+    setPath(null);setRecords([]);setRevision([]);setCurrent(1);setFilter("all");
     setError("");setMessage("Study session cleared from this tab.");
   };
   const resetDraft=()=>{
@@ -153,6 +181,53 @@ export default function EducationStudyPaths(){
     setError("");setMessage("Authoring draft cleared.");
   };
   const completeReady=!!record?.activity.trim()&&!!record?.reflection.trim();
+  const configureRevision=(interval:number)=>{
+    if(!path)return;
+    try{
+      setRevision(setStudyRevisionInterval(path,records,revision,current,interval) as Revision[]);
+      setError("");
+    }catch{setError("This revision interval could not be saved.");}
+  };
+  const reviewedToday=()=>{
+    if(!path||!record?.completed)return;
+    try{
+      setRevision(recordStudyManualReview(
+        path,records,revision,current,asOfUtc,reviewConfidence) as Revision[]);
+      setMessage("Manual review recorded for "+asOfUtc+
+        " (UTC). The next due date follows your chosen interval; no notification is scheduled.");
+      setError("");
+    }catch{setError("A completed lesson and valid review date are required to record revision.");}
+  };
+  const sharePath=(format:"json"|"txt")=>{
+    if(!path)return;
+    try{
+      const content=format==="json"
+        ?buildStudySharePathJson(path):buildStudyShareOutline(path);
+      saveFile(content,format==="json"?"eternyx-share-course-only.json":
+        "eternyx-course-outline.txt",
+        format==="json"?"application/json;charset=utf-8":"text/plain;charset=utf-8");
+      setMessage("Course-only file exported without your responses, notes, review schedule or confidence.");
+      setError("");
+    }catch{setError("Could not prepare a key-free course-only share file.");}
+  };
+  const exportRevisionCalendar=()=>{
+    if(!path)return;
+    try{
+      saveFile(buildStudyRevisionCalendarCsv(path,records,revision,asOfUtc),
+        "eternyx-private-revision-plan.csv","text/csv;charset=utf-8");
+      setMessage("Your private revision-plan CSV was exported; it includes self-reported confidence.");
+      setError("");
+    }catch{setError("Revision calendar export could not be validated.");}
+  };
+  const exportOutline=()=>{
+    try{
+      const valid=authorStudyPath(draft);
+      saveFile(buildStudyShareOutline(valid),"eternyx-course-outline.txt",
+        "text/plain;charset=utf-8");
+      setMessage("Public lesson outline exported without any learner records.");
+      setError("");
+    }catch{setError("Complete and validate the lesson pack before exporting the outline.");}
+  };
 
   return <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 sm:py-12">
     <div className="mx-auto max-w-6xl space-y-6">
@@ -218,6 +293,8 @@ export default function EducationStudyPaths(){
               <Plus aria-hidden="true" className="mr-2 h-4 w-4"/>Add lesson ({draft.lessons.length}/{STUDY_MAX_LESSONS})</Button>
             <Button variant="outline" disabled={!authorValid} onClick={exportPath}>
               <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Export validated path (.json)</Button>
+            <Button variant="outline" disabled={!authorValid} onClick={exportOutline}>
+              <Share2 aria-hidden="true" className="mr-2 h-4 w-4"/>Share course outline (.txt)</Button>
             <Button disabled={!authorValid} onClick={startOwnPath}>Open this path for study</Button>
           </div>
           {!authorValid&&<p className="mt-3 text-xs text-muted-foreground">
@@ -287,7 +364,7 @@ export default function EducationStudyPaths(){
           No imaginary courses, study progress or scores will be displayed.
         </p>
         <Button variant="outline" className="mt-4" onClick={()=>setMode("author")}>Create your first lesson pack</Button>
-      </section>:progress&&lesson&&record&&<section aria-label="Active study path" className="space-y-5">
+      </section>:progress&&lesson&&record&&revisionRow&&insights&&<section aria-label="Active study path" className="space-y-5">
         <div className="rounded-2xl border border-border bg-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="text-xl font-semibold break-words">{path.title}</h2>
@@ -319,6 +396,8 @@ export default function EducationStudyPaths(){
               <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Save study resume (.json)</Button>
             <Button variant="outline" onClick={()=>exportSession("csv")}>
               <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Export private notes (.csv)</Button>
+            <Button variant="outline" onClick={()=>exportRevisionCalendar()}>
+              <CalendarDays aria-hidden="true" className="mr-2 h-4 w-4"/>Export private revision plan (.csv)</Button>
             {progress.nextLesson!==null&&<Button variant="ghost" onClick={()=>{
               setCurrent(progress.nextLesson!);setFilter("all");
             }}>Continue next unfinished lesson</Button>}
@@ -327,6 +406,52 @@ export default function EducationStudyPaths(){
             <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary"/>
             All lessons marked complete. You can revisit them; no grade or certificate is issued.</p>}
         </div>
+        <section aria-label="Revision and progress insights" className="space-y-4 rounded-2xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Revision and progress insights</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Based on your manually saved lesson status and reviews, as of {asOfUtc} UTC.
+                Suggested remaining minutes are estimates, not tracked study time or scores.
+              </p>
+            </div>
+            {insights.nextReviewLesson!==null&&
+              <Button variant="outline" size="sm" onClick={()=>{
+                setCurrent(insights.nextReviewLesson!);setFilter("all");
+              }}>Open next revision</Button>}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {([
+              ["Due now",insights.due],["Overdue",insights.overdue],
+              ["Due in 7 days",insights.upcomingWeek],
+              ["Needs schedule",insights.readyToSchedule],
+              ["Lessons reviewed",insights.reviewed],
+              ["Est. minutes left",insights.remainingEstimatedMinutes],
+            ] as const).map(([name,value])=><div key={name} className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">{name}</p>
+              <p className="mt-1 text-lg font-bold">{value}</p>
+            </div>)}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            You choose the revision interval and confidence yourself. No algorithm measures mastery,
+            sends reminders or issues grades.
+          </p>
+        </section>
+        <section aria-label="Share course without private progress"
+          className="space-y-3 rounded-2xl border border-primary/20 bg-card p-5">
+          <h2 className="font-semibold">Share only the course, not your private progress</h2>
+          <p className="text-xs text-muted-foreground">
+            Choose a reusable JSON lesson pack or a plain-text syllabus. Both contain original
+            course lessons and prompts, but no activity responses, reflections, notes or revision data.
+            Share only material you have permission to distribute.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={()=>sharePath("json")}>
+              <Share2 aria-hidden="true" className="mr-2 h-4 w-4"/>Share course only (.json)</Button>
+            <Button variant="outline" onClick={()=>sharePath("txt")}>
+              <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Share course outline (.txt)</Button>
+          </div>
+        </section>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <Card>
             <CardHeader>
@@ -371,6 +496,49 @@ export default function EducationStudyPaths(){
                   value={record.note} onChange={e=>updateRecord("note",e.target.value)}
                   className="w-full rounded-lg border border-input bg-background p-3 text-base"/>
               </div>
+              <section aria-label="Manual lesson revision planner"
+                className="space-y-4 rounded-xl border border-border bg-background p-4">
+                <div>
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <CalendarDays aria-hidden="true" className="h-4 w-4 text-primary"/>
+                    Manual revision planner
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {revisionStatus(revisionRow,record,asOfUtc)}
+                    {revisionRow.next_due_on?" · Next review: "+revisionRow.next_due_on+" UTC":""}
+                    {" · Reviews recorded: "+revisionRow.review_count}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="study-revision-interval" className="mb-1 block text-sm font-medium">
+                      Review again in</label>
+                    <select id="study-revision-interval" value={revisionRow.interval_days}
+                      onChange={e=>configureRevision(Number(e.target.value))}
+                      className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                      {STUDY_REVISION_INTERVALS.map(days=><option key={days} value={days}>
+                        {days} {days===1?"day":"days"}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="study-review-confidence" className="mb-1 block text-sm font-medium">
+                      Self-reported confidence</label>
+                    <select id="study-review-confidence" value={reviewConfidence}
+                      onChange={e=>setReviewConfidence(e.target.value as ReviewConfidence)}
+                      className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                      <option value="needs_practice">Needs practice</option>
+                      <option value="developing">Developing</option>
+                      <option value="comfortable">Comfortable</option>
+                    </select>
+                  </div>
+                </div>
+                <Button variant="outline" disabled={!record.completed}
+                  onClick={reviewedToday}>Reviewed today — schedule next review</Button>
+                <p className="text-xs text-muted-foreground">
+                  Only a manually completed lesson can be reviewed. Reopening the lesson
+                  clears its review history and due date, while keeping your selected interval.
+                </p>
+              </section>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                 <Button variant={record.completed?"outline":"default"}
                   disabled={!record.completed&&(!record.activity.trim()||!record.reflection.trim())}
@@ -398,6 +566,8 @@ export default function EducationStudyPaths(){
               <option value="remaining">Not completed</option>
               <option value="completed">Completed</option>
               <option value="flagged">Flagged for review</option>
+              <option value="due">Due for revision</option>
+              <option value="unscheduled">Completed, needs schedule</option>
             </select>
             {shownLessons.length===0?<div className="space-y-2">
               <p className="text-sm text-muted-foreground">No lessons match this filter.</p>
@@ -413,6 +583,7 @@ export default function EducationStudyPaths(){
                   <span className="font-semibold">{l.number}. {l.title}</span>
                   <span className="mt-1 block text-xs text-muted-foreground">
                     {r.completed?"Completed":"Not completed"}{r.flagged?" · Flagged":""}
+                    {r.completed?" · "+revisionStatus(revision[l.number-1],r,asOfUtc):""}
                   </span>
                 </button>;
               })}
