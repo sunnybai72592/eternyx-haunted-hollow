@@ -43,4 +43,8 @@ export const WORKSPACE_TEAM_EVENT_LABELS=Object.freeze({
   member_joined:"Member joined",member_removed:"Member removed",
   role_changed:"Member role changed",task_created:"Task created",
   task_updated:"Task updated",task_deleted:"Task deleted",
+  task_assigned:"Task assigned",task_unassigned:"Task unassigned",
+  comment_posted:"Task comment posted",comment_redacted:"Task comment redacted",
+  step_added:"Checklist step added",step_checked:"Checklist step completed",
+  step_unchecked:"Checklist step reopened",step_removed:"Checklist step removed",
 });

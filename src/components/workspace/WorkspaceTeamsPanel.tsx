@@ -3,6 +3,8 @@ import { Archive, CheckCircle2, ClipboardCopy, FolderKanban, History, MailPlus, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
+import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -39,6 +41,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [inviteRole,setInviteRole]=useState("editor");
   const [revealedToken,setRevealedToken]=useState<{token:string;role:string;expires:string}|null>(null);
   const [draft,setDraft]=useState<Draft>(freshDraft);
+  const [taskFilter,setTaskFilter]=useState("all");
+  const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState(false);
@@ -51,6 +55,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const editor=teamCanEdit(currentRole,selected?.status);
   const canInvite=teamCanInvite(currentRole,selected?.status);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
+  const visibleTasks=useMemo(
+    ()=>tasks.filter(task=>workspaceTeamTaskMatchesFilter(task,taskFilter,owner)),
+    [tasks,taskFilter,owner]);
+  const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
   const assureOwner=async(expectedOwner:string)=>{
     const {data,error:authError}=await supabase.auth.getUser();
@@ -95,6 +103,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const token=++epoch.current;
     setSpaces([]);setSelectedId(null);setMembers([]);setTasks([]);
     setEvents([]);setInvites([]);setRevealedToken(null);
+    setTaskFilter("all");setDiscussionTaskId(null);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     setLoading(true);
     void (async()=>{
@@ -113,6 +122,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const token=++epoch.current;
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
     setRevealedToken(null);setDraft(freshDraft());
+    setTaskFilter("all");setDiscussionTaskId(null);
     if(!selectedId)return;
     setLoading(true);
     void (async()=>{
@@ -216,6 +226,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         p_space_id:selected.id,p_task_id:task.id,
       });
       if(queryError||data!==true)throw new Error(queryError?.message??"Task deletion not confirmed");
+      if(discussionTaskId===task.id)setDiscussionTaskId(null);
     },"Shared task deleted. Team activity retained.");
   };
   const changeRole=(member:Member,role:string|null)=>{
@@ -402,6 +413,18 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
 
       <div className="space-y-3 rounded-lg border border-border p-3">
         <h4 className="text-sm font-semibold">Shared team tasks ({tasks.length}/500)</h4>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Team task filters">
+          {([
+            ["all","All"],
+            ["mine","Assigned to me"],
+            ["unassigned","Unassigned"],
+            ["outstanding","Outstanding"],
+          ] as const).map(([value,label])=><Button key={value} size="sm" type="button"
+            variant={taskFilter===value?"default":"outline"}
+            onClick={()=>setTaskFilter(value)}>
+            {label}{value==="mine"?" ("+tasks.filter(t=>t.assignee_id===owner).length+")":""}
+          </Button>)}
+        </div>
         {editor&&<form className="grid gap-2 sm:grid-cols-2" onSubmit={saveTask}>
           <div className="sm:col-span-2">
             <label htmlFor="team17-task-title" className="text-xs">Task title</label>
@@ -451,7 +474,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
           </div>
         </form>}
         <div className="max-h-[24rem] divide-y divide-border overflow-y-auto">
-          {tasks.map(task=><div key={task.id} className="flex flex-wrap items-center gap-3 py-3 text-xs">
+          {visibleTasks.map(task=><div key={task.id} className="flex flex-wrap items-center gap-3 py-3 text-xs">
             <div className="min-w-0 flex-1">
               <p className="font-medium break-words">{task.title}</p>
               <p className="text-muted-foreground break-words">{task.details.slice(0,300)}</p>
@@ -461,6 +484,12 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                 {task.due_on?" due "+task.due_on:" no due date"}
               </p>
             </div>
+            <Button size="sm" type="button"
+              variant={discussionTaskId===task.id?"default":"outline"}
+              disabled={disabled||busy}
+              onClick={()=>setDiscussionTaskId(value=>value===task.id?null:task.id)}>
+              {discussionTaskId===task.id?"Close discussion":"Discussion & checklist"}
+            </Button>
             {editor&&<div className="flex gap-1">
               <Button size="sm" type="button" variant="outline"
                 disabled={busy||disabled} onClick={()=>editTask(task)}>Edit</Button>
@@ -468,10 +497,16 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                 disabled={busy||disabled} onClick={()=>removeTask(task)}>Delete</Button>
             </div>}
           </div>)}
-          {!tasks.length&&<p className="py-3 text-xs text-muted-foreground">
-            No shared tasks yet.
+          {!visibleTasks.length&&<p className="py-3 text-xs text-muted-foreground">
+            {tasks.length?"No tasks match this filter.":"No shared tasks yet."}
           </p>}
         </div>
+        {discussionTask&&<WorkspaceTeamTaskDiscussion
+          key={owner+":"+selected.id+":"+discussionTask.id}
+          owner={owner} spaceId={selected.id} taskId={discussionTask.id}
+          role={currentRole} active={selected.status==="active"}
+          disabled={busy||disabled||loading}
+          onChanged={()=>{void refresh().catch(failure=>setError(errorMessage(failure)));}} />}
       </div>
 
       <div className="space-y-2 rounded-lg border border-border p-3">
