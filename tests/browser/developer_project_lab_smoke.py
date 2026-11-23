@@ -144,7 +144,7 @@ def recovery_and_tamper(page):
     page.locator("#project-auto-recovery").check()
     page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
     page.locator("#project-editor").fill("<main><h1>Recoverable draft</h1></main>")
-    page.wait_for_function("(key) => { try { const records=JSON.parse(localStorage.getItem(key)||'[]'); return records.length > 0; } catch { return false; } }", RECOVERY_KEY, timeout=12000)
+    page.wait_for_function("(key) => { try { const records=JSON.parse(localStorage.getItem(key)||'[]'); return records.length > 0; } catch { return false; } }", arg=RECOVERY_KEY, timeout=12000)
     entries=store(page, RECOVERY_KEY)
     assert entries[0]["project"]["files"][0]["content"] == "<main><h1>Recoverable draft</h1></main>"
     page.get_by_role("button", name="Verify & restore").first.click()
