@@ -99,12 +99,22 @@ function fakeFactory(options = {}) {
       const actor = identities[index++];
       return {
         auth: {
-          signInWithPassword: async () => ({
-            data:{user:{id:actor}},error:null,
-          }),
+          signInWithPassword: async () => {
+            calls.push({actor,action:'signIn'});
+            if (options.signInFailActor === actor)
+              throw new Error('mock private authentication detail must never be printed');
+            return {data:{user:{id:actor}},error:null};
+          },
           getUser: async () => ({
             data:{user:{id:actor}},error:null,
           }),
+          signOut: async ({scope}) => {
+            calls.push({actor,action:'signOut',scope});
+            if (options.signOutThrowsActor === actor)
+              throw new Error('mock secret-bearing sign-out exception');
+            return {error: options.signOutFailActor === actor
+              ? {message:'mock private Auth failure'} : null};
+          },
         },
         rpc: async () => ({data: actor === 'admin-1' && !options.adminRoleRemoved,error:null}),
         from(table) {
@@ -198,6 +208,8 @@ test('only direct read operations and Auth sign-in are allowed by source contrac
   assert.match(src, /service_request_triage/);
   assert.doesNotMatch(src, /\.(insert|update|delete|upsert|storage\.upload)\(/);
   assert.doesNotMatch(src, /supabase\.auth\.admin|\.auth\.admin\./);
+  assert.match(src, /Promise\.allSettled\(/);
+  assert.match(src, /auth\.signOut\(\{ scope: 'local' \}\)/);
   assert.match(src, /payload\.role === 'service_role'/);
   assert.match(action, /workflow_dispatch:/);
   assert.match(action, /environment: services-staging/);
@@ -326,4 +338,67 @@ test('phase 25 release notes demand real evidence and never assert deployment', 
   assert.match(notes,/connection timeout/i);
   assert.match(notes,/not restored/i);
   assert.match(notes,/real-account staging/i);
+});
+
+test('Phase 26 signs out all three dedicated actors with local scope after a real success', async () => {
+  const factory=fakeFactory();
+  assert.equal(await runStagingReadiness(validateStagingConfig(config()),factory.client),true);
+  const out=factory.calls.filter((c)=>c.action==='signOut');
+  assert.deepEqual(out.map((c)=>[c.actor,c.scope]),[
+    ['user-A','local'],['user-B','local'],['admin-1','local'],
+  ]);
+  assert.equal(factory.calls.some((c)=>c.actor==='anonymous' && c.action==='signOut'),false);
+  const lastSignIn=factory.calls.reduce((i,c,index)=>c.action==='signIn'?index:i,-1);
+  assert.ok(lastSignIn>=0 && factory.calls.indexOf(out[0])>lastSignIn);
+});
+
+test('Phase 26 cleans up all actors even after an RLS assertion failure', async () => {
+  const factory=fakeFactory({leakCustomerB:true});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /unrelated account can see a forbidden fixture/);
+  assert.deepEqual(factory.calls.filter((c)=>c.action==='signOut').map((c)=>c.actor),
+    ['user-A','user-B','admin-1']);
+});
+
+test('Phase 26 settles concurrent sign-in outcomes before attempting any sign-out', async () => {
+  const factory=fakeFactory({signInFailActor:'user-B'});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Unable to verify all dedicated staging identities/);
+  const attempts=factory.calls.filter((c)=>c.action==='signIn');
+  const logouts=factory.calls.filter((c)=>c.action==='signOut');
+  assert.equal(attempts.length,3);
+  assert.equal(logouts.length,3);
+  assert.ok(factory.calls.indexOf(logouts[0]) > factory.calls.indexOf(attempts[2]));
+});
+
+test('Phase 26 reports a failed local sign-out and attempts remaining cleanups', async () => {
+  const factory=fakeFactory({signOutFailActor:'user-A'});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Dedicated staging Auth session cleanup failed/);
+  assert.equal(factory.calls.filter((c)=>c.action==='signOut').length,3);
+});
+
+test('Phase 26 contains throwing sign-out errors without short-circuiting remaining actors', async () => {
+  const factory=fakeFactory({signOutThrowsActor:'user-B'});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Dedicated staging Auth session cleanup failed/);
+  assert.deepEqual(factory.calls.filter((c)=>c.action==='signOut').map((c)=>c.actor),
+    ['user-A','user-B','admin-1']);
+});
+
+test('Phase 26 preserves the original privacy assertion if cleanup also fails', async () => {
+  const factory=fakeFactory({leakCustomerB:true,signOutThrowsActor:'admin-1'});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /unrelated account can see a forbidden fixture/);
+  assert.equal(factory.calls.filter((c)=>c.action==='signOut').length,3);
+});
+
+test('Phase 26 documents current database blocker and independent staging acceptance', async () => {
+  const doc=await read('docs/ETERNYX_SERVICES_SESSION_LIFECYCLE_PHASE26.md');
+  assert.match(doc,/Phase 13 before Phase 14/);
+  assert.match(doc,/connection timeout/i);
+  assert.match(doc,/no new SQL migration/i);
+  assert.match(doc,/local sign-out/i);
+  assert.match(doc,/real.account staging/i);
+  assert.match(doc,/not production.ready/i);
 });
