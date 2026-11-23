@@ -6,8 +6,6 @@ on:
       - "src/lib/ai/portableVideoBundle.mjs"
       - "gpu-worker/launch_portable_video.py"
       - "gpu-worker/tests/test_launch_portable_video.py"
-      - "gpu-worker/launch_portable_video.py"
-      - "gpu-worker/tests/test_launch_portable_video.py"
       - "tests/portable-video-bundle.test.mjs"
       - "src/components/LocalVideoEditor.tsx"
       - "gpu-worker/render_video_timeline.py"
@@ -18,6 +16,8 @@ on:
     branches: [main]
     paths:
       - "src/lib/ai/portableVideoBundle.mjs"
+      - "gpu-worker/launch_portable_video.py"
+      - "gpu-worker/tests/test_launch_portable_video.py"
       - "tests/portable-video-bundle.test.mjs"
       - "src/components/LocalVideoEditor.tsx"
       - "gpu-worker/render_video_timeline.py"
