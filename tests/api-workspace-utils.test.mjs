@@ -32,7 +32,7 @@ test("environment placeholders resolve in all request fields without persistence
   assert.throws(() => expandApiVariables("{{unknown}}", env), /Missing environment/);
   assert.throws(() => expandApiVariables("{{a}}", parseApiEnvironment("a={{b}}\nb=value")), /Unresolved or nested/);
   assert.throws(() => parseApiEnvironment("a=1\na=2"), /Duplicate/);
-  assert.throws(() => parseApiEnvironment("constructor=x"), /invalid name|/); // names are inert own properties
+  assert.equal(parseApiEnvironment("constructor=x").constructor, "x"); // own-key storage, not prototype mutation
   assert.throws(() => resolveApiDraft({ url: "{{missing}}", method: "GET" }, ""), /Missing environment/);
 });
 
