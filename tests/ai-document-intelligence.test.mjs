@@ -132,10 +132,18 @@ test("stale file reads and derived findings are invalidated on source changes", 
   ]) assert.ok(page.includes(fragment), "Missing local state boundary: " + fragment);
 });
 
-test("browser-only workflow never uploads documents or calls AI providers", () => {
+test("local workflows stay browser-only while AI requests require an explicit action", () => {
   assert.doesNotMatch(page + helper, /supabase\.functions\.invoke|ai-generation-job-enqueue|fetch\(|\beval\(/);
-  assert.match(page, /PDF\/OCR, image extraction, AI questions and/);
-  assert.match(page, /No file is uploaded, no AI job is created, and no credits are reserved/);
+  assert.match(page, /No automatic upload, PDF parsing, OCR, image analysis/);
+  assert.match(page, /Only clicking Analyze with AI Chat sends/);
+  assert.match(page, /useAIStudioChat/);
+  assert.match(page, /ai\.run\(request\.featureKey, formatDocumentDraft\(request\)\)/);
+  assert.match(page, /setAiPassage\(null\)/);
+  assert.match(page, /captureSelectedPassage/);
+  assert.match(page, /source\.slice\(field\.selectionStart, field\.selectionEnd\)/);
+  assert.match(page, /ai\.error/);
+  assert.match(page, /ai\.result/);
+  assert.match(page, /4,000 characters/);
   assert.match(page, /navigator\.clipboard\.writeText\(text\)/);
   assert.match(page, /role="alert"/);
 });

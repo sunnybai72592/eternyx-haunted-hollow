@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -36,12 +37,15 @@ const AIDocumentIntelligence = () => {
   const [task, setTask] = useState<LocalDocumentTask>("analyze");
   const [instruction, setInstruction] = useState("");
   const [draft, setDraft] = useState<LocalDocumentDraft | null>(null);
+  const [aiPassage, setAiPassage] = useState<string | null>(null);
+  const ai = useAIStudioChat();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const sourceField = useRef<HTMLTextAreaElement>(null);
   const fileReadVersion = useRef(0);
 
   const invalidate = () => {
+    ai.invalidate();
     setInspection(null);
     setSearchResults(null);
     setDraft(null);
@@ -72,6 +76,7 @@ const AIDocumentIntelligence = () => {
       invalidate();
       setKind(loaded.kind);
       setSource(loaded.text);
+      setAiPassage(null);
       setFileName(loaded.name);
     } catch (e) {
       if (version === fileReadVersion.current) setError(explainError(e));
@@ -85,6 +90,7 @@ const AIDocumentIntelligence = () => {
     setLoading(false);
     setFileName(null);
     setSource(value);
+    setAiPassage(null);
     invalidate();
   };
 
@@ -94,6 +100,7 @@ const AIDocumentIntelligence = () => {
     setLoading(false);
     setKind("txt");
     setSource("");
+    setAiPassage(null);
     setFileName(null);
     setSearchTerm("");
     setCaseSensitive(false);
@@ -154,6 +161,43 @@ const AIDocumentIntelligence = () => {
       setDraft(prepareDocumentDraft(source, kind, task, instruction));
     } catch (e) { setError(explainError(e)); }
   };
+  const captureSelectedPassage = () => {
+    const field = sourceField.current;
+    if (!field || field.selectionStart === field.selectionEnd) {
+      setError("Highlight a specific passage in the document text first.");
+      return;
+    }
+    const passage = source.slice(field.selectionStart, field.selectionEnd);
+    if (!passage.trim()) {
+      setError("Select a nonempty passage to send for AI analysis.");
+      return;
+    }
+    setAiPassage(passage);
+    ai.invalidate();
+    setError(null);
+    setNotice("Excerpt selected. Nothing was uploaded or sent to AI.");
+  };
+  const askAI = () => {
+    try {
+      const request = prepareDocumentDraft(aiPassage ?? source, kind, task, instruction);
+      setDraft(request);
+      setError(null);
+      setNotice(null);
+      void ai.run(request.featureKey, formatDocumentDraft(request));
+    } catch (failure) {
+      setError(explainError(failure));
+    }
+  };
+  const copyAIResult = async () => {
+    if (!ai.result) return;
+    try {
+      await navigator.clipboard.writeText(ai.result);
+      setNotice("AI-generated response copied.");
+      setError(null);
+    } catch {
+      setError("Clipboard access is unavailable. Select the AI response and copy it manually.");
+    }
+  };
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -175,16 +219,19 @@ const AIDocumentIntelligence = () => {
           <div className="flex items-center gap-3 text-cyan-200"><FileSearch className="h-7 w-7" />LOCAL DOCUMENT WORKSPACE</div>
           <h1 className="mt-4 text-3xl font-bold sm:text-5xl">AI Document Intelligence</h1>
           <p className="mt-4 max-w-3xl text-slate-300">
-            Inspect, search, and prepare user-provided text documents privately in your browser.
+            Inspect and search local text, or explicitly request AI analysis or field extraction from a chosen text passage.
           </p>
-          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Local tools ready · AI analysis disabled</Badge>
+          <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">Local tools · opt-in AI Chat text analysis</Badge>
         </section>
 
         <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
           <ShieldCheck className="h-4 w-4" />
           <AlertDescription>
-            TXT, Markdown, CSV, JSON and LOG are supported for local text inspection only. PDF/OCR, image extraction, AI questions and
-            server-backed document understanding are not enabled. No file is uploaded, no AI job is created, and no credits are reserved.
+            TXT, Markdown, CSV, JSON and LOG inspection stays local. Only clicking Analyze with AI Chat sends
+            the full document text or a selected excerpt to the authenticated chat backend and its configured provider,
+            and stores it in chat history using ai.chat credits. No automatic upload, PDF parsing, OCR, image analysis,
+            independent fact checking or dedicated document model is activated. Do not send sensitive documents without permission.
+            The AI request, including task instructions, must fit 4,000 characters; content is never silently truncated.
             File extension and MIME labels are not verified proof of a document's format.
           </AlertDescription>
         </Alert>
@@ -217,7 +264,7 @@ const AIDocumentIntelligence = () => {
               <span>Document text</span>
               <textarea ref={sourceField} id="document-source" value={source} maxLength={MAX_DOCUMENT_CHARACTERS} rows={10}
                 onChange={e => setEditedSource(e.target.value)}
-                placeholder="Paste plain text, Markdown, CSV or JSON here. Nothing is sent to a server…"
+                placeholder="Paste plain text, Markdown, CSV or JSON here. Local inspection stays private; AI submission requires a separate click…"
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
             </label>
@@ -227,8 +274,16 @@ const AIDocumentIntelligence = () => {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={inspect} disabled={!source.trim() || loading}><FileCheck2 className="mr-2 h-4 w-4" />Inspect document</Button>
+              <Button type="button" variant="outline" disabled={!source.trim() || loading} onClick={captureSelectedPassage}>
+                <ScanSearch className="mr-2 h-4 w-4" />Use highlighted excerpt for AI
+              </Button>
               <Button type="button" variant="ghost" onClick={clear}><RotateCcw className="mr-2 h-4 w-4" />Clear workspace</Button>
             </div>
+            {aiPassage && (
+              <p role="status" className="text-xs text-cyan-200">
+                AI excerpt selected: {aiPassage.length} characters. Only this excerpt—not the entire document—will be submitted if you click Analyze with AI Chat.
+              </p>
+            )}
             {inspection && (
               <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-950 p-4">
                 <strong className="text-white">Local document inspection</strong>
@@ -312,18 +367,18 @@ const AIDocumentIntelligence = () => {
         </Card>
 
         <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
-          <CardHeader><CardTitle className="text-white">Future AI analysis request</CardTitle><CardDescription className="text-slate-400">Prepare a local, copyable request using the existing document feature registry. Nothing is submitted.</CardDescription></CardHeader>
+          <CardHeader><CardTitle className="text-white">Document analysis request</CardTitle><CardDescription className="text-slate-400">Prepare a local request, then optionally submit a bounded excerpt for AI analysis using existing chat credits.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             <div role="group" aria-label="Document request type" className="flex flex-wrap gap-2">
               <Button type="button" variant={task === "analyze" ? "default" : "outline"} aria-pressed={task === "analyze"}
-                onClick={() => { setTask("analyze"); setDraft(null); }}>Analyze</Button>
+                onClick={() => { setTask("analyze"); setDraft(null); ai.invalidate(); }}>Analyze</Button>
               <Button type="button" variant={task === "extract" ? "default" : "outline"} aria-pressed={task === "extract"}
-                onClick={() => { setTask("extract"); setDraft(null); }}>Extract fields</Button>
+                onClick={() => { setTask("extract"); setDraft(null); ai.invalidate(); }}>Extract fields</Button>
             </div>
             <label htmlFor="document-instruction" className="block space-y-2 text-sm text-slate-300">
               <span>{task === "extract" ? "Fields to extract · required" : "Question or analysis instructions · optional"} (max 1,000 characters)</span>
               <textarea id="document-instruction" value={instruction} maxLength={1000} rows={3}
-                onChange={e => { setInstruction(e.target.value); setDraft(null); }}
+                onChange={e => { setInstruction(e.target.value); setDraft(null); ai.invalidate(); }}
                 placeholder={task === "extract" ? "For example: title, date, total, supplier" : "For example: identify key points and unresolved questions"}
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500" />
             </label>
@@ -340,6 +395,27 @@ const AIDocumentIntelligence = () => {
                 </Button>
               </div>
             )}
+            <section className="space-y-3 rounded-xl border border-violet-400/20 bg-slate-950 p-4" aria-label="Optional document AI analysis">
+              <h3 className="font-semibold text-white">Analyze the selected text with ETERNYX AI</h3>
+              <p className="text-sm text-slate-400">
+                Only an explicit click sends your {aiPassage ? "highlighted excerpt" : "full document text"} to the
+                existing AI Chat provider. Credit usage, saved chat history, and possible external processing apply.
+                The 4,000-character total request limit is enforced before any network call.
+                Output is not a verified extraction or factual guarantee.
+              </p>
+              <Button type="button" disabled={!source.trim() || loading || ai.loading || (task === "extract" && !instruction.trim())} onClick={askAI}>
+                <FileSearch className="mr-2 h-4 w-4" />{ai.loading ? "Analyzing with AI…" : "Analyze with AI Chat"}
+              </Button>
+              {ai.loading && <p role="status" className="text-xs text-cyan-200">Request in progress. Changing input hides the old response but does not cancel a submitted credit charge.</p>}
+              {ai.error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{ai.error}</AlertDescription></Alert>}
+              {ai.result && (
+                <div className="space-y-3">
+                  <Badge variant="outline">AI-generated · check against source text</Badge>
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-sm text-slate-200">{ai.result}</pre>
+                  <Button type="button" variant="outline" onClick={copyAIResult}><ClipboardCopy className="mr-2 h-4 w-4" />Copy AI analysis</Button>
+                </div>
+              )}
+            </section>
           </CardContent>
         </Card>
         <section className="grid gap-4 md:grid-cols-2">
@@ -349,7 +425,7 @@ const AIDocumentIntelligence = () => {
                 <CardTitle className="text-white">{feature.title}</CardTitle>
                 <CardDescription className="text-slate-400">{feature.description}</CardDescription>
               </CardHeader>
-              <CardContent><Badge variant="outline">Planned · AI disabled</Badge></CardContent>
+              <CardContent><Badge variant="outline">Dedicated backend planned · opt-in AI Chat text bridge available by entitlement</Badge></CardContent>
             </Card>
           ))}
         </section>

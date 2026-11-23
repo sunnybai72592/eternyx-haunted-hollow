@@ -112,9 +112,28 @@ test("UI contains source and evidence removal, bounded input and clipboard feedb
   ]) assert.ok(page.includes(fragment), "Missing UI boundary: " + fragment);
 });
 
-test("UI provides clear local-only disclosures and no external execution", () => {
+test("UI keeps local notebook private until explicit, bounded AI synthesis", () => {
   assert.match(page, /No URLs are fetched, checked or ranked/);
   assert.match(page, /Research notes are in memory only/);
-  assert.match(page, /Actual AI research is disabled/);
+  assert.match(page, /Synthesize notes with AI Chat/);
+  assert.match(page, /useAIStudioChat/);
+  assert.match(page, /ai\.run\("ai.research.summarize", formatResearchNotebookAIRequest\(request\)\)/);
+  assert.match(page, /No webpages are opened/);
+  assert.match(page, /ai\.error/);
+  assert.match(page, /ai\.result/);
   assert.doesNotMatch(page + helper, /supabase\.functions\.invoke|ai-generation-job-enqueue|fetch\(|\beval\(|localStorage\./);
+});
+
+test("AI note synthesis is explicitly grounded in unverified notes without suggesting a live search", () => {
+  const request = local.prepareResearchDraft("research", "What changed?", [source()], [entry()]);
+  const prompt = local.formatResearchNotebookAIRequest(request);
+  assert.match(prompt, /Work ONLY from the user-provided research notebook/);
+  assert.match(prompt, /Never claim live web access/);
+  assert.match(prompt, /BEGIN UNVERIFIED USER RESEARCH NOTES/);
+  assert.match(prompt, /What changed/);
+  assert.doesNotMatch(prompt, /independently checked sources; distinguish/);
+  const summary = local.formatResearchNotebookAIRequest(
+    local.prepareResearchDraft("summarize", "Summarize", [source()], [entry()]),
+  );
+  assert.match(summary, /Summarize the user's notes/);
 });

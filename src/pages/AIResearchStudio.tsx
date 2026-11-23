@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, Link2, RotateCcw, Search, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,6 +18,7 @@ import {
   filterResearchEvidence,
   formatLocalResearchBrief,
   formatResearchDraft,
+  formatResearchNotebookAIRequest,
   prepareResearchDraft,
   removeResearchSource,
   type ResearchDraft,
@@ -45,12 +47,14 @@ const AIResearchStudio = () => {
   const [draft, setDraft] = useState<ResearchDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const ai = useAIStudioChat();
 
   const counts = countResearchStances(evidence);
   const visibleEvidence = filterResearchEvidence(sources, evidence, filterText);
   const brief = formatLocalResearchBrief(sources, evidence);
 
   const invalidate = () => {
+    ai.invalidate();
     setDraft(null);
     setError(null);
     setNotice(null);
@@ -129,6 +133,33 @@ const AIResearchStudio = () => {
       setError(describe(e));
     }
   };
+  const synthesizeWithAI = () => {
+    try {
+      if (!sources.length || !evidence.length) {
+        setError("Add at least one user-entered reference and evidence note before asking AI to synthesize it.");
+        return;
+      }
+      const request = prepareResearchDraft(mode, question, sources, evidence);
+      setDraft(request);
+      setError(null);
+      setNotice(null);
+      // Research search remains planned. This is only note synthesis through
+      // the existing ai.chat entitlement and no external browsing is performed.
+      void ai.run("ai.research.summarize", formatResearchNotebookAIRequest(request));
+    } catch (failure) {
+      setError(describe(failure));
+    }
+  };
+  const copyAIResult = async () => {
+    if (!ai.result) return;
+    try {
+      await navigator.clipboard.writeText(ai.result);
+      setNotice("AI-generated synthesis copied.");
+      setError(null);
+    } catch {
+      setError("Clipboard access is unavailable. Select and copy the response manually.");
+    }
+  };
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -167,19 +198,21 @@ const AIResearchStudio = () => {
           <div className="flex items-center gap-3 text-fuchsia-200"><Search className="h-7 w-7" />MANUAL EVIDENCE WORKSPACE</div>
           <h1 className="mt-4 text-3xl font-bold sm:text-5xl">AI Research Studio</h1>
           <p className="mt-4 max-w-3xl text-slate-300">
-            Collect source references, organize claims and counterclaims, and copy a source-linked research brief.
+            Collect evidence notes and opposing viewpoints, then optionally ask ETERNYX AI to synthesize your unverified notebook.
           </p>
           <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">
-            Local research notebook · AI disabled
+            Local notebook · opt-in AI note synthesis
           </Badge>
         </section>
 
         <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
           <ShieldCheck className="h-4 w-4" />
           <AlertDescription>
-            Actual AI research is disabled. No URLs are fetched, checked or ranked; titles, publishers, excerpts and
-            stance tags are user-entered and unverified. Research notes are in memory only and will be lost on refresh.
-            Nothing is saved to an account, sent to a provider, or charged. Never enter private or token-bearing links.
+            No URLs are fetched, checked or ranked. Titles, publishers, excerpts and stance tags are user-entered
+            and unverified. Research notes are in memory only until refresh. Local actions never submit data, but clicking
+            Synthesize notes with AI Chat sends your whole bounded notebook to the configured provider and saves chat history;
+            ai.chat credits apply. This is NOT independent research, fact-checking or a live search engine.
+            Never enter private, token-bearing or confidential links without authorization.
           </AlertDescription>
         </Alert>
 
@@ -190,7 +223,7 @@ const AIResearchStudio = () => {
                 <CardTitle className="text-white">{feature.title}</CardTitle>
                 <CardDescription className="text-slate-400">{feature.description}</CardDescription>
               </CardHeader>
-              <CardContent><Badge variant="outline">Planned · AI disabled</Badge></CardContent>
+              <CardContent><Badge variant="outline">Live research backend planned · opt-in note synthesis via AI Chat</Badge></CardContent>
             </Card>
           ))}
         </section>
@@ -326,8 +359,8 @@ const AIResearchStudio = () => {
           <CardHeader>
             <CardTitle className="text-white">3. Research brief & request draft</CardTitle>
             <CardDescription className="text-slate-400">
-              Copy a grounded inventory of your own references and notes, or prepare a future AI research/summarization request.
-              Neither action checks the claims or submits an AI job.
+              Copy your manually compiled notes, prepare a request, or explicitly submit the notebook to AI Chat for an unverified synthesis.
+              No source is fetched, and AI synthesis consumes existing chat credits only when you choose to submit.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -364,6 +397,27 @@ const AIResearchStudio = () => {
                 </Button>
               </div>
             )}
+            <section className="space-y-3 rounded-xl border border-violet-400/20 bg-slate-950 p-4" aria-label="Optional AI note synthesis">
+              <h3 className="font-semibold text-white">Synthesize your notes with AI Chat</h3>
+              <p className="text-sm text-slate-400">
+                Explicit network action using ai.chat credits and saved conversation history. No webpages are opened
+                or verified. AI answers may be wrong; all references remain user-entered. The total notebook and instructions
+                must fit 4,000 characters; oversized requests are rejected before submission without truncating evidence.
+              </p>
+              <Button type="button" disabled={!question.trim() || sources.length === 0 || evidence.length === 0 || ai.loading}
+                onClick={synthesizeWithAI}>
+                <Search className="mr-2 h-4 w-4" />{ai.loading ? "Synthesizing with AI…" : "Synthesize notes with AI Chat"}
+              </Button>
+              {ai.loading && <p role="status" className="text-xs text-cyan-200">AI request running. Changes hide the old result but cannot cancel a submitted credit charge.</p>}
+              {ai.error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{ai.error}</AlertDescription></Alert>}
+              {ai.result && (
+                <div className="space-y-3">
+                  <Badge variant="outline">AI-generated · sources not independently verified</Badge>
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-sm text-slate-200">{ai.result}</pre>
+                  <Button type="button" variant="outline" onClick={copyAIResult}><ClipboardCopy className="mr-2 h-4 w-4" />Copy AI synthesis</Button>
+                </div>
+              )}
+            </section>
             <Button type="button" variant="ghost" onClick={clear}>
               <RotateCcw className="mr-2 h-4 w-4" />Clear entire notebook
             </Button>
