@@ -13,7 +13,7 @@ const PRODUCTION_REF='wcncuarekaofmfurbtbh';
 const SCHEMA='eternyx-services-phase35-readonly-evidence-v1';
 const REF=/^[a-z]{20}$/;
 const VERSION=/^20\d{12}$/;
-const NAME=/^[a-z][a-z0-9_]{2,100}$/;
+const NAME=/^[a-z0-9][a-z0-9_-]{0,127}$/;
 const MAX_AGE_MS=24*60*60*1000;
 const MAX_FUTURE_SKEW_MS=5*60*1000;
 const KEYS=Object.freeze([
@@ -23,7 +23,6 @@ const KEYS=Object.freeze([
 ]);
 const fail=code=>{throw Error('services_phase35_'+code)};
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
-const sorted=(xs)=>[...xs].sort((a,b)=>a.localeCompare(b));
 
 function validateCapture(evidence,now){
   if(!obj(evidence)||evidence.schema!==SCHEMA||
