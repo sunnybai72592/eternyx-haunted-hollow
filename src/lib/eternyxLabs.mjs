@@ -14,6 +14,11 @@ export const labCatalog = Object.freeze([
   { id: "jwt", title: "JWT structure inspector", area: "Identity & auth", level: "Intermediate", description: "Inspect JWT header and claim names without trusting or verifying its signature." },
   { id: "redact", title: "Sensitive-log redaction", area: "Defensive operations", level: "Intermediate", description: "Practice pattern-based removal of credentials from training logs." },
   { id: "sha", title: "SHA-256 text fingerprint", area: "Data integrity", level: "Foundations", description: "Calculate a text digest locally using browser Web Crypto, without upload." },
+  { id: "subnet", title: "IPv4 subnet calculator", area: "Network fundamentals", level: "Intermediate", description: "Compute IPv4 network, mask, broadcast, and assignable ranges locally." },
+  { id: "chmod", title: "UNIX permissions trainer", area: "Linux security", level: "Foundations", description: "Simulate octal permission bits and umask without modifying files." },
+  { id: "csp", title: "CSP policy lint", area: "Web hardening", level: "Intermediate", description: "Review pasted Content-Security-Policy directives for common risky configurations." },
+  { id: "cors", title: "CORS response trainer", area: "API security", level: "Intermediate", description: "Simulate a bounded browser response-sharing check from pasted CORS headers." },
+  { id: "cookie", title: "Cookie attribute clinic", area: "Session security", level: "Intermediate", description: "Inspect synthetic Set-Cookie attributes without showing the cookie value." },
 ]);
 
 export const sampleHeaders = [

@@ -4,12 +4,14 @@ import {
   ArrowLeft, ArrowRight, BookOpen, Braces, CheckCircle2, Code2, FileCode2,
   FlaskConical, Globe2, LockKeyhole, Play, RotateCcw, ShieldAlert, ShieldCheck,
   TerminalSquare, XCircle, Binary, Link2, FileKey2, ScanText, Hash,
+  Network, Calculator, ShieldCheck as ShieldSettings, Cookie,
 } from "lucide-react";
 import {
   auditResponseHeaders, buildDomXssDocument, buildPlaygroundDocument,
   evaluateAccess, labCatalog, sampleHeaders, sqlQueryComparison,
 } from "@/lib/eternyxLabs.mjs";
 import BrowserSecurityToolkit from "@/components/labs/BrowserSecurityToolkit";
+import BrowserSecurityFoundations from "@/components/labs/BrowserSecurityFoundations";
 
 const startingHtml = '<main><h1>Hello, ETERNYX!</h1><p id="result">Build something real.</p><button id="hello">Run an interaction</button></main>';
 const startingCss = 'body { background: #f8fafc; }\nh1 { color: #4f46e5; }\nbutton { padding: 12px; background: #111827; color: white; border: 0; border-radius: 8px; cursor: pointer; }';
@@ -27,6 +29,11 @@ const labIcons = {
   jwt: FileKey2,
   redact: ScanText,
   sha: Hash,
+  subnet: Network,
+  chmod: Calculator,
+  csp: ShieldSettings,
+  cors: ShieldSettings,
+  cookie: Cookie,
 };
 type LabId = keyof typeof labIcons;
 type AccessRole = "viewer" | "editor" | "admin";
@@ -88,11 +95,11 @@ export default function EternyxLabs() {
             </span>
             <h1 className="mt-5 text-3xl font-black tracking-tight sm:text-5xl">Learn it. Break it locally. Fix it properly.</h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-              Hands-on web development and security exercises. These ten workstations operate in your browser.
+              Hands-on web development and security exercises. These fifteen workstations operate in your browser.
               They are not remote virtual machines, internet scanners, or proof of a vulnerability in a real target.
             </p>
             <div className="mt-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">10 working exercises</span>
+              <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">15 working exercises</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">Browser-only execution</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">No outside targets</span>
             </div>
@@ -162,7 +169,7 @@ export default function EternyxLabs() {
             <label htmlFor="labs-workstation-search" className="sr-only">Search practical workstations</label>
             <input id="labs-workstation-search" type="search" value={labSearch}
               onChange={(event) => setLabSearch(event.target.value)}
-              placeholder="Search 10 workstations…"
+              placeholder="Search 15 workstations…"
               className="mb-3 w-full rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
@@ -311,6 +318,7 @@ export default function EternyxLabs() {
               </div>
             )}
             <BrowserSecurityToolkit selected={selected} />
+            <BrowserSecurityFoundations selected={selected} />
           </section>
         </div>
 
