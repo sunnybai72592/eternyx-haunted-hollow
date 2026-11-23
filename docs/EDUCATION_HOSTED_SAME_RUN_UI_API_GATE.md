@@ -1,0 +1,17 @@
+# Education hosted same-run browser + Auth API staging acceptance
+
+The manually approved **Education real browser staging acceptance (read only)** workflow now collects one coherent evidence package from an independently isolated Supabase staging project. It verifies three separate layers within the **same GitHub Action run**:
+
+1. **Real React browser experience:** Student A, Student B and an approved instructor in desktop and mobile Chrome; exact finalized marks, no pending/legacy grade leaks, strict cross-user denial, and no unapproved network writes or third-party egress (22 fixed checks).
+2. **Direct real-staging Auth/RLS API acceptance:** dedicated Student A and B sign in separately, prove the owned enrolled test and answer fixture, prove cross-account row invisibility, deny answer-key reads, deny private admin/educator metadata and sign out (the existing authorized read-only API checklist).
+3. **Direct verified ledger receipt API:** distinct signed-in student A/B and anonymous attempts, cross-user and raw ledger denials, exact finalized marks, no score for pending/in-progress/legacy and signed-out account sessions (the existing 26-case results suite).
+
+The final verdict is created **only after all three suites pass** in the same protected \`workflow_dispatch\` run, from \`main\`, under the existing \`rls-staging\` environment and concurrency lock. It binds the browser report SHA, run ID and attempt to the current action, then validates the exact fixed check order, full-success counts, no-write flags, sign-out flags, and strict report schemas for both API reports. The runner deletes old browser/API/release artifacts before execution. Reports downloaded from another run **are not used**.
+
+The final generated file is \`test-results/education-hosted-ui-api-readiness.json\`, uploaded with the three supporting sanitized reports. Evidence contains only fixed check names/counts, repository SHA, GitHub run/attempt, and **staging-only** outcomes; never passwords, tokens, emails, grades, screenshots or private student answers.
+
+**What this closes:** Previously a passing UI run and a passing backend read-only run could have involved different staging deployments or fixture states. The new workflow checks both against the same staging configuration, within the same CI execution, and refuses to create its combined verdict if either side is absent, malformed or failed.
+
+**Prerequisites:** In \`rls-staging\` configure a genuinely separate Supabase staging URL/ref and production ref, reviewed student A/B and approved-instructor test accounts, a seeded in-progress RLS fixture (test/question/option/attempt/answer IDs), plus the two finalized A/B, pending A, running A and legacy A result fixtures and expected marks. Migrations, row-level security and Auth profiles must be deployed and verified separately. For diagnostics, run the existing staging configuration inventory first. The live workflow is not automatically dispatched and does not create resources.
+
+**Safety boundary:** This is an independently reviewed **read-only** staging proof. It does NOT execute student writes, provisional instructor reviews, trusted final grade changes, or a complete fresh exam lifecycle. A green report is **never production launch authorization**. The explicitly approved single-attempt staging journey remains a separate release requirement. Never copy production Auth or project credentials into this workflow.
