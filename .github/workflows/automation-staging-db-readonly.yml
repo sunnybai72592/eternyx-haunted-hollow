@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   direct-pg-readonly:
-    if: "${{ inputs.staging_readonly_approval == 'I_APPROVE_READONLY_ISOLATED_STAGING' }}"
+    if: "${{ github.ref == 'refs/heads/main' && inputs.staging_readonly_approval == 'I_APPROVE_READONLY_ISOLATED_STAGING' }}"
     name: Verify staging TLS, database access and applied migration versions (READ ONLY)
     environment: automation-staging
     runs-on: ubuntu-latest
@@ -34,8 +34,6 @@ jobs:
       ETERNYX_AUTOMATION_STAGING_PGUSER: "${{ vars.ETERNYX_AUTOMATION_STAGING_PGUSER }}"
       ETERNYX_AUTOMATION_STAGING_PGPORT: "5432"
       ETERNYX_AUTOMATION_STAGING_PGDATABASE: postgres
-      ETERNYX_AUTOMATION_STAGING_PGPASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_PGPASSWORD }}"
-      ETERNYX_AUTOMATION_STAGING_CA_PEM: "${{ secrets.ETERNYX_AUTOMATION_STAGING_CA_PEM }}"
     steps:
       - name: Check out the reviewed, read-only diagnostic
         uses: actions/checkout@v4
@@ -48,6 +46,9 @@ jobs:
       - name: Execute immutable SELECT-only query in transaction READ ONLY over verified TLS
         shell: bash
         timeout-minutes: 2
+        env:
+          ETERNYX_AUTOMATION_STAGING_PGPASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_PGPASSWORD }}"
+          ETERNYX_AUTOMATION_STAGING_CA_PEM: "${{ secrets.ETERNYX_AUTOMATION_STAGING_CA_PEM }}"
         run: |
           set -euo pipefail
           bash scripts/automation-staging-db-readonly.sh > "$RUNNER_TEMP/eternyx-staging-db-readonly.json"
