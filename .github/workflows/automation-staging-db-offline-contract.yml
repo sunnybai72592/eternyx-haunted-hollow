@@ -1,0 +1,110 @@
+name: Automation standalone read-only probe contract on offline PostgreSQL 17
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/automation-staging-db-offline-contract.yml'
+      - 'scripts/automation-staging-db-readonly.mjs'
+      - 'scripts/automation-staging-db-readonly.sh'
+      - 'scripts/sql/automation-staging-db-readonly.sql'
+      - 'tests/automation-staging-db-runtime-contract.test.mjs'
+      - 'tests/sql/automation-staging-db-readonly-fixture.sql'
+      - 'supabase/migrations/20261122220000_automation_manual_control_plane.sql'
+      - 'supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql'
+      - 'supabase/migrations/20261122234500_automation_scheduled_runs.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-pg17-readonly:
+    name: Exercise actual SELECT-only probe in a networkless PG17 database
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node 22, no Supabase connection or credential usage
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exercise actual manual runner with fake local psql and hostile inherited libpq variables
+        run: node --test tests/automation-staging-db-runtime-contract.test.mjs
+      - name: Start throwaway network-isolated PostgreSQL 17
+        shell: bash
+        run: |
+          docker run -d --rm --network none --name eternyx-readonly-probe-fixture -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          ready=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-readonly-probe-fixture pg_isready -U postgres >/dev/null 2>&1; then
+              ready=$((ready+1))
+              if [ "$ready" -ge 3 ]; then break; fi
+            else
+              ready=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-readonly-probe-fixture pg_isready -U postgres
+      - name: Bootstrap isolated Auth and apply actual Automation SQL migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            tests/sql/ctf-range-db-bootstrap.sql \
+            supabase/migrations/20261122220000_automation_manual_control_plane.sql \
+            supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql \
+            supabase/migrations/20261122234500_automation_scheduled_runs.sql; do
+            docker exec -i eternyx-readonly-probe-fixture psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file" > /dev/null
+          done
+      - name: The actual read-only probe MUST fail closed if the migration journal is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < scripts/sql/automation-staging-db-readonly.sql > "$RUNNER_TEMP/missing-journal.stdout" 2> "$RUNNER_TEMP/missing-journal.stderr"; then
+            echo "::error::Read-only probe incorrectly succeeded with missing migration history"
+            exit 1
+          fi
+          echo "Missing journal correctly rejected; no raw SQL or credentials published"
+      - name: Install synthetic journal with two historical timestamps (fixture, NOT remote history)
+        run: docker exec -i eternyx-readonly-probe-fixture psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-staging-db-readonly-fixture.sql > /dev/null
+      - name: Prove the REAL psql probe and strict allowlist parser agree on actual database results
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=5000" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < scripts/sql/automation-staging-db-readonly.sql > "$RUNNER_TEMP/read-only-synthetic-result.txt"
+          node --input-type=module - "$RUNNER_TEMP/read-only-synthetic-result.txt" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import assert from "node:assert/strict";
+          import {parseProbeLines} from "./scripts/automation-staging-db-readonly.mjs";
+          const data=parseProbeLines(readFileSync(process.argv[2],"utf8"));
+          assert.equal(data.observed.transaction_read_only,true);
+          for(const [key,allowed] of Object.entries(data.observed))
+            assert.equal(allowed,true,"Synthetic schema not verified: "+key);
+          assert.deepEqual(data.collidedAppliedVersions,["20261123030000","20261123130000"]);
+          assert.equal(data.collidedAppliedVersionCount,2);
+          assert.equal(data.whichCollidedSqlExecuted,"unknown");
+          assert.equal(data.databaseWritesPerformed,false);
+          assert.equal(data.releaseAuthorized,false);
+          console.log("Real offline SELECT-only probe succeeded against actual PG17; synthetic migration history explicitly unverified");
+          NODE
+      - name: Prove read-only session blocks attempted INSERT into the synthetic migration journal
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 \
+            -c "INSERT INTO supabase_migrations.schema_migrations(version) VALUES ('20261124000000')" \
+            > "$RUNNER_TEMP/readonly-write-denied.stdout" 2> "$RUNNER_TEMP/readonly-write-denied.stderr"; then
+            echo "::error::The allegedly read-only fixture connection accepted an INSERT"
+            exit 1
+          fi
+          actual="$(docker exec eternyx-readonly-probe-fixture psql -U postgres -d postgres -X -A -t -c "SELECT count(*) FROM supabase_migrations.schema_migrations")"
+          test "$actual" = "2" || { echo "::error::Synthetic migration journal was unexpectedly modified"; exit 1; }
+          echo "Read-only PostgreSQL setting rejected INSERT; journal remains unchanged"
+      - name: Always remove the disposable offline PostgreSQL fixture
+        if: always()
+        run: docker rm --force eternyx-readonly-probe-fixture || true
