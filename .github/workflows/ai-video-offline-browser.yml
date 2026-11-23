@@ -1,0 +1,75 @@
+name: AI Video real offline browser playback
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/finish_phone_movie.py"
+      - "gpu-worker/prepare_video_sources.py"
+      - "gpu-worker/render_video_timeline.py"
+      - "src/lib/ai/portablePhoneIntake.mjs"
+      - "scripts/ai-video/generateOfflineBrowserFixture.mjs"
+      - "tests/browser/ai_video_offline_playback.py"
+      - "tests/ai-video-offline-browser-contract.test.mjs"
+      - ".github/workflows/ai-video-offline-browser.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/finish_phone_movie.py"
+      - "gpu-worker/prepare_video_sources.py"
+      - "gpu-worker/render_video_timeline.py"
+      - "src/lib/ai/portablePhoneIntake.mjs"
+      - "scripts/ai-video/generateOfflineBrowserFixture.mjs"
+      - "tests/browser/ai_video_offline_playback.py"
+      - "tests/ai-video-offline-browser-contract.test.mjs"
+      - ".github/workflows/ai-video-offline-browser.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-offline-chrome:
+    name: Decode and play actual private one-launch movie in desktop and mobile Chrome
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      # The repository contains an orphaned eternyx-backend gitlink; checkout
+      # credential removal invokes a recursive submodule command and fails.
+      # Keep default token handling for this short-lived, read-only job.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Assert strict local browser acceptance contract
+        run: |
+          node --test tests/ai-video-offline-browser-contract.test.mjs
+          python3 -m py_compile tests/browser/ai_video_offline_playback.py
+      - name: Require real CPU encoders and real Chrome
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+          ffmpeg -hide_banner -encoders | grep -q libvpx-vp9
+          ffmpeg -hide_banner -encoders | grep -q mov_text
+          command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
+      - name: Install isolated, pinned browser automation (no production keys)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ai-video-offline-browser"
+          "$RUNNER_TEMP/ai-video-offline-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
+      - name: Make genuine 24 FPS private ZIP, extract and export all movie formats
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: |
+          node scripts/ai-video/generateOfflineBrowserFixture.mjs "$RUNNER_TEMP/ai-video-browser-fixture"
+      - name: Test actual offline MP4 / VP9 WebM playback and downloads in Chrome
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+        run: |
+          "$RUNNER_TEMP/ai-video-offline-browser/bin/python" \
+            tests/browser/ai_video_offline_playback.py \
+            "$RUNNER_TEMP/ai-video-browser-fixture/extracted/phone-movie-output"
