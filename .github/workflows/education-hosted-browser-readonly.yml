@@ -20,10 +20,15 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && inputs.approve_read_only_browser }}
     runs-on: ubuntu-latest
     environment: rls-staging
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
       ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_EDU_STAGING_TEST_ID: ${{ vars.ETERNYX_EDU_STAGING_TEST_ID }}
+      ETERNYX_EDU_STAGING_QUESTION_ID: ${{ vars.ETERNYX_EDU_STAGING_QUESTION_ID }}
+      ETERNYX_EDU_STAGING_OPTION_ID: ${{ vars.ETERNYX_EDU_STAGING_OPTION_ID }}
+      ETERNYX_EDU_STAGING_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_STAGING_ATTEMPT_ID }}
+      ETERNYX_EDU_STAGING_ANSWER_ID: ${{ vars.ETERNYX_EDU_STAGING_ANSWER_ID }}
       ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT }}
       ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT }}
       ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT }}
@@ -56,11 +61,14 @@ jobs:
           ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
           ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
           ETERNYX_EDU_RESULTS_READ_APPROVAL: I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY
+          ETERNYX_EDU_STAGING_READ_APPROVAL: I_APPROVE_EDUCATION_STAGING_READ_ONLY
         run: |
           node --input-type=module -e '
             import {validateEducationResultsReadConfig} from "./scripts/staging/educationHostedResultsConfig.mjs";
+            import {validateEducationReadOnlyConfig} from "./scripts/staging/educationHostedReadOnlyConfig.mjs";
             try {
               validateEducationResultsReadConfig(process.env);
+              validateEducationReadOnlyConfig(process.env);
               const email=process.env.ETERNYX_RLS_INSTRUCTOR_EMAIL||"";
               const password=process.env.ETERNYX_RLS_INSTRUCTOR_PASSWORD||"";
               if(!/^(?:rls-|[a-z0-9._-]+\+rls-)[^@]*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)||
@@ -96,6 +104,12 @@ jobs:
           done
           echo "BLOCKED: local preview did not start."
           exit 1
+      - name: Clear any prior browser and read-only API evidence
+        run: |
+          rm -f test-results/education-hosted-browser-readonly.json
+          rm -f test-results/education-hosted-readonly.json
+          rm -f test-results/education-hosted-final-results.json
+          rm -f test-results/education-hosted-ui-api-readiness.json
       - name: Authenticate three real staging roles in desktop and mobile, blocking all writes
         timeout-minutes: 8
         env:
@@ -108,11 +122,35 @@ jobs:
           ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
         run: |
           "$RUNNER_TEMP/education-browser/bin/python" tests/browser/education_hosted_readonly.py
+      - name: Prove the same staging account boundaries through direct read-only Auth APIs
+        timeout-minutes: 8
+        env:
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_EDU_STAGING_READ_APPROVAL: I_APPROVE_EDUCATION_STAGING_READ_ONLY
+          ETERNYX_EDU_RESULTS_READ_APPROVAL: I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY
+        run: |
+          node scripts/staging/verifyEducationHostedReadOnly.mjs
+          node scripts/staging/verifyEducationHostedEvidence.mjs
+          node scripts/staging/verifyEducationHostedFinalResults.mjs
+          node scripts/staging/verifyEducationHostedFinalEvidence.mjs
+      - name: Reject missing, foreign or incomplete same-run UI and API proof
+        env:
+          ETERNYX_EDU_UI_API_READ_APPROVAL: I_APPROVE_EDUCATION_SAME_RUN_STAGING_READ_ONLY
+        run: node scripts/staging/educationHostedUiApiGate.mjs
       - name: Upload sanitized browser acceptance evidence even on a failed test
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: education-hosted-browser-readonly-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/education-hosted-browser-readonly.json
+          path: |
+            test-results/education-hosted-browser-readonly.json
+            test-results/education-hosted-readonly.json
+            test-results/education-hosted-final-results.json
+            test-results/education-hosted-ui-api-readiness.json
           if-no-files-found: warn
           retention-days: 7
