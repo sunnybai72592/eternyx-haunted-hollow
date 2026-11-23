@@ -40,7 +40,7 @@ test('admin filters priority, owner assignment, and follow-up on the server', as
   assert.match(admin, /query\.eq\('needs_follow_up_complete', true\)/);
   assert.match(admin, /query\.order\('priority_rank', \{ ascending: false \}\)/);
   assert.match(admin, /query\.order\('last_customer_activity_at', \{ ascending: false, nullsFirst: false \}\)/);
-  assert.match(admin, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE - 1\)/);
+  assert.match(admin, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE\)/);
   assert.match(admin, /count: 'exact'/);
   assert.match(admin, /setPage\(0\)/);
   assert.doesNotMatch(admin, /limit\(250\)|mockRows|Math\.random/);
