@@ -58,7 +58,7 @@ test("UI is wired to quarantine on tab hide, focus, and lost membership",()=>{
   'setSpaceListVerified(false)',
   'setSpaceListVerified(true)',
   'spaceListVerified&&spaces.map',
-  'document.visibilityState==="hidden"',
+  'workspaceResumeAction(document.visibilityState',
   'window.addEventListener("focus",resume)',
   'document.addEventListener("visibilitychange",resume)',
   'setInterval(resume,60000)',
