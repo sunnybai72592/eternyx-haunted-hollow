@@ -76,7 +76,7 @@ test("CI uploads local preview evidence after running browser tests, including o
 });
 
 test("all output textarea labels in Developer Studio are connected to real focus targets",()=>{
-  assert.match(studio,/import \{ useId, useState \} from "react"/);
+  assert.match(studio,/import \{[^}]*\buseId\b[^}]*\} from "react"/);
   assert.match(studio,/const id = useId\(\);/);
   assert.match(studio,/<Label htmlFor=\{id\}>\{label\}<\/Label>/);
   assert.match(studio,/<Textarea id=\{id\} value=\{value\} readOnly/);
