@@ -157,9 +157,9 @@ export function redactTrainingLogLocally(value){
     (_match,prefix)=>prefix+"[REDACTED]");
   apply(/(\b(?:Cookie|Set-Cookie)\s*:\s*)([^\r\n]+)/gi,
     (_match,prefix)=>prefix+"[REDACTED]");
-  apply(/(\b(?:api[_-]?key|access[_-]?token|password|passwd|client[_-]?secret|secret|token)\s*[:=]\s*)(["']?)([^\s&;,'"]+)/gi,
+  apply(/(\b(?:api[_-]?key|access[_-]?token|password|passwd|client[_-]?secret|secret|token)\s*[:=]\s*)(["']?)(?!\[REDACTED\])([^\s&;,'"]+)/gi,
     (_match,prefix)=>prefix+"[REDACTED]");
-  apply(/(\b[A-Z][A-Z0-9_]*(?:_KEY|_TOKEN|_SECRET|_PASSWORD)\s*=\s*)(["']?)([^\s&;,'"]+)/g,
+  apply(/(\b[A-Z][A-Z0-9_]*(?:_KEY|_TOKEN|_SECRET|_PASSWORD)\s*=\s*)(["']?)(?!\[REDACTED\])([^\s&;,'"]+)/g,
     (_match,prefix)=>prefix+"[REDACTED]");
   return Object.freeze({
     redactedText:text,
