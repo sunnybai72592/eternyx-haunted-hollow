@@ -8,6 +8,9 @@ import { join,isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import {lockLabAgent,reserveLabClaim,appendLabEvent,readLabClaim,labPostcondition} from "../src/lib/dockerLabRecovery.mjs";
 import {lockLabContainer} from "../src/lib/dockerLabContainerLock.mjs";
+import {auditSignedAgentRecoveryDirectory} from "../src/lib/dockerStrictRecoveryInventory.mjs";
+import {requireSignedContainerHistoryClear}
+  from "../src/lib/dockerSignedContainerHistoryFence.mjs";
 import { verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
 import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   validateSignedAgentEngineObserved,validateSignedAgentTarget}
@@ -160,6 +163,12 @@ async function main(){
     if(error?.code==="EEXIST")retainRecoveryLock=false;
     throw error;
   }
+  // This is the FIRST reliable point where O_EXCL protects history from
+  // competing signed agents. Refuse earlier UNKNOWN or unacknowledged claims,
+  // even legacy claims created before container locks existed.
+  requireSignedContainerHistoryClear(auditSignedAgentRecoveryDirectory(),{
+    agentId,claimId:permit.claimId,containerId:permit.containerId,phase:"preclaim"
+  });
   reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
   let attempted=false,postconditionConfirmed=false;
   try{
@@ -184,6 +193,12 @@ async function main(){
       "--format","{{json .}}",permit.containerId]));
     assertSignedAgentPreMutationUnchanged(
       before,justBefore,permit.containerId,permit.operation,approvedPins);
+    // Last-moment complete private journal scan: the claim must still be the
+    // exact original attempted-only record. Any missing, partial or changed
+    // claim/lock or older unreconciled operation is UNKNOWN and stops here.
+    requireSignedContainerHistoryClear(auditSignedAgentRecoveryDirectory(),{
+      agentId,claimId:permit.claimId,containerId:permit.containerId,phase:"premutation"
+    });
     if(Date.parse(permit.expiresAt)<=Date.now())
       throw Error("Signed permit expired during last-moment container reinspection.");
     docker(["--context",context,"container",permit.operation,permit.containerId],20000);
