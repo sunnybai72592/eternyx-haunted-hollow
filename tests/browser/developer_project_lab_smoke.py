@@ -174,7 +174,11 @@ def create_save_reopen(page):
     page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="app.js").click()
     editor = page.locator("#project-editor")
     assert "addEventListener" in editor.input_value()
-    editor.fill(editor.input_value() + "\n// acceptance marker")
+    # This marker is set by the sample's own JS AFTER it registered the click
+    # handler. It verifies real execution readiness, not merely DOM visibility.
+    editor.fill(editor.input_value() +
+                '\n' + 'document.querySelector("#hello")?.setAttribute("data-handler-ready", "true");' +
+                "\n// acceptance marker")
     page.get_by_role("button", name="Save browser copy").click()
     expect(page.get_by_role("link", name="Open project API tests")).to_be_visible()
     saved = store(page, PROJECT_KEY)
@@ -402,16 +406,11 @@ def preview_isolation(page):
     isolated_frame.wait_for_load_state("load", timeout=15000)
     preview=page.frame_locator('iframe[title="Isolated project preview"]')
     expect(preview.locator("#message")).to_have_text("Try editing these files.")
-    # The iframe HTML can become visible before its inline JS has registered
-    # the click handler. Await document completion inside the opaque-origin
-    # iframe, then test real interaction without arbitrary sleeps or retries.
-    preview.locator("#hello").evaluate("""node => new Promise(resolve => {
-        const doc = node.ownerDocument;
-        if (doc.readyState === 'complete') return resolve(true);
-        doc.addEventListener('readystatechange', () => {
-          if (doc.readyState === 'complete') resolve(true);
-        });
-    })""")
+    # DOM readyState/load does not prove the user script attached its handler.
+    # Wait for a marker set by the actual inline script AFTER addEventListener.
+    # This does not retry a failed click or conceal broken script execution.
+    expect(preview.locator("#hello")).to_have_attribute(
+        "data-handler-ready", "true", timeout=15000)
     preview.locator("#hello").click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
     page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html").click()
