@@ -1,0 +1,11 @@
+# Education: real browser acceptance of private results and instructor review
+
+This supplements the merged atomic-CBT browser suite (PR #612) with **11 additional user-facing scenarios in both desktop and mobile Chromium** (22 checks). The same existing Education-only workflow builds a temporary frontend with the five coordinated protected Education feature flags enabled, using the fake `offline-education.invalid` Supabase hostname. Every network request is intercepted by the synthetic test fixture; no actual Supabase project, credential or personal assessment is accessed.
+
+The student test verifies that a submitted attempt's spoofed browser-facing 999/1000 score is never displayed without a matching trusted ledger receipt. Pending grades must never even request correctness fields from the API. An authentic finalized synthetic receipt shows precisely 7/10 and enables the owner's private answer CSV; a malformed finalized receipt fails closed and disables exports. A separately signed-in Student B account is denied the first learner's attempt.
+
+The instructor test signs in separately to the actual question-bank studio, where an unapproved instructor must neither fetch the private written-review queue nor see the review editor. An approved instructor can see one authorized synthetic response, but an out-of-bounds mark cannot be sent. An explicit click on a valid 3/5 review records *provisional* mark evidence only, with no final-grade RPC or official-score update. Malformed or unowned review queue metadata must block review entirely.
+
+The Chromium runner shares the offline Auth/REST/RPC fixture from `tests/browser/education_atomic_local.py`; its added scenarios are exercised after the existing atomic exam journeys. Only fixed case names, viewports, pass/blocked results, and no other browser information appear in CI artifacts. The workflow has **no Supabase secrets, environment protection grants or production deployment step**. Downloaded private-answer CSV bytes are inspected locally by the test but never uploaded or printed.
+
+**Release remains NO-GO** until separate protected manual acceptance runs against real, independently provisioned Supabase staging and actual RLS/Auth/grade boundaries pass. This synthetic suite does not establish live service availability or authorize production.

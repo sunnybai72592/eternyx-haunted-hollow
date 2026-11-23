@@ -10,6 +10,10 @@ on:
       - 'src/lib/education*.mjs'
       - 'src/lib/education*.ts'
       - 'tests/browser/education_atomic_local.py'
+      - 'tests/browser/education_results_review_local.py'
+      - 'tests/education-results-review-browser-contract.test.mjs'
+      - 'src/components/education/EducationWrittenReviewPanel.tsx'
+      - 'src/pages/EducationInstructorStudio.tsx'
       - 'tests/education-atomic-local-browser-contract.test.mjs'
       - '.github/workflows/education-atomic-browser-ci.yml'
   push:
@@ -22,6 +26,10 @@ on:
       - 'src/lib/education*.mjs'
       - 'src/lib/education*.ts'
       - 'tests/browser/education_atomic_local.py'
+      - 'tests/browser/education_results_review_local.py'
+      - 'tests/education-results-review-browser-contract.test.mjs'
+      - 'src/components/education/EducationWrittenReviewPanel.tsx'
+      - 'src/pages/EducationInstructorStudio.tsx'
       - 'tests/education-atomic-local-browser-contract.test.mjs'
       - '.github/workflows/education-atomic-browser-ci.yml'
 
@@ -53,8 +61,8 @@ jobs:
           cache: npm
       - name: Validate exact local-only browser source and Python syntax
         run: |
-          node --test tests/education-atomic-local-browser-contract.test.mjs
-          python3 -m py_compile tests/browser/education_atomic_local.py
+          node --test tests/education-atomic-local-browser-contract.test.mjs tests/education-results-review-browser-contract.test.mjs
+          python3 -m py_compile tests/browser/education_atomic_local.py tests/browser/education_results_review_local.py
       - name: Install locked frontend dependencies (no remote secrets)
         run: npm ci
       - name: Build isolated atomic CBT UI with fake host and no production credentials
@@ -69,11 +77,14 @@ jobs:
           trap 'kill "$pid" 2>/dev/null || true' EXIT
           curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:4173/ >/dev/null
           "$RUNNER_TEMP/education-atomic-browser/bin/python" tests/browser/education_atomic_local.py
+          "$RUNNER_TEMP/education-atomic-browser/bin/python" tests/browser/education_results_review_local.py
       - name: Upload check names only, never private answers or browser snapshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: education-atomic-synthetic-browser-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/education-atomic-local-browser.json
+          path: |
+            test-results/education-atomic-local-browser.json
+            test-results/education-results-review-local-browser.json
           if-no-files-found: warn
           retention-days: 7
