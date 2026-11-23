@@ -45,6 +45,8 @@ const fields = {
   incidentReopenHistory: ["action","incidentId"],
   incidentReopenDecision: ["action","incidentId","incidentRevision","planRevision","evidenceId","decision","reason","note","requestKey"],
   incidentAuditTrace: ["action","incidentId"],
+  incidentLifecycleCheck: ["action","incidentId"],
+  incidentReadinessReport: ["action"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -120,7 +122,8 @@ export function parseAutomationControlRequest(value) {
         ? { approvalId: value.approvalId } : {}),
     };
   }
-  if(["incidentReopenPreflight","incidentReopenHistory","incidentAuditTrace"].includes(action)){
+  if(action==="incidentReadinessReport")return {ok:true,action};
+  if(["incidentReopenPreflight","incidentReopenHistory","incidentAuditTrace","incidentLifecycleCheck"].includes(action)){
     if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
       return {ok:false,reason:"invalid_incident_id"};
     }
