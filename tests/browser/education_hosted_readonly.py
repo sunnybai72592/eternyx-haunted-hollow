@@ -73,12 +73,15 @@ def guard_request(route, staging_host, violations):
     path = url.path
     if staging and method == "POST" and path == "/rest/v1/rpc/visitor_presence":
         try:
-            initiator_path = urlsplit(request.frame.url).path
-        except Exception:
-            initiator_path = ""
-        # A public login page may have started a presence poll. Abort it.
-        # The application must never poll visitor presence on private pages.
-        if initiator_path != "/auth":
+            initiator = urlsplit(request.frame.url)
+            public_auth = (initiator.scheme == "http" and
+                           initiator.hostname == "127.0.0.1" and
+                           initiator.port == 4173 and initiator.path == "/auth")
+        except (AttributeError, ValueError):
+            public_auth = False
+        # Only our *exact* local sign-in page may have started this poll.
+        # A lookalike /auth origin or any protected page is a violation.
+        if not public_auth:
             violations.append("unexpected_remote_write")
         route.abort()
         return
