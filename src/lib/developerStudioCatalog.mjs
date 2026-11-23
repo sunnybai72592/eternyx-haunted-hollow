@@ -2,6 +2,7 @@
 // Keep titles/modes consistent with each tool's actual execution boundary.
 export const developerCategories = Object.freeze([
   { id: "all", label: "All workbenches" },
+  { id: "projects", label: "Project Lab" },
   { id: "utilities", label: "Utilities" },
   { id: "api", label: "API engineering" },
   { id: "github", label: "GitHub" },
@@ -11,6 +12,7 @@ export const developerCategories = Object.freeze([
 ]);
 
 export const developerTools = Object.freeze([
+  { id: "project-lab", title: "Local Project Lab", category: "projects", mode: "local", route: "/developer-studio/project-lab", description: "Edit, preview, check and export small multi-file web projects in your browser." },
   { id: "json", title: "JSON formatter & validator", category: "utilities", mode: "local", route: "/developer-studio?tool=json#developer-utilities", description: "Validate JSON syntax and format text locally." },
   { id: "base64", title: "UTF-8 Base64 encoder & decoder", category: "utilities", mode: "local", route: "/developer-studio?tool=base64#developer-utilities", description: "Encode or decode UTF-8 text without a server request." },
   { id: "url", title: "URL component encoder & decoder", category: "utilities", mode: "local", route: "/developer-studio?tool=url#developer-utilities", description: "Safely encode and decode URI components." },

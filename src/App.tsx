@@ -42,6 +42,7 @@ const AIDocumentIntelligence = lazy(() => import("./pages/AIDocumentIntelligence
 const AIResearchStudio = lazy(() => import("./pages/AIResearchStudio"));
 const AIAgentsStudio = lazy(() => import("./pages/AIAgentsStudio"));
 const DeveloperStudio = lazy(() => import("./pages/DeveloperStudio"));
+const DeveloperProjectLab = lazy(() => import("./pages/DeveloperProjectLab"));
 const EternyxLabs = lazy(() => import("./pages/EternyxLabs"));
 const EternyxCtf = lazy(() => import("./pages/EternyxCtf"));
 const EternyxVerifiedCtf = lazy(() => import("./pages/EternyxVerifiedCtf"));
@@ -225,6 +226,7 @@ const AppContent = () => {
                         <Route path="/cybersecurity" element={<CybersecurityHub />} />
                         <Route path="/explore" element={<Explore />} />
                         <Route path="/developer-studio" element={<DeveloperStudio />} />
+                        <Route path="/developer-studio/project-lab" element={<DeveloperProjectLab />} />
                          <Route path="/labs" element={<EternyxLabs />} />
                          <Route path="/labs/ctf" element={<EternyxCtf />} />
                          <Route path="/labs/verified" element={<EternyxVerifiedCtf />} />
