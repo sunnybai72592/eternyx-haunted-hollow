@@ -1,0 +1,39 @@
+name: Docker staging release guard and owner JWT policy
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-staging-release-guard.yml'
+      - 'tests/docker-staging-release-gate.test.mjs'
+      - 'scripts/docker-staging-release-gate.mjs'
+      - 'src/lib/dockerStagingEvidence.mjs'
+      - 'supabase/config.toml'
+      - 'supabase/functions/_shared/docker-owner-guard.mjs'
+      - 'supabase/functions/_shared/docker-deployment-gate.mjs'
+      - 'supabase/functions/_shared/user-auth.ts'
+      - 'supabase/functions/docker-control/index.ts'
+      - 'supabase/functions/docker-enrollment/index.ts'
+      - 'supabase/functions/docker-heartbeat/index.ts'
+      - 'supabase/functions/docker-command-dispatch/index.ts'
+      - 'supabase/functions/_shared/docker-dispatch-handler.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-staging-security-gate:
+    name: Explicit owner JWT, agent signature and offline staging evidence gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify source-level Docker auth and execution boundaries
+        run: node scripts/docker-staging-release-gate.mjs inspect
+      - name: Test true Ed25519 evidence, missing controls, stale signatures and owner isolation
+        run: node --test tests/docker-staging-release-gate.test.mjs

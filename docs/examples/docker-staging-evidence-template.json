@@ -1,0 +1,58 @@
+{
+  "schema": "eternyx-docker-staging-operator-v1",
+  "environment": "isolated_staging",
+  "commitSha": "0000000000000000000000000000000000000000",
+  "observedAt": "1970-01-01T00:00:00.000Z",
+  "checks": [
+    {
+      "id": "real_owner_jwt_authenticated",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "anonymous_owner_rejected",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "cross_owner_access_denied",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "agent_signature_and_revocation",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "nonce_replay_denied",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "server_permit_and_expiry",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "receipt_replay_and_conflicts",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "incident_hold_no_auto_resume",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "host_network_and_socket_isolation",
+      "status": "not_run",
+      "evidenceSha256": null
+    },
+    {
+      "id": "production_execution_flags_off",
+      "status": "not_run",
+      "evidenceSha256": null
+    }
+  ]
+}
