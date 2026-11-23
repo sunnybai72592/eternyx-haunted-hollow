@@ -122,6 +122,15 @@ export default function MyServiceRequests() {
     }
   }, [userId]);
 
+  const invalidatePulse = () => {
+    pulseGeneration.current++;
+    pulseAbortRef.current?.abort();
+    pulseAbortRef.current = null;
+    setPulseOwner(null);
+    setPulseLoading(false);
+    setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
+  };
+
   const load = useCallback(async () => {
     if (!userId) return;
     const generation = ++requestGeneration.current;
@@ -294,7 +303,7 @@ export default function MyServiceRequests() {
       setNotice('Your check-in was recorded. This records a manual action, not a read receipt.');
       setLinkedRequest((current) => current?.id === id ? { ...current, last_checked_at: data, has_updates_since_check: false, has_updates_since_check_extended: false, has_updates_since_check_complete: false, clarification_changes_since_check: 0 } : current);
       void load();
-      void loadPulse();
+      invalidatePulse();
     } catch (reason) {
       console.error('Customer service check-in failed', reason);
       if (useAuthStore.getState().user?.id === userId) setNotice('Could not record your check-in. Verify your connection and account, then retry.');
@@ -443,7 +452,7 @@ export default function MyServiceRequests() {
       <Button variant="ghost" asChild className="mb-5"><Link to="/services-hub"><ArrowLeft className="mr-2 h-4 w-4" />Services</Link></Button>
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Private service desk</p><h1 className="mt-2 text-3xl font-bold sm:text-4xl">My service requests</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Only your account and authorized administrators can read your briefs. Statuses reflect actual administrator updates.</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); void loadPulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); invalidatePulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
       </header>
       {userId && <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Private queue sharing and export">
         <Button type="button" variant="outline" size="sm" disabled={!currentFocusPreset()}
@@ -530,8 +539,8 @@ export default function MyServiceRequests() {
           <ServiceRequestSectionLinks requestId={visibleLinkedRequest.id} ownerId={user.id} mode="customer" />
           {(!selectedPanel || selectedPanel === 'conversation') && <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />}
           {(!selectedPanel || selectedPanel === 'scope') && <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />}
-          {(!selectedPanel || selectedPanel === 'clarifications') && <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); void loadPulse(); }} />}
-          {(!selectedPanel || selectedPanel === 'brief-changes') && <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />}
+          {(!selectedPanel || selectedPanel === 'clarifications') && <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
+          {(!selectedPanel || selectedPanel === 'brief-changes') && <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
           {(!selectedPanel || selectedPanel === 'journal') && <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />}
         </Card>
       )}
@@ -581,12 +590,12 @@ export default function MyServiceRequests() {
               onClick={() => setOpenClarifications((current) => current === item.id ? null : item.id)}>
               <ClipboardList className="mr-2 h-4 w-4" />{openClarifications === item.id ? 'Close clarifications' : 'Clarification questions (' + item.open_clarification_count + ' open)'}
             </Button>
-            {openClarifications === item.id && user && <ServiceClarifications requestId={item.id} ownerId={user.id} onChanged={() => void load()} />}
+            {openClarifications === item.id && user && <ServiceClarifications requestId={item.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
             <Button type="button" variant="outline" className="mt-4 mr-2" aria-expanded={openAmendments === item.id}
               onClick={() => setOpenAmendments((current) => current === item.id ? null : item.id)}>
               <ClipboardList className="mr-2 h-4 w-4" />{openAmendments === item.id ? 'Close brief changes' : 'Brief changes (' + item.amendment_count + ')'}
             </Button>
-            {openAmendments === item.id && user && <ServiceBriefAmendments requestId={item.id} ownerId={user.id} onChanged={() => void load()} />}
+            {openAmendments === item.id && user && <ServiceBriefAmendments requestId={item.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
             <Button type="button" variant="outline" className="mt-4 mr-2" aria-expanded={openJournal === item.id}
               onClick={() => setOpenJournal((current) => current === item.id ? null : item.id)}>
               <ClipboardList className="mr-2 h-4 w-4" />{openJournal === item.id ? 'Close activity journal' : 'Activity journal'}
