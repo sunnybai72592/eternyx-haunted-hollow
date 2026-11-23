@@ -141,6 +141,10 @@ export async function createWorkspaceReviewedReconciliation({
     ...selectedSourceItems.map(itemPortable),
     ...selectedCurrentItems.map(itemPortable),
   ];
+  const payloadSha256=await sha256Hex(JSON.stringify({tasks,items}));
+  const reviewedSteps=tasks.reduce((total,task)=>total+task.checklist.length,0);
+  const excludedFiles=(source.parsed.files?.length??source.parsed.filesSkipped??0)+
+    snapshot.items.filter(i=>i.kind==="file").length;
   const nameSuffix=" (Reviewed recovery)";
   const newName=(source.parsed.project.name.slice(0,120-nameSuffix.length).trimEnd()+nameSuffix);
   const document = {
@@ -151,11 +155,14 @@ export async function createWorkspaceReviewedReconciliation({
       status:"active",created_at:createdAt },
     tasks,items,
     reviewed_reconciliation: {
-      version:WORKSPACE_RECONCILIATION_VERSION,
+      version:2,
       fork_id:forkId,
       created_at:createdAt,
       source_sha256:sourceSha256,
       snapshot_sha256:snapshotSha256,
+      payload_sha256:payloadSha256,
+      checklist_steps:reviewedSteps,
+      excluded_files:excludedFiles,
       selected: {
         source_tasks:selectedSourceTasks.length,
         current_tasks:selectedCurrentTasks.length,
@@ -192,5 +199,7 @@ export async function createWorkspaceReviewedReconciliation({
     taskCount:tasks.length,stepCount:parsed.stepCount,itemCount:items.length,
     excludedSourceFiles:source.parsed.files?.length??source.parsed.filesSkipped??0,
     excludedCurrentFiles:snapshot.items.filter(i=>i.kind==="file").length,
+    payloadSha256,selected:document.reviewed_reconciliation.selected,
+    reviewedSteps,excludedFiles,sourceSha256,snapshotSha256,
   };
 }
