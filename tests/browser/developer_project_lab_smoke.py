@@ -7,6 +7,7 @@ No authentication, production deployment, external provider calls or unsafe sand
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -62,7 +63,7 @@ def create_save_reopen(page):
 def editing_and_diagnostics(page):
     page.locator("#project-quick-open").fill("app")
     page.locator("#project-quick-open").press("Enter")
-    expect(page.locator("#project-editor")).to_contain_text("acceptance marker")
+    expect(page.locator("#project-editor")).to_have_value(re.compile("acceptance marker"))
     page.locator("#project-quick-open").fill("")
     page.locator("#add-filename").fill("config.json")
     page.get_by_role("button", name="Add file").click()
@@ -74,9 +75,9 @@ def editing_and_diagnostics(page):
     expect(page.get_by_role("button", name="config.json · line 3, col 4")).to_be_visible()
     page.locator("#project-replace-input").fill("count")
     page.get_by_role("button", name="Replace first in active file").click()
-    expect(editor).to_contain_text('"count"')
+    expect(editor).to_have_value(re.compile('"count"'))
     page.get_by_role("button", name="Restore", exact=False).click()
-    expect(editor).to_contain_text('"number"')
+    expect(editor).to_have_value(re.compile('"number"'))
     page.get_by_role("button", name="Duplicate file").click()
     expect(page.get_by_role("group", name="Project files").get_by_role("button", name="config-copy.json")).to_be_visible()
     # Navigation, source edits and formatting remain explicit; no auto-save.
@@ -143,7 +144,7 @@ def recovery_and_tamper(page):
     page.locator("#project-auto-recovery").check()
     page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
     page.locator("#project-editor").fill("<main><h1>Recoverable draft</h1></main>")
-    expect.poll(lambda: len(store(page, RECOVERY_KEY)), timeout=12000).to_be_greater_than(0)
+    page.wait_for_function("(key) => { try { const records=JSON.parse(localStorage.getItem(key)||'[]'); return records.length > 0; } catch { return false; } }", RECOVERY_KEY, timeout=12000)
     entries=store(page, RECOVERY_KEY)
     assert entries[0]["project"]["files"][0]["content"] == "<main><h1>Recoverable draft</h1></main>"
     page.get_by_role("button", name="Verify & restore").first.click()
@@ -196,7 +197,6 @@ def execute(label, fn, viewport):
         raise
 
 if __name__ == "__main__":
-    import re
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url",required=True)
     parser.add_argument("--staging",action="store_true",help="Run against an explicitly confirmed HTTPS staging host")
