@@ -34,7 +34,7 @@ test('Phase 32 rejects any attempt to append SQL commands or query business rows
     'SELECT 1;',
     sql+' DELETE FROM public.service_requests;',
     sql.replace(/WITH\s+/, 'INSERT INTO public.service_requests '),
-    sql.replace(/FROM pg_catalog\.pg_class/, 'FROM public.service_requests'),
+    sql.replace(/JOIN pg_catalog\.pg_class/, 'JOIN public.service_requests'),
     sql.replace(/COUNT\(\*\) FILTER \(WHERE passed IS NOT TRUE\)/, 'COUNT(*)'),
     sql.replace(/COALESCE\(bool_and\(passed IS TRUE\), false\)/, 'true'),
   ])assert.throws(()=>validateOperatorQuery(invalid));
