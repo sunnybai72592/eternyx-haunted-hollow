@@ -550,3 +550,80 @@ unsupported claims, private-key leakage rejection, overlong payloads, explicit
 export/import approvals and fixed production paths. CI does not create a real
 host acceptance record or perform an actual USB transfer. No VM, paid GPU,
 cloud service, external AI API, or public lab runtime is enabled.
+
+
+## Crash-safe offline transfer recovery — transaction journal
+
+Reviewer imports now use an **exclusive private pending journal** before any
+operator receipt is created, and a **durable committed journal** only after
+the exact two files have been fully written and synchronized. The two fixed
+markers are:
+
+```text
+.operator-import.pending.json
+.operator-import.committed.json
+```
+
+Both are root-owned, private and non-overwritable. No new public service,
+cloud infrastructure, Firecracker execution, image download, or external AI
+provider is involved. This journal is **local crash-integrity bookkeeping**,
+not a third signature, TPM attestation, or evidence of an uncompromised host.
+
+### Inspect a pending or completed import without modifying the case
+
+With the same separately obtained operator fingerprint and transferred
+packet SHA-256 used during original import:
+
+```bash
+sudo node scripts/cyber-range-operator-handoff.mjs --audit-import   --session 123e4567-e89b-42d3-a456-426614174001   --operator-sha OPERATOR_SPKI_SHA256   --transport-sha INDEPENDENT_TRANSFER_SHA256
+```
+
+This identifies whether the import was committed, remains pending, or is a
+legacy manually staged case without a transaction journal. It identifies
+missing fixed file names without printing signed content. Corrupted, foreign,
+symlinked, oversized or permission-unsafe files cause an explicit error.
+
+### Recover only the original, pinned interrupted import
+
+First manually investigate the interrupted case and verify the independent
+transfer fingerprint and hash. Restore the *original verified handoff file*
+to the fixed reviewer inbox if necessary. The pending journal must exactly
+match the same session, signer, transport hash and the **signed receipt and
+public key bytes**. No conflicting file is ever overwritten or removed.
+
+A separate operator approval is required for the recovery action:
+
+```bash
+export ETERNYX_OFFLINE_HANDOFF_ACK=I_APPROVE_OFFLINE_REVIEWER_IMPORT_RECOVERY
+sudo --preserve-env=ETERNYX_OFFLINE_HANDOFF_ACK   node scripts/cyber-range-operator-handoff.mjs   --resume-import --confirm-import-recovery   --session 123e4567-e89b-42d3-a456-426614174001   --operator-sha OPERATOR_SPKI_SHA256   --transport-sha INDEPENDENT_TRANSFER_SHA256
+```
+
+Recovery reads the pending journal and each existing file. Identical verified
+files remain unchanged; missing files are written exclusively and synced.
+Conflicting inputs, a missing pending marker, or a pre-existing committed
+marker all fail without replacement. The committed marker is written only
+after both files match the pending record.
+
+Finally re-run `--verify-import`. Verification requires the
+committed journal and checks both exact signed inputs against the independently
+pinned transfer. A **pending import blocks second-person review** through
+`--inspect`, `--endorse`, and `--verify`
+in the independent reviewer tool. Legacy manually staged evidence cases
+without a journal can still be reviewed by a human, but cannot claim a
+journal-verified import.
+
+If a journal or file is corrupt, **do not manually delete, overwrite or
+guess** its intended content. Preserve it for audit and begin a fresh
+approved case/session following the organization's incident procedure.
+
+### Free regression suite
+
+```bash
+node --test tests/ctf-firecracker-handoff-import-journal.test.mjs
+npm test
+npm run build
+```
+
+No actual physical KVM hardware, live 900-second expiry, cloud deployment,
+production hosting bill, or independently authentic host logs are asserted
+by these tests.
