@@ -15,6 +15,8 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
+import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
+import { readRequestPanel } from '@/lib/serviceRequestPanels';
 import { readQueuePreset, buildQueuePresetLink, downloadServiceQueueCsv, type AdminQueuePreset } from '@/lib/serviceQueueViews';
 import { Input } from '@/components/ui/input';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -41,6 +43,7 @@ type Draft = { status: ServiceRequestStatus; client_update: string };
 export default function AdminServiceRequests() {
   const { user, isLoading: authLoading } = useAuthStore();
   const location = useLocation();
+  const selectedPanel = readRequestPanel(location.search, 'admin');
   const navigate = useNavigate();
   const [authorizedFor, setAuthorizedFor] = useState<string | null>(null);
   const [adminAccessError, setAdminAccessError] = useState(false);
@@ -270,6 +273,7 @@ export default function AdminServiceRequests() {
   }, [authorized, loadActionCounts]);
 
   useEffect(() => {
+    if (!authorized) return;
     const selected = new URLSearchParams(location.search).get('request');
     if (!selected) return;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selected)) {
@@ -290,7 +294,13 @@ export default function AdminServiceRequests() {
     setActiveSearchField('id');
     setSearch(selected);
     setActiveSearch(selected);
-  }, [location.search]);
+    setOpenConversation(selectedPanel === 'conversation' ? selected : null);
+    setOpenScope(selectedPanel === 'scope' ? selected : null);
+    setOpenTriage(selectedPanel === 'triage' ? selected : null);
+    setOpenClarifications(selectedPanel === 'clarifications' ? selected : null);
+    setOpenAmendments(selectedPanel === 'brief-changes' ? selected : null);
+    setOpenJournal(selectedPanel === 'journal' ? selected : null);
+  }, [authorized, location.search, selectedPanel]);
 
   // All shared queue links are narrow, allowlisted task categories.
   // Private request UUID deep-links take precedence and are not changed.
@@ -681,6 +691,7 @@ export default function AdminServiceRequests() {
                 {openScope === item.id ? 'Close scope reviews' : 'Scope review & publish'}
               </Button>
             </div>
+            <ServiceRequestSectionLinks requestId={item.id} ownerId={item.user_id} mode="admin" />
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
             {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
