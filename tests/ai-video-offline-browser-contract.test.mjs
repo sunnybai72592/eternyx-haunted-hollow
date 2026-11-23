@@ -39,7 +39,7 @@ test("real Chrome must play, decode canvas, assert fallback, downloads and no ex
   assert.match(browser,/getImageData/);
   assert.match(browser,/expect_download/);
   assert.match(browser,/sha256/);
-  assert.match(browser,/src="video-subtitled\.mp4"/);
+  assert.match(browser,/get_attribute\("src"\) == "video-subtitled\.mp4"/);
   assert.match(browser,/new_context\(viewport=\{"width": 390/);
   assert.match(browser,/127\.0\.0\.1/);
 });
