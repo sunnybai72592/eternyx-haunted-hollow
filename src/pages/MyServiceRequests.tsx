@@ -16,6 +16,7 @@ import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
+import { describePrivateRequestRead } from '@/lib/servicePrivateRequestReliability';
 import { readQueuePreset, buildQueuePresetLink, downloadServiceQueueCsv, type OwnerQueuePreset } from '@/lib/serviceQueueViews';
 
 type RequestRow = {
@@ -65,6 +66,8 @@ export default function MyServiceRequests() {
   const [linkedOwner, setLinkedOwner] = useState<string | null>(null);
   const [linkedLoading, setLinkedLoading] = useState(false);
   const [linkedError, setLinkedError] = useState('');
+  const [linkedRetryable, setLinkedRetryable] = useState(false);
+  const [linkedRetry, setLinkedRetry] = useState(0);
   const [openConversation, setOpenConversation] = useState<string | null>(new URLSearchParams(location.search).get('request'));
   const [openScope, setOpenScope] = useState<string | null>(null);
   const [openClarifications, setOpenClarifications] = useState<string | null>(null);
@@ -166,6 +169,8 @@ export default function MyServiceRequests() {
     setLinkedOwner(null);
     setLinkedLoading(false);
     setLinkedError('');
+    setLinkedRetryable(false);
+    setLinkedRetry(0);
     setNotice('');
     setLoadError(false);
   }, [userId]);
@@ -205,6 +210,7 @@ export default function MyServiceRequests() {
     setLinkedRequest(null);
     setLinkedOwner(null);
     setLinkedError('');
+    setLinkedRetryable(false);
     setLinkedLoading(false);
     if (!userId || !selected) return;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selected)) {
@@ -216,25 +222,46 @@ export default function MyServiceRequests() {
     setOpenClarifications(null);
     setOpenAmendments(null);
     setOpenJournal(null);
+    const controller = new AbortController();
     let active = true;
+    const deadline = window.setTimeout(() => controller.abort(), 15000);
     setLinkedLoading(true);
     void (async () => {
-      const { data, error } = await supabase.from('service_customer_amendment_queue')
-        .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete')
-        .eq('user_id', userId)
-        .eq('id', selected)
-        .maybeSingle();
-      if (!active) return;
-      setLinkedLoading(false);
-      if (error || !data) {
-        setLinkedError('The request was not found or your account cannot access it.');
-      } else {
-        setLinkedRequest(data as RequestRow);
-        setLinkedOwner(userId);
+      try {
+        const { data, error } = await supabase.from('service_customer_amendment_queue')
+          .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete')
+          .eq('user_id', userId)
+          .eq('id', selected)
+          .abortSignal(controller.signal)
+          .maybeSingle();
+        if (!active || useAuthStore.getState().user?.id !== userId) return;
+        const status = describePrivateRequestRead(error, !!data);
+        if (status.kind !== 'ready') {
+          setLinkedError(status.message);
+          setLinkedRetryable(status.retryable);
+        } else {
+          setLinkedRequest(data as RequestRow);
+          setLinkedOwner(userId);
+        }
+      } catch (reason) {
+        if (!active || useAuthStore.getState().user?.id !== userId) return;
+        console.error('Private request lookup failed', reason);
+        const status = describePrivateRequestRead({
+          message: reason instanceof Error ? reason.message : 'Connection unavailable',
+        }, false);
+        setLinkedError(status.message);
+        setLinkedRetryable(status.retryable);
+      } finally {
+        window.clearTimeout(deadline);
+        if (active && useAuthStore.getState().user?.id === userId) setLinkedLoading(false);
       }
     })();
-    return () => { active = false; };
-  }, [userId, location.search]);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(deadline);
+    };
+  }, [userId, location.search, linkedRetry]);
 
   const markChecked = async (id: string) => {
     if (!userId || checkingId) return;
@@ -254,48 +281,71 @@ export default function MyServiceRequests() {
       console.error('Customer service check-in failed', reason);
       if (useAuthStore.getState().user?.id === userId) setNotice('Could not record your check-in. Verify your connection and account, then retry.');
     } finally {
-      setCheckingId(null);
+      if (useAuthStore.getState().user?.id === userId) setCheckingId(null);
     }
   };
 
   const copyLink = async (id: string) => {
+    if (!userId || rowsOwner !== userId || !visibleRows.some((item) => item.id === id)) return;
     try {
+      const { data: { user: verified }, error } = await supabase.auth.getUser();
+      if (error || verified?.id !== userId || useAuthStore.getState().user?.id !== userId) {
+        throw new Error('Account changed');
+      }
       await navigator.clipboard.writeText(window.location.origin + '/services/requests?request=' + encodeURIComponent(id));
-      setNotice('A link to this request has been copied. Recipients still need authorized account access.');
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('A link to this request has been copied. Recipients still need authorized account access.');
+      }
     } catch {
-      setNotice('Could not copy the link. You can use the request reference shown below.');
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Could not copy the private link. Verify your account and clipboard permission.');
+      }
     }
   };
 
-  const exportBrief = (item: RequestRow) => {
-    const text = [
-      'ETERNYX SERVICE REQUEST — PERSONAL COPY',
-      'Reference: ' + item.id,
-      'Service: ' + (getServiceOffering(item.service_key)?.title ?? item.service_key),
-      'Title: ' + item.title,
-      'Status: ' + (serviceRequestStatuses[item.status]?.label ?? item.status),
-      'Submitted: ' + item.created_at,
-      '',
-      'PROJECT BRIEF', item.description,
-      '',
-      'EXPECTED OUTCOME', item.expected_outcome || 'Not provided',
-      'PREFERRED TIMEFRAME', item.timeframe || 'Not provided',
-      'CONSTRAINTS', item.constraints || 'Not provided',
-      '',
-      'LATEST CUSTOMER UPDATE', item.client_update || 'No update yet',
-      '',
-      'This is an enquiry record, not a quote, contract or proof of delivery.',
-    ].join('\n');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = 'eternyx-request-' + item.id + '.txt';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(objectUrl);
-    setNotice('Export prepared on this device. Keep this copy private.');
+  const exportBrief = async (item: RequestRow) => {
+    if (!userId || rowsOwner !== userId || !visibleRows.some((row) => row.id === item.id)) return;
+    try {
+      const { data: { user: verified }, error } = await supabase.auth.getUser();
+      if (error || verified?.id !== userId || useAuthStore.getState().user?.id !== userId) {
+        throw new Error('Account changed');
+      }
+      const text = [
+        'ETERNYX SERVICE REQUEST — PERSONAL COPY',
+        'Reference: ' + item.id,
+        'Service: ' + (getServiceOffering(item.service_key)?.title ?? item.service_key),
+        'Title: ' + item.title,
+        'Status: ' + (serviceRequestStatuses[item.status]?.label ?? item.status),
+        'Submitted: ' + item.created_at,
+        '',
+        'PROJECT BRIEF', item.description,
+        '',
+        'EXPECTED OUTCOME', item.expected_outcome || 'Not provided',
+        'PREFERRED TIMEFRAME', item.timeframe || 'Not provided',
+        'CONSTRAINTS', item.constraints || 'Not provided',
+        '',
+        'LATEST CUSTOMER UPDATE', item.client_update || 'No update yet',
+        '',
+        'This is an enquiry record, not a quote, contract or proof of delivery.',
+      ].join('\n');
+      if (useAuthStore.getState().user?.id !== userId) return;
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = 'eternyx-request-' + item.id + '.txt';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Export prepared on this device. Keep this copy private.');
+      }
+    } catch {
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Could not export the private brief. Verify your session and retry.');
+      }
+    }
   };
 
   const choosePulse = (kind: 'all' | 'newActivity' | 'answers' | 'pendingReviews') => {
@@ -436,7 +486,13 @@ export default function MyServiceRequests() {
       </form>
       {notice && <p role="status" className="mb-4 rounded-lg border border-primary/20 p-3 text-sm text-muted-foreground">{notice}</p>}
       {linkedLoading && <p className="mb-4 text-sm text-muted-foreground">Opening your private request…</p>}
-      {linkedError && <p role="alert" className="mb-4 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{linkedError}</p>}
+      {linkedError && <div className="mb-4 rounded-lg border border-destructive/30 p-3">
+        <p role="alert" className="text-sm text-destructive">{linkedError}</p>
+        {linkedRetryable && <Button type="button" className="mt-3" size="sm" variant="outline" disabled={linkedLoading}
+          onClick={() => setLinkedRetry((count) => count + 1)}>
+          <RefreshCw className="mr-2 h-4 w-4" />Retry private request
+        </Button>}
+      </div>}
       {visibleLinkedRequest && (selectedPanel !== null || !visibleRows.some((item) => item.id === visibleLinkedRequest.id)) && user && (
         <Card className="mb-6 border-primary/20 p-5 sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Opened by private link</p>
@@ -489,7 +545,7 @@ export default function MyServiceRequests() {
               <Button type="button" variant="outline" size="sm" onClick={() => void copyLink(item.id)}>
                 <Link2 className="mr-2 h-4 w-4" />Copy private link
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => exportBrief(item)}>
+              <Button type="button" variant="outline" size="sm" onClick={() => void exportBrief(item)}>
                 <Download className="mr-2 h-4 w-4" />Export my brief
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => void markChecked(item.id)} disabled={checkingId !== null}>
