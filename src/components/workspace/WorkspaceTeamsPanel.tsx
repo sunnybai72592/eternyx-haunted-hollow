@@ -6,7 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
 import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mjs";
-import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails } from "@/lib/workspaceTeamAccess.mjs";
+import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
+  retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
+} from "@/lib/workspaceTeamAccess.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -56,6 +58,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const spacesEpoch=useRef(0);
   const detailsEpoch=useRef(0);
   const resumeInFlight=useRef(false);
+  const resumePending=useRef(false);
   ownerRef.current=owner;
   const selected=spaceListVerified ? spaces.find(s=>s.id===selectedId)??null : null;
   // Cached data from a former team/owner must never authorize rendering.
@@ -77,12 +80,16 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       throw new Error("Your signed-in Workspace account changed. Refresh before changing team data.");
     }
   };
+  const maskTeam=()=>{
+    // During membership revalidation, hide cached rows but preserve an
+    // unfinished task edit until the signed-in member is checked again.
+    setSpaceListVerified(false);setVerifiedSpaceId(null);
+    setRevealedToken(null); // one-time invite secrets should not reappear
+  };
   const quarantineTeam=()=>{
-    setSpaceListVerified(false);
-    setVerifiedSpaceId(null);
+    maskTeam();
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
-    setRevealedToken(null);setDiscussionTaskId(null);
-    setDraft(freshDraft());setLiveRevision(0);
+    setDiscussionTaskId(null);setDraft(freshDraft());setLiveRevision(0);
   };
   const loadSpaces=async(expectedOwner:string,token:number,prefer?:string|null)=>{
     const {data,error:queryError}=await supabase.from("workspace_team_spaces")
@@ -126,8 +133,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     // Protect against a user switch while the four queries were in flight.
     await assureOwner(expectedOwner);
     if(ownerRef.current!==expectedOwner || detailsEpoch.current!==token)return;
+    let verifiedRole:string;
     try {
-      verifyWorkspaceTeamDetails({
+      verifiedRole=verifyWorkspaceTeamDetails({
         space:target,owner:expectedOwner,spaceId:id,
         members:m.data??[],tasks:t.data??[],events:e.data??[],
         invites:i.data??[],
@@ -140,8 +148,11 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       setNotice("Access to this team could not be verified; cached details were cleared.");
       return;
     }
+    const verifiedTasks=(t.data??[]) as Task[];
+    setDraft(previous=>retainWorkspaceTeamDraft(
+      previous,verifiedRole,target.status,verifiedTasks)?previous:freshDraft());
     setMembers((m.data??[]) as Member[]);
-    setTasks((t.data??[]) as Task[]);
+    setTasks(verifiedTasks);
     setEvents((e.data??[]) as Event[]);
     setInvites((i.data??[]) as Invite[]);
     setVerifiedSpaceId(id);
@@ -197,6 +208,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     // just because the selected-team detail effect initialized.
     const spaceToken=++spacesEpoch.current;
     const detailToken=++detailsEpoch.current;
+    maskTeam(); // cached membership can never authorize a pending request
     try {
       await assureOwner(owner);
       const chosen=await loadSpaces(owner,spaceToken,target??selectedId);
@@ -214,24 +226,39 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     let alive=true;
     let debounce:ReturnType<typeof setTimeout>|null=null;
     const resume=()=>{
-      if(!alive||disabled)return;
-      if(document.visibilityState==="hidden"){
+      if(!alive)return;
+      const action=workspaceResumeAction(document.visibilityState,
+        resumeInFlight.current,disabled);
+      if(action==="ignore")return;
+      if(action==="mask"){
+        // Invalidate outstanding requests; do not discard an authorized draft.
         spacesEpoch.current++;detailsEpoch.current++;
-        quarantineTeam();
+        maskTeam();resumePending.current=true;
         return;
       }
-      if(document.visibilityState!=="visible"||resumeInFlight.current)return;
+      if(action==="queue"){
+        // Never lose the latest focus event behind an older network request.
+        resumePending.current=true;
+        return;
+      }
       if(debounce)clearTimeout(debounce);
       debounce=setTimeout(()=>{
-        if(!alive||resumeInFlight.current)return;
-        resumeInFlight.current=true;
-        // Hide previously cached team data until current membership is checked.
-        quarantineTeam();
-        void refresh().catch(failure=>{
-          if(!alive || ownerRef.current!==owner)return;
-          quarantineTeam();
-          setError(errorMessage(failure));
-        }).finally(()=>{resumeInFlight.current=false;});
+        if(!alive)return;
+        if(resumeInFlight.current){resumePending.current=true;return;}
+        resumeInFlight.current=true;resumePending.current=false;
+        maskTeam();
+        const pending=refresh();
+        const attempt=spacesEpoch.current;
+        void pending.catch(failure=>{
+          if(!alive||ownerRef.current!==owner||spacesEpoch.current!==attempt)return;
+          quarantineTeam();setError(errorMessage(failure));
+        }).finally(()=>{
+          resumeInFlight.current=false;
+          if(alive&&resumePending.current&&document.visibilityState==="visible"){
+            resumePending.current=false;
+            resume(); // queued tab return must trigger a new membership check
+          }
+        });
       },250);
     };
     document.addEventListener("visibilitychange",resume);
@@ -245,6 +272,20 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       window.removeEventListener("focus",resume);
     };
   },[owner,selectedId,disabled]);
+
+  useEffect(()=>{
+    // Supabase warns against async calls inside Auth's synchronous callback.
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(!shouldQuarantineWorkspaceAuth(event,session,owner))return;
+      spacesEpoch.current++;detailsEpoch.current++;
+      resumePending.current=false;
+      quarantineTeam();setSpaces([]);setSelectedId(null);
+      setJoinToken("");setTeamName("");setTeamDescription("");
+      setError("Workspace account changed. Sign in and reload your teams.");
+    });
+    return ()=>subscription.unsubscribe();
+  },[owner]);
+
   const run=async(action:()=>Promise<void>,success:string)=>{
     if(disabled||busy)return;
     setBusy(true);setError("");setNotice("");

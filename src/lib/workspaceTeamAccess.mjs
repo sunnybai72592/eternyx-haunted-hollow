@@ -48,3 +48,23 @@ export function isWorkspaceTeamAccessLoss(error){
     error.status===401||error.status===403
   ));
 }
+
+
+// Phase 27 — preserve unsaved drafts only after actual membership verification.
+export function retainWorkspaceTeamDraft(draft,role,spaceStatus,tasks) {
+  if(!draft||typeof draft!=="object"||!Array.isArray(tasks)||
+    !["owner","editor"].includes(role)||spaceStatus!=="active")return false;
+  if(draft.id===null)return true;
+  return typeof draft.id==="string"&&draft.id.length>0&&
+    tasks.some(task=>task&&task.id===draft.id);
+}
+export function shouldQuarantineWorkspaceAuth(event,session,owner) {
+  return event==="SIGNED_OUT"||
+    (typeof session?.user?.id==="string"&&session.user.id!==owner);
+}
+export function workspaceResumeAction(visibility,inFlight,disabled=false) {
+  if(disabled)return "ignore";
+  if(visibility==="hidden")return "mask";
+  if(visibility!=="visible")return "ignore";
+  return inFlight?"queue":"revalidate";
+}
