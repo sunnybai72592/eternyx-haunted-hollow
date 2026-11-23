@@ -15,6 +15,12 @@ const DIRECT_HOST=/^db\.([a-z]{20})\.supabase\.co$/;
 const SAFE_PORT="5432";
 const SAFE_DATABASE="postgres";
 const SAFE_USERS=new Set(["postgres"]);
+const COLLISION_VERSIONS=new Set([
+  "20261115060000","20261123030000","20261123040000",
+  "20261123050000","20261123070000","20261123080000",
+  "20261123090000","20261123100000","20261123110000",
+  "20261123120000","20261123130000",
+]);
 
 function problem(code){throw Error("staging_db_"+code);}
 export function inspectStagingConnection(env={}){
@@ -97,7 +103,7 @@ export function parseProbeLines(output){
     if(!line)continue;
     if(line.startsWith("applied_collision_version=")){
       const version=line.slice("applied_collision_version=".length);
-      if(!/^20\d{12}$/.test(version)||applied.has(version))
+      if(!COLLISION_VERSIONS.has(version)||applied.has(version))
         problem("malformed_migration_receipt");
       applied.add(version);
     }else {
@@ -110,7 +116,8 @@ export function parseProbeLines(output){
     }
   }
   if([...supported].some(x=>!Object.hasOwn(results,x))||
-      !results.connection_ok||!results.transaction_read_only)
+      !results.connection_ok||!results.transaction_read_only||
+      !results.migration_history_present)
     problem("incomplete_or_unsafe_query_output");
   return {
     schema:"eternyx-automation-staging-db-probe-result-v1",
