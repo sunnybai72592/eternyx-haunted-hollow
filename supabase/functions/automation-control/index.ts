@@ -34,6 +34,9 @@ const rpcStatus: Record<string, number> = {
   plan_daily_limit:429,stale_plan:409,plan_not_draft:409,
   step_not_planned:409,already_acknowledged:409,unreviewed_steps:409,
   invalid_plan_transition:409,
+  closure_not_ready:409,closure_approval_required:409,
+  closure_evidence_incomplete:409,stale_closure_review:409,
+  closure_review_limit:429,plan_not_found:404,
   already_captured:409,unrelated_evidence:403,
   recovery_review_limit:429,already_reported:409,
   evidence_not_found:404,evidence_not_ready:409,invalid_transition:409,
@@ -107,6 +110,37 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="incidentClosurePreflight"){
+      const {data,error}=await supabase.rpc("automation_incident_closure_preflight",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"closure_preflight_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticRestore:false,externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentClosureDecision"){
+      const {data,error}=await supabase.rpc("automation_record_incident_closure_decision",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+        p_incident_revision:request.incidentRevision,
+        p_plan_revision:request.planRevision,
+        p_decision:request.decision,p_note:request.note,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"closure_decision_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticallyResolved:false,externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentClosureHistory"){
+      const {data,error}=await supabase.rpc("automation_incident_closure_history",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"closure_history_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false});
+    }
     if(request.action==="investigationPlanCreate"){
       const {data,error}=await supabase.rpc("automation_create_investigation_plan",{
         p_user_id:user.id,p_incident_id:request.incidentId,
@@ -220,7 +254,7 @@ serve(async (req: Request) => {
         externalExecutionTriggered:false});
     }
     if(request.action==="incidentTransition"){
-      const {data,error}=await supabase.rpc("automation_transition_incident",{
+      const {data,error}=await supabase.rpc("automation_governed_incident_transition",{
         p_user_id:user.id,p_incident_id:request.incidentId,
         p_revision:request.expectedRevision,p_next_status:request.nextStatus,
         p_note:request.note,p_request_key:request.requestKey,

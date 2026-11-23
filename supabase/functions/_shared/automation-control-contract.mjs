@@ -38,6 +38,9 @@ const fields = {
   investigationStepAck: ["action","planId","expectedRevision","stepKind","note","requestKey"],
   investigationPlanTransition: ["action","planId","expectedRevision","nextStage","note","requestKey"],
   incidentDailyTrend: ["action","days"],
+  incidentClosurePreflight: ["action","incidentId"],
+  incidentClosureHistory: ["action","incidentId"],
+  incidentClosureDecision: ["action","incidentId","incidentRevision","planRevision","decision","note","requestKey"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -112,6 +115,28 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="incidentClosurePreflight"||action==="incidentClosureHistory"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
+      return {ok:false,reason:"invalid_incident_id"};
+    }
+    return {ok:true,action,incidentId:value.incidentId};
+  }
+  if(action==="incidentClosureDecision"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
+       !Number.isInteger(value.incidentRevision)||value.incidentRevision<1||
+       value.incidentRevision>2147483647||
+       !Number.isInteger(value.planRevision)||value.planRevision<1||
+       value.planRevision>2147483647||
+       !["defer","approve"].includes(value.decision)||
+       typeof value.note!=="string"||value.note.trim().length<12||
+       value.note.trim().length>500||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_closure_decision"};
+    }
+    return {ok:true,action,incidentId:value.incidentId,
+      incidentRevision:value.incidentRevision,planRevision:value.planRevision,
+      decision:value.decision,note:value.note.trim(),requestKey:value.requestKey};
   }
   if(action==="investigationPlanCreate"){
     if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||

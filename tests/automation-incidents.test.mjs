@@ -155,9 +155,11 @@ test("authenticated Edge and real UI are connected without fake auto-remediation
   const endpoint=await read("supabase/functions/automation-control/index.ts");
   const panel=await read("src/components/AutomationIncidentCenter.tsx");
   const cloud=await read("src/components/AutomationCloudPanel.tsx");
+  // Phase 2P routes the older action through the guarded DB wrapper.
+  assert.doesNotMatch(endpoint,/supabase\.rpc\("automation_transition_incident"/);
   assert.match(endpoint,/authenticateUser\(req\)/);
   for(const name of ["automation_incident_inbox","automation_open_incident",
-    "automation_transition_incident","automation_incident_timeline",
+    "automation_governed_incident_transition","automation_incident_timeline",
     "automation_recovery_review_inbox","automation_review_quarantine"]){
     assert.ok(endpoint.includes(name),name);
   }
