@@ -35,3 +35,11 @@ This procedure applies only to the public Developer Studio Project Lab. It does 
 The workflow never executes the project's API smoke GET against staging. It saves only synthetic configuration in disposable browser storage. Do not treat local CI as live staging proof.
 
 **Release decision:** Successful staging Chrome acceptance is one input to release review. Protected backend, real accounts, Storage, RLS and providers require independent verification.
+
+## Developer Studio 3.0 — required staging HTTPS response posture
+
+For each public staging root navigation (before and after both screen sizes), the gate checks the actual HTTP response, not a hard-coded configuration claim: HTTP 200, text/html, HSTS max-age at least one year, X-Content-Type-Options nosniff, a restricted Referrer-Policy, an actual Content-Security-Policy header without unsafe-eval, and either DENY/SAMEORIGIN X-Frame-Options or a restrictive frame-ancestors policy (self/none). This strict public staging policy may require hosting configuration changes.
+
+Only seven boolean classifications and HTTP status are saved per observation; raw CSP, HSTS, cookies, tokens, URLs, and header values do not appear in artifacts. Four fully passing observations are mandatory in staging. Failing a check means fix the staging **hosting headers** first; never weaken this gate to claim acceptance. If the service legitimately needs a more complex framing policy, review and explicitly update the policy and regression tests rather than bypass them.
+
+Even after every public UI, provenance, and HTTPS control passes, the machine-readable release decision remains **HOLD_PRODUCTION**. Protected backend, authenticated roles, RLS, cloud provider integrations and production deployment are independently unverified.
