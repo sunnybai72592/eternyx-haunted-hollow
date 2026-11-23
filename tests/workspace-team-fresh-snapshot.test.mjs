@@ -74,7 +74,7 @@ test("create/join avoid a duplicate refresh and invitation codes remain visible"
     "Team space created. Only explicitly invited members can access its tasks.",
     "Team invitation accepted. Your new membership is private to this account.",
     "One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",
-  ])assert.ok(source.includes(label+'",false,')),"Should skip duplicate/destructive refresh: "+label);
+  ])assert.ok(source.includes(label+'",false,'),"Should skip duplicate/destructive refresh: "+label);
   assert.ok(source.includes("if(refreshAfter)await refresh();"));
   assert.ok(source.includes("setRevealedToken({token:receipt.token,role:receipt.role,expires:receipt.expires_at});"));
   assert.ok(source.includes('setRevealedToken(null); // one-time invite secrets should not reappear'));
