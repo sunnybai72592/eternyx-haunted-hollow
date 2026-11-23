@@ -57,7 +57,7 @@ test("packet checksum covers canonical body and remains consistent after top-lev
 });
 test("modified content cannot silently retain a valid packet checksum",async()=>{
  const p=await packet();
- await assert.rejects(()=>verifyEvidenceHandoff(JSON.stringify({...p,core:{...p.core,purpose:"Altered"} }),{
+ await assert.rejects(()=>verifyEvidenceHandoff(JSON.stringify({...p,core:{...p.core,purpose:"Altered purpose for a separate unauthorized review."} }),{
   now,subtle:webcrypto.subtle}),/checksum mismatch/);
  await assert.rejects(()=>verifyEvidenceHandoff(JSON.stringify({...p,extra:"private_key"}),{
   now,subtle:webcrypto.subtle}),/unsupported/);
