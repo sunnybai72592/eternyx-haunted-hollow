@@ -130,6 +130,16 @@ def preview_isolation(page):
     assert "worker-src 'none'" in doc
     preview=page.frame_locator('iframe[title="Isolated project preview"]')
     expect(preview.locator("#message")).to_have_text("Try editing these files.")
+    # The iframe HTML can become visible before its inline JS has registered
+    # the click handler. Await document completion inside the opaque-origin
+    # iframe, then test real interaction without arbitrary sleeps or retries.
+    preview.locator("#hello").evaluate("""node => new Promise(resolve => {
+        const doc = node.ownerDocument;
+        if (doc.readyState === 'complete') return resolve(true);
+        doc.addEventListener('readystatechange', () => {
+          if (doc.readyState === 'complete') resolve(true);
+        });
+    })""")
     preview.locator("#hello").click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
     page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
