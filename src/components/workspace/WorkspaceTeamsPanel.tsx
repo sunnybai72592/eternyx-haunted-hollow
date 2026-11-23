@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, CheckCircle2, ClipboardCopy, Download, FolderKanban, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Archive, CheckCircle2, ClipboardCopy, Columns3, Download, FolderKanban, List, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
+import {
+  workspaceTeamBoardColumns,workspaceTeamNextTaskStatus,
+  workspaceTeamNextTaskLabel,workspaceTeamTaskStatusPayload,
+} from "@/lib/workspaceTeamTaskBoard.mjs";
 import {
   workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
   selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
@@ -54,6 +58,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [taskFilter,setTaskFilter]=useState("all");
   const [taskQuery,setTaskQuery]=useState("");
   const [taskSort,setTaskSort]=useState("updated");
+  const [taskLayout,setTaskLayout]=useState<"list"|"board">("list");
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
   const [verifiedSpaceId,setVerifiedSpaceId]=useState<string|null>(null);
@@ -84,6 +89,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     ()=>selectWorkspaceTeamTasks(tasks,{
       filter:taskFilter,search:taskQuery,sort:taskSort,owner,today,
     }),[tasks,taskFilter,taskQuery,taskSort,owner,today]);
+  const boardColumns=useMemo(
+    ()=>selected&&currentRole?workspaceTeamBoardColumns(visibleTasks,selected.id):[],
+    [visibleTasks,selected,currentRole]);
   const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
   const assureOwner=async(expectedOwner:string)=>{
@@ -189,7 +197,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
-    setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
     setLoading(true);
@@ -211,7 +219,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
-    setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     if(!selectedId)return;
     setLoading(true);
     void (async()=>{
@@ -474,6 +482,57 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     },"You left this team. Previously shared tasks were not deleted.");
   };
 
+  const quickMoveTask=(task:Task)=>{
+    if(!selected||!editor||disabled||busy||!spaceListVerified||
+       verifiedSpaceId!==selected.id)return;
+    const next=workspaceTeamNextTaskStatus(task);
+    void run(async()=>{
+      const params=workspaceTeamTaskStatusPayload(task,next,selected.id,memberIds);
+      const {data,error:queryError}=await supabase.rpc("workspace_team_save_task",params);
+      if(queryError||!data)throw new Error(
+        queryError?.message??"Task status change was not confirmed");
+    },"Task moved to "+(next==="done"?"done":next==="todo"?"to do":"in progress")+".",true,
+    ()=>{if(draft.id===task.id)setDraft(freshDraft());});
+  };
+  const renderTeamTask=(task:Task,board=false)=><div key={task.id}
+    className={board?"space-y-2 rounded-lg border border-border bg-background/60 p-3 text-xs":
+      "flex flex-wrap items-center gap-3 py-3 text-xs"}>
+    <div className="min-w-0 flex-1">
+      <p className="font-medium break-words">{task.title}</p>
+      <p className="text-muted-foreground break-words">{task.details.slice(0,300)}</p>
+      <p className="text-muted-foreground">
+        {task.status} · {task.priority} ·
+        {" "+(task.assignee_id?teamMemberLabel(task.assignee_id,owner):"Unassigned")} ·
+        {task.due_on?" due "+task.due_on:" no due date"}
+      </p>
+      {workspaceTeamTaskDueBucket(task,today)==="overdue"&&
+        <p className="text-xs text-amber-400">Overdue</p>}
+    </div>
+    <div className="flex flex-wrap gap-1">
+      <Button size="sm" type="button"
+        variant={discussionTaskId===task.id?"default":"outline"}
+        disabled={disabled||busy||loading}
+        aria-label={(discussionTaskId===task.id?"Close":"Open")+" discussion for "+task.title}
+        onClick={()=>setDiscussionTaskId(value=>value===task.id?null:task.id)}>
+        {discussionTaskId===task.id?"Close discussion":"Discussion & checklist"}
+      </Button>
+      {editor&&<>
+        <Button size="sm" type="button" variant="outline"
+          disabled={busy||disabled||loading}
+          aria-label={"Edit "+task.title} onClick={()=>editTask(task)}>Edit</Button>
+        <Button size="sm" type="button" variant="outline"
+          disabled={busy||disabled||loading}
+          aria-label={workspaceTeamNextTaskLabel(task)+" — "+task.title}
+          onClick={()=>quickMoveTask(task)}>
+          {workspaceTeamNextTaskLabel(task)}
+        </Button>
+        <Button size="sm" type="button" variant="ghost"
+          disabled={busy||disabled||loading}
+          aria-label={"Delete "+task.title} onClick={()=>removeTask(task)}>Delete</Button>
+      </>}
+    </div>
+  </div>;
+
   return <section className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-6"
     aria-label="Team collaboration workspace">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -725,36 +784,47 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
               disabled={busy||disabled} onClick={()=>setDraft(freshDraft())}>Cancel edit</Button>}
           </div>
         </form>}
-        <div className="max-h-[24rem] divide-y divide-border overflow-y-auto">
-          {visibleTasks.map(task=><div key={task.id} className="flex flex-wrap items-center gap-3 py-3 text-xs">
-            <div className="min-w-0 flex-1">
-              <p className="font-medium break-words">{task.title}</p>
-              <p className="text-muted-foreground break-words">{task.details.slice(0,300)}</p>
-              <p className="text-muted-foreground">
-                {task.status} · {task.priority} ·
-                {" "+(task.assignee_id?teamMemberLabel(task.assignee_id,owner):"Unassigned")} ·
-                {task.due_on?" due "+task.due_on:" no due date"}
-              </p>
-              {workspaceTeamTaskDueBucket(task,today)==="overdue"&&
-                <p className="text-xs text-amber-400">Overdue</p>}
-            </div>
-            <Button size="sm" type="button"
-              variant={discussionTaskId===task.id?"default":"outline"}
-              disabled={disabled||busy}
-              onClick={()=>setDiscussionTaskId(value=>value===task.id?null:task.id)}>
-              {discussionTaskId===task.id?"Close discussion":"Discussion & checklist"}
-            </Button>
-            {editor&&<div className="flex gap-1">
-              <Button size="sm" type="button" variant="outline"
-                disabled={busy||disabled} onClick={()=>editTask(task)}>Edit</Button>
-              <Button size="sm" type="button" variant="ghost"
-                disabled={busy||disabled} onClick={()=>removeTask(task)}>Delete</Button>
-            </div>}
-          </div>)}
-          {!visibleTasks.length&&<p className="py-3 text-xs text-muted-foreground">
-            {tasks.length?"No tasks match this filter.":"No shared tasks yet."}
-          </p>}
+        <div className="flex flex-wrap items-center gap-2" role="group"
+          aria-label="Team task layout">
+          <Button size="sm" type="button"
+            variant={taskLayout==="list"?"default":"outline"}
+            aria-pressed={taskLayout==="list"}
+            onClick={()=>setTaskLayout("list")}>
+            <List className="mr-1 h-3.5 w-3.5"/> List
+          </Button>
+          <Button size="sm" type="button"
+            variant={taskLayout==="board"?"default":"outline"}
+            aria-pressed={taskLayout==="board"}
+            onClick={()=>setTaskLayout("board")}>
+            <Columns3 className="mr-1 h-3.5 w-3.5"/> Board
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {taskLayout==="board"?"Filtered tasks grouped by real status":"Filtered task list"}
+          </span>
         </div>
+        {taskLayout==="list"?
+          <div className="max-h-[24rem] divide-y divide-border overflow-y-auto"
+            aria-label="Shared team task list">
+            {visibleTasks.map(task=>renderTeamTask(task))}
+          </div>
+        :
+          <div className="grid gap-3 lg:grid-cols-3" aria-label="Shared team task board">
+            {boardColumns.map(column=><section key={column.status}
+              aria-label={column.label+" tasks"} className="min-w-0 rounded-lg border border-border p-3">
+              <h5 className="mb-3 text-sm font-semibold">
+                {column.label} ({column.tasks.length})
+              </h5>
+              <div className="max-h-[28rem] space-y-2 overflow-y-auto">
+                {column.tasks.map(task=>renderTeamTask(task,true))}
+                {!column.tasks.length&&
+                  <p className="py-3 text-xs text-muted-foreground">No matching tasks in this column.</p>}
+              </div>
+            </section>)}
+          </div>
+        }
+        {!visibleTasks.length&&<p className="py-3 text-xs text-muted-foreground">
+          {tasks.length?"No tasks match this filter.":"No shared tasks yet."}
+        </p>}
         {discussionTask&&<WorkspaceTeamTaskDiscussion
           key={owner+":"+selected.id+":"+discussionTask.id}
           owner={owner} spaceId={selected.id} taskId={discussionTask.id}
