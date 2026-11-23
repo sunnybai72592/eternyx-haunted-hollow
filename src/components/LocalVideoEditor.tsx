@@ -4,6 +4,7 @@ import { buildPortableVideoBundle } from "@/lib/ai/portableVideoBundle.mjs";
 import rendererPython from "../../gpu-worker/render_video_timeline.py?raw";
 import storyboardPython from "../../gpu-worker/assemble_video_storyboard.py?raw";
 import auditPython from "../../gpu-worker/audit_video_render.py?raw";
+import localLauncherPython from "../../gpu-worker/launch_portable_video.py?raw";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import LocalMotionComposer from "@/components/LocalMotionComposer";
 import LocalLearnedVideoStudio from "@/components/LocalLearnedVideoStudio";
@@ -183,6 +184,7 @@ export default function LocalVideoEditor() {
           "render_video_timeline.py": rendererPython,
           "assemble_video_storyboard.py": storyboardPython,
           "audit_video_render.py": auditPython,
+          "launch_portable_video.py": localLauncherPython,
         },
         onProgress: (p: { done: number; total: number; phase: string }) =>
           setBundleProgress(
@@ -390,11 +392,12 @@ export default function LocalVideoEditor() {
           {notice && <p role="status" className="text-sm text-emerald-200">{notice}</p>}
           {ready && <p className="text-sm text-emerald-200">Storyboard valid for export: {ready.board.shots.length} cuts · {ready.seconds.toFixed(2)} s. Python will verify each source on render.</p>}
           <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-950/10 p-3">
-            <p className="font-semibold text-emerald-100">One ZIP · All source clips + actual CPU renderer</p>
+            <p className="font-semibold text-emerald-100">One ZIP · Real CPU renderer + guided local launch</p>
             <p className="text-sm text-slate-300">
               Download a runnable project with the edited storyboard, only its referenced
               original MP4s, any licensed soundtrack, SRT preview, three reviewed Python
               renderer modules, and Windows/macOS/Linux launch instructions.
+              Includes preflight checks, verified output and a cancel-capable desktop runner.
               No repository checkout, GPU or paid AI API is needed.
             </p>
             <Button disabled={!ready || working || audioWorking || bundleWorking}
@@ -405,8 +408,13 @@ export default function LocalVideoEditor() {
             {bundleProgress && <p role="status" className="text-xs text-emerald-200">{bundleProgress}</p>}
             <p className="text-xs text-amber-100">
               This private ZIP contains your original video and soundtrack bytes.
-              Save it only somewhere you trust. Extract it and run the local launcher:
-              Python 3.11+, FFmpeg and FFprobe are required; the MP4 is not rendered in your browser.
+              Save it only somewhere you trust. Extract it and launch
+              <code className="mx-1">launch-video-windows.cmd</code> on Windows, or
+              <code className="mx-1">sh launch-video-macos-linux.sh</code> on macOS/Linux.
+              Python 3.11+, FFmpeg/FFprobe and standard Tkinter are needed for the desktop window.
+              Without Tkinter, use <code>python3 launch_portable_video.py --check</code>
+              and then <code>python3 launch_portable_video.py --run</code>.
+              The MP4 is generated locally, never in your hosted browser.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
