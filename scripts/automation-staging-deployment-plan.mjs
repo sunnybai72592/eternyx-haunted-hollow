@@ -180,11 +180,13 @@ export async function main(argv=process.argv.slice(2)){
   // history: doing so could make an applied migration appear unapplied.
   if(report.duplicateMigrationVersions.length){
     process.stderr.write("Automation staging blocked: "+report.duplicateMigrationVersions.length+
-      " duplicate migration timestamp(s) across the repository. Review report before any push.\n");
+      " duplicate migration timestamp(s): "+
+      report.duplicateMigrationVersions.join(", ")+"; no database push allowed.\n");
   }
   // CI checks consistency of tracked code, not whether real deployment is ready.
   const sourceErrors=new Set(["migration_source_missing","migration_inventory_short",
-    "function_source_missing","handler_not_detected","jwt_config_mismatch"]);
+    "function_source_missing","handler_not_detected","jwt_config_mismatch",
+    "out_of_order_automation_migrations"]);
   return report.blockers.some(x=>sourceErrors.has(x.code))?1:0;
 }
 const invoked=process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url);
