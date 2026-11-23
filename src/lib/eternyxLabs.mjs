@@ -9,6 +9,11 @@ export const labCatalog = Object.freeze([
   { id: "headers", title: "HTTP header clinic", area: "Cybersecurity", level: "Intermediate", description: "Audit pasted HTTP response headers and inspect concrete hardening gaps." },
   { id: "sql", title: "SQL injection defense", area: "Pentesting fundamentals", level: "Foundations", description: "Observe unsafe query concatenation and a parameterized alternative without a live database." },
   { id: "access", title: "Access-control decisions", area: "Pentesting fundamentals", level: "Intermediate", description: "Test least-privilege authorization outcomes against a local policy." },
+  { id: "codec", title: "UTF-8 encoding lab", area: "Developer essentials", level: "Foundations", description: "Encode and decode UTF-8, Base64 and hex locally with strict validation." },
+  { id: "urls", title: "URL anatomy clinic", area: "Web security", level: "Foundations", description: "Break down a URL safely without visiting it or displaying secret values." },
+  { id: "jwt", title: "JWT structure inspector", area: "Identity & auth", level: "Intermediate", description: "Inspect JWT header and claim names without trusting or verifying its signature." },
+  { id: "redact", title: "Sensitive-log redaction", area: "Defensive operations", level: "Intermediate", description: "Practice pattern-based removal of credentials from training logs." },
+  { id: "sha", title: "SHA-256 text fingerprint", area: "Data integrity", level: "Foundations", description: "Calculate a text digest locally using browser Web Crypto, without upload." },
 ]);
 
 export const sampleHeaders = [
