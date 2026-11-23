@@ -24,7 +24,7 @@ PLAN_NAME = "phone-movie-plan.json"
 OUTPUT = "phone-movie-output"
 MAX_PLAN_BYTES = 32768
 PROFILES = {"landscape", "portrait", "square"}
-QUALITIES = {"standard", "high"}
+QUALITIES = {"standard", "high", "cinematic"}
 DELIVERIES = {"mp4", "mp4_with_subtitles", "mp4_webm", "all"}
 FRAMINGS = {"contain", "cover"}
 
@@ -33,9 +33,9 @@ def extra_outputs(mode):
     return (mode in ("mp4_webm", "all"), mode in ("mp4_with_subtitles", "all"))
 
 
-def verified_variant(path, expected_codec, frames, size, subtitles=False):
+def verified_variant(path, expected_codec, frames, size, subtitles=False, fps=renderer.FPS):
     """Decode/count the real output and independently verify stream codecs."""
-    result = renderer.verify_output(path, frames, size, False)
+    result = renderer.verify_output(path, frames, size, False, fps)
     streams = json.loads(renderer.execute([
         "ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name",
         "-of", "json", str(path),
@@ -60,15 +60,15 @@ def make_preview_assets(folder, receipt):
         "-frames:v", "1", "-c:v", "png", "-f", "image2pipe", "pipe:1",
     ], timeout=60)
     if (not frame.startswith(b"\x89PNG\r\n\x1a\n") or
-            len(frame) > 2 * 1024 * 1024 or len(frame) < 24 or
+            len(frame) > 8 * 1024 * 1024 or len(frame) < 24 or
             struct.unpack(">II", frame[16:24]) != (width, height)):
         raise ValueError("Real final video poster failed PNG/dimension verification")
     poster = folder / "poster.png"
     poster.write_bytes(frame)
     captions = ["WEBVTT", ""]
     for shot in receipt["shots"]:
-        start = subtitle_time(shot["timeline_start_frame"]).replace(",", ".")
-        end = subtitle_time(shot["timeline_start_frame"] + shot["frames"]).replace(",", ".")
+        start = renderer.timeline_stamp(shot["timeline_start_frame"], receipt["fps"]).replace(",", ".")
+        end = renderer.timeline_stamp(shot["timeline_start_frame"] + shot["frames"], receipt["fps"]).replace(",", ".")
         captions.extend([start + " --> " + end, escape(shot["caption"]), ""])
     vtt = folder / "captions.vtt"
     vtt.write_text("\n".join(captions) + "\n", encoding="utf8")
@@ -92,7 +92,8 @@ MP4 in Studio for broader subtitle compatibility.</p></main></html>
 """, encoding="utf8")
     result = {}
     for asset in (poster, vtt, watch):
-        if asset.is_symlink() or not asset.is_file() or not 0 < asset.stat().st_size <= 2 * 1024 * 1024:
+        bound = (8 if asset == poster else 2) * 1024 * 1024
+        if asset.is_symlink() or not asset.is_file() or not 0 < asset.stat().st_size <= bound:
             raise ValueError("Offline movie preview asset missing or oversized")
         result[asset.name] = {
             "sha256": renderer.sha256(asset),
@@ -103,10 +104,11 @@ MP4 in Studio for broader subtitle compatibility.</p></main></html>
 def produce_deliverables(folder, receipt, mode):
     """Create optional genuine local formats in the unpublished staging folder."""
     frames = receipt["total_frames"]
+    fps = receipt["fps"]
     size = (receipt["video"]["width"], receipt["video"]["height"])
     master = folder / "video.mp4"
     outputs = {
-        "video.mp4": verified_variant(master, "h264", frames, size),
+        "video.mp4": verified_variant(master, "h264", frames, size, fps=fps),
     }
     subtitles_path = folder / "captions.srt"
     if subtitles_path.is_symlink() or not subtitles_path.is_file():
@@ -123,10 +125,10 @@ def produce_deliverables(folder, receipt, mode):
             "-threads", "2", "-i", str(master),
             "-map", "0:v:0", "-an", "-sn", "-dn",
             "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "6",
-            "-b:v", "0", "-crf", "27" if receipt["quality"] == "high" else "32",
+            "-b:v", "0", "-crf", "27" if receipt["quality"] in ("high", "cinematic") else "32",
             "-pix_fmt", "yuv420p", str(target),
         ], timeout=180)
-        outputs["video.webm"] = verified_variant(target, "vp9", frames, size)
+        outputs["video.webm"] = verified_variant(target, "vp9", frames, size, fps=fps)
     if embedded:
         target = folder / "video-subtitled.mp4"
         renderer.execute([
@@ -137,7 +139,7 @@ def produce_deliverables(folder, receipt, mode):
             "-an", "-movflags", "+faststart", str(target),
         ], timeout=90)
         outputs["video-subtitled.mp4"] = verified_variant(
-            target, "h264", frames, size, subtitles=True)
+            target, "h264", frames, size, subtitles=True, fps=fps)
     outputs.update(make_preview_assets(folder, receipt))
     return outputs
 
@@ -195,7 +197,8 @@ def preflight(root=ROOT):
     checked=intake.preflight(root)
     return {
         "result":"ready","shots":len(plan["shots"]),
-        "frames":sum(s["frames"] for s in plan["shots"]),
+        "frames":sum(s["frames"] for s in plan["shots"]) * (24 if plan["quality"] == "cinematic" else 16) // 16,
+        "fps":24 if plan["quality"] == "cinematic" else 16,
         "profile":plan["profile"],"quality":plan["quality"],
         "delivery":plan.get("delivery", "mp4"),
         "framing":plan.get("framing", "contain"),
@@ -209,10 +212,14 @@ def build_board(root,plan,report):
     if report["source_count"]!=len(plan["shots"]):
         raise ValueError("Actual normalized MP4 inventory differs from the requested movie")
     shots=[]
+    fps = 24 if plan["quality"] == "cinematic" else renderer.FPS
     for authored,converted in zip(plan["shots"],report["clips"]):
         if converted["source_filename"]!=authored["source_filename"]:
             raise ValueError("Prepared video source order does not match the movie plan")
-        if authored["frames"]>converted["prepared_frames"]:
+        frames = authored["frames"] * fps // renderer.FPS
+        if converted["prepared_fps"] != f"{fps}/1":
+            raise ValueError("Prepared footage FPS is not the requested genuine output FPS")
+        if frames>converted["prepared_frames"]:
             raise ValueError(
                 "Original video "+authored["source_filename"]+
                 " is too short after decoding for the requested cut. "
@@ -221,11 +228,11 @@ def build_board(root,plan,report):
         shots.append({
             "file":converted["prepared_filename"],
             "source_sha256":converted["prepared_sha256"],
-            "start_frame":0,"frames":authored["frames"],
+            "start_frame":0,"frames":frames,
             "caption":authored["caption"],"rights_ref":authored["rights_ref"],
             "fade_in_frames":0,"fade_out_frames":0,
         })
-    return {"version":2,"shots":shots}
+    return {"version":2,"shots":shots,**({"fps":fps} if fps != renderer.FPS else {})}
 
 
 def run(root=ROOT,on_stage=None):
@@ -234,8 +241,9 @@ def run(root=ROOT,on_stage=None):
     on_stage("Verifying genuine source footage, human captions and recording rights...")
     checked=preflight(root)
     plan=load_plan(root)
-    on_stage("Converting phone footage to real constant-16FPS H264 on this CPU...")
-    intake.run(root,on_stage=on_stage)
+    on_stage(f"Converting real source frames to verified {checked['fps']} FPS H264 on this CPU...")
+    intake.run(root,on_stage=on_stage,cinematic=plan["quality"]=="cinematic",
+               limit_seconds=max(s["frames"] for s in plan["shots"]) // renderer.FPS)
     media=root/intake.OUTPUT
     report_path=media/"preparation-report.json"
     if report_path.is_symlink() or not report_path.is_file():
@@ -258,6 +266,7 @@ def run(root=ROOT,on_stage=None):
             receipt.get("total_frames")!=checked["frames"] or
             receipt.get("profile")!=plan["profile"] or
             receipt.get("quality")!=plan["quality"] or
+            receipt.get("fps")!=checked["fps"] or
             receipt.get("framing")!=plan.get("framing", "contain") or
             receipt.get("video",{}).get("frame_count")!=checked["frames"]):
             raise ValueError("Final local FFmpeg receipt does not match the original plan")
@@ -279,6 +288,7 @@ def run(root=ROOT,on_stage=None):
         "result":"completed","frames":checked["frames"],
         "shots":checked["shots"],"profile":plan["profile"],
         "quality":plan["quality"],"delivery":plan.get("delivery", "mp4"),
+        "fps":checked["fps"],
         "framing":plan.get("framing", "contain"),
         "deliverables":list(receipt["deliverables"]),
         "video_sha256":receipt["video"]["sha256"],
