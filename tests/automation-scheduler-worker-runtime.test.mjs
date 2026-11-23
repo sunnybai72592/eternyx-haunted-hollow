@@ -81,11 +81,11 @@ function makeDb(options={}){
           if(options.recoveryThrows)throw Error("synthetic network loss");
           if(options.recoveryError)return result(null,{code:"synthetic_rpc_failure"});
           if(options.recoveryStale)return result({ok:false,reason:"stale_lease"});
-          return result({ok:true});
+          return result(options.recoveryReceipt??{ok:true,retrying:true,attempts:1});
         case "automation_prune_schedule_outputs":
           if(options.pruneThrows)throw Error("synthetic cleanup disconnection");
           if(options.pruneError)return result(null,{code:"synthetic_prune_failure"});
-          return result({ok:true});
+          return result(options.pruneReceipt??0);
         default: throw Error("Unexpected RPC "+name);
       }
     },
@@ -308,20 +308,21 @@ test("stale lease receipt fails closed: worker does not falsely claim database r
   const db=makeDb({claims:[await claim()],recoveryStale:true,
     policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
   const r=await tick(db);
-  assert.equal(r.status,200);
+  assert.equal(r.status,503);
   assert.equal(r.body.failed,1);
   assert.equal(r.body.leaseRecoveryUnconfirmed,1);
   assert.equal(r.body.processed,0);
   assert.equal(count(db,"automation_fail_scheduled_run"),1);
   assert.equal(count(db,"automation_complete_scheduled_run"),0);
-  assert.equal(r.body.schedulerEnabled,true);
+  assert.match(r.body.error,/lease recovery unconfirmed/i);
+  assert.equal(count(db,"automation_claim_due_schedule"),1);
 });
 
 test("database returned error from recovery RPC is not mistaken for a released lease",async()=>{
   const db=makeDb({claims:[await claim()],recoveryError:true,
     policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
   const r=await tick(db);
-  assert.equal(r.status,200);
+  assert.equal(r.status,503);
   assert.equal(r.body.failed,1);
   assert.equal(r.body.leaseRecoveryUnconfirmed,1);
   assert.equal(count(db,"automation_fail_scheduled_run"),1);
@@ -331,13 +332,33 @@ test("thrown transport recovery error is counted once without raw database detai
   const db=makeDb({claims:[await claim()],recoveryThrows:true,
     policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
   const r=await tick(db);
-  assert.equal(r.status,200);
+  assert.equal(r.status,503);
   assert.equal(r.body.failed,1);
   assert.equal(r.body.leaseRecoveryUnconfirmed,1);
   assert.doesNotMatch(JSON.stringify(r.body),/synthetic|network|token|lease_token|schedule_id/);
 });
 
-test("two failed claims with one unconfirmed lease recovery preserve batch counters",async()=>{
+test("worker stops after first unconfirmed recovery and never claims a second queued lease",async()=>{
+  const c1=await claim();
+  const c2=await claim({
+    schedule_id:"66666666-6666-4666-8666-666666666666",
+    lease_token:"77777777-7777-4777-8777-777777777777",
+  });
+  const db=makeDb({claims:[c1,c2],recoveryStale:true,policy:{
+    ok:true,allowed:false,reason:"policy_scheduled_disabled",
+  }});
+  const r=await tick(db);
+  assert.equal(r.status,503);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(r.body.processed,0);
+  assert.equal(r.body.deferred,0);
+  assert.equal(count(db,"automation_claim_due_schedule"),1);
+  assert.equal(count(db,"automation_fail_scheduled_run"),1);
+  assert.equal(count(db,"automation_prune_schedule_outputs"),0);
+});
+
+test("two acknowledged failed leases can finish a batch without false alarm",async()=>{
   const c1=await claim();
   const c2=await claim({
     schedule_id:"66666666-6666-4666-8666-666666666666",
@@ -346,22 +367,13 @@ test("two failed claims with one unconfirmed lease recovery preserve batch count
   const db=makeDb({claims:[c1,c2],policy:{
     ok:true,allowed:false,reason:"policy_scheduled_disabled",
   }});
-  const old=db.rpc.bind(db);
-  let failures=0;
-  db.rpc=async(name,args)=>{
-    if(name==="automation_fail_scheduled_run"){
-      failures++;
-      if(failures===1)return result({ok:false,reason:"stale_lease"});
-    }
-    return old(name,args);
-  };
   const r=await tick(db);
   assert.equal(r.status,200);
   assert.equal(r.body.failed,2);
-  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
-  assert.equal(r.body.processed,0);
-  assert.equal(r.body.deferred,0);
-  assert.equal(failures,2);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+  assert.equal(count(db,"automation_claim_due_schedule"),2);
+  assert.equal(count(db,"automation_fail_scheduled_run"),2);
+  assert.equal(count(db,"automation_prune_schedule_outputs"),1);
 });
 
 test("age-based ciphertext prune returning an RPC error is explicitly observable",async()=>{
@@ -439,11 +451,10 @@ test("the worker never leaks raw failures, tenant ids or ciphertext in its obser
     policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
   const r=await tick(db);
   assert.deepEqual(Object.keys(r.body).sort(),[
-    "deferred","failed","leaseRecoveryUnconfirmed","processed",
-    "retentionCleanupFailed","schedulerEnabled","source",
+    "deferred","error","failed","leaseRecoveryUnconfirmed","processed",
   ].sort());
   assert.equal(r.body.leaseRecoveryUnconfirmed,1);
-  assert.equal(r.body.retentionCleanupFailed,true);
+  assert.equal(count(db,"automation_prune_schedule_outputs"),0);
   const payload=JSON.stringify(r.body);
   assert.doesNotMatch(payload,/user_id|lease_token|schedule_id|workflow_id|ciphertext|nonce|offline|a{32}|b{32}/);
 });
