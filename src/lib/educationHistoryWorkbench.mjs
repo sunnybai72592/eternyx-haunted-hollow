@@ -80,6 +80,17 @@ export function organizeEducationHistoryPage(rows,titles,{
   return sortable;
 }
 
+/** A resume link may only exist if no other attempt for the same test is on this page. */
+export function educationHistorySafeAction(row,rows,ownerId) {
+  const valid=strictOwnerRows(rows,ownerId);
+  const current=normalizeOwnedEducationAttempt(row,ownerId);
+  if(!current)return {label:"Attempt unavailable",path:null,status:"unavailable"};
+  if(current.status==="in_progress"&&valid.some(item=>
+    item.test_id===current.test_id&&item.id!==current.id))
+    return {label:"Conflicting attempts",path:null,status:"unavailable"};
+  return educationHistoryAction(current,ownerId);
+}
+
 /** A focus link may only exist when exactly one attempt for a test appears on this page. */
 export function educationHistoryResumeFocus(rows,ownerId,limit=3){
   if(!Number.isSafeInteger(limit)||limit<1||limit>10)
@@ -87,14 +98,13 @@ export function educationHistoryResumeFocus(rows,ownerId,limit=3){
   const valid=strictOwnerRows(rows,ownerId);
   const counts=new Map();
   for(const row of valid){
-    if(row.status==="in_progress")
-      counts.set(row.test_id,(counts.get(row.test_id)||0)+1);
+    counts.set(row.test_id,(counts.get(row.test_id)||0)+1);
   }
   return valid.filter(row=>row.status==="in_progress"&&counts.get(row.test_id)===1)
     .slice(0,limit)
     .map(row=>Object.freeze({
       attemptId:row.id,testId:row.test_id,
-      path:educationHistoryAction(row,ownerId).path,
+      path:educationHistorySafeAction(row,valid,ownerId).path,
     })).filter(row=>row.path);
 }
 
