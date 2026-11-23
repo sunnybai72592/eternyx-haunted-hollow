@@ -12,6 +12,10 @@ on:
       - 'tests/sql/workspace-revisions-db-smoke.sql'
       - 'tests/sql/workspace-team-notification-snapshot-db-smoke.sql'
       - 'tests/sql/workspace-revisions-bootstrap.sql'
+      - 'scripts/eternyx-backend-rpc-surface.mjs'
+      - 'scripts/eternyx-staging-backend-rpc-surface.sh'
+      - 'tests/eternyx-backend-rpc-surface.test.mjs'
+      - '.github/workflows/automation-staging-core-release.yml'
       - 'scripts/automation-fresh-staging-mirror.mjs'
       - 'scripts/automation-migration-collision-baseline.json'
       - 'tests/automation-postgres17-replay-plan.test.mjs'
@@ -68,6 +72,10 @@ jobs:
           docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
           docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-revisions-bootstrap.sql
           docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/services-four-pillar-bootstrap.sql
+          # CTF foundation is source-defined but intentionally absent from the
+          # Automation/Docker/Workspace/Services mirror. Apply it only in
+          # disposable PostgreSQL so this four-backend catalog can prove it.
+          docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261122170000_ctf_verified_missions.sql
       - name: Apply Automation, Docker, Workspace and Services SQL together with unique versions
         shell: bash
         run: |
@@ -97,6 +105,17 @@ jobs:
             echo "::error::Incomplete migration replay"
             exit 1
           fi
+      - name: Prove ALL four backend function RPCs and tenant RLS tables exist in actual networkless PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/eternyx-backend-rpc-surface.mjs --source > "$RUNNER_TEMP/eternyx-backend-source.json"
+          node scripts/eternyx-backend-rpc-surface.mjs --sql > "$RUNNER_TEMP/eternyx-backend-expected.sql"
+          docker exec --interactive -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-automation-docker-replay \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < "$RUNNER_TEMP/eternyx-backend-expected.sql" > "$RUNNER_TEMP/eternyx-backend-actual.txt"
+          node scripts/eternyx-backend-rpc-surface.mjs --parse "$RUNNER_TEMP/eternyx-backend-actual.txt" > "$RUNNER_TEMP/eternyx-backend-verified.json"
+          echo "Every source-called backend RPC and all referenced owner tables with RLS were found on actual isolated PG17."
       - name: Verify owner isolation, quotas, idempotency and safe workflow actions
         run: docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-control-db-smoke.sql
       - name: Verify actual Docker owner isolation, permits, receipts and incident holds
@@ -107,6 +126,20 @@ jobs:
         run: docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-team-notification-snapshot-db-smoke.sql
       - name: Verify actual Services customer/admin RLS, private journal, and non-delivery gate
         run: docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/services-four-pillar-acceptance.sql
+      - name: Fail closed if one owned Automation table loses RLS in disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "ALTER TABLE public.automation_workflows DISABLE ROW LEVEL SECURITY" > /dev/null
+          docker exec --interactive -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-automation-docker-replay \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < "$RUNNER_TEMP/eternyx-backend-expected.sql" > "$RUNNER_TEMP/eternyx-backend-rls-disabled.txt"
+          if node scripts/eternyx-backend-rpc-surface.mjs --parse "$RUNNER_TEMP/eternyx-backend-rls-disabled.txt" > /dev/null; then
+            echo "::error::Full four-backend source-derived catalog incorrectly accepted disabled owner RLS"
+            exit 1
+          fi
+          echo "Disabled Automation RLS correctly rejected by full four-backend SQL gate."
       - name: Publish local-only sanitized migration replay outcome
         if: always()
         uses: actions/upload-artifact@v4
