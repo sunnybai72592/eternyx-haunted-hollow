@@ -4,7 +4,7 @@
 
 Route: /labs (public, browser-only). Navigation entry is visible on desktop and mobile. The Cybersecurity Hub and Developer Studio link to the same route, not separate duplicate labs.
 
-Twenty-five **working**, browser-only exercises (twenty existing plus five advanced browser diagnostics):
+Thirty **working**, browser-only exercises (twenty-five existing plus five identity/network defenses):
 1. Web developer playground — edit HTML, CSS and JavaScript, explicitly run a restricted iframe preview.
 2. DOM XSS practice — inspect the difference between an HTML sink and a text sink with controlled, local input.
 3. HTTP header clinic — deterministic checks against pasted header text; no outgoing HTTP requests.
@@ -30,8 +30,13 @@ Twenty-five **working**, browser-only exercises (twenty existing plus five advan
 23. SPF record linter — simplified local SPF TXT mechanism analysis, DNS lookup budget and permissive-all warnings; no DNS queries.
 24. Token bucket simulator — deterministic request allow/deny decisions with bounded capacity, refill rate and event times; no enforcement against a server.
 25. Subresource Integrity hash builder — real Web Crypto SHA-256/384/512 base64 digests of exact local training content, never fetching remote scripts.
+26. OAuth PKCE S256 workbench — genuine SHA-256 challenge derivation and cryptographically random verifier generation, without an OAuth exchange.
+27. HMAC message integrity — real Web Crypto HMAC-SHA256 creation and signature verification using synthetic training keys.
+28. IPv4/IPv6 CIDR membership — pure 32-bit/128-bit address containment testing without network probes or firewall enforcement.
+29. HSTS transport policy clinic — local Strict-Transport-Security syntax/expiry and preload prerequisite checks, not a live host evaluation.
+30. DMARC email defense clinic — synthetic p/sp/pct, DKIM/SPF alignment, and aggregate-report count without revealing recipients or querying DNS.
 
-**Truthful limits:** The twenty-five browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
+**Truthful limits:** The thirty browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
 
 ## Boundary and threat model
 
@@ -470,3 +475,65 @@ still required.
 
 Public hosted Labs and paid cloud/GPU/AI services remain disabled. No
 remote scanning, host penetration testing, or external traffic is added.
+
+
+## Phase 8 — five identity and network-defense workstations (30 in total)
+
+The new BrowserIdentityDefense UI and pure eternyxLabsIdentity.mjs engine
+add five working exercises with bounded inputs and explicit safety limits:
+
+1. **OAuth PKCE S256:** derive a challenge for a valid 43–128 character
+   RFC 7636 verifier, or use crypto.getRandomValues to generate 32 fresh
+   bytes and a matching S256 challenge. Real Web Crypto SHA-256 is used,
+   including a known RFC 7636 acceptance vector. The verifier is sensitive
+   in a real flow; this tool only demonstrates one local step. It does not
+   handle OAuth callbacks, authorization codes, tokens, or storage.
+2. **HMAC-SHA256:** sign and verify an entered *synthetic* message and
+   synthetic shared key with Web Crypto importKey/sign/verify. Input
+   keys are neither sent nor included in returned reports. Positive,
+   changed-message and changed-key tests verify real integrity checks.
+   HMAC verification is not human identity verification, replay control,
+   a webhook endpoint, or a complete authentication protocol.
+3. **IP CIDR containment:** check whether an IPv4 or IPv6 address belongs
+   to a CIDR range. Supports exact 128-bit IPv6 comparisons including
+   compressed spellings, IPv4 /0 and /32 and IPv6 /0 and /128.
+   Calculates mathematical inclusion, not host assignability, network
+   reachability, routing, production ACLs or firewall enforcement.
+4. **HSTS policy:** parse a synthetic Strict-Transport-Security header
+   value to inspect max-age, includeSubDomains and preload-request
+   parameters. Warn about policy removal, short durations and basic
+   preload-prerequisite gaps. This is not a website fetch, HSTS browser
+   test, or authoritative HSTS preload-list status check.
+5. **DMARC policy:** parse a bounded synthetic DMARC TXT record to
+   inspect domain and subdomain enforcement, rollout percentage, DKIM/
+   SPF alignment and count aggregate-report endpoints *without exposing
+   their addresses*. This does not check DNS records, real SPF/DKIM
+   evaluation, report authorization or actual mail delivery.
+
+The existing 25 workstations and **45 real locally checked practice cases**
+remain unchanged; these five new tools raise the total to 30. Workstations
+are discoverable from the same searchable mobile/desktop Labs interface,
+with accessible labels, bounded inputs, live result announcements, robust
+failure states and instructionally honest caveats.
+
+An asynchronous UI guard discards stale Web Crypto results when inputs
+or the selected station change. No tool saves secrets or makes HTTP/DNS
+requests, and nothing is uploaded to account storage or Supabase.
+
+### Required release verification
+
+    node --test tests/eternyx-labs-identity.test.mjs
+    node --test tests/eternyx-labs-five-advanced-practice.test.mjs
+    npm test
+    npm run build
+
+The tests cover PKCE RFC vector and secure RNG, real HMAC signatures,
+malformed and adversarial inputs, exact IPv4/IPv6 membership,
+HSTS settings and malformed headers, DMARC partial/no-enforcement
+warnings, hidden report values, browser crypto requirements and unchanged
+restricted iframe sandbox. CI must pass and manual desktop/mobile
+accessibility checks should be performed before release.
+
+Public hosted Labs and paid GPU/cloud/AI infrastructure remain disabled.
+This change launches no Firecracker or Docker instance, introduces no
+credential manager, authenticates no user or email, and scans no host.

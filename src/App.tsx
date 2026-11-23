@@ -69,6 +69,7 @@ const SecurityCaseWorkspace = lazy(() => import("./pages/SecurityCaseWorkspace")
 const SecurityCaseIntelligence = lazy(() => import("./pages/SecurityCaseIntelligence"));
 const SecurityCaseLedger = lazy(() => import("./pages/SecurityCaseLedger"));
 const SecurityInvestigationWorkspace = lazy(() => import("./pages/SecurityInvestigationWorkspace"));
+const SecurityUnifiedCaseWorkspace = lazy(() => import("./pages/SecurityUnifiedCaseWorkspace"));
 const IncidentResponsePlaybookWorkbench = lazy(() => import("./pages/IncidentResponsePlaybookWorkbench"));
 const AwsIamPolicySecurityWorkbench = lazy(() => import("./pages/AwsIamPolicySecurityWorkbench"));
 const GitHubIntegrationHub = lazy(() => import("./pages/GitHubIntegrationHub"));
@@ -257,6 +258,7 @@ const AppContent = () => {
                         <Route path="/cybersecurity/case-intelligence" element={<RequireAuth><SecurityCaseIntelligence /></RequireAuth>} />
                         <Route path="/cybersecurity/case-ledger" element={<RequireAuth><SecurityCaseLedger /></RequireAuth>} />
                         <Route path="/cybersecurity/investigations" element={<RequireAuth><SecurityInvestigationWorkspace /></RequireAuth>} />
+                        <Route path="/cybersecurity/unified-cases" element={<RequireAuth><SecurityUnifiedCaseWorkspace /></RequireAuth>} />
                         <Route path="/cybersecurity/incident-playbooks" element={<IncidentResponsePlaybookWorkbench />} />
                         <Route path="/cybersecurity/aws-iam-policy" element={<AwsIamPolicySecurityWorkbench />} />
                         <Route path="/developer-studio/github-hub" element={<GitHubIntegrationHub />} />

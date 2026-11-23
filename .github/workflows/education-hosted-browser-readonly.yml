@@ -1,0 +1,114 @@
+name: Education real browser staging acceptance (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      approve_read_only_browser:
+        description: Authenticate three prepared staging accounts; never start an exam or submit any write
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-education-hosted-shared-staging
+  cancel-in-progress: false
+
+jobs:
+  real-education-browser:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && inputs.approve_read_only_browser }}
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 20
+    env:
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT }}
+      ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_A_SCORE: ${{ vars.ETERNYX_EDU_RESULT_A_SCORE }}
+      ETERNYX_EDU_RESULT_A_MAX: ${{ vars.ETERNYX_EDU_RESULT_A_MAX }}
+      ETERNYX_EDU_RESULT_B_SCORE: ${{ vars.ETERNYX_EDU_RESULT_B_SCORE }}
+      ETERNYX_EDU_RESULT_B_MAX: ${{ vars.ETERNYX_EDU_RESULT_B_MAX }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install pinned frontend dependencies without staging credentials
+        run: npm ci
+      - name: Validate isolated staging credentials, role and final-result fixture offline
+        env:
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_EDU_RESULTS_READ_APPROVAL: I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY
+        run: |
+          node --input-type=module -e '
+            import {validateEducationResultsReadConfig} from "./scripts/staging/educationHostedResultsConfig.mjs";
+            try {
+              validateEducationResultsReadConfig(process.env);
+              const email=process.env.ETERNYX_RLS_INSTRUCTOR_EMAIL||"";
+              const password=process.env.ETERNYX_RLS_INSTRUCTOR_PASSWORD||"";
+              if(!/^(?:rls-|[a-z0-9._-]+\+rls-)[^@]*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)||
+                 password.length<12||
+                 [process.env.ETERNYX_RLS_TEST_A_EMAIL,process.env.ETERNYX_RLS_TEST_B_EMAIL]
+                   .some(x=>x?.toLowerCase()===email.toLowerCase()))throw new Error("role collision");
+              process.stdout.write("Protected staging browser configuration validated offline.\n");
+            } catch {
+              process.stderr.write("BLOCKED: isolated Education browser configuration invalid.\n");
+              process.exitCode=1;
+            }
+          '
+      - name: Build frontend against staging only with protected RPC flags
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          VITE_CBT_ATOMIC_RPC: "true"
+          VITE_EDUCATION_INSTRUCTOR_RPC: "true"
+          VITE_EDUCATION_PUBLICATION_RPC: "true"
+          VITE_EDUCATION_WRITTEN_REVIEW_RPC: "true"
+          VITE_EDUCATION_VERIFIED_RESULTS_RPC: "true"
+        run: npm run build
+      - name: Prepare browser executable without real account credentials
+        run: |
+          python3 -m venv "$RUNNER_TEMP/education-browser"
+          "$RUNNER_TEMP/education-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
+      - name: Start local staging-targeted preview with no account credentials
+        run: |
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/education-preview.log" 2>&1 &
+          for i in $(seq 1 25); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "BLOCKED: local preview did not start."
+          exit 1
+      - name: Authenticate three real staging roles in desktop and mobile, blocking all writes
+        timeout-minutes: 8
+        env:
+          ETERNYX_EDU_BROWSER_READ_APPROVAL: I_APPROVE_EDUCATION_STAGING_BROWSER_READ_ONLY
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+        run: |
+          "$RUNNER_TEMP/education-browser/bin/python" tests/browser/education_hosted_readonly.py
+      - name: Upload sanitized browser acceptance evidence even on a failed test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-hosted-browser-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-browser-readonly.json
+          if-no-files-found: warn
+          retention-days: 7
