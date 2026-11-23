@@ -1,0 +1,39 @@
+name: Docker signed agent exclusive per-container lock (offline)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-agent-container-lock.yml'
+      - 'src/lib/dockerLabContainerLock.mjs'
+      - 'src/lib/dockerStrictRecoveryInventory.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'tests/docker-container-lock.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_CONTAINER_LOCK.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-container-exclusion:
+    name: Prove OS exclusive per-container ownership and fail-closed recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check actual agent, lock and forensic inventory
+        run: |
+          node --check src/lib/dockerLabContainerLock.mjs
+          node --check src/lib/dockerStrictRecoveryInventory.mjs
+          node --check scripts/docker-lab-agent.mjs
+          node --check tests/docker-container-lock.test.mjs
+      - name: Exercise fsynced O_EXCL, second-process refusal, UNKNOWN lock hold and forensic integrity
+        run: |
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
