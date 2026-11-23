@@ -281,3 +281,39 @@ export async function buildPortableVideoBundle({
     explanation:"Includes actual private clips, Python/FFmpeg renderer, read-only preflight, cancellation-capable optional desktop GUI, and both CLI launchers. MP4 rendered locally after extraction.",
   };
 }
+
+
+/** Reusable ZIP32 STORE writer for private offline project handoffs.
+ * No compression, no network. Validates paths and byte boundaries.
+ * Cross-references and actual SHA256 are checked by the caller.
+ */
+export async function packPortableArchive(members,onProgress=()=>{}){
+  if(!Array.isArray(members)||!members.length||
+     members.length>PORTABLE_BUNDLE_LIMITS.maxFiles||
+     typeof onProgress!=="function")
+    throw new Error("Invalid bounded private portable ZIP members.");
+  const names=new Set(),parts=[],indexes=[];
+  let offset=0;
+  for(const [i,item] of members.entries()){
+    if(!item||typeof item!=="object")throw new Error("Invalid private ZIP entry.");
+    const record=await storedEntry(item.path,item.blob);
+    const key=record.name.toLowerCase();
+    if(names.has(key))throw new Error("Case-colliding ZIP members.");
+    names.add(key);
+    const head=header(record.name,record.size,record.crc);
+    indexes.push(central(record.name,record.size,record.crc,offset));
+    parts.push(head,record.blob);
+    offset+=head.length+record.size;
+    if(offset>PORTABLE_BUNDLE_LIMITS.maxZipBytes)
+      throw new Error("Portable ZIP exceeds classic ZIP32 limit.");
+    onProgress({done:i+1,total:members.length,phase:"pack"});
+  }
+  const centralBytes=indexes.reduce((sum,x)=>sum+x.length,0);
+  if(offset+centralBytes+22>PORTABLE_BUNDLE_LIMITS.maxZipBytes)
+    throw new Error("Portable ZIP central directory exceeds ZIP32 bounds.");
+  const blob=new Blob([...parts,...indexes,
+    endRecord(members.length,centralBytes,offset)],{type:"application/zip"});
+  if(blob.size!==offset+centralBytes+22)
+    throw new Error("Portable ZIP byte accounting failed.");
+  return blob;
+}
