@@ -8,6 +8,7 @@ import { evaluateCybersecurityReleaseGate, REQUIRED_STAGING_TABLES, REQUIRED_CHE
 import { inspectStagingDossier, EVIDENCE_IDS, DOSSIER_LIMIT } from "@/lib/securityStagingDossier.mjs";
 import { validateMigrationObservation } from "@/lib/securityMigrationObservation.mjs";
 import { evaluateStagingRecoveryReadiness } from "@/lib/securityStagingRecoveryReadiness.mjs";
+import { parseRecoveryPacketJson, RECOVERY_PACKET_MAX_BYTES } from "@/lib/securityRecoveryEvidence.mjs";
 
 const MAX_REPORT_BYTES=48*1024;
 type Report={observedAt:string;[key:string]:unknown};
@@ -54,6 +55,8 @@ export default function SecurityReleaseReadiness(){
   const [dossierBusy,setDossierBusy]=useState(false);
   const [migrationObservation,setMigrationObservation]=useState<Record<string,unknown>|null>(null);
   const [migrationError,setMigrationError]=useState("");
+  const [recoveryPacket,setRecoveryPacket]=useState<ReturnType<typeof parseRecoveryPacketJson>|null>(null);
+  const [recoveryPacketError,setRecoveryPacketError]=useState("");
   const recovery=evaluateStagingRecoveryReadiness(migrationObservation);
   const gate=evaluateCybersecurityReleaseGate(uploaded);
   async function importReport(file?:File){
@@ -111,6 +114,19 @@ export default function SecurityReleaseReadiness(){
       setMigrationObservation(result as Record<string,unknown>);
     }catch{
       setMigrationError("Migration observation rejected: wrong project, missing checks or unsupported report.");
+    }
+  }
+  async function importRecoveryPacket(file?:File){
+    setRecoveryPacket(null);setRecoveryPacketError("");
+    if(!file)return;
+    if(file.size<1||file.size>RECOVERY_PACKET_MAX_BYTES){
+      setRecoveryPacketError("Recovery report must be 48 KiB or less.");return;
+    }
+    try{
+      const validated=parseRecoveryPacketJson(await file.text());
+      setRecoveryPacket(validated);
+    }catch{
+      setRecoveryPacketError("Recovery evidence rejected: malformed, contradictory or elevated claims.");
     }
   }
   return <main className="min-h-screen bg-background text-foreground"><div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
@@ -175,7 +191,28 @@ export default function SecurityReleaseReadiness(){
       <ul className="space-y-2">{recovery.requirements.map(item=><li key={item.id} className="flex gap-3 rounded-lg border border-border bg-background p-3 text-sm"><ShieldAlert className="h-4 w-4 shrink-0 text-amber-200"/><span>{item.description} — <strong>not verified</strong></span></li>)}</ul>
       <p className="text-xs text-amber-100">{recovery.conclusion}</p>
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>5. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
+    <Card><CardHeader><CardTitle>5. Isolated restore and recovery evidence</CardTitle>
+      <CardDescription>Review an optional Wave 16 operator packet. RTO and RPO are calculated from supplied timestamps; there is no independent proof that a restore, data validation or permission check actually ran.</CardDescription>
+    </CardHeader><CardContent className="space-y-4">
+      <Label htmlFor="security-recovery-evidence">Unsigned recovery packet (48 KiB maximum)</Label>
+      <Input id="security-recovery-evidence" type="file" accept=".json,application/json" onChange={e=>void importRecoveryPacket(e.target.files?.[0])}/>
+      {recoveryPacketError&&<p role="alert" className="text-sm text-rose-200">{recoveryPacketError}</p>}
+      {!recoveryPacket&&<p className="text-sm text-muted-foreground">No isolated restore evidence imported. All eight recovery and approval gates remain unverified.</p>}
+      {recoveryPacket&&<div className="space-y-3">
+        <p role="status" className="flex items-center gap-2 text-sm font-semibold text-amber-200"><ShieldAlert className="h-4 w-4"/>Production BLOCKED · Operator-supplied, unsigned recovery evidence</p>
+        <p className="text-xs text-muted-foreground">Staging: {recoveryPacket.stagingRef} · Isolated recovery: {recoveryPacket.recoveryRef} · Review: {new Date(recoveryPacket.observedAt).toLocaleString()}</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-border p-3"><p className="text-xs text-muted-foreground">Reported RTO</p><p className="font-semibold">{recoveryPacket.metrics.rtoSeconds===null?"Not measured":String(recoveryPacket.metrics.rtoSeconds)+" seconds"}</p></div>
+          <div className="rounded-lg border border-border p-3"><p className="text-xs text-muted-foreground">Reported RPO</p><p className="font-semibold">{recoveryPacket.metrics.rpoSeconds===null?"Not measured":String(recoveryPacket.metrics.rpoSeconds)+" seconds"}</p></div>
+        </div>
+        <p className="text-sm">Migration: {recoveryPacket.migration.status} · After-restore PostgreSQL catalog: {recoveryPacket.catalog.status}</p>
+        <ul className="space-y-2">{recoveryPacket.requirements.map(item=><li key={item.id} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background p-3 text-sm">
+          <span>{item.id.replaceAll("-"," ")}</span><strong className="shrink-0 text-amber-200">{item.status==="missing"?"Missing":"Unsigned claim"}</strong>
+        </li>)}</ul>
+        <p className="text-xs text-amber-100">Even if every supplied file has a matching SHA-256 digest, no independent backup restore, project identity or production approval is established. Authenticated approval is always missing in this packet.</p>
+      </div>}
+    </CardContent></Card>
+    <Card><CardHeader><CardTitle>6. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
       <p role="status" className="flex items-center gap-2 font-semibold text-amber-200"><ShieldAlert className="h-5 w-5"/>Production release: BLOCKED</p>
       <ol className="space-y-3">{gate.blockers.map((item,index)=><li key={item} className="flex gap-3 rounded-lg border border-border bg-background p-3 text-sm"><span className="font-semibold text-amber-200">{index+1}.</span><span>{item}</span></li>)}</ol>
       <p className="text-xs text-muted-foreground">No deployment button, schema write, role change, fake readiness score or release override exists on this page.</p>
