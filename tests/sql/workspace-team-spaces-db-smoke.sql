@@ -26,6 +26,7 @@ BEGIN
     RAISE EXCEPTION 'Team invitation did not return an editor secret';
   END IF;
   PERFORM pg_catalog.set_config('test.team17.invite',invitation->>'token',false);
+  PERFORM pg_catalog.set_config('test.team17.invite_id',invitation->>'invite_id',false);
   IF (SELECT count(*) FROM public.workspace_team_invites
       WHERE space_id=sid AND revoked_at IS NULL)<>1 THEN
     RAISE EXCEPTION 'No persisted invitation';
@@ -163,9 +164,9 @@ BEGIN
     RAISE EXCEPTION 'Nonmember created a fake team leave event';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   BEGIN
-    PERFORM public.workspace_team_revoke_invite((
-      SELECT id FROM public.workspace_team_invites WHERE space_id=sid LIMIT 1));
-    -- RLS returns no row for outsider; null ID must still fail closed.
+    PERFORM public.workspace_team_revoke_invite(
+      pg_catalog.current_setting('test.team17.invite_id')::uuid);
+    -- The UUID is known, so the RPC itself must independently reject the outsider.
     RAISE EXCEPTION 'Nonmember revoked another team invitation';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END;
