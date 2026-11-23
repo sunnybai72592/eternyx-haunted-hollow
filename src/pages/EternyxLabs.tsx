@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, BookOpen, Braces, CheckCircle2, Code2, FileCode2,
   FlaskConical, Globe2, LockKeyhole, Play, RotateCcw, ShieldAlert, ShieldCheck,
-  TerminalSquare, XCircle,
+  TerminalSquare, XCircle, Binary, Link2, FileKey2, ScanText, Hash,
 } from "lucide-react";
 import {
   auditResponseHeaders, buildDomXssDocument, buildPlaygroundDocument,
   evaluateAccess, labCatalog, sampleHeaders, sqlQueryComparison,
 } from "@/lib/eternyxLabs.mjs";
+import BrowserSecurityToolkit from "@/components/labs/BrowserSecurityToolkit";
 
 const startingHtml = '<main><h1>Hello, ETERNYX!</h1><p id="result">Build something real.</p><button id="hello">Run an interaction</button></main>';
 const startingCss = 'body { background: #f8fafc; }\nh1 { color: #4f46e5; }\nbutton { padding: 12px; background: #111827; color: white; border: 0; border-radius: 8px; cursor: pointer; }';
@@ -21,6 +22,11 @@ const labIcons = {
   headers: ShieldCheck,
   sql: Braces,
   access: LockKeyhole,
+  codec: Binary,
+  urls: Link2,
+  jwt: FileKey2,
+  redact: ScanText,
+  sha: Hash,
 };
 type LabId = keyof typeof labIcons;
 type AccessRole = "viewer" | "editor" | "admin";
@@ -75,11 +81,11 @@ export default function EternyxLabs() {
             </span>
             <h1 className="mt-5 text-3xl font-black tracking-tight sm:text-5xl">Learn it. Break it locally. Fix it properly.</h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-              Hands-on web development and security exercises. These five workstations operate in your browser.
+              Hands-on web development and security exercises. These ten workstations operate in your browser.
               They are not remote virtual machines, internet scanners, or proof of a vulnerability in a real target.
             </p>
             <div className="mt-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">5 working exercises</span>
+              <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">10 working exercises</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">Browser-only execution</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">No outside targets</span>
             </div>
@@ -290,6 +296,7 @@ export default function EternyxLabs() {
                 </div>
               </div>
             )}
+            <BrowserSecurityToolkit selected={selected} />
           </section>
         </div>
 
@@ -306,7 +313,7 @@ export default function EternyxLabs() {
         </section>
 
         <footer className="rounded-xl border border-border/70 bg-card/60 p-4 text-xs leading-6 text-muted-foreground">
-          <strong className="text-foreground">Scope & privacy:</strong> Phase 1 exercises run in the browser, without a training VM or an external scanning endpoint. The preview iframes are deliberately sandboxed without same-origin access. Do not paste secrets or sensitive personal data; no verified cross-device progress, badges, or course certification is claimed.
+          <strong className="text-foreground">Scope & privacy:</strong> These browser workstations run without a training VM or an external scanning endpoint. The preview iframes are deliberately sandboxed without same-origin access. Do not paste secrets or sensitive personal data; no verified cross-device progress, badges, or course certification is claimed.
         </footer>
       </div>
     </div>
