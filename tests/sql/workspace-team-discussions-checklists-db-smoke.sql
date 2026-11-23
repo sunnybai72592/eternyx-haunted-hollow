@@ -5,8 +5,18 @@ SET ROLE authenticated;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '11111111-1111-4111-8111-111111111111',false);
 
+-- Each psql invocation uses a NEW connection. Do not rely on Phase 17's
+-- session-scoped test.team17.* settings. Establish this test's own fixture.
+DO $p18_setup$
+DECLARE sid uuid;
+BEGIN
+  sid:=public.workspace_team_create('Phase 18 isolated team','Discussion test fixtures');
+  PERFORM pg_catalog.set_config('test.p18.space',sid::text,false);
+END;
+$p18_setup$;
+
 DO $p18$
-DECLARE sid uuid:=pg_catalog.current_setting('test.team17.space')::uuid;
+DECLARE sid uuid:=pg_catalog.current_setting('test.p18.space')::uuid;
   task uuid; other_space uuid; other_task uuid; comment uuid; step uuid; invite jsonb;
 BEGIN
   task:=public.workspace_team_save_task(
@@ -59,7 +69,7 @@ $p18$;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '22222222-2222-4222-8222-222222222222',false);
 DO $p18$
-DECLARE sid uuid:=pg_catalog.current_setting('test.team17.space')::uuid;
+DECLARE sid uuid:=pg_catalog.current_setting('test.p18.space')::uuid;
   task uuid:=pg_catalog.current_setting('test.p18_task')::uuid;
   step uuid:=pg_catalog.current_setting('test.p18_step')::uuid;
   tstamp timestamptz; comment uuid; own_step uuid;
@@ -113,7 +123,7 @@ $p18$;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '33333333-3333-4333-8333-333333333333',false);
 DO $p18$
-DECLARE sid uuid:=pg_catalog.current_setting('test.team17.space')::uuid;
+DECLARE sid uuid:=pg_catalog.current_setting('test.p18.space')::uuid;
   task uuid:=pg_catalog.current_setting('test.p18_task')::uuid;
   step uuid:=pg_catalog.current_setting('test.p18_step')::uuid;
   comment uuid:=pg_catalog.current_setting('test.p18_owner_comment')::uuid;
@@ -149,7 +159,7 @@ $p18$;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '11111111-1111-4111-8111-111111111111',false);
 DO $p18$
-DECLARE sid uuid:=pg_catalog.current_setting('test.team17.space')::uuid;
+DECLARE sid uuid:=pg_catalog.current_setting('test.p18.space')::uuid;
   task uuid:=pg_catalog.current_setting('test.p18_task')::uuid; tstamp timestamptz;
 BEGIN
   SELECT updated_at INTO tstamp FROM public.workspace_team_tasks WHERE id=task;
@@ -168,7 +178,7 @@ $p18$;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '22222222-2222-4222-8222-222222222222',false);
 DO $p18$
-DECLARE sid uuid:=pg_catalog.current_setting('test.team17.space')::uuid;
+DECLARE sid uuid:=pg_catalog.current_setting('test.p18.space')::uuid;
   task uuid:=pg_catalog.current_setting('test.p18_task')::uuid;
   step uuid:=pg_catalog.current_setting('test.p18_step')::uuid;
   comment uuid:=pg_catalog.current_setting('test.p18_owner_comment')::uuid;
@@ -206,7 +216,7 @@ $p18$;
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '11111111-1111-4111-8111-111111111111',false);
 DO $p18$
-DECLARE sid uuid:=pg_catalog.current_setting('test.team17.space')::uuid;
+DECLARE sid uuid:=pg_catalog.current_setting('test.p18.space')::uuid;
   task uuid:=pg_catalog.current_setting('test.p18_task')::uuid;
   step uuid:=pg_catalog.current_setting('test.p18_step')::uuid;
   comment uuid:=pg_catalog.current_setting('test.p18_owner_comment')::uuid;
