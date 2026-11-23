@@ -8,11 +8,12 @@ import {
 import {labCatalog} from "../src/lib/eternyxLabs.mjs";
 const read=path=>readFile(new URL("../"+path,import.meta.url),"utf8");
 
-test("twenty real workstations include all five defensive operations tools",()=>{
+test("twenty-five real workstations retain the original defensive operations tools",()=>{
   const ids=labCatalog.map(x=>x.id);
-  assert.equal(ids.length,20);
-  assert.equal(new Set(ids).size,20);
-  assert.deepEqual(ids.slice(-5),["dns","http","securitytxt","events","tokens"]);
+  assert.equal(ids.length,25);
+  assert.equal(new Set(ids).size,25);
+  assert.deepEqual(ids.slice(15,20),["dns","http","securitytxt","events","tokens"]);
+  assert.deepEqual(ids.slice(-5),["ipv6","cache","spf","ratelimit","sri"]);
 });
 test("DNS record clinic counts all supported record types without resolving a host",()=>{
   const r=inspectDnsZoneLocally([
@@ -183,7 +184,7 @@ test("offline engines and React workstations are integrated with explicit safety
   ]);
   assert.match(page,/BrowserDefensiveOperations selected=\{selected\}/);
   assert.match(page,/20 working exercises/);
-  assert.match(page,/Search 20 workstations/);
+  assert.match(page,/Search 25 workstations/);
   for(const id of ["dns","http","securitytxt","events","tokens"])
     assert.ok(ui.includes('selected==="'+id+'"'),id);
   assert.match(ui,/role="alert"/);
