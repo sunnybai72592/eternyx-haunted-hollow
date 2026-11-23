@@ -9,11 +9,12 @@ import {
 import {labCatalog} from "../src/lib/eternyxLabs.mjs";
 
 const view=path=>readFile(new URL("../"+path,import.meta.url),"utf8");
-test("twenty-five unique workstations include five genuinely interactive advanced diagnostics",()=>{
+test("thirty unique workstations include five genuinely interactive advanced diagnostics",()=>{
   const ids=labCatalog.map(x=>x.id);
-  assert.equal(ids.length,25);
-  assert.equal(new Set(ids).size,25);
-  assert.deepEqual(ids.slice(-5),["ipv6","cache","spf","ratelimit","sri"]);
+  assert.equal(ids.length,30);
+  assert.equal(new Set(ids).size,30);
+  assert.deepEqual(ids.slice(20,25),["ipv6","cache","spf","ratelimit","sri"]);
+  assert.deepEqual(ids.slice(-5),["pkce","hmac","cidrcheck","hsts","dmarc"]);
 });
 test("IPv6 CIDR computes exact unsigned 128-bit network boundaries and huge counts",()=>{
   const result=calculateIpv6SubnetLocally("2001:db8:abcd:2::1234/64");
@@ -145,8 +146,8 @@ test("React integration keeps new tools real, accessible and network/storage ind
     view("src/lib/eternyxLabsAdvanced.mjs"),
   ]);
   assert.match(page,/BrowserAdvancedDiagnostics selected=\{selected\}/);
-  assert.match(page,/25 working exercises/);
-  assert.match(page,/Search 25 workstations/);
+  assert.match(page,/30 working exercises/);
+  assert.match(page,/Search 30 workstations/);
   for(const tool of ["ipv6","cache","spf","ratelimit","sri"])
     assert.ok(ui.includes('selected==="'+tool+'"'));
   assert.match(ui,/role="alert"/);
