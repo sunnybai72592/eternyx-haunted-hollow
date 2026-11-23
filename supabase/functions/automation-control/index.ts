@@ -112,6 +112,24 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="incidentLifecycleCheck"){
+      const {data,error}=await supabase.rpc("automation_incident_lifecycle_check",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_integrity_unavailable");
+      return reply({...data,integritySource:data.source,
+        source:"authenticated_server",externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentReadinessReport"){
+      const {data,error}=await supabase.rpc("automation_incident_readiness_report",{
+        p_user_id:user.id,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_readiness_unavailable");
+      return reply({...data,readinessSource:data.source,
+        source:"authenticated_server",externalExecutionTriggered:false});
+    }
     if(request.action==="incidentReopenPreflight"){
       const {data,error}=await supabase.rpc("automation_incident_reopen_preflight",{
         p_user_id:user.id,p_incident_id:request.incidentId,
