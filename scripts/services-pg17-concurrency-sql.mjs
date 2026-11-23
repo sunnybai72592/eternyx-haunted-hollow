@@ -50,10 +50,23 @@ const verify=sqlLines([
 " IF (SELECT count(*) FROM public.service_brief_amendments WHERE request_id='"+aRequest+"' AND summary IN ('Concurrent distinct Alpha','Concurrent distinct Bravo')) <> 1 OR",
 "    (SELECT count(*) FROM public.service_brief_amendments WHERE request_id='"+bRequest+"' AND lower(btrim(summary))='concurrent same summary') <> 1",
 " THEN RAISE EXCEPTION 'concurrent write accepted forbidden second winner'; END IF;",
+'END $check_concurrency$;',
+'-- The journal has an explicit auth.uid() WHERE clause, even for superusers.',
+'-- Verify it using the ACTUAL authenticated SQL role, as each owner.',
+'SET ROLE authenticated;',
+"SELECT set_config('request.jwt.claim.sub','"+aUser+"',false);",
+'DO $check_a_journal$ BEGIN',
 " IF (SELECT count(*) FROM public.service_request_journal WHERE request_id='"+aRequest+"' AND event_kind='amendment_submitted')<>4 OR",
-"    (SELECT count(*) FROM public.service_request_journal WHERE request_id='"+bRequest+"' AND event_kind='amendment_submitted')<>1",
-" THEN RAISE EXCEPTION 'journal exposes uncommitted or rejected writes'; END IF;",
-'END $check_concurrency$;'
+"    (SELECT count(*) FROM public.service_request_journal WHERE request_id='"+bRequest+"')<>0",
+" THEN RAISE EXCEPTION 'owner A journal exposes uncommitted or cross-account writes'; END IF;",
+'END $check_a_journal$;',
+"SELECT set_config('request.jwt.claim.sub','"+bUser+"',false);",
+'DO $check_b_journal$ BEGIN',
+" IF (SELECT count(*) FROM public.service_request_journal WHERE request_id='"+bRequest+"' AND event_kind='amendment_submitted')<>1 OR",
+"    (SELECT count(*) FROM public.service_request_journal WHERE request_id='"+aRequest+"')<>0",
+" THEN RAISE EXCEPTION 'owner B journal exposes uncommitted or cross-account writes'; END IF;",
+'END $check_b_journal$;',
+'RESET ROLE;'
 ]);
 const cleanup=sqlLines([
 'BEGIN;',
