@@ -49,3 +49,35 @@ export function shouldInvalidateAutomationCloud(kind) {
   return ["backend_missing", "backend_unavailable", "network_unavailable",
     "sign_in_required"].includes(kind);
 }
+
+const RUN_FIELDS = new Set([
+  "id","workflow_id","workflow_revision","status","trigger_type",
+  "webhook_trigger_id","schedule_id","input_lines","output_lines",
+  "input_characters","output_characters","trace","created_at",
+]);
+const RAW_FIELDS = new Set(["input", "output", "raw_input", "raw_output",
+  "input_ciphertext", "output_ciphertext", "secret", "token"]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const safeCount = x => Number.isSafeInteger(x) && x >= 0;
+export function verifyAutomationRunHistory(raw) {
+  if (!Array.isArray(raw) || raw.length > 20) throw Error("Invalid authenticated run history.");
+  const ids = new Set();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) ||
+        typeof entry.id !== "string" || !UUID.test(entry.id) || ids.has(entry.id.toLowerCase()) ||
+        !(entry.workflow_id === null || typeof entry.workflow_id === "string" && UUID.test(entry.workflow_id)) ||
+        !Number.isSafeInteger(entry.workflow_revision) || entry.workflow_revision < 1 ||
+        entry.status !== "completed" ||
+        !["manual", "webhook", "scheduled"].includes(entry.trigger_type) ||
+        typeof entry.created_at !== "string" || !Number.isFinite(Date.parse(entry.created_at)) ||
+        !["input_lines","output_lines","input_characters","output_characters"].every(k => safeCount(entry[k])) ||
+        Object.keys(entry).some(k => !RUN_FIELDS.has(k) || RAW_FIELDS.has(k)) ||
+        !Array.isArray(entry.trace) || entry.trace.length > 12 ||
+        entry.trace.some(t => !t || typeof t !== "object" || Array.isArray(t) ||
+          Object.keys(t).some(k => RAW_FIELDS.has(k)))) {
+      throw Error("Unverified or unsafe authenticated run-history record.");
+    }
+    ids.add(entry.id.toLowerCase());
+  }
+  return raw;
+}
