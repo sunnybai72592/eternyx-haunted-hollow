@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useAuthStore } from "@/store/authStore";
+import { SECURITY_LEDGER_TABLES, evaluateLedgerReadiness } from "@/lib/securityLedgerReadiness.mjs";
 
 type Engagement = Database["public"]["Tables"]["pentest_engagements"]["Row"];
 type Evidence = Database["public"]["Tables"]["pentest_evidence"]["Row"];
@@ -108,24 +109,37 @@ export default function SecurityCaseLedger() {
     setLoading(true); setError(""); setNotice("");
     if (!userId) { setLoading(false); return () => { valid = false; }; }
     void (async () => {
-      const [existing, available] = await Promise.all([
-        supabase.from("pentest_engagements").select("*").eq("owner_id", userId)
-          .order("updated_at", { ascending: false }).limit(100),
-        ledger("security_case_assets").select("id").limit(1) as unknown as Promise<LedgerResponse>,
-      ]);
-      if (!valid) return;
-      if (existing.error) {
-        setError("Unable to load your private engagements: " + existing.error.message);
-      } else {
-        setEngagements(existing.data || []);
+      try {
+        const probes = SECURITY_LEDGER_TABLES.map((table) =>
+          ledger(table).select("id").eq("owner_id", userId).limit(1) as unknown as Promise<LedgerResponse>);
+        const [existing, ...tableResults] = await Promise.all([
+          supabase.from("pentest_engagements").select("*").eq("owner_id", userId)
+            .order("updated_at", { ascending: false }).limit(100),
+          ...probes,
+        ]);
+        if (!valid) return;
+        const readiness = evaluateLedgerReadiness({
+          userId, engagements: existing,
+          tableResults: Object.fromEntries(SECURITY_LEDGER_TABLES.map((table, index) =>
+            [table, tableResults[index]])),
+        });
+        if (readiness.ready) {
+          setEngagements(existing.data || []);
+          setBackendReady(true);
+          setError("");
+        } else {
+          setEngagements([]);
+          setBackendReady(false);
+          setError("Schema not deployed or accessible. " + readiness.reason +
+            " The indexed ledger is disabled; existing private case snapshots are still available.");
+        }
+      } catch {
+        if (!valid) return;
+        setBackendReady(false); setEngagements([]);
+        setError("Schema not deployed or accessible. Database preflight failed. No ledger data is displayed.");
+      } finally {
+        if (valid) setLoading(false);
       }
-      if (available.error) {
-        setBackendReady(false);
-        setError("Schema not deployed or accessible. The indexed ledger is disabled; existing private case snapshots are still available.");
-      } else {
-        setBackendReady(true);
-      }
-      setLoading(false);
     })();
     return () => { valid = false; requestToken.current += 1; };
   }, [userId]);
