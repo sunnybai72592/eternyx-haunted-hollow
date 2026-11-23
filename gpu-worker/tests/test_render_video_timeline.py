@@ -65,6 +65,37 @@ class OfflineVideoTimelineTests(unittest.TestCase):
     def write_board(self):
         self.board_path.write_text(json.dumps(self.board, ensure_ascii=False), encoding="utf-8")
 
+
+    def test_cinematic_real_24fps_720p_and_legacy_16fps_are_separate_verified_modes(self):
+        file = self.video("cinematic.mp4", "testsrc=size=1280x720:rate=24:duration=1")
+        self.board = {
+            "version": 2, "fps": 24,
+            "shots": [{"file": "cinematic.mp4",
+                       "source_sha256": self.digest(file),
+                       "start_frame": 0, "frames": 24,
+                       "caption": "Real frame timing",
+                       "rights_ref": "ffmpeg-fixture"}],
+        }
+        self.write_board()
+        destination = self.root / "native-720"
+        result = render(self.board_path, self.media, destination,
+                        "landscape", "cinematic")
+        self.assertEqual(result["fps"], 24)
+        self.assertEqual(result["video"]["fps"], "24/1")
+        self.assertEqual(result["video"]["frame_count"], 24)
+        self.assertEqual((result["video"]["width"], result["video"]["height"]), (1280, 720))
+        self.assertIn("00:00:01,000", (destination / "captions.srt").read_text())
+        self.assertEqual(self.digest(destination / "video.mp4"),
+                         result["video"]["sha256"])
+        with self.assertRaisesRegex(ValueError, "24 FPS storyboard"):
+            render(self.board_path, self.media, self.root / "wrong-quality",
+                   "landscape", "high")
+        self.board["fps"] = 30
+        self.write_board()
+        with self.assertRaisesRegex(ValueError, "v2 storyboard"):
+            render(self.board_path, self.media, self.root / "wrong-fps",
+                   "landscape", "cinematic")
+
     def test_real_32_frame_video_with_fades_and_subtitles(self):
         dest = self.root / "edited"
         receipt = render(self.board_path, self.media, dest)
