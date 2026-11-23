@@ -202,14 +202,18 @@ async function signIn(client, person) {
 
 const success = (name) => process.stdout.write('PASS ' + name + '\n');
 
-export async function runStagingReadiness(config, clientFactory = createSafeClient) {
-  const [a, b, admin, anon] = Array.from({ length: 4 },
-    () => clientFactory(config.url, config.key));
-  const [aId, bId, adminId] = await Promise.all([
+// The wrapper owns all four clients and waits for every sign-in to settle
+// before cleanup. A failed parallel sign-in must not leave another account
+// signing in *after* cleanup has already run.
+async function runStagingChecks(config, [a, b, admin, anon]) {
+  const actors = await Promise.allSettled([
     signIn(a, config.customers[0]),
     signIn(b, config.customers[1]),
     signIn(admin, config.admin),
   ]);
+  enforce(actors.every((actor) => actor.status === 'fulfilled'),
+    'Unable to verify all dedicated staging identities');
+  const [aId, bId, adminId] = actors.map((actor) => actor.value);
   enforce(new Set([aId, bId, adminId]).size === 3, 'Staging actors share a user ID');
   success('three distinct authenticated identities');
 
@@ -340,6 +344,41 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
   }
   success('anonymous access denied across request, amendment, journal and triage resources');
 
+  return true;
+}
+
+// Always release only the three dedicated staging sign-in sessions (never
+// the anonymous client). Explicit "local" scope is essential: Supabase's
+// default global sign-out would revoke unrelated sessions for the account.
+// This makes an Auth sign-out request, not a Service business-record write.
+export async function runStagingReadiness(config, clientFactory = createSafeClient) {
+  const clients = Array.from({ length: 4 },
+    () => clientFactory(config.url, config.key));
+  let checkError = null;
+  try {
+    await runStagingChecks(config, clients);
+  } catch (error) {
+    checkError = error;
+  }
+
+  // No short-circuit: an error on one sign-out must not prevent attempts
+  // for the other two dedicated staging accounts. Never print SDK errors.
+  let cleanupFailed = false;
+  for (const client of clients.slice(0, 3)) {
+    try {
+      enforce(typeof client?.auth?.signOut === 'function',
+        'Dedicated staging Auth cleanup is unavailable');
+      const result = await client.auth.signOut({ scope: 'local' });
+      if (!result || result.error) cleanupFailed = true;
+    } catch {
+      cleanupFailed = true;
+    }
+  }
+  // Preserve the original failed assertion, but never mark the whole run
+  // PASSED unless all three cleanup operations were successful.
+  if (checkError) throw checkError;
+  enforce(!cleanupFailed, 'Dedicated staging Auth session cleanup failed');
+  success('dedicated staging Auth session cleanup');
   process.stdout.write('STAGING SERVICE DATA-API ACCEPTANCE: PASSED\n');
   return true;
 }
