@@ -142,7 +142,7 @@ test('Phase 18 does not change SQL and documents real account handoff testing', 
   const doc = await read('docs/ETERNYX_SERVICES_REQUEST_HANDOFF_PHASE18.md');
   assert.match(doc, /no new SQL migration/i);
   assert.match(doc, /Phase 13 before Phase 14/i);
-  assert.match(doc, /customer A[\s\S]*customer B[\s\S]*administrator/ii);
+  assert.match(doc, /customer A[\s\S]*customer B[\s\S]*administrator/i);
   assert.match(doc, /connection timeout/i);
   assert.match(doc, /read receipts/i);
   assert.match(doc, /Browser Back and Forward/);
