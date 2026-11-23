@@ -178,8 +178,9 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
       return;
     }
 
-    if (!file.size || file.size > 20 * 1024 * 1024) {
-      toast.error('Choose a nonempty file up to 20 MiB.');
+    const maxBytes = isPDF ? 12 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (!file.size || file.size > maxBytes) {
+      toast.error(isPDF ? 'Choose a PDF up to 12 MiB.' : 'Choose a nonempty image up to 20 MiB.');
       return;
     }
 
@@ -220,7 +221,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
       }
 
       // Trigger processing (Edge Function)
-      const { error: processError } = await supabase.functions.invoke('process-document', {
+      const { data: processed, error: processError } = await supabase.functions.invoke('process-document', {
         body: {
           documentId: docData.id,
           storagePath: uploadData.path,
@@ -229,11 +230,25 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
         },
       });
 
-      if (processError) throw new Error(processError.message);
+      if (processError) {
+        let detail = 'Document processing could not finish.';
+        // The Edge function returns a safe error message for PDF-specific
+        // issues (scanned text layer, invalid PDF, timeout and size limit).
+        try {
+          const body = await processError.context?.json?.();
+          if (typeof body?.error === 'string' && body.error.length <= 200) {
+            detail = body.error;
+          }
+        } catch { /* Keep the safe default. */ }
+        throw new Error(detail);
+      }
+      if (processed?.success !== true || processed?.documentId !== docData.id) {
+        throw new Error('Document processing has not been confirmed. Check its status before asking questions.');
+      }
 
-      toast.success(`${fileType === 'pdf' ? 'PDF' : 'Image'} is ready to use in chat.`);
+      toast.success(`${fileType === 'pdf' ? 'PDF text layer' : 'Image text'} is ready to use in chat.`);
     } catch (error) {
-      toast.error(`Upload failed: ${(error as Error).message}`);
+      toast.error(`Document preparation failed: ${(error as Error).message}`);
     } finally {
       void loadDocuments(userId);
       setUploadingFile(false);

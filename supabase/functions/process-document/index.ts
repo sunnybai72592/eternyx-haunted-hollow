@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
 import { recordAuthorizationEvent } from "../_shared/security-events.ts";
+import { extractTextFromPDF } from "../_shared/pdf-text-extract.ts";
+import {
+  PDFIngestError, MAX_PDF_BYTES, MAX_PDF_EXTRACTED_CHARACTERS,
+  validOwnedDocumentPath, matchesDeclaredImageBytes,
+} from "../_shared/pdf-ingest-guards.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,11 +84,6 @@ async function extractTextFromImage(imageBase64: string, mimeType: string): Prom
     .join("");
 }
 
-async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  // This remains a basic text-layer extraction, not a full PDF parser or OCR engine.
-  return new TextDecoder("utf-8", { fatal: false }).decode(pdfBuffer);
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "Method not allowed" }, 405);
@@ -114,6 +114,17 @@ serve(async (req) => {
     if (documentError) throw new Error("Unable to verify document ownership");
     if (!document) return reply({ error: "Document not found" }, 404);
     ownedDocumentId = document.id;
+    // A user-owned metadata row alone cannot grant access to another user's
+    // Storage object. The object's key must be scoped under this user ID.
+    if (!validOwnedDocumentPath(document.storage_path, user.id)) {
+      await recordAuthorizationEvent({
+        functionName: "process-document",
+        reason: "document_object_owner_path_mismatch",
+        actorUserId: user.id,
+        severity: "high",
+      });
+      return reply({ error: "Document storage reference is not authorized" }, 403);
+    }
     if (body.storagePath !== undefined && body.storagePath !== document.storage_path) {
       await recordAuthorizationEvent({
         functionName: "process-document",
@@ -135,6 +146,11 @@ serve(async (req) => {
       return reply({ error: "Only JPEG, PNG, and WebP images are supported" }, 415);
     }
 
+    const maxBytes = fileType === "pdf" ? MAX_PDF_BYTES : 20 * 1024 * 1024;
+    if (!Number.isSafeInteger(document.file_size) || document.file_size < 1 ||
+        document.file_size > maxBytes) {
+      return reply({ error: "Document size exceeds the processing limit or is invalid" }, 413);
+    }
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
       .download(document.storage_path);
@@ -142,8 +158,15 @@ serve(async (req) => {
     if (downloadError || !fileData) {
       throw new Error("Unable to download the uploaded document");
     }
-    if (fileData.size > 20 * 1024 * 1024) {
-      return reply({ error: "Document exceeds the 20 MB processing limit" }, 413);
+    if (fileData.size !== document.file_size || fileData.size > maxBytes) {
+      return reply({ error: "Uploaded document size does not match its approved metadata" }, 413);
+    }
+    const bytes = new Uint8Array(await fileData.arrayBuffer());
+    if (bytes.byteLength !== fileData.size) {
+      return reply({ error: "Uploaded file content is incomplete" }, 422);
+    }
+    if (fileType === "image" && !matchesDeclaredImageBytes(bytes, mimeType)) {
+      return reply({ error: "Image content does not match its declared type" }, 415);
     }
 
     const { error: processingError } = await supabase
@@ -155,18 +178,18 @@ serve(async (req) => {
 
     let extractedText = "";
     if (fileType === "pdf") {
-      extractedText = await extractTextFromPDF(await fileData.arrayBuffer());
+      extractedText = await extractTextFromPDF(bytes);
     } else {
-      const bytes = new Uint8Array(await fileData.arrayBuffer());
       extractedText = await extractTextFromImage(toBase64(bytes), mimeType);
     }
 
     if (!extractedText.trim()) throw new Error("No readable text could be extracted");
-    if (extractedText.length > 2_000_000) {
+    if (extractedText.length > MAX_PDF_EXTRACTED_CHARACTERS) {
       throw new Error("Extracted document text exceeds the processing limit");
     }
 
     const chunks = chunkText(extractedText, 500, 100);
+    if (chunks.length > 605) throw new Error("Document exceeds the maximum indexable text length");
     const chunkRecords = chunks.map((content, index) => ({
       document_id: document.id,
       content,
@@ -202,13 +225,31 @@ serve(async (req) => {
       extractedTextLength: extractedText.length,
     });
   } catch (error) {
-    console.error("Document processing failed:", error);
+    const pdfError = error instanceof PDFIngestError ? error : null;
+    const statusByCode: Record<string, number> = {
+      invalid_pdf: 415, pdf_too_large: 413, too_many_pages: 413,
+      text_too_large: 413, no_text_layer: 422, pdf_timeout: 504,
+    };
+    const publicMessages: Record<string, string> = {
+      invalid_pdf: "The uploaded file is not a valid PDF.",
+      pdf_too_large: "PDF exceeds the 12 MiB processing limit.",
+      too_many_pages: "PDF has too many pages (maximum 60).",
+      text_too_large: "PDF text layer is too large to process safely.",
+      no_text_layer: "No readable text layer found. Scanned PDFs require OCR, which is not enabled for PDFs.",
+      pdf_timeout: "PDF text extraction timed out. Try a smaller file.",
+    };
+    const responseMessage = pdfError ? publicMessages[pdfError.code] : "Document processing failed";
+    // Never log file contents or upstream provider errors containing user text.
+    console.error("Document processing failed", {
+      code: pdfError?.code ?? "INTERNAL_PROCESSING_ERROR",
+    });
     if (ownedDocumentId) {
       await supabase.from("ai_documents")
-        .update({ status: "failed", error_message: "Document processing failed" })
+        .update({ status: "failed", error_message: responseMessage })
         .eq("id", ownedDocumentId)
         .eq("user_id", user.id);
     }
-    return reply({ error: (error as Error).message || "Document processing failed" }, 500);
+    return reply({ error: responseMessage, code: pdfError?.code ?? "DOCUMENT_PROCESSING_ERROR" },
+      pdfError ? statusByCode[pdfError.code] : 500);
   }
 });
