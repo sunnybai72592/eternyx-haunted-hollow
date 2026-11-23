@@ -197,7 +197,7 @@ RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $body$
 DECLARE p public.automation_investigation_plans%ROWTYPE;
  latest public.automation_incident_reopen_decisions%ROWTYPE;
 BEGIN
- IF OLD.status IS NOT DISTINCT FROM 'resolved' OR
+ IF OLD.status IS DISTINCT FROM 'resolved' OR
     NEW.status IS DISTINCT FROM 'investigating' THEN
    RETURN NEW;
  END IF;
