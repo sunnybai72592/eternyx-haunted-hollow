@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      workspace_import_sessions: {
+        Row: { id: string; owner_id: string; project_id: string; source_sha256: string;
+          source_version: number; expected_tasks: number; expected_steps: number;
+          expected_items: number; expected_files: number; status: string;
+          created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; project_id: string; source_sha256: string;
+          source_version: number; expected_tasks: number; expected_steps: number;
+          expected_items: number; expected_files: number; status?: string;
+          created_at?: string; updated_at?: string }
+        Update: { id?: string; owner_id?: string; project_id?: string; source_sha256?: string;
+          source_version?: number; expected_tasks?: number; expected_steps?: number;
+          expected_items?: number; expected_files?: number; status?: string;
+          created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      workspace_import_batches: {
+        Row: { session_id: string; phase: string; batch_index: number;
+          payload_md5: string; row_count: number; step_count: number; created_at: string }
+        Insert: { session_id: string; phase: string; batch_index: number;
+          payload_md5: string; row_count: number; step_count?: number; created_at?: string }
+        Update: { session_id?: string; phase?: string; batch_index?: number;
+          payload_md5?: string; row_count?: number; step_count?: number; created_at?: string }
+        Relationships: []
+      }
+      workspace_import_files: {
+        Row: { session_id: string; file_index: number; title: string; size_bytes: number;
+          mime_type: string; sha256: string; storage_path: string;
+          registered: boolean; created_at: string }
+        Insert: { session_id: string; file_index: number; title: string; size_bytes: number;
+          mime_type: string; sha256: string; storage_path: string;
+          registered?: boolean; created_at?: string }
+        Update: { session_id?: string; file_index?: number; title?: string; size_bytes?: number;
+          mime_type?: string; sha256?: string; storage_path?: string;
+          registered?: boolean; created_at?: string }
+        Relationships: []
+      }
       workspace_projects: {
         Row: { id: string; owner_id: string; name: string; description: string; status: string; pinned: boolean; created_at: string; updated_at: string }
         Insert: { id?: string; owner_id: string; name: string; description?: string; status?: string; pinned?: boolean; created_at?: string; updated_at?: string }
@@ -2943,6 +2979,18 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_import_begin: { Args: {
+        p_source_sha256: string; p_source_version: number; p_project_name: string;
+        p_description: string; p_expected_tasks: number; p_expected_steps: number;
+        p_expected_items: number; p_expected_files: number }; Returns: Json }
+      workspace_import_status: { Args: { p_session_id: string }; Returns: Json }
+      workspace_import_apply_batch: { Args: {
+        p_session_id: string; p_phase: string; p_batch_index: number; p_payload: Json }; Returns: Json }
+      workspace_import_claim_file: { Args: {
+        p_session_id: string; p_file_index: number; p_title: string; p_size_bytes: number;
+        p_mime_type: string; p_sha256: string }; Returns: Json }
+      workspace_import_register_file: { Args: { p_session_id: string; p_file_index: number }; Returns: boolean }
+      workspace_import_finish: { Args: { p_session_id: string }; Returns: boolean }
       workspace_restore_task_batch: { Args: { p_project_id: string; p_tasks: Json }; Returns: Json }
       mark_service_request_checked: { Args: { p_request_id: string }; Returns: string }
       workspace_delete_archived_project: { Args: { p_project_id: string }; Returns: boolean }
