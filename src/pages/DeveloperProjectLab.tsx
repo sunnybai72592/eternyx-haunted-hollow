@@ -15,6 +15,7 @@ import {
 import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
 import ProjectRecoveryPanel from "@/components/developer/ProjectRecoveryPanel";
 import ProjectRevisionReviewPanel from "@/components/developer/ProjectRevisionReviewPanel";
+import ProjectTestSuitePanel from "@/components/developer/ProjectTestSuitePanel";
 import {
   createDeveloperEditHistory, developerEditHistoryCounts,
   editDeveloperWithHistory, stepDeveloperEditHistory,
@@ -510,6 +511,7 @@ export default function DeveloperProjectLab() {
       <ProjectInspectionPanel project={project} baseline={savedBaseline} activeFile={file.name}
         onJump={jumpToMatch} onReplace={replaceActiveText} />
       <ProjectRevisionReviewPanel project={project} savedBaseline={savedBaseline} onJump={jumpToMatch} onRestore={restoreSavedFile} />
+      <ProjectTestSuitePanel key={project.id} project={project} onJump={jumpToMatch} />
       <ProjectRecoveryPanel project={project} dirty={dirty} onRestore={handleRecovery} />
       <Card className="border-slate-800 bg-slate-900/70 text-white">
         <CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-cyan-300" />Unified project preflight</CardTitle>
