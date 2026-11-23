@@ -11,6 +11,7 @@ import {
 } from "@/lib/developerProjectInspection.mjs";
 import { normalizeDeveloperProject } from "@/lib/developerProjectLab.mjs";
 import { developerLinePosition } from "@/lib/developerLocalWorkflows.mjs";
+import { summarizeDeveloperProjectIntegration } from "@/lib/developerProjectIntegration.mjs";
 
 type Project = ReturnType<typeof normalizeDeveloperProject>;
 type Result = { file: string; index: number; length: number; line: number; column: number };
@@ -39,6 +40,7 @@ export default function ProjectInspectionPanel({ project, baseline, activeFile, 
   const diagnostics = useMemo(() => inspectDeveloperProject(project), [project]);
   const errors = diagnostics.filter(d => d.level === "error").length;
   const warnings = diagnostics.filter(d => d.level === "warning").length;
+  const integration = useMemo(() => summarizeDeveloperProjectIntegration(project), [project]);
 
   return <div className="grid gap-5 lg:grid-cols-2">
     <Card className="min-w-0 border-slate-800 bg-slate-900/70 text-white">
@@ -84,7 +86,7 @@ export default function ProjectInspectionPanel({ project, baseline, activeFile, 
     </Card>
     <Card className="min-w-0 border-slate-800 bg-slate-900/70 text-white">
       <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-cyan-300"/>Project diagnostics & change review</CardTitle>
-        <CardDescription className="text-slate-400">Offline, heuristic checks of HTML, JSON and restricted preview compatibility. Not a full compiler, accessibility audit or security scan.</CardDescription>
+        <CardDescription className="text-slate-400">Offline, heuristic checks of HTML, JSON, local file references and restricted preview compatibility. Not a full compiler, accessibility audit or security scan.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-lg border border-slate-700 p-3 text-xs text-slate-300">
@@ -98,6 +100,7 @@ export default function ProjectInspectionPanel({ project, baseline, activeFile, 
               {changes.deleted.map(name => <li key={"del-"+name} className="break-all">Deleted: {name}</li>)}
             </ul>}
         </div>
+        <p role="status" className="text-xs text-cyan-200">Cross-file references: {integration.resolved}/{integration.checked} matched by exact filename · {integration.unresolved} need review. Filename integrity is not runtime loadability.</p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p role="status" className="text-xs text-slate-300">{errors} errors · {warnings} warnings · {diagnostics.length} findings</p>
           <Button size="sm" variant="outline" onClick={() => downloadReport(exportDeveloperInspectionReport(project))}>
