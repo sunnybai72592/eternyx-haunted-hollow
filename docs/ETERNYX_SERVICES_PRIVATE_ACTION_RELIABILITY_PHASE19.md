@@ -56,6 +56,7 @@ but direct SQL and migration-list endpoints repeatedly return
 13 and Phase 14 migrations remain unverified and were not deployed by
 the assistant. Passing CI is not equivalent to deployment.
 
+The required order is **Phase 13 before Phase 14**.
 Follow docs/ETERNYX_SERVICES_DATABASE_RECOVERY.md: inspect supported
 migration history, apply only missing migrations in order (Phase 13
 before Phase 14), and verify SQL grants, RLS, invoker views and real
