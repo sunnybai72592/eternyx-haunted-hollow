@@ -383,6 +383,17 @@ def warped(previous,decisions,strength):
                 dy+=vectors[tile][1]*weight
             sx=(x-dx*strength/100)%v2.W
             sy=(y-dy*strength/100)%v2.H
+            # A uniform, integral shift MUST preserve the exact original
+            # quantized color ID. Floating-point tile interpolation can place
+            # an integer coordinate a few ulps to either side of the boundary;
+            # resampling that near-integer would spuriously mix adjacent pixels.
+            # This also makes 0% strength a byte-exact stationary control.
+            nearest_x=round(sx)
+            nearest_y=round(sy)
+            if abs(sx-nearest_x)<1e-8 and abs(sy-nearest_y)<1e-8:
+                result[y*v2.W+x]=previous[(nearest_y%v2.H)*v2.W+
+                                          (nearest_x%v2.W)]
+                continue
             xl=int(math.floor(sx));yl=int(math.floor(sy))
             xr=(xl+1)%v2.W;yr=(yl+1)%v2.H
             ax=sx-xl;ay=sy-yl
