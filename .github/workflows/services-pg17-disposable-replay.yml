@@ -51,15 +51,20 @@ jobs:
             -e POSTGRES_PASSWORD=synthetic_ci_only postgres:17-alpine > /dev/null
           trap 'docker rm --force "$name" >/dev/null 2>&1 || true' EXIT
 
-          ready=0
-          for _ in $(seq 1 45); do
-            if docker exec "$name" pg_isready -q -U postgres; then
-              ready=1
-              break
+          # Postgres entrypoint starts a temporary initdb server and then
+          # shuts it down. A single successful pg_isready can observe the
+          # temporary server; demand four consecutive healthy probes.
+          stable=0
+          for _ in $(seq 1 60); do
+            if docker exec "$name" pg_isready -q -U postgres > /dev/null 2>&1; then
+              stable=$((stable + 1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
             fi
             sleep 1
           done
-          if [ "$ready" -ne 1 ]; then
+          if [ "$stable" -lt 4 ]; then
             echo "Disposable PostgreSQL container did not become ready"
             exit 1
           fi
