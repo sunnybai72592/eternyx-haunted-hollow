@@ -43,7 +43,7 @@ const plannedStudios = [
   },
   {
     name: "AI Document Intelligence",
-    description: "Local document inspection, accurate two-text comparison with line evidence and exports, plus optional AI Chat analysis. Native PDF OCR remains pending.",
+    description: "Private document inspection, line-level comparison, JSON field diffs, CSV key-matched changes and complete exports, plus opt-in AI Chat analysis. Native PDF OCR remains pending.",
     icon: FileSearch,
   },
   {

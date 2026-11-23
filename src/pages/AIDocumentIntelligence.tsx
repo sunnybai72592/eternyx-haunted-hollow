@@ -14,6 +14,12 @@ import {
   type DocumentComparison,
 } from "@/lib/ai/document-compare-tools";
 import {
+  MAX_STRUCTURED_AI_CHANGES, StructuredCompareError,
+  compareStructuredJson, compareStructuredCsv,
+  formatStructuredComparison, prepareStructuredComparisonAIRequest,
+  type StructuredComparison,
+} from "@/lib/ai/document-structured-compare";
+import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_CHARACTERS,
@@ -54,6 +60,9 @@ const AIDocumentIntelligence = () => {
   const [comparisonFileName, setComparisonFileName] = useState<string | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonIgnoreWhitespace, setComparisonIgnoreWhitespace] = useState(false);
+  const [comparisonMode, setComparisonMode] = useState<"line" | "json" | "csv">("line");
+  const [comparisonCsvKey, setComparisonCsvKey] = useState("");
+  const [structuredComparison, setStructuredComparison] = useState<StructuredComparison | null>(null);
   const [comparison, setComparison] = useState<DocumentComparison | null>(null);
   const [comparisonQuestion, setComparisonQuestion] = useState("");
   const [comparisonError, setComparisonError] = useState<string | null>(null);
@@ -62,6 +71,7 @@ const AIDocumentIntelligence = () => {
   const invalidateComparison = () => {
     comparisonAI.invalidate();
     setComparison(null);
+    setStructuredComparison(null);
     setComparisonError(null);
   };
   const invalidate = () => {
@@ -139,19 +149,42 @@ const AIDocumentIntelligence = () => {
   const compareDocuments = () => {
     invalidateComparison();
     try {
-      setComparison(compareLocalDocuments(source, comparisonSource, {
-        beforeName: fileName, afterName: comparisonFileName,
-        ignoreWhitespace: comparisonIgnoreWhitespace,
-      }));
+      if (comparisonMode === "line") {
+        setComparison(compareLocalDocuments(source, comparisonSource, {
+          beforeName: fileName, afterName: comparisonFileName,
+          ignoreWhitespace: comparisonIgnoreWhitespace,
+        }));
+      } else {
+        const options = { sourceA: fileName, sourceB: comparisonFileName };
+        setStructuredComparison(comparisonMode === "json"
+          ? compareStructuredJson(source, comparisonSource, options)
+          : compareStructuredCsv(source, comparisonSource, comparisonCsvKey, options));
+      }
     } catch (reason) {
       const messages: Record<string, string> = {
         invalid_source: "Enter nonempty text in both source boxes.",
         too_long: "Each comparison input must contain at most 100,000 characters.",
         too_many_lines: "Each input must have at most 1,200 lines for bounded local comparison.",
       };
-      setComparisonError(reason instanceof DocumentCompareError
-        ? messages[reason.code] || "Comparison could not be completed safely."
-        : "Local comparison failed.");
+      const structuredErrors: Record<string, string> = {
+        invalid_input: "Both source documents must contain nonempty, nonbinary text.",
+        too_long: "Each structured input must contain at most 100,000 characters.",
+        invalid_json: "Both inputs must be valid JSON. No comparison was performed.",
+        invalid_csv: "Both inputs must be well-formed CSV with unique headers and equal-width records.",
+        too_deep: "JSON nesting exceeds the safe depth limit (32).",
+        too_many_nodes: "JSON has too many nested nodes for a bounded local comparison (5,000).",
+        too_many_rows: "CSV must contain at most 1,200 data records in each input.",
+        too_many_columns: "CSV must contain at most 100 columns in each input.",
+        too_many_changes: "Over 2,000 changes; comparison refused rather than silently truncated.",
+        invalid_key: "Enter a CSV key column present in both header rows. Every key value must be nonempty.",
+        duplicate_key: "Duplicate CSV key values found. Choose a unique column; no arbitrary row matching was performed.",
+        schema_mismatch: "CSV column names must match between sources (column order may differ).",
+      };
+      setComparisonError(reason instanceof StructuredCompareError
+        ? structuredErrors[reason.code] || "Structured comparison was rejected safely."
+        : reason instanceof DocumentCompareError
+          ? messages[reason.code] || "Comparison could not be completed safely."
+          : "Local comparison failed.");
     }
   };
   const downloadComparison = (format: "txt" | "json") => {
@@ -167,22 +200,46 @@ const AIDocumentIntelligence = () => {
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  const downloadStructuredComparison = (format: "txt" | "json") => {
+    if (!structuredComparison) return;
+    const contents = format === "txt"
+      ? formatStructuredComparison(structuredComparison)
+      : JSON.stringify(structuredComparison, null, 2);
+    const url = URL.createObjectURL(new Blob([contents], {
+      type: format === "txt" ? "text/plain;charset=utf-8" : "application/json",
+    }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "eternyx-structured-comparison." + format;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const analyzeComparison = () => {
-    if (!comparison) return;
+    if (!comparison && !structuredComparison) return;
     try {
-      const prompt = prepareDocumentComparisonAIRequest(comparison, comparisonQuestion);
+      const prompt = structuredComparison
+        ? prepareStructuredComparisonAIRequest(structuredComparison, comparisonQuestion)
+        : prepareDocumentComparisonAIRequest(comparison!, comparisonQuestion);
       setComparisonError(null);
       void comparisonAI.run("ai.documents.analyze", prompt);
     } catch (reason) {
-      const message = reason instanceof DocumentCompareError
+      const message = reason instanceof StructuredCompareError
         ? ({
-            no_changes: "No changes to analyze. The two documents match under the selected comparison mode.",
-            too_many_changes: "AI analysis accepts at most 12 changed lines. Narrow your source texts; no AI request was made.",
-            too_long: "The differences exceed the chat message budget. Narrow both sources manually; no text was silently truncated.",
-            invalid_question: "The comparison question must be at most 250 characters.",
-            invalid_source: "Both documents are required.",
-            too_many_lines: "Too many lines for comparison.",
-          }[reason.code]) : "AI comparison request could not be prepared.";
+            no_changes: "No structured changes to analyze. Both inputs match under the selected mode.",
+            too_many_changes: "AI Chat accepts at most 12 structural changes. Narrow inputs manually; no request was made.",
+            too_long: "Structural changes exceed the AI Chat request budget. Narrow inputs; nothing was silently truncated.",
+            invalid_question: "Optional question must contain at most 250 characters.",
+          } as Record<string, string>)[reason.code] || "The structured AI request was rejected safely."
+        : reason instanceof DocumentCompareError
+          ? ({
+              no_changes: "No changes to analyze. The two documents match under the selected comparison mode.",
+              too_many_changes: "AI analysis accepts at most 12 changed lines. Narrow your source texts; no AI request was made.",
+              too_long: "The differences exceed the chat message budget. Narrow both sources manually; no text was silently truncated.",
+              invalid_question: "The comparison question must be at most 250 characters.",
+              invalid_source: "Both documents are required.",
+              too_many_lines: "Too many lines for comparison.",
+            }[reason.code])
+          : "AI comparison request could not be prepared.";
       setComparisonError(message);
     }
   };
@@ -205,6 +262,8 @@ const AIDocumentIntelligence = () => {
     setComparisonSource("");
     setComparisonFileName(null);
     setComparisonIgnoreWhitespace(false);
+    setComparisonMode("line");
+    setComparisonCsvKey("");
     setComparisonQuestion("");
     setComparisonLoading(false);
     setAiPassage(null);
@@ -438,14 +497,16 @@ const AIDocumentIntelligence = () => {
             <CardTitle className="text-white">Local two-document comparison</CardTitle>
             <CardDescription className="text-slate-400">
               Compare the source above (A) to an independent text file or pasted text (B).
-              Deterministic line-by-line differences are computed privately in your browser, not generated by AI.
+              Compare raw lines, JSON fields by exact RFC 6901 paths, or CSV records by a unique key.
+              All differences are computed privately in your browser, not generated by AI.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-xs text-slate-400">
-              Bounded to {MAX_COMPARISON_LINES.toLocaleString()} lines and 100,000 characters per input.
-              Reordered blocks may appear as removed and added lines. Only the optional AI analysis button
-              transmits the difference text to the existing ETERNYX AI Chat provider.
+              Raw text comparison is bounded to {MAX_COMPARISON_LINES.toLocaleString()} lines per input.
+              Structural JSON/CSV comparison uses additional depth, row and change caps.
+              No source files leave the browser unless you explicitly request AI interpretation
+              of a small, complete difference report.
             </p>
             <p className="break-all text-sm text-slate-300">Source A: {fileName || "Current pasted/edited document"}</p>
             <label htmlFor="document-compare-file" className="block text-sm text-slate-300">Optional source B text file</label>
@@ -466,13 +527,50 @@ const AIDocumentIntelligence = () => {
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white placeholder:text-slate-500"
               />
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input type="checkbox" checked={comparisonIgnoreWhitespace} onChange={e => {
-                setComparisonIgnoreWhitespace(e.target.checked); invalidateComparison();
-              }} />
-              Ignore whitespace changes when matching lines
+            <label htmlFor="document-comparison-mode" className="block space-y-2 text-sm text-slate-300">
+              <span>Comparison method</span>
+              <select id="document-comparison-mode" value={comparisonMode}
+                onChange={e => {
+                  setComparisonMode(e.target.value as "line" | "json" | "csv");
+                  invalidateComparison();
+                }}
+                className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
+                <option value="line">Line-by-line text</option>
+                <option value="json">JSON fields and array indexes</option>
+                <option value="csv">CSV rows matched by unique key</option>
+              </select>
             </label>
-            <Button type="button" disabled={!source.trim() || !comparisonSource.trim() || loading || comparisonLoading}
+            {comparisonMode === "line" && (
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input type="checkbox" checked={comparisonIgnoreWhitespace} onChange={e => {
+                  setComparisonIgnoreWhitespace(e.target.checked); invalidateComparison();
+                }} />
+                Ignore whitespace changes when matching lines
+              </label>
+            )}
+            {comparisonMode === "json" && (
+              <p className="text-xs text-slate-400">
+                JSON keys are compared regardless of property order. Pointers follow RFC 6901.
+                Arrays are compared by index, not inferred moves; invalid JSON or overly deep documents are rejected.
+              </p>
+            )}
+            {comparisonMode === "csv" && (
+              <div className="space-y-2">
+                <label htmlFor="document-comparison-key" className="block space-y-1 text-sm text-slate-300">
+                  <span>Required unique CSV key column — exact header name, case-sensitive</span>
+                  <input id="document-comparison-key" value={comparisonCsvKey} maxLength={100}
+                    onChange={e => { setComparisonCsvKey(e.target.value); invalidateComparison(); }}
+                    placeholder="For example: asset_id"
+                    className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
+                </label>
+                <p className="text-xs text-slate-400">
+                  Matching key values must be present and unique in each file. Column order may vary,
+                  but the two header sets must match. Quoted commas and multiline cells are supported.
+                </p>
+              </div>
+            )}
+            <Button type="button" disabled={!source.trim() || !comparisonSource.trim() || loading || comparisonLoading ||
+              (comparisonMode === "csv" && !comparisonCsvKey)}
               onClick={compareDocuments}>
               <FileCheck2 className="mr-2 h-4 w-4" />Compare documents locally
             </Button>
@@ -515,12 +613,61 @@ const AIDocumentIntelligence = () => {
                 </div>
               </div>
             )}
+            {structuredComparison && (
+              <section aria-label="Structured document differences" className="space-y-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-4">
+                <Badge variant="outline">Exact local {structuredComparison.mode.toUpperCase()} comparison · no AI call</Badge>
+                <p role="status" className="text-sm text-slate-300">
+                  {structuredComparison.identical ? "No structural changes found." :
+                    structuredComparison.added + " added · " + structuredComparison.removed + " removed · " +
+                    structuredComparison.changed + " changed"}
+                  {" · "}{structuredComparison.unchanged} unchanged fields/cells
+                </p>
+                <p className="text-xs text-slate-400">
+                  {structuredComparison.mode === "json"
+                    ? "JSON property names are order-independent. Arrays are index-based; paths use RFC 6901 notation."
+                    : "CSV records are aligned by exact unique key values. Column order is ignored; header sets must match."}
+                  {" "}Values are copied from source data; no model verifies them.
+                </p>
+                {structuredComparison.changes.length > 50 && <p className="text-xs text-amber-200">
+                  Displaying the first 50 of {structuredComparison.changes.length} changes.
+                  TXT/JSON downloads include the full report without truncation.
+                </p>}
+                <ul className="max-h-80 space-y-2 overflow-y-auto text-xs text-slate-300">
+                  {structuredComparison.changes.slice(0, 50).map((entry, index) => (
+                    <li key={index} className="rounded-md border border-slate-700 p-3">
+                      <strong className="break-all text-cyan-200">
+                        {entry.kind.toUpperCase()} · {entry.location || "(JSON root)"}
+                      </strong>
+                      <p className="mt-2 break-all whitespace-pre-wrap text-rose-200">
+                        Before: {entry.before === null ? "(not present)" : entry.before}
+                      </p>
+                      <p className="mt-1 break-all whitespace-pre-wrap text-emerald-200">
+                        After: {entry.after === null ? "(not present)" : entry.after}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline"
+                    onClick={() => void copy(formatStructuredComparison(structuredComparison), "Structured difference report")}>
+                    <ClipboardCopy className="mr-2 h-4 w-4" />Copy full structural report
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadStructuredComparison("txt")}>
+                    Download full report (.txt)
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadStructuredComparison("json")}>
+                    Download full report (.json)
+                  </Button>
+                </div>
+              </section>
+            )}
             <section aria-label="Optional AI difference analysis" className="space-y-3 rounded-xl border border-violet-400/20 bg-slate-950 p-4">
               <h3 className="font-semibold text-white">Optional AI interpretation of actual changes</h3>
               <p className="text-sm text-slate-400">
                 Only clicking Analyze changes with AI Chat sends the bounded diff text to an external
                 model, uses existing ai.chat credits and stores chat history. Maximum {MAX_COMPARISON_AI_CHANGES}
-                changed lines; larger comparisons must be narrowed manually, without silent truncation.
+                changed lines or {MAX_STRUCTURED_AI_CHANGES} JSON/CSV structural changes; larger reports must be
+                narrowed manually, without silent truncation.
                 The model's interpretation is not independent verification of either original document.
               </p>
               <label htmlFor="document-comparison-question" className="block space-y-2 text-sm text-slate-300">
@@ -532,7 +679,11 @@ const AIDocumentIntelligence = () => {
                 />
               </label>
               <Button type="button" onClick={analyzeComparison}
-                disabled={!comparison || comparison.identical || comparison.changes.length > MAX_COMPARISON_AI_CHANGES || comparisonAI.loading}>
+                disabled={comparisonAI.loading ||
+                  (!comparison && !structuredComparison) ||
+                  (comparison !== null && (comparison.identical || comparison.changes.length > MAX_COMPARISON_AI_CHANGES)) ||
+                  (structuredComparison !== null && (structuredComparison.identical ||
+                    structuredComparison.changes.length > MAX_STRUCTURED_AI_CHANGES))}>
                 {comparisonAI.loading ? "Analyzing comparison…" : "Analyze changes with AI Chat"}
               </Button>
               {comparison && comparison.changes.length > MAX_COMPARISON_AI_CHANGES && (
@@ -540,6 +691,13 @@ const AIDocumentIntelligence = () => {
                   This comparison has {comparison.changes.length} changed lines.
                   Narrow the documents to at most {MAX_COMPARISON_AI_CHANGES} differences for optional AI analysis.
                   Full local copy and downloads still work.
+                </p>
+              )}
+              {structuredComparison && structuredComparison.changes.length > MAX_STRUCTURED_AI_CHANGES && (
+                <p role="status" className="text-xs text-amber-200">
+                  This structural comparison has {structuredComparison.changes.length} changes.
+                  Narrow your input to 12 changes or fewer before sending for AI analysis.
+                  Local exports remain available.
                 </p>
               )}
               {comparisonAI.error && <Alert role="alert" variant="destructive">
