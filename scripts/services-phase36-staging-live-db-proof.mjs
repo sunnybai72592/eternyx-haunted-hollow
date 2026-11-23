@@ -13,6 +13,7 @@ import {fileURLToPath} from 'node:url';
 import {validateOperatorQuery} from './services-pg17-catalog-verdict-regressions.mjs';
 import {verifyServicesStagingEvidence,SERVICES_CATALOG_CHECKS} from './services-staging-release-evidence.mjs';
 import {reconcileServicesHistory} from './services-phase35-managed-history-reconciler.mjs';
+import {auditorPrivilegeSelect,validateAuditorPrivilegeResult} from './services-phase37-auditor-privileges.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const PRODUCTION='wcncuarekaofmfurbtbh';
@@ -70,7 +71,7 @@ export function buildAuditSql(schemaSql,verdictSql){
   '\\set ON_ERROR_STOP on',
   'BEGIN TRANSACTION READ ONLY;',
   "SET LOCAL statement_timeout = '12000ms';",
-  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time) i;",
+  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges) i;",
   'SELECT row_to_json(h)::text FROM (',
   " SELECT COALESCE(json_agg(json_build_object('version',version::text,'name',COALESCE(name,'')) ORDER BY version), '[]'::json) AS managed_migrations",
   ' FROM supabase_migrations.schema_migrations',
@@ -93,6 +94,9 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
  const [identity,history,catalog,verdict]=rows;
  if(identity.role!==ROLE||identity.db!=='postgres'||
     typeof identity.server_time!=='string')fail('incorrect_auditor_role');
+ let privilegeProof;
+ try{privilegeProof=validateAuditorPrivilegeResult(identity.auditor_privileges)}
+ catch{fail('auditor_privileges_not_verified')}
  const skew=Math.abs(now.getTime()-Date.parse(identity.server_time));
  if(!Number.isFinite(skew)||skew>5*60*1000)fail('database_clock_invalid');
  if(!Array.isArray(history.managed_migrations)||history.managed_migrations.length===0)
@@ -126,7 +130,9 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
  return {
    gate:'services-phase36-staging-live-readonly-db-proof',
    accepted:true,
-   connectionRoleLeastPrivilegeDeclared:true,
+   connectionRoleLeastPrivilegeVerified:true,
+   auditorPrivilegeChecksPassed:privilegeProof.checksPassed,
+   securityDefinerFunctionEffectsProven:false,
    sqlTransactionReadOnly:true,
    remoteHistoryByNameObserved:true,
    liveCatalogChecksEvaluated:SERVICES_CATALOG_CHECKS,

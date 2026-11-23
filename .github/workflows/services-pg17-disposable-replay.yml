@@ -27,6 +27,9 @@ on:
       - "tests/services-phase35-managed-history-reconciler.test.mjs"
       - "scripts/services-phase36-staging-live-db-proof.mjs"
       - "tests/services-phase36-staging-live-db-proof.test.mjs"
+      - "scripts/services-phase37-auditor-privileges.mjs"
+      - "scripts/services-phase37-auditor-privilege-replay.mjs"
+      - "tests/services-phase37-auditor-privileges.test.mjs"
       - ".github/workflows/services-staging-acceptance.yml"
       - ".github/workflows/services-pg17-disposable-replay.yml"
   workflow_dispatch:
@@ -55,7 +58,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
@@ -128,7 +131,14 @@ jobs:
           # Docker --network none, no published ports, genuine concurrent
           # advisory lock waiters and exact trigger-generated denials.
           bash scripts/services-pg17-concurrency-ci.sh "$name"
-          echo "PASS: isolated Services PG17 migrations, role RLS, catalog mutations, write-abuse and real concurrency (no remote deployment)"
+          # Phase 37: real PostgreSQL privilege mutations on a disposable
+          # SQL-only staging auditor role. The role, grants and sequence
+          # exist solely inside --network none CI and are dropped after.
+          node scripts/services-phase37-auditor-privilege-replay.mjs --stdout \
+            > "$RUNNER_TEMP/services-phase37-auditor-privilege-regressions.sql"
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < "$RUNNER_TEMP/services-phase37-auditor-privilege-regressions.sql"
+          echo "PASS: isolated Services PG17 migrations, role RLS, catalog mutations, write-abuse, concurrency and auditor privileges (no remote deployment)"
 
       # No Supabase secrets, no linked project, no production/staging database
       # connection and no artifact upload containing DB rows.
