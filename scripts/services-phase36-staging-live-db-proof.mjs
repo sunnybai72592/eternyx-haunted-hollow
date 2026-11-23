@@ -16,6 +16,7 @@ import {reconcileServicesHistory} from './services-phase35-managed-history-recon
 import {auditorPrivilegeSelect,validateAuditorPrivilegeResult} from './services-phase37-auditor-privileges.mjs';
 import {exposedRoutineSql,verifyRoutineExposure} from './services-phase38-executable-definer-guard.mjs';
 import {phase39Sql,validatePhase39Facts} from './services-phase39-definer-safety.mjs';
+import {enforceConsistentStagingEvidence} from './services-phase40-consistent-staging-evidence.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const PRODUCTION='wcncuarekaofmfurbtbh';
@@ -72,6 +73,7 @@ export function buildAuditSql(schemaSql,verdictSql){
  return [
   '\\set ON_ERROR_STOP on',
   'BEGIN TRANSACTION READ ONLY;',
+  'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;',
   "SET LOCAL statement_timeout = '12000ms';",
   "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges, (SELECT row_to_json(s) FROM ("+exposedRoutineSql()+") s) AS routine_surface, (SELECT row_to_json(z) FROM ("+phase39Sql()+") z) AS definer_hardening) i;",
   'SELECT row_to_json(h)::text FROM (',
@@ -133,6 +135,11 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
     reviewed.phase13.status!=='history_name_and_objects_present_not_sql_content_proof'||
     reviewed.phase14.status!=='history_name_and_objects_present_not_sql_content_proof')
     fail('history_or_schema_missing');
+ // Require source-order alignment against actual *managed* version numbers,
+ // and a strict proof-envelope contract after all existing safety gates.
+ let consistency;
+ try{consistency=enforceConsistentStagingEvidence(rows)}
+ catch{fail('inconsistent_live_evidence')}
  // All conclusions are direct results of real SELECTs, NOT a deployment
  // signature or proof of actual SQL contents of historically colliding files.
  return {
@@ -147,6 +154,10 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
    securityDefinerFunctionEffectsProven:false,
    sqlTransactionReadOnly:true,
    remoteHistoryByNameObserved:true,
+   remoteHistoryDependencyOrderVerified:consistency.actualManagedVersionOrderStrictlyIncreasing,
+   phase13Before14ByRealManagedVersion:true,
+   readOnlyRepeatableReadSnapshot:true,
+   strictLiveEvidenceEnvelope:true,
    liveCatalogChecksEvaluated:SERVICES_CATALOG_CHECKS,
    liveCatalogChecksFailed:0,
    sourceContentProvenByLiveQuery:false,
