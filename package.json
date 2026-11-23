@@ -18,6 +18,8 @@
     "workspace:staging:write": "node scripts/workspace-team-staging-write-roles.mjs --run",
     "workspace:staging:storage:config": "node scripts/workspace-team-staging-storage.mjs --config-check",
     "workspace:staging:storage": "node scripts/workspace-team-staging-storage.mjs --run",
+    "workspace:staging:revoke:config": "node scripts/workspace-team-staging-revocation.mjs --config-check",
+    "workspace:staging:revoke": "node scripts/workspace-team-staging-revocation.mjs --run",
     "automation:staging:plan": "node scripts/automation-staging-deployment-plan.mjs",
     "automation:staging:db:check": "node --test tests/automation-staging-db-readonly.test.mjs",
     "automation:staging:db:contract": "node --test tests/automation-staging-db-readonly.test.mjs tests/automation-staging-db-runtime-contract.test.mjs",
