@@ -72,6 +72,10 @@ export function inspectStagingConnection(env={}){
 export function classifyStagingPgFailure(stderr){
   if(typeof stderr!=="string")return "unknown_failure";
   const msg=stderr.slice(0,12000).toLowerCase();
+  if(/could not accept ssl connection.*(?:eof detected|connection reset by peer)/.test(msg))
+    return "tls_handshake_interrupted";
+  if(/could not receive data from client.*connection reset by peer/.test(msg))
+    return "management_client_connection_reset";
   if(/certificate verify failed|server certificate|certificate has expired|unable to get local issuer certificate|root certificate file|sslrootcert|tlsv/.test(msg))
     return "tls_certificate_verification_failed";
   if(/password authentication failed|no password supplied|authentication failed/.test(msg))
