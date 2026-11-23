@@ -47,7 +47,7 @@ export async function readPrivateOfflineEvidence({
   const initial=await pathStat(path,allowMissing);
   if(!initial)return null;
   if(!trustedStat(initial,owner,maxBytes))
-    throw Error("Untrusted private offline evidence file");
+    throw Error("Unsafe private offline evidence file");
   const fd=await open(path,
     constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
   try{
