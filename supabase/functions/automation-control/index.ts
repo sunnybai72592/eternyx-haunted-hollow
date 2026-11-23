@@ -37,6 +37,8 @@ const rpcStatus: Record<string, number> = {
   closure_not_ready:409,closure_approval_required:409,
   closure_evidence_incomplete:409,stale_closure_review:409,
   closure_review_limit:429,plan_not_found:404,
+  stale_reopen_review:409,reopen_not_ready:409,reopen_approval_required:409,
+  reopen_evidence_not_found:404,reopen_review_limit:429,
   already_captured:409,unrelated_evidence:403,
   recovery_review_limit:429,already_reported:409,
   evidence_not_found:404,evidence_not_ready:409,invalid_transition:409,
@@ -110,6 +112,45 @@ serve(async (req: Request) => {
   if (!user || !supabase || user.is_anonymous) return reply({ error: "Sign in to manage Automation workflows" }, 401);
 
   try {
+    if(request.action==="incidentReopenPreflight"){
+      const {data,error}=await supabase.rpc("automation_incident_reopen_preflight",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"reopen_preflight_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticReopen:false,externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentReopenDecision"){
+      const {data,error}=await supabase.rpc("automation_record_incident_reopen_decision",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+        p_incident_revision:request.incidentRevision,p_plan_revision:request.planRevision,
+        p_evidence_id:request.evidenceId,p_decision:request.decision,
+        p_reason:request.reason,p_note:request.note,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"reopen_decision_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticReopen:false,externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentReopenHistory"){
+      const {data,error}=await supabase.rpc("automation_incident_reopen_history",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"reopen_history_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentAuditTrace"){
+      const {data,error}=await supabase.rpc("automation_incident_audit_trace",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"incident_audit_trace_failed");
+      return reply({...data,source:"authenticated_server",
+        externalExecutionTriggered:false});
+    }
     if(request.action==="incidentClosurePreflight"){
       const {data,error}=await supabase.rpc("automation_incident_closure_preflight",{
         p_user_id:user.id,p_incident_id:request.incidentId,
