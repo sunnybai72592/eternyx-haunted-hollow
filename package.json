@@ -30,7 +30,9 @@
     "range:microvm:hardware": "node scripts/cyber-range-microvm-hardware-acceptance.mjs",
     "docker:lab:drill": "node scripts/docker-lab-assurance.mjs drill",
     "docker:lab:preflight": "node scripts/docker-lab-assurance.mjs preflight",
-    "docker:lab:review": "node scripts/docker-lab-review.mjs acceptance"
+    "docker:lab:review": "node scripts/docker-lab-review.mjs acceptance",
+    "docker:staging:auth:check": "node scripts/docker-hosted-auth-probe.mjs --check-config",
+    "docker:staging:auth:run": "node scripts/docker-hosted-auth-probe.mjs --run"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
