@@ -140,6 +140,16 @@ const destinations: Destination[] = [
     limitation: "This route checks for reviewed database tables and fails closed when unavailable. Production migration has not been deployed or verified.",
   },
   {
+    name: "Private security investigations",
+    description: "Track an authorized investigation timeline, assigned actions, linked private evidence and documented closure decisions.",
+    href: "/cybersecurity/investigations",
+    icon: FileCheck2,
+    category: "Security operations",
+    kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "Owner-scoped private case versions using existing evidence storage. Events and outcomes are analyst-entered; no live detection or automated containment.",
+  },
+  {
     name: "Private assessment cases",
     description: "Work from attested pentest scope, manage analyst findings and remediation, and save versioned private evidence snapshots.",
     href: "/cybersecurity/cases",
