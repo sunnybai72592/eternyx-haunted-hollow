@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Copy, Download, FileVideo2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {buildPortablePhoneIntake} from "@/lib/ai/portablePhoneIntake.mjs";
+import {buildPortablePhoneIntake,buildPortablePhoneMovie} from "@/lib/ai/portablePhoneIntake.mjs";
 import phonePython from "../../gpu-worker/prepare_video_sources.py?raw";
 import renderPython from "../../gpu-worker/render_video_timeline.py?raw";
 import assemblePython from "../../gpu-worker/assemble_video_storyboard.py?raw";
 import auditPython from "../../gpu-worker/audit_video_render.py?raw";
 import launchPython from "../../gpu-worker/launch_phone_intake.py?raw";
+import moviePython from "../../gpu-worker/finish_phone_movie.py?raw";
 import { Input } from "@/components/ui/input";
 import {
   checkPreparedVideoSelection, phonePreparationCommand,
@@ -19,6 +20,11 @@ type Report = ReturnType<typeof readPhonePreparationReport>;
 export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]}) {
   const [start, setStart] = useState(0);
   const [originals,setOriginals]=useState<File[]>([]);
+  const [movieCaptions,setMovieCaptions]=useState<string[]>([]);
+  const [movieRights,setMovieRights]=useState<string[]>([]);
+  const [movieCutSeconds,setMovieCutSeconds]=useState(1);
+  const [movieProfile,setMovieProfile]=useState<"landscape"|"portrait"|"square">("landscape");
+  const [movieQuality,setMovieQuality]=useState<"standard"|"high">("standard");
   const [bundling,setBundling]=useState(false);
   const [bundleStatus,setBundleStatus]=useState("");
   const bundleRequest=useRef(0);
@@ -58,20 +64,29 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
     }
   };
 
-  const downloadPortablePhoneIntake=async()=>{
+  const downloadPortablePhoneIntake=async(directMovie=false)=>{
     if(bundling)return;
     const token=++bundleRequest.current;
     setBundling(true);setBundleStatus("Hashing private original phone files locally...");
     setError("");setMessage("");
     try{
-      const result=await buildPortablePhoneIntake({
-        files:originals,start,seconds,
+      const moviePlan=directMovie?{
+        profile:movieProfile,quality:movieQuality,
+        shots:originals.map((file,index)=>({
+          source_filename:file.name,frames:movieCutSeconds*16,
+          caption:movieCaptions[index]??"",
+          rights_ref:movieRights[index]??"",
+        })),
+      }:null;
+      const result=await (directMovie?buildPortablePhoneMovie:buildPortablePhoneIntake)({
+        files:originals,start,seconds,moviePlan,
         pythonSources:{
           "prepare_video_sources.py":phonePython,
           "render_video_timeline.py":renderPython,
           "assemble_video_storyboard.py":assemblePython,
           "audit_video_render.py":auditPython,
           "launch_phone_intake.py":launchPython,
+          "finish_phone_movie.py":moviePython,
         },
         onProgress:(p:{phase:string;done:number;total:number})=>{
           if(token===bundleRequest.current)
@@ -85,9 +100,11 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
       link.href=url;link.download=result.filename;
       document.body.appendChild(link);link.click();link.remove();
       window.setTimeout(()=>URL.revokeObjectURL(url),30000);
-      setMessage("Downloaded a complete private phone conversion project ("+
+      setMessage((directMovie?"Downloaded a complete offline phone MOVIE project (":"Downloaded a complete private phone conversion project (")+
         (result.bytes/1048576).toFixed(2)+" MiB). Extract and launch it locally; "+
-        "the output includes verified 16 FPS MP4s AND a reusable editable project draft.");
+        (directMovie?
+          "the runner creates an actual finished H264 video.mp4, SRT captions, preview, receipts, and editable source clips.":
+          "the output includes verified 16 FPS MP4s AND a reusable editable project draft."));
     }catch(cause){
       if(token===bundleRequest.current)
         setError(cause instanceof Error?cause.message:"Could not export genuine private source conversion ZIP.");
@@ -137,7 +154,10 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
               className="mt-1 min-h-11 border-slate-700 bg-slate-950"
               onChange={event=>{
                 ++bundleRequest.current;
-                setOriginals(Array.from(event.currentTarget.files??[]));
+                const picked=Array.from(event.currentTarget.files??[]);
+                setOriginals(picked);
+                setMovieCaptions(picked.map(()=>""));
+                setMovieRights(picked.map(()=>""));
                 setError("");setMessage("");
                 event.currentTarget.value="";
               }}/>
@@ -147,8 +167,86 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
             {" "}{(originals.reduce((sum,file)=>sum+file.size,0)/1048576).toFixed(2)} MiB,
             included privately in the ZIP.
           </p>}
+          {originals.length>0&&<div className="space-y-3 rounded border border-sky-500/30 bg-slate-950/65 p-3">
+            <h5 className="font-semibold text-sky-200">
+              Direct finished movie — no draft reopen required
+            </h5>
+            <p className="text-xs leading-5 text-slate-300">
+              Enter one genuine caption and recording/usage permission reference
+              per original clip. Each is displayed as a sequential shot in the
+              completed video. Nothing is invented or sent to a server.
+            </p>
+            {originals.map((file,index)=><div key={index+"-"+file.name}
+              className="space-y-2 rounded border border-slate-700 p-3">
+              <p className="break-all text-sm font-semibold text-sky-200">
+                Shot {index+1}: {file.name}
+              </p>
+              <label className="block space-y-1 text-xs">
+                Human-written caption (required for final render)
+                <Input value={movieCaptions[index]??""} maxLength={180}
+                  disabled={bundling} placeholder="Describe what the actual footage shows"
+                  className="border-slate-700 bg-slate-900"
+                  onChange={event=>setMovieCaptions(old=>
+                    old.map((x,i)=>i===index?event.target.value:x))}/>
+              </label>
+              <label className="block space-y-1 text-xs">
+                Recording or usage-rights reference (required)
+                <Input value={movieRights[index]??""} maxLength={180}
+                  disabled={bundling} placeholder="Your actual filming or license reference"
+                  className="border-slate-700 bg-slate-900"
+                  onChange={event=>setMovieRights(old=>
+                    old.map((x,i)=>i===index?event.target.value:x))}/>
+              </label>
+            </div>)}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="block space-y-1 text-xs">
+                Seconds per original shot (1–3)
+                <Input type="number" min={1} max={3} step={1}
+                  value={movieCutSeconds} disabled={bundling}
+                  onChange={event=>setMovieCutSeconds(Number(event.target.value))}
+                  className="border-slate-700 bg-slate-900"/>
+              </label>
+              <label className="block space-y-1 text-xs">
+                Finished movie shape
+                <select value={movieProfile} disabled={bundling}
+                  onChange={event=>setMovieProfile(event.target.value as "landscape"|"portrait"|"square")}
+                  className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                  <option value="landscape">Landscape</option>
+                  <option value="portrait">Portrait</option>
+                  <option value="square">Square</option>
+                </select>
+              </label>
+              <label className="block space-y-1 text-xs">
+                Render quality
+                <select value={movieQuality} disabled={bundling}
+                  onChange={event=>setMovieQuality(event.target.value as "standard"|"high")}
+                  className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                  <option value="standard">Standard</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+            </div>
+            <p className="text-xs text-slate-400">
+              Maximum {originals.length*movieCutSeconds} seconds for this selection.
+              All original recordings must contain enough frames after the chosen start offset.
+              Captions become a separate SRT file, not burned into the MP4.
+            </p>
+            <Button size="sm"
+              disabled={bundling||!!commandError||movieCutSeconds<1||movieCutSeconds>3}
+              onClick={()=>{void downloadPortablePhoneIntake(true);}}>
+              <Download className="mr-2 h-4 w-4"/>
+              {bundling?"Packaging local media...":"Download direct-to-finished-MP4 project ZIP"}
+            </Button>
+            <p className="text-xs text-amber-100">
+              Extract your private ZIP, then launch finish-phone-movie-windows.cmd
+              or sh finish-phone-movie-macos-linux.sh. Local Python 3.11+ and
+              FFmpeg/FFprobe/libx264 are required. The launcher converts genuine
+              footage and renders phone-movie-output/video.mp4 automatically.
+              A normalized editing draft is retained for later refinement.
+            </p>
+          </div>}
           <Button size="sm" disabled={bundling||!originals.length||!!commandError}
-            onClick={()=>{void downloadPortablePhoneIntake();}}>
+            onClick={()=>{void downloadPortablePhoneIntake(false);}}>
             <Download className="mr-2 h-4 w-4"/>
             {bundling?"Verifying and packaging...":"Download runnable phone intake ZIP"}
           </Button>
