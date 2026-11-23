@@ -179,5 +179,5 @@ test("manual staging workflow is protected, main-only, project-inventory verifie
     ".github/workflows/automation-staging-core-release.yml"),"utf8");
   assert.match(released,/scripts\/automation-staging-negative-http\.mjs --run-negative-only/);
   assert.match(released,/I_APPROVE_STAGING_NEGATIVE_HTTP/);
-  assert.match(released,/verifyDeployedCore/);
+  assert.match(released,/verifyFourInventory/);
 });
