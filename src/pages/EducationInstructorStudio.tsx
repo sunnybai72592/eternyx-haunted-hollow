@@ -557,6 +557,9 @@ export default function EducationInstructorStudio() {
               <Button asChild variant="outline" size="sm">
                 <Link to="/education/practice">Open learner practice workspace</Link>
               </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/education/study-paths">Create or follow study paths</Link>
+              </Button>
             </div>
           </div>
           {qualityAudit.items.some(item => item.warnings.length > 0) && (
