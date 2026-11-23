@@ -29,7 +29,11 @@ test("agenda sorts due before unscheduled and future; excludes incomplete",()=>{
  assert.deepEqual(buildStudyRevisionAgenda(p,rows,rev,"2026-11-23").map(x=>x.number),[1,3,2]);
  assert.equal(buildStudyRevisionAgenda(p,rows,rev,"2026-11-23")[0].status,"Overdue");
  const reopened=changeStudyRecord(p,rows,3,"completed",false);
- assert.throws(()=>buildStudyRevisionAgenda(p,reopened,rev,"2026-11-23"),
+ // An unreviewed lesson may legitimately be reopened without invalid revision history.
+ assert.deepEqual(buildStudyRevisionAgenda(p,reopened,rev,"2026-11-23").map(x=>x.number),[1,2]);
+ // A reviewed lesson cannot keep its old revision history after reopening.
+ const reviewedReopened=changeStudyRecord(p,rows,1,"completed",false);
+ assert.throws(()=>buildStudyRevisionAgenda(p,reviewedReopened,rev,"2026-11-23"),
    /Invalid Education/);
 });
 test("seven-day UTC window includes today and ends at day six",()=>{
