@@ -43,6 +43,7 @@ function LabNotice({ children }: { children: React.ReactNode }) {
 
 export default function EternyxLabs() {
   const [selected, setSelected] = useState<LabId>("web");
+  const [labSearch, setLabSearch] = useState("");
   const [html, setHtml] = useState(startingHtml);
   const [css, setCss] = useState(startingCss);
   const [js, setJs] = useState(startingJs);
@@ -56,6 +57,12 @@ export default function EternyxLabs() {
   const [action, setAction] = useState<AccessAction>("delete");
 
   const current = useMemo(() => labCatalog.find((lab) => lab.id === selected)!, [selected]);
+  const filteredLabs = useMemo(() => {
+    const query = labSearch.trim().toLowerCase();
+    return labCatalog.filter(lab => !query ||
+      [lab.title,lab.area,lab.level,lab.description].some(value =>
+        value.toLowerCase().includes(query)));
+  }, [labSearch]);
   const sql = useMemo(() => sqlQueryComparison(email), [email]);
   const access = useMemo(() => evaluateAccess(role, action), [role, action]);
 
@@ -152,8 +159,14 @@ export default function EternyxLabs() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(245px,290px)_minmax(0,1fr)]">
           <nav aria-label="Choose a practical lab" className="rounded-2xl border border-border/70 bg-card/70 p-3">
             <p className="px-3 pb-3 pt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Practical workstations</p>
+            <label htmlFor="labs-workstation-search" className="sr-only">Search practical workstations</label>
+            <input id="labs-workstation-search" type="search" value={labSearch}
+              onChange={(event) => setLabSearch(event.target.value)}
+              placeholder="Search 10 workstations…"
+              className="mb-3 w-full rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              {labCatalog.map((lab) => {
+              {filteredLabs.map((lab) => {
                 const Icon = labIcons[lab.id as LabId];
                 return (
                   <button
@@ -173,6 +186,7 @@ export default function EternyxLabs() {
                 );
               })}
             </div>
+            {filteredLabs.length === 0 && <p role="status" className="p-3 text-sm text-muted-foreground">No matching workstation. Try another search term.</p>}
           </nav>
 
           <section aria-labelledby="lab-title" className="min-w-0 space-y-5 rounded-2xl border border-border/70 bg-card/70 p-4 sm:p-6">
