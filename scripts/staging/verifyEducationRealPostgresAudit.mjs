@@ -24,7 +24,8 @@ export function parseAuditOutput(output,{deniedCheck=null}={}){
     r.schema!==1||!r.checks||Array.isArray(r.checks)||
     JSON.stringify(Object.keys(r.checks).sort())!==JSON.stringify([...DATABASE_CHECKS].sort())||
     (deniedCheck!==null&&!DATABASE_CHECKS.includes(deniedCheck)))fail();
-  for(const k of DATABASE_CHECKS)if(r.checks[k]!== (k===deniedCheck?false:true))fail();
+  for(const k of DATABASE_CHECKS)if(r.checks[k]!== (k===deniedCheck?false:true))
+    throw new Error("check:"+k);
   return Object.freeze({passed:DATABASE_CHECKS.length,deniedCheck});
 }
 export function rollbackSabotageSql(source,sabotage){
@@ -41,7 +42,7 @@ function psql(input){
     "exec","-i",OFFLINE_CONTAINER,"psql","-X","-q","-A","-t",
     "-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres",
   ],{input,encoding:"utf8",timeout:30000,maxBuffer:256*1024});
-  if(result.error||result.status!==0)fail();
+  if(result.error||result.status!==0)throw new Error("sql_execution_failed");
   return result.stdout;
 }
 export function runRealPostgresAudit(){
@@ -58,8 +59,13 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{
    if(process.argv.length!==3||process.argv[2]!=="--run")fail();
    runRealPostgresAudit();
- }catch{
-   process.stderr.write("BLOCKED Education isolated PostgreSQL catalog acceptance.\n");
+ }catch(error){
+   // Print only known, fixed check IDs; no raw SQL output or sensitive rows.
+   const message=String(error?.message||"");
+   const safe=message.startsWith("check:") &&
+     DATABASE_CHECKS.includes(message.slice(6)) ? message : (
+       message==="sql_execution_failed" ? message : "invalid_evidence");
+   process.stderr.write("BLOCKED Education isolated PostgreSQL catalog acceptance: "+safe+".\n");
    process.exitCode=1;
  }
 }
