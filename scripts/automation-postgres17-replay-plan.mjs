@@ -19,10 +19,12 @@ function within(base,location){
 function owner(name){
   return name.includes("_automation_")?"Automation":
     name.includes("_docker_")?"Docker":
-    name.includes("_workspace_")?"Workspace":null;
+    name.includes("_workspace_")?"Workspace":
+    /_(?:services|service)_/.test(name)?"Services":null;
 }
-export function planReplay(raw,{includeWorkspace=false}={}) {
-  if(typeof includeWorkspace!=="boolean")reject("invalid_scope");
+export function planReplay(raw,{includeWorkspace=false,includeServices=false}={}) {
+  if(typeof includeWorkspace!=="boolean"||typeof includeServices!=="boolean"||
+    (includeServices&&!includeWorkspace))reject("invalid_scope");
   if(!raw||typeof raw!=="object"||Array.isArray(raw)||
      raw.schema!=="eternyx-fresh-staging-migration-mirror-v1"||
      raw.sourceSqlBytesChanged!==false||
@@ -46,24 +48,32 @@ export function planReplay(raw,{includeWorkspace=false}={}) {
     if(item.original.slice(0,12)!==item.mirror.slice(0,12))
       reject("unexpected_timestamp_range");
     const pillar=owner(item.original);
-    if(pillar&&(pillar!=="Workspace"||includeWorkspace))
+    if(pillar&&(pillar!=="Workspace"||includeWorkspace)&&
+      (pillar!=="Services"||includeServices))
       scoped.push({original:item.original,mirror:item.mirror,pillar});
   }
   const automation=scoped.filter(x=>x.pillar==="Automation");
   const docker=scoped.filter(x=>x.pillar==="Docker");
   const workspace=scoped.filter(x=>x.pillar==="Workspace");
+  const services=scoped.filter(x=>x.pillar==="Services");
   if(automation.length<20||docker.length<8||
-    (includeWorkspace&&workspace.length<12))reject("missing_pillar_migrations");
+    (includeWorkspace&&workspace.length<12)||
+    (includeServices&&services.length<13))reject("missing_pillar_migrations");
   scoped.sort((a,b)=>a.mirror.localeCompare(b.mirror));
-  if(!scoped[0].original.includes("_automation_manual_control_plane"))
+  if(includeServices){
+    if(!scoped[0].original.includes("_service_requests"))
+      reject("unexpected_first_migration");
+  } else if(!scoped[0].original.includes("_automation_manual_control_plane"))
     reject("unexpected_first_migration");
   return {
     schema:"eternyx-automation-docker-postgres17-replay-v1",
     mode:"disposable_postgres_only",
-    scope:includeWorkspace?"Automation_Docker_Workspace_SQL_only":"Automation_and_Docker_SQL_only",
+    scope:includeServices?"Automation_Docker_Workspace_Services_SQL_only":
+      includeWorkspace?"Automation_Docker_Workspace_SQL_only":"Automation_and_Docker_SQL_only",
     automationMigrationCount:automation.length,
     dockerMigrationCount:docker.length,
     workspaceMigrationCount:workspace.length,
+    servicesMigrationCount:services.length,
     combinedMigrationCount:scoped.length,
     order:scoped,
     otherPillarsExcluded:true,
@@ -75,13 +85,13 @@ export function planReplay(raw,{includeWorkspace=false}={}) {
     remoteDeployAllowed:false,
   };
 }
-export async function writeReplayPlan(mirrorDirectory,outputFile,{includeWorkspace=false}={}){
+export async function writeReplayPlan(mirrorDirectory,outputFile,{includeWorkspace=false,includeServices=false}={}){
   if(typeof mirrorDirectory!=="string"||!path.isAbsolute(mirrorDirectory)||
      typeof outputFile!=="string"||!path.isAbsolute(outputFile))reject("unsafe_paths");
   const root=path.resolve(mirrorDirectory),target=path.resolve(outputFile);
   if(!within(path.dirname(root),target)&&!within(root,target))reject("plan_outside_workspace");
   const manifest=JSON.parse(await readFile(path.join(root,"REHEARSAL_ONLY.json"),"utf8"));
-  const result=planReplay(manifest,{includeWorkspace});
+  const result=planReplay(manifest,{includeWorkspace,includeServices});
   const lines=result.order.map(entry=>entry.mirror).join("\n")+"\n";
   // The mirror is generated in a new clean local directory. The output
   // path may not already exist and is never used as a command.
@@ -90,10 +100,12 @@ export async function writeReplayPlan(mirrorDirectory,outputFile,{includeWorkspa
   return result;
 }
 export async function main(argv=process.argv.slice(2)){
-  const workspace=argv.length===5&&argv[4]==="--include-workspace";
-  if((argv.length!==4&&!workspace)||argv[0]!=="--mirror"||
-     argv[2]!=="--plan")reject("invalid_arguments");
-  const result=await writeReplayPlan(argv[1],argv[3],{includeWorkspace:workspace});
+  const workspace=argv.length>=5&&argv[4]==="--include-workspace";
+  const services=argv.length===6&&argv[5]==="--include-services";
+  if(!([4,5,6].includes(argv.length))||(argv.length===5&&!workspace)||
+     (argv.length===6&&(!workspace||!services))||
+     argv[0]!=="--mirror"||argv[2]!=="--plan")reject("invalid_arguments");
+  const result=await writeReplayPlan(argv[1],argv[3],{includeWorkspace:workspace,includeServices:services});
   process.stdout.write(JSON.stringify({...result,order:undefined},null,2)+"\n");
   return 0;
 }
