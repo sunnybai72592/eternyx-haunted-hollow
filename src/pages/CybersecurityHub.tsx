@@ -140,6 +140,16 @@ const destinations: Destination[] = [
     limitation: "This route checks for reviewed database tables and fails closed when unavailable. Production migration has not been deployed or verified.",
   },
   {
+    name: "Private evidence handoff and offline verification",
+    description: "Create a redacted checksum-protected evidence handoff, verify packet consistency and compare independently supplied evidence files locally.",
+    href: "/cybersecurity/evidence-handoff",
+    icon: FileCheck2,
+    category: "Security governance",
+    kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "No server sharing, recipient authorization, digital signature or custody certification. A checksum verifies packet consistency only.",
+  },
+  {
     name: "Private evidence provenance and SHA-256",
     description: "Hash actual private evidence bytes, compare repeat downloads, trace investigation references and export a local verification manifest.",
     href: "/cybersecurity/evidence-provenance",
