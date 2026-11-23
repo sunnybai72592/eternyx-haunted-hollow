@@ -11,7 +11,9 @@ const validDay=value=>typeof value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(value)
 const addDays=(day,n)=>{
   const date=new Date(day+"T00:00:00.000Z");
   date.setUTCDate(date.getUTCDate()+n);
-  return date.toISOString().slice(0,10);
+  const result=date.toISOString().slice(0,10);
+  if(date.getUTCFullYear()>9999||!validDay(result))throw new Error("Education calendar date exceeds supported range");
+  return result;
 };
 const safe=(path,records,revision,asOf)=>{
   if(!validDay(asOf))throw new Error("Invalid Education agenda date");
@@ -31,6 +33,11 @@ export function buildStudyRevisionAgenda(path,records,revision,asOf){
   return Object.freeze(entries.filter(x=>x.priority!==4).sort((a,b)=>
     a.priority-b.priority||
     (a.due_on??"").localeCompare(b.due_on??"")||a.number-b.number));
+}
+/** Overdue backlog remains visible even when its original review dates are outside the next week. */
+export function buildStudyOverdueBacklog(path,records,revision,asOf){
+  return Object.freeze(buildStudyRevisionAgenda(path,records,revision,asOf)
+    .filter(item=>item.due_on!==null&&item.due_on<asOf));
 }
 /** Seven UTC calendar days including selected date, from actual saved review dates. */
 export function buildStudyRevisionWeek(path,records,revision,asOf){
@@ -53,20 +60,32 @@ const fold=line=>{
   chunks.push(current);
   return chunks.join("\r\n");
 };
+// Dual independent 32-bit hashes scope event identity to the actual authored course,
+ // preventing two different courses' lesson #1 on the same day sharing a UID.
+const courseFingerprint=path=>{
+  const data=JSON.stringify(path);
+  let a=2166136261,b=0x811c9dc7;
+  for(const byte of new TextEncoder().encode(data)){
+    a=Math.imul(a^byte,16777619)>>>0;
+    b=Math.imul(b^byte,2246822519)>>>0;
+  }
+  return a.toString(16).padStart(8,"0")+b.toString(16).padStart(8,"0");
+};
 /**
- * Importable all-day UTC review dates, with deterministic unique UIDs.
+ * Importable all-day UTC review dates, with deterministic course-scoped UIDs.
  * Only the author-supplied path title/lesson titles and review dates are included.
  */
 export function buildStudyRevisionCalendarIcs(path,records,revision,asOf){
   const s=safe(path,records,revision,asOf);
   const agenda=buildStudyRevisionAgenda(s.path,s.records,s.revision,asOf);
   const dated=agenda.filter(x=>x.due_on!==null);
+  const scope=courseFingerprint(s.path);
   const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ETERNYX//Local Study Revision//EN",
     "CALSCALE:GREGORIAN","METHOD:PUBLISH"];
   for(const r of dated){
     const date=r.due_on.replace(/-/g,"");
     const end=addDays(r.due_on,1).replace(/-/g,"");
-    const uid="study-"+r.number+"-"+date+"@eternyx.local";
+    const uid="study-"+scope+"-"+r.number+"-"+date+"@eternyx.local";
     lines.push("BEGIN:VEVENT","UID:"+uid,"DTSTAMP:"+asOf.replace(/-/g,"")+"T000000Z",
       "DTSTART;VALUE=DATE:"+date,"DTEND;VALUE=DATE:"+end,
       "SUMMARY:"+escapeIcs("Study review: "+r.title),
