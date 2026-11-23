@@ -9,6 +9,7 @@ import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mj
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
   assertWorkspaceTeamState,requireWorkspacePreferredTeam,
+  verifyWorkspaceTeamCompletePage,isWorkspaceActionCurrent,
 } from "@/lib/workspaceTeamAccess.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -60,6 +61,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const detailsEpoch=useRef(0);
   const resumeInFlight=useRef(false);
   const resumePending=useRef(false);
+  const actionBusyRef=useRef(false);
+  const actionEpoch=useRef(0);
   ownerRef.current=owner;
   const selected=spaceListVerified ? spaces.find(s=>s.id===selectedId)??null : null;
   // Cached data from a former team/owner must never authorize rendering.
@@ -105,7 +108,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     rows.forEach(assertWorkspaceTeamState);
     requireWorkspacePreferredTeam(rows,prefer);
     const chosen=chooseWorkspaceTeam(rows,selectedId,prefer);
-    if(!rows.some(space=>space.id===selectedId)) {
+    if(selectedId && !rows.some(space=>space.id===selectedId)) {
       // Revocation or leave: drop all cached personal/team detail immediately.
       quarantineTeam();
       if(selectedId)setNotice("This team is no longer available to your account. Local team details were cleared.");
@@ -124,9 +127,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     assertWorkspaceTeamState(target);
     const isOwner=target.owner_id===expectedOwner;
     const [m,t,e,i]=await Promise.all([
-      supabase.from("workspace_team_members").select("*")
+      supabase.from("workspace_team_members").select("*",{count:"exact"})
         .eq("space_id",id).order("joined_at",{ascending:true}).limit(20),
-      supabase.from("workspace_team_tasks").select("*")
+      supabase.from("workspace_team_tasks").select("*",{count:"exact"})
         .eq("space_id",id).order("updated_at",{ascending:false}).limit(500),
       supabase.from("workspace_team_events").select("*")
         .eq("space_id",id).order("created_at",{ascending:false}).limit(30),
@@ -136,6 +139,12 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     ]);
     if(m.error||t.error||e.error||i.error)throw new Error(
       m.error?.message??t.error?.message??e.error?.message??i.error?.message??"Team query failed");
+    const verifiedMembers=verifyWorkspaceTeamCompletePage(
+      "members",m.data,m.count,20,"user_id");
+    const verifiedTasks=verifyWorkspaceTeamCompletePage(
+      "tasks",t.data,t.count,500,"id");
+    if(!Array.isArray(e.data)||!Array.isArray(i.data))
+      throw Error("Workspace activity or invitations could not be verified");
     // Protect against a user switch while the four queries were in flight.
     await assureOwner(expectedOwner);
     if(ownerRef.current!==expectedOwner || detailsEpoch.current!==token)return false;
@@ -143,8 +152,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     try {
       verifiedRole=verifyWorkspaceTeamDetails({
         space:target,owner:expectedOwner,spaceId:id,
-        members:m.data??[],tasks:t.data??[],events:e.data??[],
-        invites:i.data??[],
+        members:verifiedMembers,tasks:verifiedTasks,events:e.data,
+        invites:i.data,
       });
     }catch{
       // A revoked membership is not an empty team. Quarantine old data.
@@ -154,10 +163,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       setNotice("Access to this team could not be verified; cached details were cleared.");
       return false;
     }
-    const verifiedTasks=(t.data??[]) as Task[];
     setDraft(previous=>retainWorkspaceTeamDraft(
       previous,verifiedRole,target.status,verifiedTasks)?previous:freshDraft());
-    setMembers((m.data??[]) as Member[]);
+    setMembers(verifiedMembers as Member[]);
     setTasks(verifiedTasks);
     setEvents((e.data??[]) as Event[]);
     setInvites((i.data??[]) as Invite[]);
@@ -173,6 +181,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setVerifiedSpaceId(null);
     setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
+    actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
     setLoading(true);
     void (async()=>{
       try {
@@ -221,7 +230,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       // Only an explicit create/join target is required; a revoked previous
       // selection must be allowed to fall back to another authorized team.
       const snapshot=await loadSpaces(owner,spaceToken,target);
-      if(!snapshot)return;
+      if(!snapshot)throw Error("Team verification was superseded by another refresh");
       const {chosen,rows}=snapshot;
       if(chosen && chosen===selectedId) {
         // Read status and owner from these freshly fetched rows: stale closure
@@ -291,6 +300,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(!shouldQuarantineWorkspaceAuth(event,session,owner))return;
       spacesEpoch.current++;detailsEpoch.current++;
+      actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
       resumePending.current=false;
       quarantineTeam();setSpaces([]);setSelectedId(null);
       setJoinToken("");setTeamName("");setTeamDescription("");
@@ -299,22 +309,34 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     return ()=>subscription.unsubscribe();
   },[owner]);
 
-  const run=async(action:()=>Promise<void>,success:string,refreshAfter=true)=>{
-    if(disabled||busy)return;
-    setBusy(true);setError("");setNotice("");
+  const run=async(
+    action:()=>Promise<unknown>,success:string,refreshAfter=true,
+    onConfirmed?:(result:unknown)=>void,
+  )=>{
+    // React state alone does not serialize clicks or protect older owner RPCs.
+    if(disabled||actionBusyRef.current)return;
+    actionBusyRef.current=true;
+    const epoch=++actionEpoch.current;
     const initialOwner=owner;
+    const current=()=>isWorkspaceActionCurrent(
+      initialOwner,ownerRef.current,epoch,actionEpoch.current);
+    setBusy(true);setError("");setNotice("");
     try {
       await assureOwner(initialOwner);
-      await action();
-      if(ownerRef.current!==initialOwner)return;
-      // A server mutation is not a verified local UI update until the latest
-      // membership and task snapshot has been reconciled.
+      if(!current())return;
+      const result=await action();
+      await assureOwner(initialOwner);
+      if(!current())return;
       if(refreshAfter)await refresh();
-      if(ownerRef.current===initialOwner)setNotice(success);
-    } catch(failure) {
-      if(ownerRef.current===initialOwner)setError(errorMessage(failure));
-    } finally {
-      if(ownerRef.current===initialOwner)setBusy(false);
+      if(!current())return;
+      // Publish one-time secrets and clear form drafts only for the account
+      // that initiated the action after the server confirmed it.
+      onConfirmed?.(result);
+      setNotice(success);
+    }catch(failure){
+      if(current())setError(errorMessage(failure));
+    }finally{
+      if(current()){actionBusyRef.current=false;setBusy(false);}
     }
   };
   const createTeam=(event:FormEvent)=>{
@@ -325,9 +347,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         p_name:teamName.trim(),p_description:teamDescription,
       });
       if(queryError||!data)throw new Error(queryError?.message??"Team creation was not confirmed");
-      setTeamName("");setTeamDescription("");
       await refresh(data);
-    },"Team space created. Only explicitly invited members can access its tasks.",false);
+    },"Team space created. Only explicitly invited members can access its tasks.",false,
+    ()=>{setTeamName("");setTeamDescription("");});
   };
   const acceptInvite=(event:FormEvent)=>{
     event.preventDefault();
@@ -337,9 +359,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         p_token:code,
       });
       if(queryError||!data)throw new Error(queryError?.message??"Invitation was not accepted");
-      setJoinToken("");
       await refresh(data);
-    },"Team invitation accepted. Your new membership is private to this account.",false);
+    },"Team invitation accepted. Your new membership is private to this account.",false,
+    ()=>setJoinToken(""));
   };
   const invite=()=>{
     if(!selected||!canInvite)return;
@@ -351,8 +373,12 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       const receipt=data as {token?:string;role?:string;expires_at?:string};
       if(!receipt.token||!receipt.role||!receipt.expires_at)
         throw new Error("Server did not return a one-time invitation code");
+      return receipt;
+    },"One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",false,
+    result=>{
+      const receipt=result as {token:string;role:string;expires_at:string};
       setRevealedToken({token:receipt.token,role:receipt.role,expires:receipt.expires_at});
-    },"One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",false);
+    });
   };
   const saveTask=(event:FormEvent)=>{
     event.preventDefault();
@@ -364,8 +390,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         ...validated,p_expected_updated_at:draft.updatedAt,
       });
       if(queryError||!data)throw new Error(queryError?.message??"Task save was not confirmed");
-      setDraft(freshDraft());
-    },"Assigned task saved to your private team space.");
+    },"Assigned task saved to your private team space.",true,
+    ()=>setDraft(freshDraft()));
   };
   const editTask=(task:Task)=>{
     setDraft({id:task.id,updatedAt:task.updated_at,title:task.title,
@@ -379,8 +405,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         p_space_id:selected.id,p_task_id:task.id,
       });
       if(queryError||data!==true)throw new Error(queryError?.message??"Task deletion not confirmed");
-      if(discussionTaskId===task.id)setDiscussionTaskId(null);
-    },"Shared task deleted. Team activity retained.");
+    },"Shared task deleted. Team activity retained.",true,
+    ()=>{if(discussionTaskId===task.id)setDiscussionTaskId(null);});
   };
   const changeRole=(member:Member,role:string|null)=>{
     if(!selected || currentRole!=="owner" || member.role==="owner")return;
@@ -412,7 +438,6 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         p_space_id:selected.id,
       });
       if(queryError||data!==true)throw new Error(queryError?.message??"Leave was not confirmed");
-      setSelectedId(null);
     },"You left this team. Previously shared tasks were not deleted.");
   };
 
@@ -558,8 +583,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                     p_invite_id:i.id,
                   });
                   if(queryError||data!==true)throw new Error(queryError?.message??"Revoke not confirmed");
-                  setRevealedToken(null);
-                },"Invitation revoked.");
+                },"Invitation revoked.",true,()=>setRevealedToken(null));
               }}>Revoke</Button>
           </div>)}
           {!canInvite&&<p className="text-xs text-muted-foreground">
