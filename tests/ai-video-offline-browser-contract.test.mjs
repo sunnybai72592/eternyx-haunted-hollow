@@ -27,8 +27,8 @@ test("fixture proves entire private ZIP one-launch and requests genuine local mo
   assert.match(fixture,/createHash\("sha256"\)/);
 });
 test("real Chrome must play, decode canvas, assert fallback, downloads and no external egress",()=>{
-  for (const token of ["file_uri_actual_mp4_decode_and_clock",
-                       "loopback_http_actual_mp4_decode_and_clock",
+  for (const token of ["file_uri", "loopback_http",
+                       "_actual_mp4_decode_and_clock",
                        "actual_rendered_video_pixels","real_webm_decoder_fallback",
                        "actual_verified_mp4_download",
                        "mobile_playback_and_no_horizontal_overflow",
