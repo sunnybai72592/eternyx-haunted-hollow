@@ -138,7 +138,7 @@ export function auditSignedAgentRecoveryDirectory(dir=labJournalDir){
   completeInventoryVerified:true,stableDoubleReadVerified:true,
   claims:second.claims.map(c=>({...c,
    lockPresent:byAgent.has(c.agentId),
-   receiptReplayEligible:c.outcome!==null&&!c.acknowledged&&!byAgent.has(c.agentId)
+   receiptReplayAuthorized:false
   })),
   locks:second.locks.map(l=>({...l,
    claimCount:second.claims.filter(c=>c.agentId===l.agentId).length})),
