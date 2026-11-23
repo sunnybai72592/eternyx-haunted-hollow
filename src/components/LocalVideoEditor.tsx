@@ -10,6 +10,7 @@ import CausalRolloutAdaptStudio from "@/components/CausalRolloutAdaptStudio";
 import NeuralScheduleSelectionStudio from "@/components/NeuralScheduleSelectionStudio";
 import TaggedNeuralVideoStudio from "@/components/TaggedNeuralVideoStudio";
 import TaggedSpatialMotionStudio from "@/components/TaggedSpatialMotionStudio";
+import TemporalCoherenceStudio from "@/components/TemporalCoherenceStudio";
 import { Clapperboard, Copy, Download, Film, Music2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -204,6 +205,7 @@ export default function LocalVideoEditor() {
         <NeuralScheduleSelectionStudio />
         <TaggedNeuralVideoStudio />
         <TaggedSpatialMotionStudio />
+        <TemporalCoherenceStudio />
 
         <LocalVideoImportPrep sources={sources} />
 
