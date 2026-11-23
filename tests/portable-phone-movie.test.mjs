@@ -330,7 +330,7 @@ test("real CPU high-quality MP4, embedded mov_text subtitle MP4 and VP9 WebM are
     for(const [name,record] of Object.entries(receipt.deliverables)){
       assert.equal(record.sha256,hash(readFileSync(join(out,name))));
       assert.ok(record.file_bytes>0);
-      if(name!=="captions.srt"){
+      if(name.endsWith(".mp4")||name.endsWith(".webm")){
         assert.equal(record.frame_count,16);
         assert.equal(record.width,512);
         assert.equal(record.height,288);
