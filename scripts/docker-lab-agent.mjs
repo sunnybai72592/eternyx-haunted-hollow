@@ -7,6 +7,7 @@ import { readFileSync,lstatSync,mkdirSync,openSync,writeSync,closeSync,constants
 import { join,isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import {lockLabAgent,reserveLabClaim,appendLabEvent,readLabClaim,labPostcondition} from "../src/lib/dockerLabRecovery.mjs";
+import {lockLabContainer} from "../src/lib/dockerLabContainerLock.mjs";
 import { verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
 import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   validateSignedAgentEngineObserved,validateSignedAgentTarget}
@@ -95,6 +96,7 @@ async function main(){
   // Once a claim is reserved, a missing durable terminal is a manual-recovery
   // hold. Never release the agent lock on an uncertain Docker operation.
   let retainRecoveryLock=false;
+  let unlockContainer=null;
   try {
     const context=executeLab?localContext():null; // Receipt-only recovery never touches Docker
   const endpoint=host.origin+"/functions/v1/docker-command-dispatch";
@@ -142,7 +144,22 @@ async function main(){
   // A crash or duplicate claim MUST NOT execute a previously reserved claim again.
   // Retain the exclusive lock even if creating/fsyncing a claim journal fails
   // midway: O_EXCL may have created an incomplete file before throwing.
-  retainRecoveryLock=true; // Never auto-unlock a newly reserved, unresolved claim.
+  retainRecoveryLock=true; // Protect against partial lock/journal fsync failures.
+  try{
+    // Atomically own the exact Docker container BEFORE reserving its claim or
+    // making any mutating Docker call. Different agent IDs cannot overlap on
+    // one operator-owned local journal directory.
+    unlockContainer=lockLabContainer({
+      agentId,claimId:permit.claimId,containerId:permit.containerId
+    });
+  }catch(error){
+    // A definite EEXIST means another agent already owns the container;
+    // this agent never created a claim and can safely release its own lock.
+    // All other errors might follow a partial O_EXCL creation/fsync and MUST
+    // retain the per-agent lock for operator investigation.
+    if(error?.code==="EEXIST")retainRecoveryLock=false;
+    throw error;
+  }
   reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
   let attempted=false,postconditionConfirmed=false;
   try{
@@ -193,8 +210,12 @@ async function main(){
   const outcome=disposition.outcome;
   appendLabEvent(permit.claimId,outcome);
   requireDurableTerminalBeforeReceipt(readLabClaim(permit.claimId),outcome);
-  // Release only AFTER the journal's definitive outcome has been fsynced and
-  // read back. Receipt-only recovery remains possible after network errors.
+  // The container's exclusive lock has its own matching durable-terminal
+  // check and tamper guard. Keep BOTH agent and container holds on failure.
+  unlockContainer();
+  unlockContainer=null;
+  // Release only AFTER the journal's definitive outcome has been fsynced,
+  // read back, and the per-container hold was safely released.
   retainRecoveryLock=false;
   audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:outcome});
   try{
