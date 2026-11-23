@@ -27,6 +27,7 @@
     "automation:staging:http:check": "node --test tests/automation-staging-negative-http.test.mjs",
     "automation:staging:two-owner:check": "node --test tests/automation-staging-acceptance.test.mjs tests/automation-staging-two-owner-gate.test.mjs",
     "automation:staging:fresh-auth:check": "node --test tests/automation-staging-fresh-auth.test.mjs tests/automation-staging-two-owner-gate.test.mjs",
+    "automation:worker:runtime:check": "node --test tests/automation-scheduler-worker-runtime.test.mjs tests/automation-schedules.test.mjs",
     "automation:migrations:audit": "node scripts/automation-migration-collision-forensics.mjs",
     "automation:migrations:rehearsal": "node scripts/automation-fresh-staging-mirror.mjs --check",
     "audit:tools": "node scripts/audit-tool-registry.mjs",

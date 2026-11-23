@@ -40,22 +40,29 @@ serve(async (req: Request) => {
   if (!validSchedulerWorkerKey(supplied,expected)) return reply({error:"Unauthorized worker"},401);
   let action: unknown;
   try {
-    if (Number(req.headers.get("content-length") ?? 0) > 80) {
+    const declaredLength=req.headers.get("content-length");
+    // Reject malformed/negative length hints; streaming still enforces
+    // the same byte limit for chunked bodies with no Content-Length.
+    if (declaredLength!==null &&
+        (!/^\d{1,3}$/.test(declaredLength) || Number(declaredLength)>80)) {
       return reply({error:"Request too large"},413);
     }
     if (!req.body) return reply({error:"Missing worker request"},400);
     const reader=req.body.getReader();
     const chunks: Uint8Array[]=[];
     let length=0;
-    while (true) {
-      const chunk=await reader.read();
-      if (chunk.done) break;
-      length+=chunk.value.byteLength;
-      if (length>80) {
-        await reader.cancel().catch(()=>undefined);
-        return reply({error:"Request too large"},413);
+    try {
+      while (true) {
+        const chunk=await reader.read();
+        if (chunk.done) break;
+        if (!(chunk.value instanceof Uint8Array)) throw Error("invalid_chunk");
+        length+=chunk.value.byteLength;
+        if (length>80) return reply({error:"Request too large"},413);
+        chunks.push(chunk.value);
       }
-      chunks.push(chunk.value);
+    } finally {
+      // Always release the request reader, including malformed or aborted streams.
+      await reader.cancel().catch(()=>undefined);
     }
     const data=new Uint8Array(length);
     let offset=0;
@@ -117,12 +124,12 @@ serve(async (req: Request) => {
         // A quota-limited task remains eligible for a future tick; an explicitly
         // blocked channel is a failure that the owner must resolve.
         if(policy.reason==="policy_daily_limit"){
-          const {data:deferred,error:deferError}=await db.rpc(
+          const {data:deferReceipt,error:deferError}=await db.rpc(
             "automation_defer_scheduled_run",{
               p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
               p_schedule_revision:claim.revision,
             });
-          if(deferError||deferred?.ok!==true)throw Error("policy_deferral_failed");
+          if(deferError||deferReceipt?.ok!==true)throw Error("policy_deferral_failed");
           deferred++;
           continue;
         }
