@@ -1,4 +1,5 @@
 import { checkDeveloperProject, normalizeDeveloperProject, editDeveloperFile } from "./developerProjectLab.mjs";
+import { summarizeDeveloperProjectIntegration, developerIntegrationAdvice } from "./developerProjectIntegration.mjs";
 
 export const PROJECT_INSPECTION_REPORT_SCHEMA = "eternyx-developer-inspection-v1";
 export const MAX_PROJECT_SEARCH_RESULTS = 120;
@@ -119,7 +120,11 @@ export function inspectDeveloperProject(project) {
     if (link) push("warning", "blocked-stylesheet-link", entry.name, lineNumber(html, link.index),
       "Linked stylesheets are not loaded by this preview. Use a project .css file instead.");
   }
-  if (findings.length >= MAX_DIAGNOSTICS) {
+  const integration = summarizeDeveloperProjectIntegration(valid);
+  for (const issue of integration.findings) {
+    push("warning", issue.rule, issue.file, issue.line, developerIntegrationAdvice(issue.rule));
+  }
+  if (findings.length >= MAX_DIAGNOSTICS || integration.truncated) {
     findings.push({ level: "info", rule: "limit", file: "", line: 0, message: "Only the first 80 advisory findings are shown." });
   }
   return findings;
