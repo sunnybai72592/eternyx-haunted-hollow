@@ -63,6 +63,11 @@ jobs:
         run: |
           node --check src/lib/workspaceTeamAccess.mjs
           node --check tests/workspace-team-resume.test.mjs
+      - name: Verify Phase 28 isolated staging audit source (offline only)
+        run: |
+          node --check scripts/workspace-staging-db-audit.mjs
+          node --check tests/workspace-staging-db-audit.test.mjs
+          bash -n scripts/workspace-staging-db-audit.sh
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
