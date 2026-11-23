@@ -36,7 +36,7 @@ test('private deep links do not display data from a different authenticated user
   assert.match(source, /setLinkedOwner\(userId\)/);
   assert.match(source, /\.eq\('user_id', userId\)/);
   assert.match(source, /\.eq\('id', selected\)/);
-  assert.match(source, /visibleLinkedRequest && !visibleRows\.some/);
+  assert.match(source, /visibleLinkedRequest && \(selectedPanel !== null \|\| !visibleRows\.some/);
   assert.match(source, /The request was not found or your account cannot access it/);
 });
 
