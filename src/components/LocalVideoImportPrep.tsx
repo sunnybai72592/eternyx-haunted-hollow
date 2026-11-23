@@ -23,6 +23,10 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const [movieCaptions,setMovieCaptions]=useState<string[]>([]);
   const [movieRights,setMovieRights]=useState<string[]>([]);
   const [movieCutSeconds,setMovieCutSeconds]=useState(1);
+  const [movieShotSeconds,setMovieShotSeconds]=useState<number[]>([]);
+  const [movieTrimSeconds,setMovieTrimSeconds]=useState<number[]>([]);
+  const [movieFadeInFrames,setMovieFadeInFrames]=useState<number[]>([]);
+  const [movieFadeOutFrames,setMovieFadeOutFrames]=useState<number[]>([]);
   const [movieProfile,setMovieProfile]=useState<"landscape"|"portrait"|"square">("landscape");
   const [movieQuality,setMovieQuality]=useState<"standard"|"high"|"cinematic">("standard");
   const [movieDelivery,setMovieDelivery]=useState<"mp4"|"mp4_with_subtitles"|"mp4_webm"|"all">("mp4");
@@ -32,6 +36,17 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const bundleRequest=useRef(0);
   const [seconds, setSeconds] = useState(30);
   const [report, setReport] = useState<Report | null>(null);
+  const totalMovieSeconds=originals.reduce((sum,_,i)=>sum+(movieShotSeconds[i]??movieCutSeconds),0);
+  const validShotWindows=originals.every((_,i)=>{
+    const cut=movieShotSeconds[i]??movieCutSeconds;
+    const trim=movieTrimSeconds[i]??0;
+    const fadeIn=movieFadeInFrames[i]??0;
+    const fadeOut=movieFadeOutFrames[i]??0;
+    return Number.isSafeInteger(cut)&&cut>=1&&cut<=3&&
+      Number.isSafeInteger(trim)&&trim>=0&&trim+cut<=seconds&&start+trim<300&&
+      [fadeIn,fadeOut].every(fade=>Number.isSafeInteger(fade)&&
+        fade>=0&&fade<=Math.min(8,cut*8));
+  })&&totalMovieSeconds<=30;
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const active = useRef(0);
@@ -68,6 +83,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
 
   const downloadPortablePhoneIntake=async(directMovie=false)=>{
     if(bundling)return;
+    if(directMovie&&!validShotWindows){setError("Each shot must fit the source window and the 30-second timeline.");return;}
     const token=++bundleRequest.current;
     setBundling(true);setBundleStatus("Hashing private original phone files locally...");
     setError("");setMessage("");
@@ -76,7 +92,10 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
         profile:movieProfile,quality:movieQuality,delivery:movieDelivery,
         framing:movieFraming,
         shots:originals.map((file,index)=>({
-          source_filename:file.name,frames:movieCutSeconds*16,
+          source_filename:file.name,frames:(movieShotSeconds[index]??movieCutSeconds)*16,
+          start_seconds:movieTrimSeconds[index]??0,
+          fade_in_frames:movieFadeInFrames[index]??0,
+          fade_out_frames:movieFadeOutFrames[index]??0,
           caption:movieCaptions[index]??"",
           rights_ref:movieRights[index]??"",
         })),
@@ -161,6 +180,10 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
                 setOriginals(picked);
                 setMovieCaptions(picked.map(()=>""));
                 setMovieRights(picked.map(()=>""));
+                setMovieShotSeconds(picked.map(()=>movieCutSeconds));
+                setMovieTrimSeconds(picked.map(()=>0));
+                setMovieFadeInFrames(picked.map(()=>0));
+                setMovieFadeOutFrames(picked.map(()=>0));
                 setError("");setMessage("");
                 event.currentTarget.value="";
               }}/>
@@ -184,6 +207,54 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
               <p className="break-all text-sm font-semibold text-sky-200">
                 Shot {index+1}: {file.name}
               </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block space-y-1 text-xs">
+                  Start within selected source window (seconds)
+                  <Input type="number" min={0} max={Math.max(0,seconds-1)} step={1}
+                    value={movieTrimSeconds[index]??0} disabled={bundling}
+                    onChange={event=>setMovieTrimSeconds(old=>
+                      old.map((v,i)=>i===index?Number(event.target.value):v))}
+                    className="border-slate-700 bg-slate-900"/>
+                </label>
+                <label className="block space-y-1 text-xs">
+                  Length of this shot (1–3 seconds)
+                  <Input type="number" min={1} max={3} step={1}
+                    value={movieShotSeconds[index]??movieCutSeconds} disabled={bundling}
+                    onChange={event=>setMovieShotSeconds(old=>
+                      old.map((v,i)=>i===index?Number(event.target.value):v))}
+                    className="border-slate-700 bg-slate-900"/>
+                </label>
+                <label className="block space-y-1 text-xs">
+                  Fade into this shot (to/from black)
+                  <select value={movieFadeInFrames[index]??0} disabled={bundling}
+                    onChange={event=>setMovieFadeInFrames(old=>
+                      old.map((v,i)=>i===index?Number(event.target.value):v))}
+                    className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                    <option value={0}>None</option>
+                    <option value={4}>0.25 seconds</option>
+                    <option value={8}>0.5 seconds</option>
+                  </select>
+                </label>
+                <label className="block space-y-1 text-xs">
+                  Fade out of this shot (to black)
+                  <select value={movieFadeOutFrames[index]??0} disabled={bundling}
+                    onChange={event=>setMovieFadeOutFrames(old=>
+                      old.map((v,i)=>i===index?Number(event.target.value):v))}
+                    className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                    <option value={0}>None</option>
+                    <option value={4}>0.25 seconds</option>
+                    <option value={8}>0.5 seconds</option>
+                  </select>
+                </label>
+              </div>
+              <p className="text-xs text-slate-400">
+                Timeline: {originals.slice(0,index).reduce((t,_,i)=>t+
+                  (movieShotSeconds[i]??movieCutSeconds),0)}s–
+                {originals.slice(0,index+1).reduce((t,_,i)=>t+
+                  (movieShotSeconds[i]??movieCutSeconds),0)}s.
+                Original source window: {start+(movieTrimSeconds[index]??0)}s–
+                {start+(movieTrimSeconds[index]??0)+(movieShotSeconds[index]??movieCutSeconds)}s.
+              </p>
               <label className="block space-y-1 text-xs">
                 Human-written caption (required for final render)
                 <Input value={movieCaptions[index]??""} maxLength={180}
@@ -203,10 +274,14 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
             </div>)}
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block space-y-1 text-xs">
-                Seconds per original shot (1–3)
+                Default seconds per original shot (sets all cuts)
                 <Input type="number" min={1} max={3} step={1}
                   value={movieCutSeconds} disabled={bundling}
-                  onChange={event=>setMovieCutSeconds(Number(event.target.value))}
+                  onChange={event=>{
+                    const length=Number(event.target.value);
+                    setMovieCutSeconds(length);
+                    setMovieShotSeconds(old=>old.map(()=>length));
+                  }}
                   className="border-slate-700 bg-slate-900"/>
               </label>
               <label className="block space-y-1 text-xs">
@@ -258,12 +333,14 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
               requires mov_text. No additional manual export command.
             </p>
             <p className="text-xs text-slate-400">
-              Maximum {originals.length*movieCutSeconds} seconds for this selection.
-              All original recordings must contain enough frames after the chosen start offset.
+              Timeline: {totalMovieSeconds} / 30 seconds · {originals.length} independently
+              trimmed shots. Every source cut must fit within the chosen {seconds}-second
+              window beginning at {start}s, and must contain real decoded footage.
+              Fades go to/from black (not cross-dissolves).
               Editable SRT is always included; optional MP4 subtitle tracks are selectable, not burned into pixels.
             </p>
             <Button size="sm"
-              disabled={bundling||!!commandError||movieCutSeconds<1||movieCutSeconds>3}
+              disabled={bundling||!!commandError||!validShotWindows}
               onClick={()=>{void downloadPortablePhoneIntake(true);}}>
               <Download className="mr-2 h-4 w-4"/>
               {bundling?"Packaging local media...":"Download direct-to-finished-MP4 project ZIP"}
@@ -273,7 +350,8 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
               or sh finish-phone-movie-macos-linux.sh. Local Python 3.11+ and
               FFmpeg/FFprobe/libx264 are required. The launcher converts genuine
               footage and renders phone-movie-output/video.mp4 automatically.
-              A normalized editing draft is retained for later refinement.
+              The prepared source clips and actual storyboard are retained; the legacy
+              editing draft is available only for 16 FPS Standard/High, not Cinematic.
             </p>
           </div>}
           <Button size="sm" disabled={bundling||!originals.length||!!commandError}
