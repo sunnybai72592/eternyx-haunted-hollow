@@ -39,6 +39,8 @@ jobs:
         run: |
           node scripts/automation-migration-collision-forensics.mjs > "$RUNNER_TEMP/eternyx-migration-collisions.json"
           node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/eternyx-migration-collisions.json","utf8"));console.log("Historical migration collisions: "+r.collisionVersionCount+" versions, "+r.collisionFileCount+" source files; baseline="+r.sourceBaselineValid+"; staging deploy BLOCKED pending remote history.");'
+      - name: Validate unique versions for a source-pinned fresh local staging mirror
+        run: node scripts/automation-fresh-staging-mirror.mjs --check > "$RUNNER_TEMP/eternyx-fresh-staging-plan.json"
       - name: Check utility JavaScript syntax
         run: |
           node --check src/lib/developerStudioUtils.mjs
