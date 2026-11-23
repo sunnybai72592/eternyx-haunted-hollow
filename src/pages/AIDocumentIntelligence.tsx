@@ -1369,7 +1369,7 @@ const AIDocumentIntelligence = () => {
                 Plaintext exports contain COMPLETE ORIGINAL DECODED DOCUMENT TEXT, filenames, searches
                 and questions. Use the password-encrypted option below for confidential evidence.
                 Local backups do not sync or automatically recover after refresh. Encryption protects
-                the backup contents at rest, but does NOT authenticate who supplied the source files.
+                the backup contents at rest, but does NOT prove its author or authenticate who supplied the source files.
               </p>
               <p className="text-xs text-slate-400">
                 Version 1 JSON · maximum {(MAX_CORPUS_WORKSPACE_BYTES / 1024 / 1024).toLocaleString()} MiB.
