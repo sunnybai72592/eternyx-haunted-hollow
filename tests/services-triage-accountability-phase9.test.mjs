@@ -77,7 +77,7 @@ test('queue workload counts come from verified database head/count queries', asy
   assert.match(src, /const loadQueueCounts = useCallback/);
   assert.match(src, /if \(!authorized \|\| !user\?\.id\) return/);
   assert.match(src, /Promise\.all\(buckets\.map/);
-  assert.match(src, /from\('service_admin_followup_queue'\)/);
+  assert.match(src, /from\('service_admin_amendment_queue'\)/);
   assert.match(src, /select\('id', \{ head: true, count: 'exact' \}\)/);
   assert.match(src, /\.eq\('review_bucket', bucket\)/);
   assert.match(src, /if \(seq !== countGeneration\.current\) return/);
