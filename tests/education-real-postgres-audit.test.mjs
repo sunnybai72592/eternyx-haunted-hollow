@@ -52,3 +52,14 @@ test("no arbitrary SQL injection into negative cases, only disposable Docker tar
   assert.ok(workflow.indexOf("staging-education-immutable-final-grade-records.sql") <
     workflow.indexOf("verifyEducationRealPostgresAudit.mjs --run"));
 });
+
+test("four protected RPC catalog checks accept only PostgreSQL canonical empty search paths",()=>{
+  const normalized=(audit.match(/'search_path=""'=ANY\(COALESCE\(p\.proconfig,ARRAY\[\]::text\[\]\)\)/g)||[]);
+  const unquoted=(audit.match(/'search_path='=ANY\(COALESCE\(p\.proconfig,ARRAY\[\]::text\[\]\)\)/g)||[]);
+  assert.equal(normalized.length,4);
+  assert.equal(unquoted.length,4);
+  assert.doesNotMatch(audit,/search_path=public|search_path=pg_catalog,public/);
+  for(const name of ["atomic_start_rpc","atomic_save_rpc","atomic_submit_rpc","trusted_final_grade_rpc"]){
+    assert.ok(audit.includes("'"+name+"'"));
+  }
+});
