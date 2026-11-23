@@ -128,6 +128,29 @@ export function summarizeDeveloperProjectIntegration(project) {
   return { checked, resolved, unresolved: checked - resolved, findings, truncated: findings.length < checked - resolved };
 }
 
+/**
+ * Return only matched project filenames, rule IDs and line numbers; never
+ * expose the original quoted reference value through this shared API.
+ * Unmatched and unsupported references keep a null target.
+ */
+export function listDeveloperProjectReferences(project) {
+  const valid = normalizeDeveloperProject(project);
+  const lookup = new Map(valid.files.map(file => [file.name.toLowerCase(), file.name]));
+  const results = [];
+  for (const kind of DEVELOPER_INTEGRATION_KINDS) {
+    for (const file of applicableFiles(valid, kind)) {
+      for (const reference of scanFile(file, kind)) {
+        const reason = checkReference(reference, lookup);
+        const target = reason ? null :
+          lookup.get(reference.value.split(/[?#]/, 1)[0].replace(/^\\.\\//, "").toLowerCase()) || null;
+        results.push({ from: file.name, to: target, kind, line: reference.line,
+          reason: reason || "resolved" });
+      }
+    }
+  }
+  return results;
+}
+
 export function developerIntegrationAdvice(reason) {
   const advice = {
     "missing-local-reference": "Add the named local file to this project or correct the reference. Project Lab supports only flat filenames.",
