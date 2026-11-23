@@ -108,6 +108,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
       const current = readSavedDeveloperTestSuites(localStorage.getItem(DEVELOPER_TEST_STORAGE) || "[]");
       const next = upsertSavedDeveloperTestSuite(current, project.id, cases);
       localStorage.setItem(DEVELOPER_TEST_STORAGE, JSON.stringify(next));
+      window.dispatchEvent(new Event("eternyx:developer-tests-saved"));
       tell("Saved this project test plan in this browser only. Assertions may contain source or secrets.");
     } catch (cause) { tell(cause instanceof Error ? cause.message : "Could not save test plan.", true); }
   };
@@ -120,6 +121,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
         JSON.stringify(current.filter(item => item.projectId !== project.id)));
       setCases(defaultDeveloperTests());
       setLastRun(null);
+      window.dispatchEvent(new Event("eternyx:developer-tests-saved"));
       tell("Deleted saved plan from this browser and restored default checks.");
     } catch { tell("Browser storage unavailable; saved test plan was not deleted.", true); }
   };
