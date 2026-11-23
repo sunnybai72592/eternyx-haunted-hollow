@@ -7,7 +7,9 @@ No authentication, production deployment, external provider calls or unsafe sand
 import argparse
 import json
 import os
+import ipaddress
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -23,11 +25,23 @@ def target_origin(args):
     if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
         raise ValueError("Target must be an origin without paths, credentials, query or fragment.")
     if args.staging:
+        if not args.confirmed_staging:
+            raise ValueError("Remote browser acceptance requires explicit --confirmed-staging.")
+        if parsed.port is not None or parsed.hostname is None:
+            raise ValueError("Staging accepts only the standard HTTPS port and a named host.")
+        if parsed.hostname.endswith((".localhost", ".local", ".internal", ".test", ".invalid")) or parsed.hostname == "localhost":
+            raise ValueError("Remote staging cannot use local or internal domains.")
+        try:
+            ipaddress.ip_address(parsed.hostname)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Remote staging cannot use IP literals.")
         if parsed.scheme != "https" or parsed.hostname != args.expected_host:
             raise ValueError("Staging requires HTTPS and an exact --expected-host match.")
         if not any(part in (parsed.hostname or "").lower() for part in ("staging", "stage")):
             raise ValueError("Target does not clearly identify a staging host; refusing remote checks.")
-    elif parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost") or parsed.port != 4173:
+    elif args.confirmed_staging or args.expected_host or parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost") or parsed.port != 4173:
         raise ValueError("Local mode accepts only http://127.0.0.1:4173 or http://localhost:4173.")
     return parsed.scheme + "://" + parsed.netloc
 
@@ -201,6 +215,7 @@ if __name__ == "__main__":
     parser.add_argument("--base-url",required=True)
     parser.add_argument("--staging",action="store_true",help="Run against an explicitly confirmed HTTPS staging host")
     parser.add_argument("--expected-host",default="",help="Required exact staging hostname (independent operator check)")
+    parser.add_argument("--confirmed-staging",action="store_true",help="Required second explicit confirmation for remote checks")
     args=parser.parse_args()
     ORIGIN=target_origin(args)
     CASES=[]
@@ -211,10 +226,10 @@ if __name__ == "__main__":
                 for width,height in ((390,844),(1440,900)):
                     viewport=f"{width}x{height}"
                     context=browser.new_context(viewport={"width":width,"height":height},accept_downloads=True,
-                                                reduced_motion="reduce")
+                                                reduced_motion="reduce",service_workers="block",ignore_https_errors=False)
                     def external(route):
                         url=urlsplit(route.request.url)
-                        if url.scheme not in ("http","https") or url.netloc != urlsplit(ORIGIN).netloc:
+                        if url.scheme != urlsplit(ORIGIN).scheme or url.netloc != urlsplit(ORIGIN).netloc:
                             return route.abort()
                         return route.continue_()
                     context.route("**/*",external)
@@ -240,6 +255,10 @@ if __name__ == "__main__":
             "production_verified":False,
             "staging_executed":bool(args.staging),
             "browser":"Chrome",
+            "target_host":urlsplit(ORIGIN).hostname,
+            "network_scope":"same-origin only",
+            "api_requests_executed":not bool(args.staging),
+            "finished_at":datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
             "commit":os.getenv("GITHUB_SHA","local-unknown"),
             "cases":CASES,
             "note":"Only case names/outcomes recorded; project source, URLs, tokens and downloaded artifacts excluded.",
