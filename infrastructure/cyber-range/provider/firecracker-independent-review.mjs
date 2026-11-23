@@ -21,6 +21,7 @@ import {assertNoUnfinishedHandoff} from
   "./firecracker-handoff-import-journal.mjs";
 import {readPrivateOfflineEvidence} from "./firecracker-private-safe-read.mjs";
 import {verifyStableOfflineCaseSnapshot} from "./firecracker-case-snapshot.mjs";
+import {composeOfflineCaseAudit} from "./firecracker-complete-case-audit.mjs";
 import {auditOperatorEvidenceConsistency} from
   "./firecracker-evidence-consistency.mjs";
 import {
@@ -706,5 +707,65 @@ export async function verifyIndependentRuntimeAddendum({
     throw Error("Noncanonical or tampered offline runtime addendum bytes");
   return verifySignedRuntimeAddendum({
     ...data,...data.keys,report,externallyPinnedAddendumSha256,
+  });
+}
+
+
+/**
+ * Read-only, complete OFFLINE reviewer file-chain audit. No private key,
+ * mutation, KVM host interaction or public lab activation.
+ *
+ * Both SHA-256 pins must come from independent trusted records, NOT from the
+ * local case folder. A passing audit never authenticates the physical host.
+ */
+export async function auditCompleteIndependentReviewCase({
+  sessionId,operatorFingerprint,reviewerFingerprint,
+  externallyPinnedCheckpointSha256,externallyPinnedAddendumSha256,
+  caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  const identity={sessionId,operatorFingerprint,reviewerFingerprint,
+    caseBase,owner};
+  // Each layer performs its own bounded, pinned cryptographic verification.
+  // An invalid or missing layer throws; this cannot produce a partial pass.
+  const consistency=await auditIndependentReviewConsistency(identity);
+  const review=await verifyIndependentReviewCase(identity);
+  const disposition=await verifyIndependentReviewDisposition(identity);
+  const checkpoint=await verifyIndependentCaseCheckpoint({
+    ...identity,externallyPinnedSha256:externallyPinnedCheckpointSha256,
+  });
+  const runtime=await auditIndependentRuntimeObservations(identity);
+  const addendum=await verifyIndependentRuntimeAddendum({
+    ...identity,externallyPinnedCheckpointSha256,
+    externallyPinnedAddendumSha256,
+  });
+  // Final re-read includes every earlier signed record, both external-pin
+  // records, the exact mode-specific runtime sidecars and original imports.
+  const source=await loadCase(sessionId,{caseBase,owner});
+  const keys=await reviewerKeys({owner});
+  const names=[
+    ["review-verdict.json",8192],
+    ["review-disposition.json",8192],
+    [CASE_CHECKPOINT_FILE,8192],
+    [RUNTIME_ADDENDUM_FILE,4096],
+    ...requiredRuntimeObservationFiles(checkpoint.mode).map(x=>
+      [x.sidecar,4096]),
+  ];
+  const finalFiles=Object.fromEntries(await Promise.all(names.map(
+    async ([name,max])=>[
+      name,await safeRead(join(source.folder,name),owner,max),
+    ]
+  )));
+  const snapshot=await verifyStableOfflineCaseSnapshot({
+    folder:source.folder,owner,mode:checkpoint.mode,
+    expectedFiles:{...source.caseSourceFiles,...finalFiles},
+  });
+  await recheckReviewerKeys(keys,{owner});
+  return composeOfflineCaseAudit({
+    sessionId,mode:checkpoint.mode,operatorFingerprint,
+    reviewerFingerprint,externallyPinnedCheckpointSha256,
+    externallyPinnedAddendumSha256,consistency,review,disposition,
+    checkpoint,runtime,addendum,snapshot,
+    committedImport:source.caseSourceFiles[
+      ".operator-import.committed.json"]!==undefined,
   });
 }
