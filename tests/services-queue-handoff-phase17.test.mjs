@@ -70,7 +70,7 @@ test('CSV builder produces UTF-8 BOM, CRLF rows and rejects mismatched columns',
   ]);
   assert.ok(output.startsWith('\uFEFF'));
   assert.ok(output.includes('\r\n'));
-  assert.ok(output.includes('"222","\\'=cmd|""thing"""'));
+  assert.ok(output.includes("\"222\",\"'=cmd|\"\"thing\"\"\""));
   assert.ok(output.includes('"333","With\nline break"'));
   assert.throws(() => buildServiceQueueCsv([], []));
   assert.throws(() => buildServiceQueueCsv(['Only one'], [['A', 'B']]));
