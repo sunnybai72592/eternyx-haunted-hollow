@@ -16,6 +16,7 @@ on:
       - 'supabase/migrations/20261124170000_workspace_team_spaces.sql'
       - 'supabase/migrations/20261124190000_workspace_team_discussions_checklists.sql'
       - 'supabase/migrations/20261124210000_workspace_team_realtime_notifications.sql'
+      - 'supabase/migrations/20261124230000_workspace_team_notification_snapshot.sql'
       - 'tests/sql/workspace-owner-quotas-db-smoke.sql'
       - 'tests/sql/workspace-priority-archive-purge-db-smoke.sql'
       - 'tests/sql/workspace-task-checklists-db-smoke.sql'
@@ -28,6 +29,7 @@ on:
       - 'tests/sql/workspace-team-spaces-db-smoke.sql'
       - 'tests/sql/workspace-team-discussions-checklists-db-smoke.sql'
       - 'tests/sql/workspace-team-realtime-notifications-db-smoke.sql'
+      - 'tests/sql/workspace-team-notification-snapshot-db-smoke.sql'
       - 'tests/sql/workspace-revisions-bootstrap.sql'
       - 'tests/sql/workspace-revisions-db-smoke.sql'
       - '.github/workflows/workspace-revisions-postgres.yml'
@@ -76,6 +78,7 @@ jobs:
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124170000_workspace_team_spaces.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124190000_workspace_team_discussions_checklists.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124210000_workspace_team_realtime_notifications.sql
+          docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124230000_workspace_team_notification_snapshot.sql
       - name: Verify actual ownership, revision history, audit and archive invariants
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-revisions-db-smoke.sql
       - name: Verify owner caps, pinned RLS and Storage registration metadata
@@ -102,6 +105,8 @@ jobs:
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-team-discussions-checklists-db-smoke.sql
       - name: Verify Phase 19 notification receipt isolation, event membership and no forged browser writes
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-team-realtime-notifications-db-smoke.sql
+      - name: Verify Phase 20 single-snapshot team unread counts, viewer and outsider isolation
+        run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-team-notification-snapshot-db-smoke.sql
       - name: Dispose PostgreSQL
         if: always()
         run: docker rm --force eternyx-workspace-test || true

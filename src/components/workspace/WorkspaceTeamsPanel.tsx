@@ -519,6 +519,12 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         onRemoteChange={()=>{
           setLiveRevision(value=>value+1);
           void refresh().catch(failure=>setError(errorMessage(failure)));
+        }}
+        onOpenTask={(taskId)=>{
+          if(!tasks.some(task=>task.id===taskId))return;
+          setTaskFilter("all");setDiscussionTaskId(taskId);
+          window.setTimeout(()=>document.querySelector('[aria-label="Shared task discussion and checklist"]')
+            ?.scrollIntoView({behavior:"smooth",block:"start"}),30);
         }} />
     </div>}
   </section>;

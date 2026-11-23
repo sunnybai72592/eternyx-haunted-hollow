@@ -1,23 +1,37 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, CheckCheck, History, Radio, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, Download, History, Radio, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { teamMemberLabel, WORKSPACE_TEAM_EVENT_LABELS } from "@/lib/workspaceTeamUtils.mjs";
 import { workspaceTeamEventUnread, workspaceTeamVisibleEvents } from "@/lib/workspaceTeamLive.mjs";
+import {
+  TEAM_ACTIVITY_PAGE_SIZE, TEAM_ACTIVITY_VIEW_CAP,
+  mergeWorkspaceTeamHistory, normalizeWorkspaceTeamSnapshot,
+  teamHistorySearch, buildWorkspaceTeamActivityCsv,
+} from "@/lib/workspaceTeamActivityHistory.mjs";
 
 type Event=Database["public"]["Tables"]["workspace_team_events"]["Row"];
 type Task=Database["public"]["Tables"]["workspace_team_tasks"]["Row"];
 type Connection="connecting"|"connected"|"disconnected";
-export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tasks,onRemoteChange}:{
+export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tasks,onRemoteChange,onOpenTask}:{
   owner:string;spaceId:string;joinedAt:string;events:Event[];tasks:Task[];
-  onRemoteChange:()=>void;
+  onRemoteChange:()=>void;onOpenTask:(taskId:string)=>void;
 }) {
   const [connection,setConnection]=useState<Connection>("connecting");
   const [unread,setUnread]=useState<number|null>(null);
   const [lastSeen,setLastSeen]=useState(0);
   const [group,setGroup]=useState("all");
   const [actor,setActor]=useState("all");
+  const [onlyUnread,setOnlyUnread]=useState(false);
+  const [search,setSearch]=useState("");
+  const [older,setOlder]=useState<Event[]>([]);
+  const [hasMore,setHasMore]=useState<boolean|null>(null);
+  const [historyLoading,setHistoryLoading]=useState(false);
+  const [historyError,setHistoryError]=useState("");
+  const [historyNotice,setHistoryNotice]=useState("");
+  const historyEpoch=useRef(0);
+  const latestHead=useRef<number|null>(null);
   const [pulse,setPulse]=useState(0);
   const [working,setWorking]=useState(false);
   const [error,setError]=useState("");
@@ -29,8 +43,21 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
   useEffect(()=>{
     const version=++revision.current;
     setUnread(null);setLastSeen(0);setError("");setMessage("");
-    return ()=>{revision.current++;};
+    setOlder([]);setHasMore(null);setHistoryError("");setHistoryNotice("");
+    latestHead.current=null;historyEpoch.current++;
+    return ()=>{revision.current++;historyEpoch.current++;};
   },[owner,spaceId]);
+
+  useEffect(()=>{
+    const current=events[0]?.id??null;
+    const before=latestHead.current;
+    latestHead.current=current;
+    if(before!==null && before!==current){
+      historyEpoch.current++;
+      setOlder([]);setHasMore(null);setHistoryError("");
+      setHistoryNotice("New activity arrived. Older pages were reset to avoid missing events.");
+    }
+  },[events,owner,spaceId]);
 
   useEffect(()=>{
     const version=revision.current;
@@ -40,21 +67,13 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
         const auth=await supabase.auth.getUser();
         if(auth.error||auth.data.user?.id!==owner)
           throw new Error("Your Workspace account changed. Sign in again to see team notifications.");
-        const marker=await supabase.from("workspace_team_read_cursors")
-          .select("last_seen_event_id").eq("space_id",spaceId).eq("user_id",owner)
-          .maybeSingle();
-        if(marker.error)throw new Error(marker.error.message);
-        const seen=marker.data?.last_seen_event_id??0;
-        if(!Number.isSafeInteger(seen)||seen<0)
-          throw new Error("Invalid server notification receipt");
-        const count=await supabase.from("workspace_team_events")
-          .select("id",{head:true,count:"exact"})
-          .eq("space_id",spaceId).neq("actor_id",owner)
-          .gte("created_at",joinedAt).gt("id",seen);
-        if(count.error||!Number.isSafeInteger(count.count))
-          throw new Error(count.error?.message??"Exact unread event count unavailable");
+        const snapshot=await supabase.rpc("workspace_team_notification_snapshot",{
+          p_space_id:spaceId,
+        });
+        if(snapshot.error)throw new Error(snapshot.error.message);
+        const parsed=normalizeWorkspaceTeamSnapshot(snapshot.data);
         if(alive&&version===revision.current) {
-          setLastSeen(seen);setUnread(count.count as number);setError("");
+          setLastSeen(parsed.lastSeen);setUnread(parsed.unread);setError("");
         }
       }catch(failure) {
         if(alive&&version===revision.current) {
@@ -114,13 +133,15 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
       const auth=await supabase.auth.getUser();
       if(auth.error||auth.data.user?.id!==owner)
         throw new Error("Workspace identity changed; refresh before acknowledging events");
-      const newest=await supabase.from("workspace_team_events")
-        .select("id").eq("space_id",spaceId)
-        .order("id",{ascending:false}).limit(1).maybeSingle();
-      if(newest.error||!newest.data)
-        throw new Error(newest.error?.message??"No server event available to acknowledge");
+      const latest=await supabase.rpc("workspace_team_notification_snapshot",{
+        p_space_id:spaceId,
+      });
+      if(latest.error)throw new Error(latest.error.message);
+      const newest=normalizeWorkspaceTeamSnapshot(latest.data);
+      if(newest.latest===null)
+        throw new Error("No server event available to acknowledge");
       const saved=await supabase.rpc("workspace_team_mark_events_seen",{
-        p_space_id:spaceId,p_event_id:newest.data.id,
+        p_space_id:spaceId,p_event_id:newest.latest,
       });
       if(saved.error||!Number.isSafeInteger(saved.data))
         throw new Error(saved.error?.message??"Event acknowledgement was not verified");
@@ -136,7 +157,63 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
       if(version===revision.current)setWorking(false);
     }
   };
-  const visible=workspaceTeamVisibleEvents(events,group,actor,owner);
+  const history=mergeWorkspaceTeamHistory(events,older,spaceId);
+  const titles=Object.fromEntries(tasks.map(task=>[task.id,task.title]));
+  const visible=workspaceTeamVisibleEvents(history,group,actor,owner).filter(event=>
+    (!onlyUnread||(unread!==null && workspaceTeamEventUnread(event,owner,joinedAt,lastSeen))) &&
+    teamHistorySearch(event,WORKSPACE_TEAM_EVENT_LABELS[
+      event.event_type as keyof typeof WORKSPACE_TEAM_EVENT_LABELS]??event.event_type,
+      titles[event.entity_id]??"",search));
+  const canLoadMore=(hasMore??events.length>=30)&&history.length<TEAM_ACTIVITY_VIEW_CAP;
+  const loadOlder=async()=>{
+    if(historyLoading||!canLoadMore||!history.length)return;
+    const version=revision.current,epoch=historyEpoch.current;
+    const oldest=history.at(-1)!.id;
+    const limit=Math.min(TEAM_ACTIVITY_PAGE_SIZE,TEAM_ACTIVITY_VIEW_CAP-history.length);
+    setHistoryLoading(true);setHistoryError("");setHistoryNotice("");
+    try {
+      const auth=await supabase.auth.getUser();
+      if(auth.error||auth.data.user?.id!==owner)
+        throw new Error("Signed-in account changed; reload this team first");
+      const page=await supabase.from("workspace_team_events")
+        .select("*",{count:"exact"}).eq("space_id",spaceId)
+        .lt("id",oldest).order("id",{ascending:false}).limit(limit);
+      if(page.error)throw new Error(page.error.message);
+      if(!Number.isSafeInteger(page.count)||page.count===null||
+        (page.data?.length??-1)!==Math.min(page.count,limit)) {
+        throw new Error("Incomplete event-history page; try again before exporting");
+      }
+      const rows=(page.data??[]) as Event[];
+      if(rows.some(row=>row.id>=oldest))
+        throw new Error("History cursor returned a repeated or out-of-order event");
+      mergeWorkspaceTeamHistory([],rows,spaceId); // rejects malformed cross-space payloads
+      const verified=await supabase.auth.getUser();
+      if(verified.error||verified.data.user?.id!==owner)
+        throw new Error("Signed-in account changed while loading history");
+      if(version===revision.current&&epoch===historyEpoch.current) {
+        setOlder(previous=>mergeWorkspaceTeamHistory(previous,rows,spaceId));
+        setHasMore(page.count>rows.length);
+      }
+    }catch(failure){
+      if(version===revision.current&&epoch===historyEpoch.current)
+        setHistoryError(failure instanceof Error?failure.message:"Cannot load older activity");
+    }finally{
+      if(version===revision.current&&epoch===historyEpoch.current)setHistoryLoading(false);
+    }
+  };
+  const exportVisible=()=>{
+    try{
+      const csv=buildWorkspaceTeamActivityCsv(visible,owner,titles,WORKSPACE_TEAM_EVENT_LABELS);
+      const blob=new Blob([String.fromCharCode(0xFEFF),csv],{type:"text/csv;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;link.download="eternyx-team-activity-"+spaceId.slice(0,8)+".csv";
+      document.body.appendChild(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(failure){
+      setHistoryError(failure instanceof Error?failure.message:"History CSV export failed");
+    }
+  };
   return <div className="space-y-3 rounded-lg border border-border p-3"
     aria-label="Team notifications and server-recorded activity">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -188,6 +265,23 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
         </select>
       </label>
     </div>
+    <label className="block text-xs">Search loaded activity
+      <input aria-label="Search loaded team activity" value={search}
+        onChange={event=>setSearch(event.target.value)}
+        placeholder="Action or task title"
+        className="mt-1 min-h-9 w-full rounded-md border border-border bg-background px-3"/>
+    </label>
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={onlyUnread} disabled={unread===null}
+          onChange={event=>setOnlyUnread(event.target.checked)}/>
+        Show only unread teammate events
+      </label>
+      <Button variant="outline" size="sm" type="button" disabled={!visible.length}
+        onClick={exportVisible}>
+        <Download className="mr-1 h-3.5 w-3.5"/> Export visible CSV ({visible.length})
+      </Button>
+    </div>
     <div className="max-h-[18rem] space-y-2 overflow-y-auto">
       {visible.map(event=>{
         const task=tasks.find(t=>t.id===event.entity_id);
@@ -197,16 +291,30 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
           {" · "}<strong>{WORKSPACE_TEAM_EVENT_LABELS[
             event.event_type as keyof typeof WORKSPACE_TEAM_EVENT_LABELS]??event.event_type}</strong>
           {" · "}{teamMemberLabel(event.actor_id,owner)}
-          {task&&<span className="block break-words text-muted-foreground">Task: {task.title.slice(0,120)}</span>}
+          {task&&<div className="flex flex-wrap items-center gap-2">
+            <span className="break-words text-muted-foreground">Task: {task.title.slice(0,120)}</span>
+            <Button variant="ghost" size="sm" type="button"
+              onClick={()=>onOpenTask(task.id)}>Open task</Button>
+          </div>}
           {isNew&&<span className="text-cyan-400">Unread</span>}
         </div>;
       })}
       {!visible.length&&<p className="text-xs text-muted-foreground">No events in this filter.</p>}
     </div>
+    {historyError&&<p role="alert" className="text-xs text-destructive">{historyError}</p>}
+    {historyNotice&&<p role="status" className="text-xs text-muted-foreground">{historyNotice}</p>}
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+      <span>Showing {history.length} loaded events (up to {TEAM_ACTIVITY_VIEW_CAP} per session)</span>
+      {canLoadMore&&<Button size="sm" variant="outline" type="button"
+        disabled={historyLoading} onClick={()=>void loadOlder()}>
+        {historyLoading?"Loading…":"Load older activity"}
+      </Button>}
+    </div>
     <p className="text-xs text-muted-foreground">
-      Latest 30 actual server events are shown; unread totals are exact across the
-      team since your current membership began. Browser notifications, email,
-      presence and full-history export are not enabled.
+      Exact unread totals use a single server snapshot and include teammate events
+      since your membership began. Search and CSV include only loaded rows;
+      the CSV is not a full compliance archive. Realtime can be unavailable;
+      refresh or tab resumption reconciles team state. No email or push delivery.
     </p>
   </div>;
 }

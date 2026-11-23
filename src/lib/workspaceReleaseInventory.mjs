@@ -14,6 +14,7 @@ export const WORKSPACE_MIGRATION_PATHS = Object.freeze([
   "supabase/migrations/20261124170000_workspace_team_spaces.sql",
   "supabase/migrations/20261124190000_workspace_team_discussions_checklists.sql",
   "supabase/migrations/20261124210000_workspace_team_realtime_notifications.sql",
+  "supabase/migrations/20261124230000_workspace_team_notification_snapshot.sql",
 ]);
 export const WORKSPACE_DRILL_PATHS = Object.freeze([
   "tests/sql/workspace-revisions-db-smoke.sql",
@@ -29,6 +30,7 @@ export const WORKSPACE_DRILL_PATHS = Object.freeze([
   "tests/sql/workspace-team-spaces-db-smoke.sql",
   "tests/sql/workspace-team-discussions-checklists-db-smoke.sql",
   "tests/sql/workspace-team-realtime-notifications-db-smoke.sql",
+  "tests/sql/workspace-team-notification-snapshot-db-smoke.sql",
 ]);
 
 // caller supplies a source map, e.g. filesystem reads of tracked files.

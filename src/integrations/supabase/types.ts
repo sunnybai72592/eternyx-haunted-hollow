@@ -3092,6 +3092,10 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_team_notification_snapshot: {
+        Args: { p_space_id: string }
+        Returns: Json
+      }
       workspace_team_mark_events_seen: {
         Args: { p_space_id: string; p_event_id: number }
         Returns: number
