@@ -12,6 +12,7 @@ import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklis
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import WorkspaceRecoveryCenter from "@/components/workspace/WorkspaceRecoveryCenter";
 import WorkspaceRecoveryForkPanel from "@/components/workspace/WorkspaceRecoveryForkPanel";
+import WorkspaceReconciliationJournal from "@/components/workspace/WorkspaceReconciliationJournal";
 import WorkspaceGlobalSearch from "@/components/workspace/WorkspaceGlobalSearch";
 import WorkspaceTaskFocus from "@/components/workspace/WorkspaceTaskFocus";
 import { Button } from "@/components/ui/button";
@@ -686,7 +687,10 @@ export default function DigitalWorkspace() {
               target={forkTarget} owner={owner} disabled={busy || loading}
               onClose={(message) => {
                 setForkTarget(null);
-                if (message) setNotice(message);
+                if (message) {
+                  setNotice(message);
+                  setRecoveryRefreshKey(value => value + 1);
+                }
               }} />}
             <WorkspaceRecoveryCenter owner={owner} disabled={busy || loading}
               projects={projects} refreshKey={recoveryRefreshKey}
@@ -723,6 +727,8 @@ export default function DigitalWorkspace() {
                 setRecoveryRefreshKey(value => value + 1);
                 void load(owner);
               }} />
+            <WorkspaceReconciliationJournal owner={owner}
+              disabled={busy || loading} refreshKey={recoveryRefreshKey} />
             <div className="space-y-3 border-t border-border pt-4">
               <label htmlFor="workspace-project-search" className="text-sm font-medium">Find a project</label>
               <div className="relative">

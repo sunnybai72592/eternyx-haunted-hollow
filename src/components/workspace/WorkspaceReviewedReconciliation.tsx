@@ -10,6 +10,7 @@ import {
 } from "@/lib/workspaceReconciliation.mjs";
 import { fetchWorkspaceReviewSnapshot } from "@/lib/workspaceReconciliationReader.mjs";
 import { sha256Hex } from "@/lib/workspaceImportRecovery.mjs";
+import { verifyWorkspaceReviewedArchive, buildWorkspaceReviewReceiptArgs } from "@/lib/workspaceReconciliationVerification.mjs";
 import { supabase } from "@/integrations/supabase/client";
 
 type ReviewTarget={sessionId:string;sourceHash:string;projectId:string;projectName:string};
@@ -99,6 +100,26 @@ export default function WorkspaceReviewedReconciliation({
       // helper response or data from a different signed-in account.
       if(await fingerprintWorkspaceReviewSnapshot(snapshot,owner,target.projectId)!==initialFingerprint)
         throw new Error("Review snapshot verification failed");
+      // Independent local verification occurs before anything is recorded
+      // as prepared. A server receipt is a client-asserted digest/selection
+      // history entry, not a cryptographic signature or proof of download.
+      const verified=await verifyWorkspaceReviewedArchive(fork.content,fork.fingerprint);
+      const receiptArgs=buildWorkspaceReviewReceiptArgs(target.sessionId,verified);
+      if (verified.sourceSha256!==target.sourceHash ||
+          verified.snapshotSha256!==initialFingerprint) {
+        throw new Error("Recovery provenance changed before journal preparation");
+      }
+      const { data:receiptData,error:receiptError }=await supabase.rpc(
+        "workspace_reconciliation_record",receiptArgs);
+      if(receiptError || !receiptData)
+        throw new Error("The private preparation receipt could not be recorded. " +
+          "Reviewed download was NOT started: "+
+          (receiptError?.message??"missing server confirmation")+
+          ". Verify the Phase 14 database migration.");
+      const receipt=receiptData as {receipt_id?:string;project_id?:string;event_type?:string};
+      if(!receipt.receipt_id || receipt.project_id!==target.projectId ||
+          receipt.event_type!=="archive_prepared")
+        throw new Error("The server did not confirm a valid owned preparation receipt");
       const blob=new Blob([fork.content],{type:"application/json;charset=utf-8"});
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
@@ -106,7 +127,8 @@ export default function WorkspaceReviewedReconciliation({
       link.download="eternyx-reviewed-recovery-"+fork.fingerprint.slice(0,12)+".json";
       link.click();
       window.setTimeout(()=>URL.revokeObjectURL(url),30000);
-      onDone("Reviewed recovery download started: "+fork.taskCount+" tasks, "+
+      onDone("Preparation receipt recorded; browser download started (not confirmed saved): "+
+        fork.taskCount+" tasks, "+
         fork.stepCount+" steps and "+fork.itemCount+" notes/links, no file bytes. "+
         "Choose that exact downloaded archive in Restore an export to create a NEW private project. "+
         "Neither original project was changed.");
@@ -178,7 +200,9 @@ export default function WorkspaceReviewedReconciliation({
     </p>
     <p className="text-xs text-amber-400">
       <ShieldAlert className="mr-1 inline h-3.5 w-3.5" aria-hidden="true"/>
-      Private files (original or current) are excluded. Preserve their bytes with
+      A private server PREPARATION receipt is recorded before download; it does
+      not prove that your browser saved a file. Private files (original or current)
+      are excluded. Preserve their bytes with
       the existing complete project backup before using this feature. Historical
       revisions, activity and original completion timestamps are not restored.
     </p>

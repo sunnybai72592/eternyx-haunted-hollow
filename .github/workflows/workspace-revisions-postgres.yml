@@ -12,6 +12,7 @@ on:
       - 'supabase/migrations/20261124090000_workspace_import_sessions.sql'
       - 'supabase/migrations/20261124110000_workspace_import_recovery_review_and_discard.sql'
       - 'supabase/migrations/20261124130000_workspace_import_protection_and_integrity.sql'
+      - 'supabase/migrations/20261124150000_workspace_reconciliation_receipts.sql'
       - 'tests/sql/workspace-owner-quotas-db-smoke.sql'
       - 'tests/sql/workspace-priority-archive-purge-db-smoke.sql'
       - 'tests/sql/workspace-task-checklists-db-smoke.sql'
@@ -19,6 +20,7 @@ on:
       - 'tests/sql/workspace-import-recovery-db-smoke.sql'
       - 'tests/sql/workspace-import-review-discard-db-smoke.sql'
       - 'tests/sql/workspace-import-protection-db-smoke.sql'
+      - 'tests/sql/workspace-reconciliation-receipts-db-smoke.sql'
       - 'tests/sql/workspace-revisions-bootstrap.sql'
       - 'tests/sql/workspace-revisions-db-smoke.sql'
       - '.github/workflows/workspace-revisions-postgres.yml'
@@ -63,6 +65,7 @@ jobs:
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124090000_workspace_import_sessions.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124110000_workspace_import_recovery_review_and_discard.sql
           docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124130000_workspace_import_protection_and_integrity.sql
+          docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261124150000_workspace_reconciliation_receipts.sql
       - name: Verify actual ownership, revision history, audit and archive invariants
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-revisions-db-smoke.sql
       - name: Verify owner caps, pinned RLS and Storage registration metadata
@@ -79,6 +82,8 @@ jobs:
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-import-review-discard-db-smoke.sql
       - name: Verify owner-held partial imports, content drift and safe resume checkpoints
         run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-import-protection-db-smoke.sql
+      - name: Verify immutable private reconciliation preparation receipts and cross-owner isolation
+        run: docker exec --interactive eternyx-workspace-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/workspace-reconciliation-receipts-db-smoke.sql
       - name: Dispose PostgreSQL
         if: always()
         run: docker rm --force eternyx-workspace-test || true
