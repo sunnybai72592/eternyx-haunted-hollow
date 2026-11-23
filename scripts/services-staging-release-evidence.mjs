@@ -11,7 +11,7 @@ const PRODUCTION_PROJECT_REF = 'wcncuarekaofmfurbtbh';
 const REF = /^[a-z]{20}$/;
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
-const CATALOG_CHECKS = 64;
+export const SERVICES_CATALOG_CHECKS = 64;
 const SCHEMA = 'eternyx-services-staging-operator-evidence-v1';
 
 function fail(code) {
@@ -66,7 +66,7 @@ export function verifyServicesStagingEvidence(env, now = new Date()) {
   }
   const c = evidence.catalog;
   if (!record(c) || c.catalog_checks_passed !== true ||
-      c.checks_evaluated !== CATALOG_CHECKS ||
+      c.checks_evaluated !== SERVICES_CATALOG_CHECKS ||
       c.checks_failed !== 0 ||
       !Array.isArray(c.failed_check_ids) ||
       c.failed_check_ids.length !== 0) {
