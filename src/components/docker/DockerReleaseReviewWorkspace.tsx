@@ -1,4 +1,6 @@
-import {useState} from "react";
+import {useEffect,useState} from "react";
+import DockerReleaseReviewerPanel,{type DockerReleaseReviewerAssignment} from "./DockerReleaseReviewerPanel";
+import {verifyDockerReleaseHistory} from "@/lib/dockerReleaseHistoryIntegrity.mjs";
 import {FileCheck2,RefreshCw} from "lucide-react";
 
 export type DockerReleaseReview={
@@ -8,10 +10,11 @@ export type DockerReleaseReview={
  created_at:string;updated_at:string;reviewed_at:string|null;
 };
 export type DockerReleaseReviewEvent={
- id:number;review_id:string;event_kind:string;note:string;occurred_at:string;
+ id:number;review_id:string;owner_id:string;actor_id:string;event_kind:string;note:string;occurred_at:string;previous_sha256:string;entry_sha256:string;
 };
 type Props={
  reviews:DockerReleaseReview[];events:DockerReleaseReviewEvent[];
+ assignments:DockerReleaseReviewerAssignment[];currentUserId:string|null;
  loaded:boolean;onAction:(action:string,fields:Record<string,unknown>)=>Promise<Record<string,unknown>>;
  refresh:()=>Promise<void>;
 };
@@ -19,12 +22,25 @@ const HEX40=/^[a-f0-9]{40}$/,HEX64=/^[a-f0-9]{64}$/,REF=/^[a-z0-9]{20}$/;
 const noteOK=(s:string)=>s.trim().length>=12&&s.trim().length<=500&&!/[\u0000-\u001f\u007f]/.test(s);
 const blank=()=>({commitSha:"",candidateSha256:"",sourceSnapshotSha256:"",
  manifestSha256:"",stagingRef:"",note:""});
-export default function DockerReleaseReviewWorkspace({reviews,events,loaded,onAction,refresh}:Props){
+export default function DockerReleaseReviewWorkspace({reviews,events,assignments,currentUserId,loaded,onAction,refresh}:Props){
  const [draft,setDraft]=useState(blank);
  const [key,setKey]=useState(()=>crypto.randomUUID());
  const [notes,setNotes]=useState<Record<string,string>>({});
  const [confirm,setConfirm]=useState<Record<string,string>>({});
  const [working,setWorking]=useState(false);
+ const [integrity,setIntegrity]=useState<Record<string,string>>({});
+ useEffect(()=>{
+  let active=true;
+  void (async()=>{
+   const next:Record<string,string>={};
+   for(const review of reviews){
+    const report=await verifyDockerReleaseHistory(events,review.id,currentUserId??"");
+    next[review.id]=report.status;
+   }
+   if(active)setIntegrity(next);
+  })();
+  return ()=>{active=false;};
+ },[reviews,events,currentUserId]);
  const [error,setError]=useState(""),[notice,setNotice]=useState("");
  const valid=HEX40.test(draft.commitSha)&&HEX64.test(draft.candidateSha256)&&
   HEX64.test(draft.sourceSnapshotSha256)&&HEX64.test(draft.manifestSha256)&&
@@ -87,12 +103,16 @@ export default function DockerReleaseReviewWorkspace({reviews,events,loaded,onAc
    className="min-h-11 rounded-lg bg-cyan-500 px-4 font-semibold text-slate-950 disabled:opacity-50">
    Save owner release metadata (no deployment)
   </button>
+  <DockerReleaseReviewerPanel reviews={reviews} assignments={assignments} currentUserId={currentUserId}
+   busy={working} onAction={onAction} refresh={refresh}/>
   <h3 className="text-lg font-semibold">Owned release reviews and server-recorded history</h3>
   {loaded&&reviews.length===0&&<p className="text-sm text-muted-foreground">No release records. Nothing is approved for deployment.</p>}
   {reviews.map(r=>{
    const history=events.filter(e=>e.review_id===r.id);
    const note=notes[r.id]??"";
    const phrase="REVIEW "+r.id.slice(0,8);
+   const accepted=assignments.some(a=>a.review_id===r.id&&a.owner_id===currentUserId&&
+     a.reviewer_id!==currentUserId&&a.state==="accepted"&&a.candidate_sha256===r.candidate_sha256);
    return <article key={r.id} className="space-y-3 rounded-xl border border-border p-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
      <p className="text-sm font-semibold">Git {r.commit_sha.slice(0,12)} · Staging {r.staging_ref}</p>
@@ -110,6 +130,9 @@ export default function DockerReleaseReviewWorkspace({reviews,events,loaded,onAc
        value={note} onChange={e=>setNotes(s=>({...s,[r.id]:e.target.value}))}
        className="mt-1 w-full rounded-lg border border-border bg-background p-3 text-sm"/>
      </label>
+     {r.state==="in_review"&&<p className="text-xs text-muted-foreground">
+      Distinct authenticated reviewer: {accepted?"accepted matching candidate":"required before owner completion"}
+     </p>}
      {r.state==="in_review"&&<label className="block text-xs">
       To finish your account review, type <strong>{phrase}</strong>
       <input aria-label={"Release review confirmation "+r.id.slice(0,8)} autoComplete="off"
@@ -119,7 +142,7 @@ export default function DockerReleaseReviewWorkspace({reviews,events,loaded,onAc
      <div className="flex flex-wrap gap-2">
       {r.state==="submitted"&&<button type="button" disabled={working||!noteOK(note)}
        onClick={()=>decide(r,"in_review")} className="min-h-11 rounded-lg border border-border px-4 text-sm disabled:opacity-50">Begin review</button>}
-      {r.state==="in_review"&&<button type="button" disabled={working||!noteOK(note)||confirm[r.id]!==phrase}
+      {r.state==="in_review"&&<button type="button" disabled={working||!accepted||!noteOK(note)||confirm[r.id]!==phrase}
        onClick={()=>decide(r,"reviewed")} className="min-h-11 rounded-lg border border-cyan-500/50 px-4 text-sm disabled:opacity-50">Mark owner review complete (not approval)</button>}
       <button type="button" disabled={working||!noteOK(note)} onClick={()=>decide(r,"blocked")}
        className="min-h-11 rounded-lg border border-amber-500/50 px-4 text-sm disabled:opacity-50">Block release review</button>
@@ -127,13 +150,19 @@ export default function DockerReleaseReviewWorkspace({reviews,events,loaded,onAc
     </>}
     <div className="border-t border-border pt-3">
      <p className="text-xs font-semibold">Recent owner audit history</p>
+     <p role="status" className="mt-2 text-xs text-muted-foreground">
+      Server-reported SHA-256 history: {integrity[r.id]==="hash_chain_consistent"?
+      "consistent across visible events (not independent database attestation)":
+      integrity[r.id]==="broken"?"BROKEN — verify externally and do not rely on this review":
+      "incomplete or unverified — missing history cannot count as a passing audit"}
+     </p>
      <ol className="mt-2 space-y-2">
       {history.map(e=><li key={e.id} className="rounded-lg bg-muted/30 p-3 text-xs">
-       {e.event_kind.replaceAll("_"," ")} · {new Date(e.occurred_at).toLocaleString()}
+       {e.event_kind.replaceAll("_"," ")} · {new Date(e.occurred_at).toLocaleString()} · Actor {e.actor_id.slice(0,8)}
        <p className="mt-1 break-words text-muted-foreground">{e.note}</p>
       </li>)}
      </ol>
-     {!history.length&&<p className="mt-2 text-xs text-muted-foreground">No events in the most recent 80-event window.</p>}
+     {!history.length&&<p className="mt-2 text-xs text-muted-foreground">No events in the most recent 100-event window.</p>}
     </div>
     <p className="text-xs text-amber-500">Server owner record only · Independent release approval: not verified · Docker execution: disabled</p>
    </article>;
