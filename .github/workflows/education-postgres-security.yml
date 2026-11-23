@@ -7,6 +7,10 @@ on:
       - 'tests/sql/education-db-*.sql'
       - 'scripts/staging/verifyEducationConcurrency.mjs'
       - 'scripts/staging/verifyEducationFinalGradingRaces.mjs'
+      - 'scripts/staging/verifyEducationRealPostgresAudit.mjs'
+      - 'scripts/staging/educationHostedDbMetadata.mjs'
+      - 'scripts/sql/education-hosted-db-metadata.sql'
+      - 'tests/education-real-postgres-audit.test.mjs'
       - 'supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql'
       - '.github/workflows/education-postgres-security.yml'
   workflow_dispatch:
@@ -75,6 +79,8 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-verified-results.sql
       - name: Install staged final-grade immutability and bulk-erasure guards
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-immutable-final-grade-records.sql
+      - name: Execute actual 31-check hosted SQL and five rollback-restored authorization tamper tests in disposable PostgreSQL
+        run: node scripts/staging/verifyEducationRealPostgresAudit.mjs --run
       - name: Rehearse the complete instructor-to-student exam and grading journey
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-full-journey.sql
       - name: Assert 23 finalized-grade owner-tamper and safe-learner-read boundaries
