@@ -51,6 +51,7 @@ export default function WorkspaceImportPanel({
     setPreview(null);
     setSource("");
     setSourceHash("");
+    setIsRecoveryFork(false);
     setProgress("");
     setImportNotice("");
     setError("");
@@ -115,6 +116,10 @@ export default function WorkspaceImportPanel({
 
   const run = async () => {
     if (!preview || !sourceHash || inFlight.current || busy || disabled) return;
+    if (resumeFingerprint && sourceHash !== resumeFingerprint) {
+      setError("A different recovery session is selected. Choose its exact original archive before restoring.");
+      return;
+    }
     if (!window.confirm(
       "Restore or RESUME this verified archive into its account-owned project? " +
       preview.tasks.length + " tasks, " + (preview.stepCount ?? 0) + " checklist steps, " +
@@ -276,7 +281,7 @@ export default function WorkspaceImportPanel({
       const message = textError(failure);
       setError(message);
       if (sessionId && projectId) {
-        let committed = "The exact archive can be selected again to resume safely.";
+        let committed = "Inspect the Recovery Center first. The exact archive can resume only when its server checkpoint still matches.";
         try {
           const { data } = await supabase.rpc("workspace_import_status",
             { p_session_id: sessionId });
@@ -286,7 +291,7 @@ export default function WorkspaceImportPanel({
           if (status) committed = "Committed on server: " +
             (status.tasks ?? 0) + " tasks, " + (status.steps ?? 0) +
             " steps, " + (status.items ?? 0) + " saved items, " +
-            (status.files ?? 0) + " files. Select the same archive and retry.";
+            (status.files ?? 0) + " files. The exact archive may resume only after the server validates the saved project.";
         } catch {
           // The source archive remains selected for a safe manual retry.
         }
