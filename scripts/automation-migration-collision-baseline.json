@@ -1,0 +1,161 @@
+{
+  "schema": "eternyx-migration-collision-baseline-v1",
+  "explanation": "Historical repository filename/blob pins only. NOT proof of any applied database migration. Reconcile each version with independently retrieved remote history before modifying files.",
+  "duplicateVersions": [
+    {
+      "version": "20261115060000",
+      "files": [
+        {
+          "name": "20261115060000_ai_generation_input_asset_registry.sql",
+          "gitBlobSha": "e1de931bc78b397b2dec3a28225a94813c481ed5"
+        },
+        {
+          "name": "20261115060000_bind_ai_job_idempotency_to_request.sql",
+          "gitBlobSha": "c962fb7e741bd81da3f8f634046b1ba4048be777"
+        }
+      ]
+    },
+    {
+      "version": "20261123030000",
+      "files": [
+        {
+          "name": "20261123030000_automation_github_issue_approvals.sql",
+          "gitBlobSha": "da98daceb9d15cd2d974d5b5b7bdf9272aa967e1"
+        },
+        {
+          "name": "20261123030000_docker_workspace_enrollment.sql",
+          "gitBlobSha": "36210549a62235b964148047b2113b18c6b0b3a4"
+        }
+      ]
+    },
+    {
+      "version": "20261123040000",
+      "files": [
+        {
+          "name": "20261123040000_automation_github_workflow_tracking.sql",
+          "gitBlobSha": "306acd46096a701bb26379e44753880dd8617af3"
+        },
+        {
+          "name": "20261123040000_docker_agent_signed_reports.sql",
+          "gitBlobSha": "dcb16efcd0dbc0a4d887deda86150cc07fb03502"
+        },
+        {
+          "name": "20261123040000_service_brief_amendments.sql",
+          "gitBlobSha": "a3f8aeaa0835c3e18d2726d3e497a6c15324d687"
+        }
+      ]
+    },
+    {
+      "version": "20261123050000",
+      "files": [
+        {
+          "name": "20261123050000_automation_template_gallery.sql",
+          "gitBlobSha": "748d3205eb1ad11ceb20bb42d5359159391751de"
+        },
+        {
+          "name": "20261123050000_docker_operation_review.sql",
+          "gitBlobSha": "ded63b44239ff9607d18432c9a3cb04214600a79"
+        },
+        {
+          "name": "20261123050000_service_request_journal.sql",
+          "gitBlobSha": "de875e40631a0acdbdde2adc09a031ec2c72ad06"
+        },
+        {
+          "name": "20261123050000_workspace_owner_projects_tasks_items.sql",
+          "gitBlobSha": "4cbe6bd339bb2efda8d79e792e0986852f2b4a15"
+        }
+      ]
+    },
+    {
+      "version": "20261123070000",
+      "files": [
+        {
+          "name": "20261123070000_automation_operations.sql",
+          "gitBlobSha": "6a95edc9332a3a1f73fd47ddafab0ac3690bd249"
+        },
+        {
+          "name": "20261123070000_docker_signed_command_dispatch.sql",
+          "gitBlobSha": "7bf5d8d1bf212bd150f92d9a548fdb03eb42c93e"
+        }
+      ]
+    },
+    {
+      "version": "20261123080000",
+      "files": [
+        {
+          "name": "20261123080000_automation_observability_recovery.sql",
+          "gitBlobSha": "507c03a1ae054f4c59121633b40d2d209f372621"
+        },
+        {
+          "name": "20261123080000_docker_dispatch_receipt_recovery.sql",
+          "gitBlobSha": "b5247c4678bf7200cb371c83e6165fb78931b8ad"
+        }
+      ]
+    },
+    {
+      "version": "20261123090000",
+      "files": [
+        {
+          "name": "20261123090000_automation_incident_management.sql",
+          "gitBlobSha": "3855de22f01f95f6757851c1e19ef86afe053752"
+        },
+        {
+          "name": "20261123090000_docker_lab_incident_triage.sql",
+          "gitBlobSha": "daab3f088aa6a5bb0a5f5a8425835ba32357bdb2"
+        }
+      ]
+    },
+    {
+      "version": "20261123100000",
+      "files": [
+        {
+          "name": "20261123100000_automation_incident_evidence_reporting.sql",
+          "gitBlobSha": "f8ea6a17f60487b9732edcbba83d7e89aed638e5"
+        },
+        {
+          "name": "20261123100000_docker_incident_containment.sql",
+          "gitBlobSha": "39637d0abed5b719d33913a92069e18843e3b0d6"
+        }
+      ]
+    },
+    {
+      "version": "20261123110000",
+      "files": [
+        {
+          "name": "20261123110000_automation_investigation_plans.sql",
+          "gitBlobSha": "2064fbc668f111be47e83759cf85ceabbdcfdde5"
+        },
+        {
+          "name": "20261123110000_docker_release_review_history.sql",
+          "gitBlobSha": "05d655cfc56e8767ef69679d8aebd3c4181cc59e"
+        }
+      ]
+    },
+    {
+      "version": "20261123120000",
+      "files": [
+        {
+          "name": "20261123120000_automation_governed_incident_closure.sql",
+          "gitBlobSha": "dc2c1f956b8a9a82a1243c328930b0836ce9c904"
+        },
+        {
+          "name": "20261123120000_docker_reviewer_accountability_and_event_chain.sql",
+          "gitBlobSha": "04434f6c9f8cf0e7743edbb6dc1a2f41663a3ea8"
+        }
+      ]
+    },
+    {
+      "version": "20261123130000",
+      "files": [
+        {
+          "name": "20261123130000_automation_governed_reopen_trace.sql",
+          "gitBlobSha": "2265a54c53b24afbb49ed33ee0b6bf938081069f"
+        },
+        {
+          "name": "20261123130000_docker_full_release_audit_export.sql",
+          "gitBlobSha": "8af292272209b86eb7bb170d915dc21f6be99fec"
+        }
+      ]
+    }
+  ]
+}
