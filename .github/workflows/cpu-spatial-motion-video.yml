@@ -1,0 +1,44 @@
+name: CPU neural spatial motion from licensed footage
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/train_spatial_motion_video.py"
+      - "gpu-worker/tests/test_train_spatial_motion_video.py"
+      - "gpu-worker/train_tagged_neural_video.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - ".github/workflows/cpu-spatial-motion-video.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/train_spatial_motion_video.py"
+      - "gpu-worker/tests/test_train_spatial_motion_video.py"
+      - "gpu-worker/train_tagged_neural_video.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - ".github/workflows/cpu-spatial-motion-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  spatial-motion:
+    name: Train actual per-tag 4x3 motion classifier and verify real CPU H264 videos
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require actual local FFmpeg/FFprobe CPU H264
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Train motion on real source video pairs, test heldout isolation, generate and compare actual MP4s
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_train_spatial_motion_video.py' -v
