@@ -220,6 +220,10 @@ def exercise(browser, label, viewport, records):
              assert_equal(fixture.submitted, 1), records, label)
         expect(page.get_by_text("Grading pending", exact=False).first).to_be_visible(timeout=20000)
         expect(page.get_by_text("999 / 1000", exact=False)).to_have_count(0)
+        if fixture.unexpected_mutations:
+            # Only fixed API operation tail labels, never request bodies or URLs.
+            print("Synthetic UI unexpected operation types: " +
+                  ",".join(fixture.unexpected_mutations), flush=True)
         case("verified_pending_result_never_exposes_legacy_score", lambda:
              assert_equal(fixture.unexpected_mutations, []), records, label)
     finally:
