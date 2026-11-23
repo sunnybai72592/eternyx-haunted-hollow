@@ -1,0 +1,36 @@
+name: Local CPU video edit history and source preview
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai/localVideoEditHistory.mjs"
+      - "src/lib/ai/localVideoTimeline.mjs"
+      - "src/components/LocalVideoTimeline.tsx"
+      - "src/components/LocalVideoEditor.tsx"
+      - "tests/local-video-edit-history.test.mjs"
+      - ".github/workflows/local-video-edit-history.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai/localVideoEditHistory.mjs"
+      - "src/lib/ai/localVideoTimeline.mjs"
+      - "src/components/LocalVideoTimeline.tsx"
+      - "src/components/LocalVideoEditor.tsx"
+      - "tests/local-video-edit-history.test.mjs"
+      - ".github/workflows/local-video-edit-history.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  local-edit-history:
+    name: Verify real 40-step undo redo, original-source playback and drag-to-reorder
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run offline editable shot journal and preview regressions
+        run: node --test tests/local-video-edit-history.test.mjs
