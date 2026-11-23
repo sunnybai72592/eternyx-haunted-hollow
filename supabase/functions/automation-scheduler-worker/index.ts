@@ -36,6 +36,17 @@ function validClaim(v: unknown): v is ScheduleClaim {
     typeof a.nonce==="string" && /^[0-9a-f]{24}$/i.test(a.nonce);
 }
 
+function confirmedDeferral(value: unknown): boolean {
+  if (!value || typeof value!=="object" || Array.isArray(value)) return false;
+  const data=value as Record<string,unknown>;
+  // SQL returns a row status and the next scheduled time only after
+  // releasing the exact lease under owner/revision locking.
+  return data.ok===true && data.deferred===true &&
+    typeof data.next_run_at==="string" && data.next_run_at.length<=64 &&
+    /^\d{4}-\d{2}-\d{2}T/.test(data.next_run_at) &&
+    Number.isFinite(Date.parse(data.next_run_at));
+}
+
 serve(async (req: Request) => {
   if (req.method!=="POST") return reply({error:"Method not allowed"},405);
   const supplied=req.headers.get("x-eternyx-scheduler-key");
@@ -141,7 +152,7 @@ serve(async (req: Request) => {
               p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
               p_schedule_revision:claim.revision,
             });
-          if(deferError||deferReceipt?.ok!==true)throw Error("policy_deferral_failed");
+          if(deferError||!confirmedDeferral(deferReceipt))throw Error("policy_deferral_failed");
           deferred++;
           continue;
         }
@@ -175,7 +186,7 @@ serve(async (req: Request) => {
           p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
           p_schedule_revision:claim.revision,
         });
-        if (deferError || postponed?.ok!==true) throw new Error("quota_deferral_failed");
+        if (deferError || !confirmedDeferral(postponed)) throw new Error("quota_deferral_failed");
         deferred++;
         continue;
       }
