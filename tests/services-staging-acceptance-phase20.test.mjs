@@ -109,7 +109,7 @@ function fakeFactory(options = {}) {
             in(field,values) { this.conditions.push((r)=>values.includes(r[field])); return this; },
             async limit(size) {
               calls.push({actor,table,columns:this.columns});
-              if (actor === 'anonymous' && options.anonResult) return options.anonResult;
+              if (actor === 'anonymous' && options.anonResult) return typeof options.anonResult === 'function' ? options.anonResult(table) : options.anonResult;
               if (actor === 'user-A' && table === 'service_requests' && options.nullOwnerResponse)
                 return {data:null,error:null,status:200};
               if (options.missingJournal && table === 'service_request_journal')
@@ -237,7 +237,9 @@ test('network errors, missing relations, ambiguous results and leaked anonymous 
 });
 
 test('real acceptance rejects a missing anonymous journal instead of showing a false PASS', async () => {
-  const factory = fakeFactory({anonResult:{data:null,error:{code:'PGRST205'},status:404}});
+  const factory = fakeFactory({anonResult:(table) => table === 'service_request_journal'
+    ? {data:null,error:{code:'PGRST205'},status:404}
+    : {data:[],error:null,status:200}});
   await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
     /anonymous access was not a verified permission denial/);
 });
