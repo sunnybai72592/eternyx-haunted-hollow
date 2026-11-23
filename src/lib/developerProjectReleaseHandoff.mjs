@@ -130,7 +130,7 @@ export function exportDeveloperLocalReleaseHandoff(report) {
   const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
   return JSON.stringify({
     schema: DEVELOPER_RELEASE_HANDOFF_SCHEMA,
-    createdAt: typeof report.createdAt === "string" && /^\d{4}-\d{2}-\d{2}T/.test(report.createdAt) ?
+    createdAt: typeof report.createdAt === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(report.createdAt) &&\n      Number.isFinite(Date.parse(report.createdAt)) ?
       report.createdAt : null,
     scope: "Local static/parser/default-smoke evidence only; no source or filenames exported. Staging, backend, production NOT VERIFIED.",
     localVerdict,
