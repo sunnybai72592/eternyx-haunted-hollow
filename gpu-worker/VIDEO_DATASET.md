@@ -598,3 +598,44 @@ python gpu-worker/train_spatiotemporal_neural_video.py generate \
 The create-only output directory contains `clip-01.mp4`, `eternyx-video-v2.json`, `render/video.mp4`, `render/manifest.json`, `render/captions.srt`, `render/preview.html` and `generation-report.json`. The generation report records the measured raw pixel frame differences and independent MP4 SHA-256, while the renderer receipt describes only the downstream conventional editing/encoding operation.
 
 **Interpretation/limits:** A 48×28 neural texture is an incremental research baseline, **not** photorealistic video, prompt-to-video, diffusion inference or a production generative model. More detail and two-frame context provide more learned information, but no guaranteed improvement in subjective quality or temporal consistency. Check the holdout metrics and visually inspect the actual MP4. Neural weights and aggregate color statistics may reveal details about local footage; keep model files private. All training, sampling and checking are local/offline; no paid GPU, remote AI API, subscription enforcement or media upload occurs.
+
+
+
+## Matched neural v1 vs v2 benchmark: real same-source errors, CPU timings and H.264 side-by-side
+
+The **AI Video Studio** includes **Fair neural v1 vs v2 comparison · Same footage · CPU-only**. This workflow helps determine whether the two CPU-trained neural video baselines improve *measured prediction* under a comparable local dataset. Unlike comparing separate model training reports (which evaluate at different spatial resolutions), it evaluates both models on the same ground-truth target frame grid and checks every selected training source's SHA-256.
+
+### Run with the same licensed footage
+
+Place 1–3 owned/reviewed 16 FPS MP4 clips in the local `./local-video-media` folder. Each must have at least **32 actual decoded frames** (so the last-quarter holdout contains at least eight steps), source resolution at most 512×512 and file size at most 64 MiB. The benchmark consumes at most 64 frames per clip. Select 1–2 training epochs for **both** models. It creates two new checkpoints inside an atomic, create-only output batch without modifying existing v1 or v2 model directories.
+
+```sh
+python gpu-worker/compare_cpu_neural_video.py \
+  --input ./local-video-media \
+  --output ./eternyx-neural-comparison \
+  --rights-ref owner-reviewed-video --seed 42 --epochs 1 --seconds 1
+```
+
+The tool produces:
+
+- `model-v1/model.json` and `model-v2/model.json` plus matching training reports, trained independently with equal source names/bytes, source SHA-256, random seed, epochs and identical temporal 75%/25% training/holdout boundaries.
+- `comparison-report.json`: explicit common evaluation target **48×28**, native v2 predictions and nearest-neighbor upscaled v1 predictions (from 32×18) on the SAME **4-level-per-RGB-channel quantized** held-out video pixels. It records real 1, 4 and 8-step *causal free-running* MSE against the same static-last-training-frame baseline, actual per-step errors, and local monotonic wall-clock training and rendering timings. The model's predicted intermediate pixels feed subsequent predictions; unseen held-out targets are used only for error calculation.
+- `sample-v1/render/video.mp4` and `sample-v2/render/video.mp4`: genuinely sampled short neural CPU video outputs and their own conventional editing/encoding receipts and generated-origin reports.
+- `comparison.mp4`: an actual playable **512×144 H.264** video with v1 on the left and v2 on the right. This is a *visual review tool*, not a claim that either model generates more realistic footage. The SHA-256 and actual decoded frame count of each of the three MP4s are verified and recorded.
+
+The report records actual measured CPU wall time for separate training, evaluation, video generation/encoding and side-by-side assembly. Such single-run timings are **machine- and workload-specific**; no guaranteed benchmark performance across hardware is implied. Checkpoints and sources are still small CPU video-texture models—this is not photorealistic text-to-video, diffusion inference, improved text prompt conditioning or finished flagship production inference.
+
+### View and verify without uploads
+
+Download/select the local `comparison-report.json` in the Studio's comparator section to inspect one-, four- and eight-step errors and measured CPU timings. Select the two distinct `video.mp4` files and `comparison.mp4`; although the individual MP4s share a basename, the browser matches their *actual bytes* by SHA-256 and size to the precise version indicated in the report. The videos can be played independently or as a stacked side-by-side clip without uploading any files.
+
+Important distinctions:
+
+1. **Matched dataset:** Both models train on identical source files, temporal boundaries and integer epoch budgets. Different architectures, spatial resolutions and training sample counts still prevent claims of a perfectly controlled architecture comparison.
+2. **Matched evaluation:** V1 outputs are resampled by nearest-neighbor to the 48×28 target, while v2 operates natively at 48×28. This avoids reporting metrics calculated against different ground-truth targets; it does not eliminate architectural bias or prove better perception.
+3. **No teacher forcing in rollout:** Both models start from true final training-prefix frame(s); their own predictions—not actual held-out frames—feed successive steps. The same constant training-prefix frame is the baseline for both models.
+4. **8-step error is not realism:** Lower error can favor blurry, static or color-averaged video, and a persistence baseline may beat either network. No automatic winner/quality score is produced. Use direct visual inspection.
+5. **Bounded local execution:** Only 1–3 MP4s, first 64 frames each, 1–2 epochs and 1–2 seconds of side-by-side output. Paths, source types, rights reference, model sample file hashes, decoded frame counts and output sizes are guarded; an interrupted batch leaves no published partial output.
+6. **No hidden paid services:** The code uses Python standard library and existing locally installed FFmpeg/FFprobe/libx264; there is no paid GPU, model download, remote AI API, media upload or subscription.
+
+Dedicated CPU integration tests independently train both models on real FFmpeg-created clips, recompute per-step MSE on the common 48×28 target, verify exact video hashes/decoded frames, check real elapsed timings and full-batch rollback, and test the offline CLI. Browser regressions reject malformed evidence and mismatched MP4 hashes before playback.
