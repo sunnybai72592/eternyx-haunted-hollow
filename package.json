@@ -31,6 +31,7 @@
     "automation:staging:fresh-auth:check": "node --test tests/automation-staging-fresh-auth.test.mjs tests/automation-staging-two-owner-gate.test.mjs",
     "automation:worker:runtime:check": "node --test tests/automation-scheduler-worker-runtime.test.mjs tests/automation-schedules.test.mjs",
     "automation:worker:recovery:check": "node --test tests/automation-scheduler-worker-runtime.test.mjs",
+    "automation:worker:fail-closed:check": "node --test tests/automation-scheduler-worker-runtime.test.mjs tests/automation-schedules.test.mjs",
     "automation:migrations:audit": "node scripts/automation-migration-collision-forensics.mjs",
     "automation:migrations:rehearsal": "node scripts/automation-fresh-staging-mirror.mjs --check",
     "audit:tools": "node scripts/audit-tool-registry.mjs",

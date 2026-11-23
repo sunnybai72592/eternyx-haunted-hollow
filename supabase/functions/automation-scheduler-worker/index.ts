@@ -36,6 +36,17 @@ function validClaim(v: unknown): v is ScheduleClaim {
     typeof a.nonce==="string" && /^[0-9a-f]{24}$/i.test(a.nonce);
 }
 
+function confirmedDeferral(value: unknown): boolean {
+  if (!value || typeof value!=="object" || Array.isArray(value)) return false;
+  const data=value as Record<string,unknown>;
+  // SQL returns a row status and the next scheduled time only after
+  // releasing the exact lease under owner/revision locking.
+  return data.ok===true && data.deferred===true &&
+    typeof data.next_run_at==="string" && data.next_run_at.length<=64 &&
+    /^\d{4}-\d{2}-\d{2}T/.test(data.next_run_at) &&
+    Number.isFinite(Date.parse(data.next_run_at));
+}
+
 serve(async (req: Request) => {
   if (req.method!=="POST") return reply({error:"Method not allowed"},405);
   const supplied=req.headers.get("x-eternyx-scheduler-key");
@@ -141,7 +152,7 @@ serve(async (req: Request) => {
               p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
               p_schedule_revision:claim.revision,
             });
-          if(deferError||deferReceipt?.ok!==true)throw Error("policy_deferral_failed");
+          if(deferError||!confirmedDeferral(deferReceipt))throw Error("policy_deferral_failed");
           deferred++;
           continue;
         }
@@ -175,7 +186,7 @@ serve(async (req: Request) => {
           p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
           p_schedule_revision:claim.revision,
         });
-        if (deferError || postponed?.ok!==true) throw new Error("quota_deferral_failed");
+        if (deferError || !confirmedDeferral(postponed)) throw new Error("quota_deferral_failed");
         deferred++;
         continue;
       }
@@ -194,17 +205,33 @@ serve(async (req: Request) => {
             p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
             p_schedule_revision:claim.revision,
           });
-        recoveryConfirmed=!failureError && failureReceipt?.ok===true;
+        // A resolved RPC can carry {ok:false}, or a syntactically valid
+        // but untrustworthy receipt. The SQL contract returns attempts 1..3
+        // and retrying=(attempts<3) only after releasing the exact lease.
+        recoveryConfirmed=!failureError && failureReceipt?.ok===true &&
+          Number.isSafeInteger(failureReceipt.attempts) &&
+          failureReceipt.attempts>=1 && failureReceipt.attempts<=3 &&
+          typeof failureReceipt.retrying==="boolean" &&
+          failureReceipt.retrying===(failureReceipt.attempts<3);
       } catch {
         // Do not log schedule IDs, tokens, plaintext or other sensitive data.
       }
-      if(!recoveryConfirmed) leaseRecoveryUnconfirmed++;
+      if(!recoveryConfirmed) {
+        leaseRecoveryUnconfirmed++;
+        // The lease may still exist, may have expired or may have been
+        // reclaimed by another worker. Never claim another task while
+        // its predecessor's recovery outcome is ambiguous.
+        return reply({error:"Schedule lease recovery unconfirmed",
+          processed,failed,deferred,leaseRecoveryUnconfirmed},503);
+      }
     }
   }
   try {
     // Prune aged ciphertext on every authenticated tick; no plaintext retained.
-    const {error:pruneError}=await db.rpc("automation_prune_schedule_outputs");
-    if(pruneError) retentionCleanupFailed=true;
+    // The SQL function returns an integer deletion count, not {ok:true}.
+    const {data:pruned,error:pruneError}=await db.rpc("automation_prune_schedule_outputs");
+    if(pruneError || !Number.isSafeInteger(pruned) || pruned<0)
+      retentionCleanupFailed=true;
   } catch {
     // Cleanup is best-effort, but a failed database RPC is not silent success.
     retentionCleanupFailed=true;
