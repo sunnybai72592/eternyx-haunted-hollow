@@ -27,7 +27,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: eternyx-education-trusted-staging-final-grades
+  group: eternyx-education-hosted-shared-staging
   cancel-in-progress: false
 
 jobs:

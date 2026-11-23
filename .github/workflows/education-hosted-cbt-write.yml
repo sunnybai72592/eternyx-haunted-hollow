@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: eternyx-education-hosted-cbt-student-write
+  group: eternyx-education-hosted-shared-staging
   cancel-in-progress: false
 
 jobs:
