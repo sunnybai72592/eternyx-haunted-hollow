@@ -1335,3 +1335,102 @@ reviewer/addendum data, same-length modifications, missing files, unsafe
 symlinks/hardlinks, wrong-owner/private-mode cases, stage remnants, and
 integrations for the pre-sign recheck. All fixtures are simulated and
 **not independent KVM acceptance evidence**.
+
+
+## Complete, read-only offline evidence file-chain audit
+
+The complete case audit consolidates the independently pinned and
+cryptographically checked records into one **bounded, safe JSON summary**.
+The report is deliberately classified
+\`verified-offline-file-review-only-not-hardware-attestation\`.
+It never grants permission to run or expose a hosted lab.
+
+### Preconditions and strict checks
+
+The case must already have the original Ed25519 operator receipt,
+separately signed reviewer endorsement and constrained signed disposition,
+reviewed structured host/image inventory, verified imported handoff journal
+(or explicitly identified legacy manual staging), a **sealed case checkpoint**
+and a **separately reviewer-signed runtime addendum**.
+
+The verifier independently repeats these checks **read-only**:
+
+1. Original operator signature, signer pins, reviewed raw file digests and
+   independent reviewer signature.
+2. Human review disposition and controlled reasons matched against the
+   reviewer signature and signed operator receipt.
+3. Host preflight, pinned kernel/rootfs/Firecracker/jailer digests, metadata
+   timestamp order, offline policy and expected review mode.
+4. Sealed case checkpoint against an independently controlled SHA-256 value,
+   never a value trusted merely because it appears on the case disk.
+5. Guest vsock/systemd watchdog/cgroup sidecars with exact reviewed
+   transcript digests, fixed schemas and proper mode-specific source files.
+6. Separate reviewer-signed runtime addendum and a **second independently
+   protected SHA-256 pin**. Mixed decisions, sessions, signer identities,
+   altered or missing sidecars and wrong-mode observations fail closed.
+7. A final private no-follow, bounded re-read of all original files, signed
+   case records, both imported journal markers when applicable, checkpoint,
+   runtime observations and signed addendum. It also rechecks the reviewer
+   public key. The command never reads the private signing key.
+
+### Single offline verification command
+
+Use the **real independently pinned values** from the organization's
+separately retained trust register:
+
+\`\`\`bash
+sudo node scripts/cyber-range-complete-case-audit.mjs --audit \
+  --session SESSION_UUID \
+  --operator-sha EXTERNALLY_PINNED_OPERATOR_SPKI_SHA256 \
+  --reviewer-sha EXTERNALLY_PINNED_REVIEWER_SPKI_SHA256 \
+  --checkpoint-sha EXTERNAL_CASE_CHECKPOINT_SHA256 \
+  --addendum-sha EXTERNAL_RUNTIME_ADDENDUM_SHA256
+\`\`\`
+
+This command is intentionally strict. It does not silently fall back to
+a partial case audit if any layer is absent. For an earlier case without
+a signed runtime addendum, use the existing individual read-only verifier
+commands, but **do not describe it as a complete signed file-chain audit**.
+
+### Understanding the result
+
+The signed disposition maps to one of:
+
+- \`archival-file-review-only\` — reviewed file records can be retained
+  internally, **not** deployed to public infrastructure
+- \`follow-up-required\` — recorded evidence gaps still need action
+- \`evidence-rejected\` — human reviewer rejected the submitted evidence
+
+The report includes the exact two pinned SHA-256 values, both signer SPKI
+fingerprints, case mode, signed disposition reasons, number of signed
+runtime sidecars, whether a committed import journal was verified, and the
+number of bounded case records checked in the final snapshot. It does
+**not** contain the private logs, captured guest transcript content,
+private keys, host paths or confidential artifacts.
+
+Every result still lists the following unresolved external assurance:
+
+- Physical KVM source provenance and independently authenticated host logs
+- Cryptographic identity of the guest and independently checked image origin
+- Provider-enforced multitenant isolation and billing controls
+
+Accordingly it always returns \`physicalHostAttested:false\`,
+\`independentHostEvidenceVerified:false\`,
+\`publicLabsEnabled:false\`, and \`productionReady:false\`.
+The word "complete" means **complete signed offline file-chain evidence**,
+not complete real-host validation, operational sign-off, independent TPM
+measurement, or customer-facing readiness.
+
+### No-cost CI and audit regressions
+
+\`\`\`bash
+node --test tests/ctf-firecracker-complete-case-audit.test.mjs
+npm test
+npm run build
+\`\`\`
+
+The suite tests all three modes and three dispositions, legacy versus
+committed handoffs, missing layers, replayed session IDs, altered sidecars,
+wrong external SHA pins, false hardware claims and CLI refusal behavior.
+Only fabricated, disposable local inputs are used; no KVM instance,
+network, paid services or public Labs are started.
