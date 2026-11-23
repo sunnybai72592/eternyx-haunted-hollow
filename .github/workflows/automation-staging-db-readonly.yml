@@ -1,0 +1,62 @@
+name: Automation staging direct PostgreSQL read-only diagnosis
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_readonly_approval:
+        description: "Requires an independently verified ISOLATED staging Supabase project. No writes or deployment."
+        required: true
+        type: choice
+        options:
+          - NOT_APPROVED
+          - I_APPROVE_READONLY_ISOLATED_STAGING
+        default: NOT_APPROVED
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-automation-isolated-staging-db-readonly
+  cancel-in-progress: false
+
+jobs:
+  direct-pg-readonly:
+    if: "${{ inputs.staging_readonly_approval == 'I_APPROVE_READONLY_ISOLATED_STAGING' }}"
+    name: Verify staging TLS, database access and applied migration versions (READ ONLY)
+    environment: automation-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      ETERNYX_AUTOMATION_STAGING_DB_CONSENT: "${{ inputs.staging_readonly_approval }}"
+      ETERNYX_AUTOMATION_STAGING_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+      ETERNYX_AUTOMATION_PRODUCTION_REF: wcncuarekaofmfurbtbh
+      ETERNYX_AUTOMATION_STAGING_PGHOST: "${{ vars.ETERNYX_AUTOMATION_STAGING_PGHOST }}"
+      ETERNYX_AUTOMATION_STAGING_PGUSER: "${{ vars.ETERNYX_AUTOMATION_STAGING_PGUSER }}"
+      ETERNYX_AUTOMATION_STAGING_PGPORT: "5432"
+      ETERNYX_AUTOMATION_STAGING_PGDATABASE: postgres
+      ETERNYX_AUTOMATION_STAGING_PGPASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_PGPASSWORD }}"
+      ETERNYX_AUTOMATION_STAGING_CA_PEM: "${{ secrets.ETERNYX_AUTOMATION_STAGING_CA_PEM }}"
+    steps:
+      - name: Check out the reviewed, read-only diagnostic
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22 for offline input verification
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate explicit staging target BEFORE accessing credentials
+        run: node scripts/automation-staging-db-readonly.mjs --check-config
+      - name: Execute immutable SELECT-only query in transaction READ ONLY over verified TLS
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          bash scripts/automation-staging-db-readonly.sh > "$RUNNER_TEMP/eternyx-staging-db-readonly.json"
+          echo "Isolated staging read-only DB metadata and migration-history query completed."
+      - name: Publish allowlisted staging-only evidence (never credentials or SQL rows)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-automation-staging-db-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/eternyx-staging-db-readonly.json
+          if-no-files-found: error
+          retention-days: 7
