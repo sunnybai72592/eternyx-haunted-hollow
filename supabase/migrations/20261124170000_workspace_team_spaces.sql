@@ -159,7 +159,7 @@ DECLARE
   v_id uuid;
   v_expiry timestamptz:=now()+interval '7 days';
 BEGIN
-  IF v_actor IS NULL OR public.workspace_team_role(p_space_id)<>'owner' THEN
+  IF v_actor IS NULL OR COALESCE(public.workspace_team_role(p_space_id),'')<>'owner' THEN
     RAISE EXCEPTION 'Only the team owner can create invitations' USING ERRCODE='42501';
   END IF;
   IF p_role IS NULL OR p_role NOT IN ('editor','viewer') THEN
@@ -252,7 +252,7 @@ BEGIN
   SELECT * INTO v_invite FROM public.workspace_team_invites
     WHERE id=p_invite_id FOR UPDATE;
   IF NOT FOUND OR v_actor IS NULL
-    OR public.workspace_team_role(v_invite.space_id)<>'owner' THEN
+    OR COALESCE(public.workspace_team_role(v_invite.space_id),'')<>'owner' THEN
     RAISE EXCEPTION 'Invitation not found or cannot be managed'
       USING ERRCODE='42501';
   END IF;
@@ -279,7 +279,7 @@ BEGIN
   SELECT * INTO v_space FROM public.workspace_team_spaces
     WHERE id=p_space_id FOR UPDATE;
   IF NOT FOUND OR v_actor IS NULL OR v_space.owner_id<>v_actor
-    OR public.workspace_team_role(p_space_id)<>'owner' THEN
+    OR COALESCE(public.workspace_team_role(p_space_id),'')<>'owner' THEN
     RAISE EXCEPTION 'Only a team owner can manage members' USING ERRCODE='42501';
   END IF;
   SELECT role INTO v_old FROM public.workspace_team_members
@@ -314,7 +314,7 @@ AS $team_leave$
 DECLARE v_actor uuid:=(SELECT auth.uid());
 BEGIN
   PERFORM 1 FROM public.workspace_team_spaces WHERE id=p_space_id FOR UPDATE;
-  IF v_actor IS NULL OR public.workspace_team_role(p_space_id) NOT IN('editor','viewer') THEN
+  IF v_actor IS NULL OR COALESCE(public.workspace_team_role(p_space_id),'') NOT IN('editor','viewer') THEN
     RAISE EXCEPTION 'Only non-owner team members may leave' USING ERRCODE='42501';
   END IF;
   UPDATE public.workspace_team_tasks SET assignee_id=NULL,updated_at=now()
@@ -333,7 +333,7 @@ CREATE OR REPLACE FUNCTION public.workspace_team_set_status(
 AS $team_status$
 DECLARE v_actor uuid:=(SELECT auth.uid()); v_old text;
 BEGIN
-  IF v_actor IS NULL OR public.workspace_team_role(p_space_id)<>'owner' THEN
+  IF v_actor IS NULL OR COALESCE(public.workspace_team_role(p_space_id),'')<>'owner' THEN
     RAISE EXCEPTION 'Only team owner may archive or reopen' USING ERRCODE='42501';
   END IF;
   IF p_status IS NULL OR p_status NOT IN('active','archived') THEN
@@ -365,7 +365,7 @@ DECLARE
   v_task public.workspace_team_tasks%ROWTYPE;
   v_id uuid;
 BEGIN
-  IF v_actor IS NULL OR public.workspace_team_role(p_space_id) NOT IN('owner','editor') THEN
+  IF v_actor IS NULL OR COALESCE(public.workspace_team_role(p_space_id),'') NOT IN('owner','editor') THEN
     RAISE EXCEPTION 'Only team editors can change tasks' USING ERRCODE='42501';
   END IF;
   SELECT * INTO v_space FROM public.workspace_team_spaces
@@ -431,7 +431,7 @@ CREATE OR REPLACE FUNCTION public.workspace_team_delete_task(
 AS $team_delete_task$
 DECLARE v_actor uuid:=(SELECT auth.uid()); v_space public.workspace_team_spaces%ROWTYPE;
 BEGIN
-  IF v_actor IS NULL OR public.workspace_team_role(p_space_id) NOT IN('owner','editor') THEN
+  IF v_actor IS NULL OR COALESCE(public.workspace_team_role(p_space_id),'') NOT IN('owner','editor') THEN
     RAISE EXCEPTION 'Only team editors can delete tasks' USING ERRCODE='42501';
   END IF;
   SELECT * INTO v_space FROM public.workspace_team_spaces
