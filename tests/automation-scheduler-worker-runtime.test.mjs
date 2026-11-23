@@ -73,7 +73,9 @@ function makeDb(options={}){
           return result(options.policy??{ok:true,allowed:true});
         case "automation_defer_scheduled_run":
           return options.deferError?result(null,{message:"offline simulated defer failure"}):
-            result({ok:true});
+            result(options.deferReceipt??{
+              ok:true,deferred:true,next_run_at:"2026-11-24T00:00:00+00:00",
+            });
         case "automation_complete_scheduled_run":
           return result(options.completion??{ok:true});
         case "automation_fail_scheduled_run":
@@ -457,4 +459,138 @@ test("the worker never leaks raw failures, tenant ids or ciphertext in its obser
   assert.equal(count(db,"automation_prune_schedule_outputs"),0);
   const payload=JSON.stringify(r.body);
   assert.doesNotMatch(payload,/user_id|lease_token|schedule_id|workflow_id|ciphertext|nonce|offline|a{32}|b{32}/);
+});
+
+test("a resolved but malformed failure-recovery success receipt MUST trigger 503 and stop the batch",async()=>{
+  const c1=await claim();
+  const c2=await claim({schedule_id:"66666666-6666-4666-8666-666666666666"});
+  const malformed=[
+    {ok:true},
+    {ok:true,retrying:true},
+    {ok:true,retrying:true,attempts:0},
+    {ok:true,retrying:true,attempts:4},
+    {ok:true,retrying:true,attempts:1.5},
+    {ok:true,retrying:"true",attempts:1},
+    {ok:true,retrying:false,attempts:1},
+    {ok:true,retrying:true,attempts:3},
+    {ok:false,retrying:true,attempts:1},
+  ];
+  for(const recoveryReceipt of malformed){
+    const db=makeDb({claims:[c1,c2],recoveryReceipt,
+      policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+    const r=await tick(db);
+    assert.equal(r.status,503,JSON.stringify(recoveryReceipt));
+    assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+    assert.equal(r.body.failed,1);
+    assert.equal(count(db,"automation_claim_due_schedule"),1);
+    assert.equal(count(db,"automation_fail_scheduled_run"),1);
+    assert.equal(count(db,"automation_prune_schedule_outputs"),0);
+  }
+});
+
+test("third attempt confirmed terminal failure is an acknowledged recovery, not an HTTP error",async()=>{
+  const db=makeDb({claims:[await claim()],recoveryReceipt:{
+    ok:true,retrying:false,attempts:3,
+  },policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+  assert.equal(count(db,"automation_claim_due_schedule"),2);
+});
+
+test("after one successful completion, a second unconfirmed lease stops the tick without hiding the first completion",async()=>{
+  const c1=await claim();
+  const c2=await claim({schedule_id:"66666666-6666-4666-8666-666666666666",
+    lease_token:"77777777-7777-4777-8777-777777777777"});
+  const db=makeDb({claims:[c1,c2],recoveryStale:true});
+  let preflight=0;
+  const original=db.rpc.bind(db);
+  db.rpc=async(name,args)=>{
+    if(name==="automation_workflow_preflight"){
+      preflight++;
+      return result(preflight===1?{ok:true,allowed:true}:
+        {ok:true,allowed:false,reason:"policy_scheduled_disabled"});
+    }
+    return original(name,args);
+  };
+  const r=await tick(db);
+  assert.equal(r.status,503);
+  assert.equal(r.body.processed,1);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.deferred,0);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(count(db,"automation_claim_due_schedule"),2);
+  assert.equal(count(db,"automation_complete_scheduled_run"),1);
+  assert.equal(count(db,"automation_fail_scheduled_run"),1);
+  assert.equal(count(db,"automation_prune_schedule_outputs"),0);
+  assert.doesNotMatch(JSON.stringify(r.body),/ciphertext|nonce|lease_token|workflow_id|user_id/);
+});
+
+test("quota deferral missing next-run time, release acknowledgment or deferred marker must not count as success",async()=>{
+  const invalid=[
+    {ok:true},{ok:true,deferred:true},
+    {ok:true,deferred:true,next_run_at:"invalid-date"},
+    {ok:true,deferred:false,next_run_at:"2026-11-24T00:00:00+00:00"},
+    {ok:false,deferred:true,next_run_at:"2026-11-24T00:00:00+00:00"},
+    {ok:true,deferred:true,next_run_at:1234},
+  ];
+  for(const receipt of invalid){
+    const db=makeDb({claims:[await claim()],deferReceipt:receipt,
+      policy:{ok:true,allowed:false,reason:"policy_daily_limit"}});
+    const r=await tick(db);
+    assert.equal(r.status,200,JSON.stringify(receipt));
+    assert.equal(r.body.deferred,0);
+    assert.equal(r.body.failed,1);
+    assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+    assert.equal(count(db,"automation_fail_scheduled_run"),1);
+    assert.equal(count(db,"automation_defer_scheduled_run"),1);
+  }
+});
+
+test("completion-time quota deferral validates the same SQL receipt contract",async()=>{
+  const db=makeDb({claims:[await claim()],
+    completion:{ok:false,reason:"daily_run_limit"},
+    deferReceipt:{ok:true,deferred:false,next_run_at:"2026-11-24T00:00:00+00:00"}});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.deferred,0);
+  assert.equal(r.body.failed,1);
+  assert.equal(count(db,"automation_complete_scheduled_run"),1);
+  assert.equal(count(db,"automation_defer_scheduled_run"),1);
+  assert.equal(count(db,"automation_fail_scheduled_run"),1);
+});
+
+test("pruning only counts valid nonnegative integer SQL row count as acknowledged maintenance",async()=>{
+  const good=[0,1,2147483647];
+  for(const pruneReceipt of good){
+    const db=makeDb({pruneReceipt});
+    const r=await tick(db);
+    assert.equal(r.status,200);
+    assert.equal(r.body.retentionCleanupFailed,false);
+  }
+  for(const pruneReceipt of [{ok:true},"0",-1,1.5,null,NaN,Infinity]){
+    const db=makeDb({pruneReceipt});
+    const r=await tick(db);
+    // Null selects the fixture default, so that particular case is not an
+    // invalid receipt for this mock; other values are checked strictly.
+    if(pruneReceipt===null)continue;
+    assert.equal(r.status,200);
+    assert.equal(r.body.retentionCleanupFailed,true,String(pruneReceipt));
+    assert.equal(count(db,"automation_prune_schedule_outputs"),1);
+  }
+});
+
+test("no recursive retry or additional claim is performed after an ambiguous lease recovery",async()=>{
+  const db=makeDb({claims:[await claim()],recoveryThrows:true,
+    policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.equal(r.status,503);
+  assert.equal(count(db,"automation_claim_due_schedule"),1);
+  assert.equal(count(db,"automation_fail_scheduled_run"),1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(r.body.processed,0);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.deferred,0);
+  assert.equal(r.body.schedulerEnabled,undefined);
 });
