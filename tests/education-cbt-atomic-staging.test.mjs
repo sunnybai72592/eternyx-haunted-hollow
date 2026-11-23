@@ -104,7 +104,7 @@ test("12: server submission owns final status and refuses null timing", () => {
 
 test("13: production remains on legacy path until the feature flag is explicitly enabled", () => {
   assert.match(client, /import\.meta\.env\.VITE_CBT_ATOMIC_RPC === "true"/);
-  assert.match(exam, /if \(atomicCbtEnabled\) \{\s+return await startCbtAttempt\(testId!\)/);
+  assert.match(exam, /if \(atomicCbtEnabled\) \{\s+return validateEducationAttemptEnvelope\(await startCbtAttempt\(testId!\)\)/);
   assert.match(exam, /Legacy path is retained only while the coordinated server rollout is/);
   assert.match(guide, /Never enable the flag without/);
 });
