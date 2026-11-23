@@ -193,7 +193,7 @@ test("REAL full private phone movie: 30FPS MOV + 24FPS MP4 -> 16FPS prepared cli
     assert.ok(readFileSync(join(out,"preview.html"),"utf8").length>100);
     assert.ok(readFileSync(join(out,"poster.png")).subarray(0,8)
       .equals(Buffer.from([137,80,78,71,13,10,26,10])));
-    assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/^WEBVTT\\n/);
+    assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/^WEBVTT\n/);
     assert.match(readFileSync(join(out,"watch.html"),"utf8"),/<video controls/);
     const inspect=JSON.parse(run("ffprobe",[
       "-v","error","-count_frames","-show_entries",
