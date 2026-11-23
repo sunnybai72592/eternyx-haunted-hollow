@@ -10,6 +10,44 @@ on:
       - 'tests/ctf-firecracker-hardware-acceptance.test.mjs'
       - 'infrastructure/cyber-range/provider/firecracker-hardware-evidence.mjs'
       - 'tests/ctf-firecracker-hardware-evidence.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-guest-probe.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-expiry-drill.mjs'
+      - 'infrastructure/cyber-range/guest/eternyx_vsock_probe.py'
+      - 'tests/ctf-firecracker-guest-probe-expiry.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-operator-evidence.mjs'
+      - 'tests/ctf-firecracker-operator-evidence.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-independent-review.mjs'
+      - 'scripts/cyber-range-independent-review.mjs'
+      - 'tests/ctf-firecracker-independent-review.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-operator-handoff.mjs'
+      - 'scripts/cyber-range-operator-handoff.mjs'
+      - 'tests/ctf-firecracker-operator-handoff.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-handoff-import-journal.mjs'
+      - 'tests/ctf-firecracker-handoff-import-journal.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-evidence-consistency.mjs'
+      - 'tests/ctf-firecracker-evidence-consistency.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-review-disposition.mjs'
+      - 'tests/ctf-firecracker-review-disposition.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-review-checkpoint.mjs'
+      - 'scripts/cyber-range-review-checkpoint.mjs'
+      - 'tests/ctf-firecracker-review-checkpoint.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-runtime-observations.mjs'
+      - 'tests/ctf-firecracker-runtime-observations.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-runtime-addendum.mjs'
+      - 'scripts/cyber-range-runtime-addendum.mjs'
+      - 'tests/ctf-firecracker-runtime-addendum.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-offline-atomic-publish.mjs'
+      - 'tests/ctf-firecracker-offline-atomic-publish.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-private-safe-read.mjs'
+      - 'tests/ctf-firecracker-private-safe-read.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-case-snapshot.mjs'
+      - 'tests/ctf-firecracker-case-snapshot.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-complete-case-audit.mjs'
+      - 'scripts/cyber-range-complete-case-audit.mjs'
+      - 'tests/ctf-firecracker-complete-case-audit.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-portable-audit-receipt.mjs'
+      - 'scripts/cyber-range-portable-audit.mjs'
+      - 'tests/ctf-firecracker-portable-audit-receipt.test.mjs'
       - 'tests/ctf-firecracker-systemd-supervisor.test.mjs'
       - 'tests/ctf-firecracker-boot-controller.test.mjs'
       - '.github/workflows/ctf-firecracker-hardware-acceptance.yml'
@@ -33,6 +71,21 @@ jobs:
         run: |
           node --test tests/ctf-firecracker-hardware-acceptance.test.mjs \
             tests/ctf-firecracker-hardware-evidence.test.mjs \
+            tests/ctf-firecracker-guest-probe-expiry.test.mjs \
+            tests/ctf-firecracker-operator-evidence.test.mjs \
+            tests/ctf-firecracker-independent-review.test.mjs \
+            tests/ctf-firecracker-operator-handoff.test.mjs \
+            tests/ctf-firecracker-handoff-import-journal.test.mjs \
+            tests/ctf-firecracker-evidence-consistency.test.mjs \
+            tests/ctf-firecracker-review-disposition.test.mjs \
+            tests/ctf-firecracker-review-checkpoint.test.mjs \
+            tests/ctf-firecracker-runtime-observations.test.mjs \
+            tests/ctf-firecracker-runtime-addendum.test.mjs \
+            tests/ctf-firecracker-offline-atomic-publish.test.mjs \
+            tests/ctf-firecracker-private-safe-read.test.mjs \
+            tests/ctf-firecracker-case-snapshot.test.mjs \
+            tests/ctf-firecracker-complete-case-audit.test.mjs \
+            tests/ctf-firecracker-portable-audit-receipt.test.mjs \
             tests/ctf-firecracker-systemd-supervisor.test.mjs \
             tests/ctf-firecracker-boot-controller.test.mjs
       - name: No operator approval must refuse live guest boot

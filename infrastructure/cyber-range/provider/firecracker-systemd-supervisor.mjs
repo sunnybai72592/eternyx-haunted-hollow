@@ -38,7 +38,11 @@ export function supervisedNetns(sessionId){
   if(!validSessionId(sessionId))throw Error("Invalid microVM namespace");
   return "eternyx-"+projectForSession(sessionId);
 }
-export function supervisedUnitSpec(sessionId,manifest,uid,gid){
+export function supervisedUnitSpec(sessionId,manifest,uid,gid,{
+  retainTimeoutResult=false,
+}={}){
+  if(typeof retainTimeoutResult!=="boolean")
+    throw Error("Invalid local systemd result retention mode");
   const cmd=buildHardenedJailerCommand({sessionId,manifest,uid,gid});
   // Critical: the offline service's systemd cgroup MUST own the Firecracker
   // process. Jailer --cgroup settings create a separate host cgroup, outside
@@ -60,7 +64,8 @@ export function supervisedUnitSpec(sessionId,manifest,uid,gid){
   return Object.freeze({unit,
     executable:"systemd-run",
     argv:Object.freeze([
-      "--unit="+unit,"--collect","--service-type=exec",
+      "--unit="+unit,...(retainTimeoutResult?[]:["--collect"]),
+      "--service-type=exec",
       "--description=ETERNYX offline microVM "+projectForSession(sessionId),
       "--property=RuntimeMaxSec=900s",
       "--property=KillMode=control-group",
@@ -267,15 +272,23 @@ export class SystemdMicrovmSupervisor {
     ]));
   }
   async launchJailer({sessionId,manifest,uid,gid,jailerSha256,
-    firecrackerSha256}={}){
+    firecrackerSha256,retainTimeoutResult=false}={}){
     if(this.#platform!=="linux"||this.#uid!==0 ||
        this.#env.ETERNYX_FIRECRACKER_HOST_EXECUTION!=="operator_approved" ||
        this.#env.ETERNYX_RANGE_OPERATOR_ACK!=="LOCAL_ONLY_NO_PUBLIC_INGRESS" ||
        this.#env.ETERNYX_RANGE_RUNTIME==="firecracker"){
       throw Error("Firecracker host launch requires separate local-only root opt-in");
     }
-    // No existing public/production provider runtime is activated here.
-    const plan=supervisedUnitSpec(sessionId,manifest,uid,gid);
+    if(retainTimeoutResult!==false && (
+       retainTimeoutResult!==true ||
+       this.#env.ETERNYX_FIRECRACKER_EXPIRY_DRILL!==
+         "I_APPROVE_LOCAL_900_SECOND_WATCHDOG_DRILL"))
+      throw Error("Retained systemd timeout result requires separate approval");
+    // Only the deliberately approved timeout drill retains a failed unit's
+    // Result=timeout until read; normal short smoke still uses --collect.
+    const plan=supervisedUnitSpec(sessionId,manifest,uid,gid,{
+      retainTimeoutResult,
+    });
     await this.#launchGate();
     const hostCheck=await this.#preflight({sessionId,manifest,
       jailerSha256,firecrackerSha256,exec:(...args)=>this.#command(...args)});
@@ -359,6 +372,17 @@ export class SystemdMicrovmSupervisor {
     verifySystemdUnitProperties(sessionId,props,{allowStopped:true});
     this.#command("systemctl",["stop",supervisedVmUnit(sessionId)]);
     return {requested:true,unit:supervisedVmUnit(sessionId)};
+  }
+  /**
+   * Read-only independent timeout attribution after proving an empty cgroup.
+   * With --collect, systemd may unload the unit; missing Result fails closed.
+   */
+  async verifyTimedOut(sessionId){
+    if(await this.verifyDead(sessionId)!==true)return false;
+    const out=this.#command("systemctl",[
+      "show",supervisedVmUnit(sessionId),"-pResult",
+    ]);
+    return out.trim()==="Result=timeout";
   }
   async verifyDead(sessionId){
     const raw=this.#read(sessionId),p=parseSystemdUnitShow(raw);

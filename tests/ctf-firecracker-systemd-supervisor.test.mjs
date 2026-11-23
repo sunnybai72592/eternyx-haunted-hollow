@@ -368,3 +368,53 @@ test("CLI and supervisor remain local-only, never run automatically at app start
   assert.doesNotMatch(cli,/launchJailer\(/);
   assert.match(boot,/bootJailedMicrovm/);
 });
+
+
+test("900-second drill keeps Result only under a distinct operator approval",async()=>{
+  const host=fakeHost();
+  const base={
+    sessionId:session,manifest:validGuest(),uid:22001,gid:22001,
+    jailerSha256:"f".repeat(64),firecrackerSha256:"e".repeat(64),
+    retainTimeoutResult:true,
+  };
+  const normal=makeSupervisor(host);
+  await assert.rejects(normal.launchJailer(base),/separate approval/);
+  assert.equal(host.calls.some(c=>c.name==="systemd-run"),false);
+  const approved=makeSupervisor(host,{env:{
+    ETERNYX_FIRECRACKER_HOST_EXECUTION:"operator_approved",
+    ETERNYX_RANGE_OPERATOR_ACK:"LOCAL_ONLY_NO_PUBLIC_INGRESS",
+    ETERNYX_FIRECRACKER_EXPIRY_DRILL:"I_APPROVE_LOCAL_900_SECOND_WATCHDOG_DRILL",
+  }});
+  await approved.launchJailer(base);
+  const call=host.calls.find(c=>c.name==="systemd-run");
+  assert.ok(call);
+  assert.equal(call.args.includes("--collect"),false);
+  assert.ok(call.args.includes("--property=RuntimeMaxSec=900s"));
+  await approved.terminate(session);
+  assert.equal(await approved.verifyDead(session),true);
+});
+
+test("expiry result requires stopped guest, zero descendants, exact systemd timeout",async()=>{
+  const host=fakeHost({cgroupText:"",populated:0});
+  const oldRun=host.run.bind(host);
+  let result="Result=timeout";
+  let alive=false;
+  host.run=(name,args)=>{
+    if(name==="systemctl"&&args[0]==="show"&&args.includes("-pResult"))
+      return result;
+    if(name==="systemctl"&&args[0]==="show")
+      return makeShow(alive?{}:{
+        ActiveState:"failed",SubState:"failed",MainPID:"0",
+      });
+    return oldRun(name,args);
+  };
+  const s=makeSupervisor(host);
+  assert.equal(await s.verifyTimedOut(session),true);
+  result="Result=success";
+  assert.equal(await s.verifyTimedOut(session),false);
+  result="Result=";
+  assert.equal(await s.verifyTimedOut(session),false);
+  result="Result=timeout";
+  alive=true;
+  assert.equal(await s.verifyTimedOut(session),false);
+});

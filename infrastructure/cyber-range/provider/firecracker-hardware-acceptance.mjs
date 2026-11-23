@@ -9,6 +9,10 @@
  * No image downloads, namespace creation, public ports, Docker or cloud.
  */
 import {lstat} from "node:fs/promises";
+import {performance} from "node:perf_hooks";
+import {probeOfflineGuest} from "./firecracker-guest-probe.mjs";
+import {observeIndependentExpiry,requireLocalExpiryDrillApproval} from
+  "./firecracker-expiry-drill.mjs";
 import {setTimeout as sleep} from "node:timers/promises";
 import {validSessionId} from
   "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
@@ -129,10 +133,22 @@ export async function runOfflineHardwareAcceptance({
   socketReady=waitForJailedFirecrackerSocket,
   boot=bootJailedMicrovm,
   pause=(ms,signal)=>sleep(ms,undefined,{signal}),
+  guestProbeEnabled=false,expiryDrill=false,
+  guestProbe=probeOfflineGuest,observeExpiry=observeIndependentExpiry,
+  now=()=>performance.now(),
   signal,
 }={}){
   verifyConfig({sessionId,manifest,uid,gid,jailerSha256,firecrackerSha256});
   requireLocalHardwareApproval(approval);
+  if(guestProbeEnabled!==true&&guestProbeEnabled!==false ||
+     expiryDrill!==true&&expiryDrill!==false)
+    throw Error("Invalid optional offline acceptance mode");
+  if(expiryDrill)requireLocalExpiryDrillApproval(approval);
+  if((guestProbeEnabled&&typeof guestProbe!=="function") ||
+     (expiryDrill&&(typeof observeExpiry!=="function"||
+      typeof supervisor?.verifyTimedOut!=="function")) ||
+      typeof now!=="function")
+    throw Error("Missing trusted offline guest and expiry verifier");
   if(typeof supervisor?.launchJailer!=="function" ||
      typeof supervisor.attest!=="function" ||
      typeof supervisor.terminate!=="function" ||
@@ -151,8 +167,10 @@ export async function runOfflineHardwareAcceptance({
   let evidence;
   let error;
   try{
+    const wallStartMs=now();
     const status=await supervisor.launchJailer({
       sessionId,manifest,uid,gid,jailerSha256,firecrackerSha256,
+      retainTimeoutResult:expiryDrill,
     });
     // A service may exist even when its receipt is malformed. Any resolved
     // launch must receive unconditional kill and death verification.
@@ -186,12 +204,35 @@ export async function runOfflineHardwareAcceptance({
        observed.externalWatchdogArmed!==true||observed.cgroupEnforced!==true||
        observed.cloudProvisioningAllowed!==false)
       throw Error("Offline guest stopped or lost isolation during observation");
+    if(guestProbeEnabled){
+      const proof=await guestProbe({sessionId,guardian:supervisor,signal});
+      if(proof?.guestServiceFunctional!==true ||
+         proof.challengeResponseVerified!==true||
+         proof.localVsockOnly!==true)
+        throw Error("Offline guest service did not respond correctly");
+    }
+    if(expiryDrill){
+      const expiry=await observeExpiry({
+        sessionId,supervisor,wallStartMs,signal,now,
+      });
+      if(expiry?.expiryDrillVerified!==true ||
+         expiry.systemdTimeoutResultVerified!==true ||
+         expiry.noCgroupDescendants!==true)
+        throw Error("Independent systemd watchdog expiry was not proven");
+    }
     evidence={
       accepted:true,sessionId,unit:supervisedVmUnit(sessionId),
       bootApiAccepted:true,offlineNetnsAttested:true,
       independentDeadlineSeconds:900,
       localKvmGuestObserved:true,publicLabsEnabled:false,
       cloudProvisioningAllowed:false,providerHardLimitVerified:false,
+      ...(guestProbeEnabled?{
+        guestServiceFunctional:true,guestChallengeResponseVerified:true,
+      }:{}),
+      ...(expiryDrill?{
+        full900SecondExpiryObserved:true,systemdTimeoutResultVerified:true,
+        noCgroupDescendants:true,
+      }:{}),
     };
   }catch(e){
     error=e;
