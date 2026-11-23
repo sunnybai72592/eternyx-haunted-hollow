@@ -218,8 +218,27 @@ def editing_and_diagnostics(page):
     page.get_by_role("button", name="Save browser copy").click()
     assert len(store(page, PROJECT_KEY)[0]["files"]) == 6
     page.locator("#project-editor").fill("Unsaved draft that can be reversed")
-    page.get_by_role("button", name="Restore saved file").click()
+    expect(page.get_by_role("heading", name="Saved-vs-working review")).to_be_visible()
+    expect(page.get_by_role("button", name="Undo edit (1)")).to_be_enabled()
+    with page.expect_download() as exported:
+        page.get_by_role("button", name="Export source-free changes").click()
+    review = json.loads(Path(exported.value.path()).read_text(encoding="utf-8"))
+    assert review["schema"] == "eternyx-developer-revisions-v1"
+    assert review["changedFiles"] == 1
+    assert "Unsaved draft" not in json.dumps(review)
+    page.get_by_role("group", name="Project files").get_by_role("button", name="app.js").click()
+    page.get_by_role("group", name="Project files").get_by_role("button", name="field-notes.md").click()
+    page.get_by_role("button", name="Undo edit (1)").click()
     expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
+    page.get_by_role("button", name="Redo edit (1)").click()
+    expect(page.locator("#project-editor")).to_have_value("Unsaved draft that can be reversed")
+    page.get_by_role("group", name="Changed project files").get_by_role(
+        "button", name=re.compile("field-notes.md")).click()
+    page.get_by_role("button", name="Open changed line").click()
+    assert page.locator("#project-editor").evaluate("(el) => el.selectionStart") == 0
+    page.get_by_role("button", name="Restore saved file").first.click()
+    expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
+    expect(page.get_by_text("No differences from the last explicitly saved project.")).to_be_visible()
 
 def actual_preflight(page):
     page.get_by_role("group", name="Project files").get_by_role("button", name="app.js").click()
