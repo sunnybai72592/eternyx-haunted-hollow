@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Download, FilePlus2, FolderOpen, Play, RotateCcw, Save, ShieldCheck, Trash2, Upload, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
+import { replaceDeveloperFileText } from "@/lib/developerProjectInspection.mjs";
 import {
   PROJECT_STORAGE_KEY, MAX_PROJECT_FILES, MAX_SAVED_PROJECTS,
   addDeveloperFile, checkDeveloperProject, createDeveloperProject, editDeveloperFile,
@@ -45,11 +47,17 @@ export default function DeveloperProjectLab() {
   const [previewSource, setPreviewSource] = useState("");
   const [previewRun, setPreviewRun] = useState(0);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const [selection, setSelection] = useState<{ file: string; index: number; length: number } | null>(null);
   const file = project.files.find((item) => item.name === activeFile) || project.files[0];
   const currentSource = JSON.stringify(project.files);
   const dirty = savedCopy !== JSON.stringify(project);
   const previewStale = previewHtml !== null && previewSource !== currentSource;
   const findings = useMemo(() => checkDeveloperProject(project), [project]);
+  const savedBaseline = useMemo(() => {
+    try { return savedCopy ? normalizeDeveloperProject(JSON.parse(savedCopy)) : null; }
+    catch { return null; }
+  }, [savedCopy]);
   const alert = (message: string, error = false) => setFeedback({ message, error });
 
   useEffect(() => {
@@ -58,6 +66,30 @@ export default function DeveloperProjectLab() {
     window.addEventListener("beforeunload", confirmLeave);
     return () => window.removeEventListener("beforeunload", confirmLeave);
   }, [dirty]);
+
+  useEffect(() => {
+    if (!selection || selection.file !== file.name) return;
+    editorRef.current?.focus();
+    editorRef.current?.setSelectionRange(selection.index, selection.index + selection.length);
+  }, [selection, file.name]);
+
+  const jumpToMatch = (match: { file: string; index: number; length: number }) => {
+    setActiveFile(match.file);
+    setSelection({ file: match.file, index: match.index, length: match.length });
+  };
+  const replaceActiveText = (query: string, replacement: string, all: boolean) => {
+    try {
+      const result = replaceDeveloperFileText(project, file.name, query, replacement, all);
+      if (!result.count) { alert("No exact-case matches in the active file."); return; }
+      const next = commit(() => result.project);
+      if (next) {
+        setSelection(null);
+        alert("Replaced " + result.count + " occurrence(s) in " + file.name + ". Change checkpoint created; save explicitly to persist.");
+      }
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Replacement failed.", true);
+    }
+  };
 
   const safeTransition = () => !dirty || window.confirm("You have unsaved project changes. Continue and discard them?");
   const applyProject = (next: Project, markSaved = false) => {
@@ -211,7 +243,7 @@ export default function DeveloperProjectLab() {
           <CardHeader><CardTitle>Code editor · {file.name}</CardTitle><CardDescription className="text-slate-400">Plain text editor. Changes remain in memory until you click Save browser copy or Export. No compilation or IntelliSense is claimed.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
             <Label htmlFor="project-editor">File contents</Label>
-            <Textarea id="project-editor" value={file.content} onChange={(e) => update((old) => editDeveloperFile(old, file.name, e.target.value))}
+            <Textarea id="project-editor" ref={editorRef} value={file.content} onChange={(e) => update((old) => editDeveloperFile(old, file.name, e.target.value))}
               spellCheck={false} className="min-h-[420px] max-h-[70vh] overflow-y-auto border-slate-700 bg-slate-950 font-mono text-sm text-slate-100" />
             <div className="flex flex-wrap justify-between gap-2"><span className="text-xs text-slate-400">{file.content.length} / 20,000 characters</span>
               <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={createCheckpoint}><Save className="mr-2 h-4 w-4" />Checkpoint</Button>
@@ -219,6 +251,9 @@ export default function DeveloperProjectLab() {
           </CardContent>
         </Card>
       </div>
+
+      <ProjectInspectionPanel project={project} baseline={savedBaseline} activeFile={file.name}
+        onJump={jumpToMatch} onReplace={replaceActiveText} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="border-slate-800 bg-slate-900/70 text-white">
