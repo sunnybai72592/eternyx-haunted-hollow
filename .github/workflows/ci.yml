@@ -35,6 +35,11 @@ jobs:
         run: node scripts/workspace-release-readiness.mjs --source-check
       - name: Verify Phase 21 staging acceptance runner syntax without remote credentials
         run: node --check scripts/workspace-team-staging-acceptance.mjs
+      - name: Verify Phase 22 realtime staging runner syntax without network credentials
+        run: |
+          node --check scripts/workspace-team-staging-realtime.mjs
+          node --check src/lib/workspaceRealtimeAcceptance.mjs
+          node --check tests/workspace-staging-realtime.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
