@@ -116,6 +116,13 @@ def preview_isolation(page):
     assert "worker-src 'none'" in doc
     preview=page.frame_locator('iframe[title="Isolated project preview"]')
     expect(preview.locator("#message")).to_have_text("Try editing these files.")
+    # The HTML renders before the trailing inline app.js attaches its click handler.
+    # Wait for the sandboxed document load so a fast desktop click is meaningful.
+    preview.locator("#hello").evaluate("""element => new Promise(resolve => {
+      const doc = element.ownerDocument;
+      if (doc.readyState === "complete") return resolve(true);
+      doc.defaultView.addEventListener("load", () => resolve(true), { once: true });
+    })""")
     preview.locator("#hello").click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
     page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
