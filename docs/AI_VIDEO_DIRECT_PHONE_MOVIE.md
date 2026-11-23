@@ -78,3 +78,37 @@ the original verified conversion suite and
   recording is too short.
 - Verify that the Studio actually exposes the direct-render fields and
   makes no media-upload or external AI job requests.
+
+## Next release: final quality and one-launch delivery formats
+
+- The **standard** H.264 output stays at 256×144 landscape / 144×256 portrait /
+  256×256 square (16 FPS). The **high** preset outputs 512×288 / 288×512 /
+  512×512 with the CPU `medium` H.264 encoder, CRF 19 instead of CRF 23,
+  and Lanczos aspect-preserving resampling. Resizing does not invent detail
+  absent from the original phone footage. Both presets retain YUV420p and
+  streamable faststart MP4.
+- Every movie contains verified `video.mp4`, `captions.srt`,
+  `preview.html` and `manifest.json`. In the *same* direct movie
+  export selector, choose **MP4 only**, **MP4 + selectable-caption MP4**,
+  **MP4 + VP9 WebM**, or **all three video files**.
+- Optional `video-subtitled.mp4` includes a real `mov_text` subtitle stream
+  (not burned-in lettering). Optional `video.webm` is encoded with local
+  `libvpx-vp9` and uses no cloud services. The local ffmpeg build must
+  support those encoders when selected, and the automatic `--check` preflight
+  verifies the needed capabilities before conversion.
+- Every requested video is independently checked for **actual decoded frames,
+  dimensions, exact codec**, and output SHA-256; an embedded-caption MP4 must
+  contain exactly one verified selectable subtitle track. The manifest
+  records these real artifacts without falsely claiming digital signatures.
+- The complete folder becomes visible only after **all** requested formats
+  succeed. If an optional encode fails, no partial finished folder is
+  published; genuine already-prepared clips stay available. Existing v1
+  movie plans without a delivery field remain valid and produce MP4 + SRT.
+- This is still an **offline editor of existing licensed footage**, *not*
+  generated AI video. Audio is deliberately absent in the direct phone flow;
+  editable SRT is always supplied. There are no extra manual steps beyond
+  the existing ZIP extract and launcher.
+
+Acceptance includes actual 24/30 FPS source transcodes, high preset inspection,
+real WebM/MP4 subtitle codec and frame verification, option validation, and
+backward-compatible MP4-only plans.
