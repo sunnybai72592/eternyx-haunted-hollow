@@ -80,8 +80,11 @@ export default function LabsPracticeChallenges(){
     setFeedbackError(null);
   };
   const next=()=>{
-    const index=PRACTICE_CASES.findIndex(c=>c.id===activeId);
-    selectCase(PRACTICE_CASES[(index+1)%PRACTICE_CASES.length].id);
+    // Navigation obeys the user's current search, status and bookmark filters.
+    const matching=visibleTracks.flatMap(t=>filterPracticeCases(t.id,filters));
+    if(!matching.length){setNavigationNotice("No cases match these filters.");return;}
+    const index=matching.findIndex(c=>c.id===activeId);
+    selectCase(matching[(index+1)%matching.length].id);
   };
   const nextUnfinished=()=>{
     const id=nextUnfinishedPracticeCase(activeId,passed);
@@ -140,7 +143,7 @@ export default function LabsPracticeChallenges(){
             const activeTrack=track.id===t.id;
             return (
               <button key={t.id} type="button" aria-pressed={activeTrack}
-                onClick={()=>selectCase(PRACTICE_CASES.find(c=>c.track===t.id)!.id)}
+                onClick={()=>selectCase(filterPracticeCases(t.id,filters)[0].id)}
                 className={"min-h-20 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary "+
                   (activeTrack?"border-primary/50 bg-primary/[0.09]":"border-border/60 bg-background/50 hover:border-primary/35")}>
                 <span className="block text-sm font-semibold">{t.title}</span>
@@ -171,6 +174,9 @@ export default function LabsPracticeChallenges(){
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">{track.title} · {cases.findIndex(c=>c.id===activeId)+1} of 3</p>
             <h3 className="text-xl font-bold">{active.title}</h3>
+            {!visibleCases.some(c=>c.id===activeId)&&<p role="status" className="text-xs text-muted-foreground">
+              This open scenario is outside your current filters. Choose a matching case or select Next scenario.
+            </p>}
             <p className="text-sm leading-6">{active.prompt}</p>
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/70 bg-card/75 p-4 font-mono text-xs leading-6">{active.scenario}</pre>
           </div>

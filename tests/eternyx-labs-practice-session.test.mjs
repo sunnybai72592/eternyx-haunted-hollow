@@ -51,6 +51,14 @@ test("tampered, duplicate, oversized and versioned payloads fail closed",()=>{
     assert.throws(()=>importPracticeSession(data));
   assert.throws(()=>exportPracticeSession(["tampered"],[]));
 });
+test("filtered navigation selects matching cases without silently discarding filters",async()=>{
+  const ui=await readFile(new URL("../src/components/labs/LabsPracticeChallenges.tsx",import.meta.url),"utf8");
+  assert.match(ui,/visibleTracks\.flatMap\(t=>filterPracticeCases\(t\.id,filters\)\)/);
+  assert.match(ui,/filterPracticeCases\(t\.id,filters\)\[0\]\.id/);
+  assert.match(ui,/This open scenario is outside your current filters/);
+  assert.match(ui,/Next unfinished/);
+  assert.match(ui,/Bookmark scenario/);
+});
 test("session helper is pure and does not store, fetch or claim trusted grades",async()=>{
   const helper=await readFile(new URL("../src/lib/eternyxLabsPracticeSession.mjs",import.meta.url),"utf8");
   assert.doesNotMatch(helper,/\bfetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|WebSocket|Math\.random/);
