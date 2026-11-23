@@ -42,8 +42,8 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
   const [lastRun, setLastRun] = useState<{ signature: string; report: Report } | null>(null);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
   const [issuesOnly, setIssuesOnly] = useState(true);
-  const signature = useMemo(() => JSON.stringify([project.files, baseline?.files ?? null]),
-    [project.files, baseline]);
+  const signature = useMemo(() => JSON.stringify([project.id, project.name, project.files, baseline ? [baseline.id, baseline.name, baseline.files] : null]),
+    [project.id, project.name, project.files, baseline]);
   const report = lastRun?.report ?? null;
   const stale = Boolean(lastRun && lastRun.signature !== signature);
   const tell = (message: string, error = false) => setFeedback({ message, error });
