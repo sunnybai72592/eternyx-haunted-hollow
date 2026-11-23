@@ -16,7 +16,7 @@ const safe=()=>Object.fromEntries(REQUIRED_AUDITOR_ASSERTIONS.map(k=>[k,true]));
 const now=new Date('2026-11-23T21:00:00Z');
 const ref='abcdefghijklmnopqrst';
 const fixtures=()=>[
- {role:'services_staging_auditor',db:'postgres',server_time:'2026-11-23T21:00:00+00:00',auditor_privileges:safe()},
+ {role:'services_staging_auditor',db:'postgres',server_time:'2026-11-23T21:00:00+00:00',auditor_privileges:safe(),routine_surface:{volatile_security_definer_execute_denied:true,private_helper_schema_usage_denied:true,security_definer_procedures_execute_denied:true}},
  {managed_migrations:[
   'service_requests','service_request_activity','service_scope_triage',
   'services_delivery_gate','service_admin_attention_queue','service_write_rate_limits',
