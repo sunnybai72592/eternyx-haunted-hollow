@@ -352,9 +352,10 @@ export default function TestInterface() {
     try {
       const attemptId = attemptQuery.data.id;
       if (atomicCbtEnabled) {
-        if (restoreReady) {
+        if (restoreReady && Date.now() < deadline!) {
           try {
-            // This flush is only for a fully hydrated owner-scoped queue.
+            // Only send answers inside the original time window, from a
+            // fully hydrated, owner-scoped queue. After expiry, finalize only.
             await flushPendingAnswers();
           } catch (error) {
             // Once the original deadline has passed, only finalization may
