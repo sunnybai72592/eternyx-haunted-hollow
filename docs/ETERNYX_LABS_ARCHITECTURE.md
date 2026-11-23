@@ -673,3 +673,32 @@ No hosted Labs activation, external security assessment, paid GPU/AI
 service, live scanning, database writes or authenticated learner
 certificate is introduced. Manual browser and accessibility testing
 is still required after automated CI.
+
+
+## Phase 11 — seventy-five answer-checked cryptography and data-security challenges
+
+Following merged PR #621 (35 working offline stations), the practice center now includes
+**75 unique open-book exercises across 25 tracks**, preserving the original first 60
+unchanged in order. Five three-case tracks reuse the actual browser-local engines:
+
+1. PBKDF2-SHA256: two real known-input 256-bit derivations with distinct work factors and one measured output-length exercise. Fixed 16-byte salts and passphrases are **synthetic lesson fixtures only**.
+2. AES-256-GCM: real UTF-8 payload-byte count, ciphertext length including the 128-bit tag, and confirmed authenticated decryption failure after ciphertext tampering. New ephemeral non-exportable key and random nonce per attempt.
+3. RFC 6238 TOTP: eight-digit published SHA-1 vectors, including a leading-zero code, and one six-digit example. These synthetic seeds do not enroll or validate a real account.
+4. Browser origin distinctions: exact default-port normalization, HTTP/HTTPS scheme and explicit non-default ports. No remote URL is resolved or contacted.
+5. CSV formula neutralization: formula-trigger counts including whitespace variants and one-column RFC 4180-style serialization counts; safety is destination-application-dependent.
+
+All crypto answer keys are computed **asynchronously by Web Crypto**, with
+explicit errors if it is unavailable; origin and CSV answers use their
+actual synchronous offline analyzers. Input is bounded to 64 answer characters,
+OTP formatting requires exact digit counts, and previous request-sequence
+fencing prevents stale asynchronous grades from appearing after an edit or switch.
+The calculated answer is deliberately shown as open-book feedback. Local check
+marks exist only in component memory—not browser storage, a database, a verified
+exam, or a credential. No real passwords, authentication seeds, credentials,
+customer data, outside targets, paid APIs or host Docker access are used.
+
+Regression checks include independent Node PBKDF2 references, RFC 6238
+known vectors, authenticated tamper rejection, boundary parsing,
+wrong-answer and malformed-input checks, prior 60-case preservation,
+accessibility markers, and no-network/no-persistence contracts. Manual
+mobile/desktop and CI checks remain release requirements.

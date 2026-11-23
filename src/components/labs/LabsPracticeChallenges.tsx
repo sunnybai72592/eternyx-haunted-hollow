@@ -145,7 +145,9 @@ export default function LabsPracticeChallenges(){
                 active.kind==="bigint"?"Your exact decimal integer":active.kind==="octal"?"Your octal mode":
                 active.kind==="boolean"?"Choose Yes or No":
                 active.kind==="base64url"?"Your case-sensitive Base64url challenge":
-                active.kind==="hex64"?"Your 64-character HMAC digest":"Your whole-number answer"}
+                active.kind==="hex64"?"Your 64-character hexadecimal digest":
+                active.kind==="otp8"?"Your exact eight-digit OTP (keep leading zeroes)":
+                active.kind==="otp6"?"Your exact six-digit OTP (keep leading zeroes)":"Your whole-number answer"}
             </label>
             {active.kind==="boolean"
               ?<select id="labs-practice-answer" required value={answer}
@@ -161,7 +163,9 @@ export default function LabsPracticeChallenges(){
                     active.kind==="bigint"?"e.g. 340282366920938463463374607431768211456":
                     active.kind==="octal"?"e.g. 750":
                     active.kind==="base64url"?"43 unpadded Base64url characters":
-                    active.kind==="hex64"?"64 hexadecimal characters":"e.g. 4"}
+                    active.kind==="hex64"?"64 hexadecimal characters":
+                    active.kind==="otp8"?"Exactly 8 digits, e.g. 07081804":
+                    active.kind==="otp6"?"Exactly 6 digits, e.g. 287082":"e.g. 4"}
                   value={answer}
                   onChange={event=>editAnswer(event.target.value)}
                   className={fieldClass}/>}
