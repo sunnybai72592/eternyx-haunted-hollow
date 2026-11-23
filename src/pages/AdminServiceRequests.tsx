@@ -667,7 +667,6 @@ export default function AdminServiceRequests() {
                 <CheckCircle2 className="mr-2 h-4 w-4" />{checkingId === item.id ? 'Recording…' : 'Mark checked'}
               </Button>
               <Button type="button" variant="outline" onClick={() => void copyAdminLink(item.id)}><Link2 className="mr-2 h-4 w-4" />Copy admin link</Button>
-              <ServiceRequestSectionLinks requestId={item.id} ownerId={item.user_id} mode="admin" />
               <Button type="button" variant="outline" aria-expanded={openConversation === item.id} onClick={() => setOpenConversation((current) => current === item.id ? null : item.id)}>
                 <MessageCircle className="mr-2 h-4 w-4" />{openConversation === item.id ? 'Close conversation' : 'Customer conversation'}
               </Button>
@@ -692,6 +691,7 @@ export default function AdminServiceRequests() {
                 {openScope === item.id ? 'Close scope reviews' : 'Scope review & publish'}
               </Button>
             </div>
+            <ServiceRequestSectionLinks requestId={item.id} ownerId={item.user_id} mode="admin" />
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
             {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
