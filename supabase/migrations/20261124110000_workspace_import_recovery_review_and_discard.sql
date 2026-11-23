@@ -213,3 +213,41 @@ REVOKE ALL ON FUNCTION public.workspace_import_finalize_discard(uuid)
   FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.workspace_import_finalize_discard(uuid)
   TO authenticated;
+
+
+-- Phase 1 is reversible before final removal. This operation never removes
+-- data or Storage objects, and can also recover a prepared import after a
+-- lost browser response.
+CREATE OR REPLACE FUNCTION public.workspace_import_cancel_discard(p_session_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $workspace_import_cancel_discard$
+DECLARE
+  v_owner uuid := (SELECT auth.uid());
+  v_session public.workspace_import_sessions%ROWTYPE;
+BEGIN
+  SELECT * INTO v_session FROM public.workspace_import_sessions s
+    WHERE s.id=p_session_id AND s.owner_id=v_owner FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Import session not found or not owned' USING ERRCODE='42501';
+  END IF;
+  IF v_session.status='active' THEN RETURN true; END IF;
+  IF v_session.status<>'discarding' THEN
+    RAISE EXCEPTION 'Completed imports cannot be unsealed' USING ERRCODE='23514';
+  END IF;
+  PERFORM 1 FROM public.workspace_projects p
+    WHERE p.id=v_session.project_id AND p.owner_id=v_owner
+      AND p.status='archived' FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'The sealed import project is not archived; inspect it manually'
+      USING ERRCODE='23514';
+  END IF;
+  UPDATE public.workspace_projects SET status='active'
+    WHERE id=v_session.project_id AND owner_id=v_owner;
+  UPDATE public.workspace_import_sessions SET status='active',updated_at=now()
+    WHERE id=p_session_id;
+  RETURN true;
+END;
+$workspace_import_cancel_discard$;
+REVOKE ALL ON FUNCTION public.workspace_import_cancel_discard(uuid)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.workspace_import_cancel_discard(uuid) TO authenticated;
