@@ -137,7 +137,7 @@ test('customer list is account-bound, abortable, paginated, exact, retryable and
 
 test('administrator list has the same bounded cancellation and admin-account safeguards', async () => {
   const admin=await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin,/import \{ readServicePageWithinBudget \}/);
+  assert.match(admin,/import \{ readServiceWindowWithinBudget \}/);
   assert.match(admin,/adminListAbortRef = useRef<AbortController \| null>/);
   assert.match(admin,/adminListAbortRef\.current\?\.abort\(\)/);
   assert.match(admin,/const generation = \+\+fetchGeneration\.current/);
