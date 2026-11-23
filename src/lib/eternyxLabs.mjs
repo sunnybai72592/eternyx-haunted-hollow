@@ -39,6 +39,11 @@ export const labCatalog = Object.freeze([
   { id: "totp", title: "TOTP one-time code calculator", area: "Identity security", level: "Intermediate", description: "Compute RFC 6238 training OTPs with real Web Crypto HMAC and a specified timestamp." },
   { id: "origins", title: "Browser origin comparison", area: "Web security", level: "Foundations", description: "Compare HTTP(S) URL origins without fetching DNS or revealing query values." },
   { id: "csvsafe", title: "CSV formula neutralizer", area: "Data safety", level: "Intermediate", description: "Quote synthetic CSV cell values and neutralize common spreadsheet formula triggers." },
+  { id: "hkdf", title: "HKDF-SHA256 key derivation", area: "Cryptographic fundamentals", level: "Advanced", description: "Derive real context-separated bytes with the browser Web Crypto HKDF primitive." },
+  { id: "ecdsa", title: "ECDSA P-256 signature verification", area: "Digital signatures", level: "Advanced", description: "Create an ephemeral asymmetric signature and verify authentic and modified messages." },
+  { id: "aesaad", title: "AES-GCM additional-data integrity", area: "Authenticated encryption", level: "Advanced", description: "Encrypt with authenticated context and reject changed associated data or ciphertext." },
+  { id: "jsonmask", title: "Structured JSON credential redaction", area: "Data privacy", level: "Intermediate", description: "Mask known sensitive JSON key names with bounded nested parsing, without uploading." },
+  { id: "jsonhash", title: "Deterministic JSON SHA-256 fingerprint", area: "Data integrity", level: "Advanced", description: "Hash sorted-key JSON locally and compare genuine SHA-256 digests." },
 ]);
 
 export const sampleHeaders = [

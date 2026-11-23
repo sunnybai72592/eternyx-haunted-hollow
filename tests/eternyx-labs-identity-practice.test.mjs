@@ -26,10 +26,10 @@ const expected=[
 ];
 const tracks=["pkce","hmac","cidrcheck","hsts","dmarc"];
 
-test("seventy-five unique challenges span twenty-five tracks and preserve the first forty-five cases",()=>{
-  assert.equal(PRACTICE_TRACKS.length,25);
-  assert.equal(PRACTICE_CASES.length,75);
-  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,75);
+test("ninety unique challenges span thirty tracks and preserve the first forty-five cases",()=>{
+  assert.equal(PRACTICE_TRACKS.length,30);
+  assert.equal(PRACTICE_CASES.length,90);
+  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,90);
   assert.deepEqual(PRACTICE_TRACKS.slice(15,20).map(t=>t.id),tracks);
   assert.deepEqual(PRACTICE_CASES.slice(45,60).map(c=>c.id),expected.map(x=>x[0]));
   assert.deepEqual(PRACTICE_CASES.slice(42,45).map(c=>c.id),
@@ -138,9 +138,9 @@ test("historical synchronous grading remains fully compatible, crypto intentiona
 });
 test("progress is unique, in-memory, never saved or turned into certificates",()=>{
   const p=summarizePracticeProgress();
-  assert.equal(p.total,75);
+  assert.equal(p.total,90);
   assert.equal(p.passed,0);
-  assert.equal(p.byTrack.length,25);
+  assert.equal(p.byTrack.length,30);
   const mixed=summarizePracticeProgress(["pkce-rfc","pkce-rfc","hmac-valid","cidr-v6-in","subnet-hosts"]);
   assert.equal(mixed.passed,4);
   assert.equal(mixed.byTrack.find(t=>t.id==="pkce").passed,1);
@@ -149,7 +149,7 @@ test("progress is unique, in-memory, never saved or turned into certificates",()
   assert.equal(mixed.saved,false);
   assert.equal(mixed.authenticated,false);
   assert.equal(mixed.certificateAwarded,false);
-  assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(x=>x.id))).passed,75);
+  assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(x=>x.id))).passed,90);
   assert.throws(()=>summarizePracticeProgress(["fabricated-pkce"]));
 });
 test("the React UI waits for actual crypto grades and invalidates stale results",async()=>{
@@ -158,7 +158,7 @@ test("the React UI waits for actual crypto grades and invalidates stale results"
     readFile(new URL("../src/pages/EternyxLabs.tsx",import.meta.url),"utf8"),
     readFile(new URL("../src/lib/eternyxLabsPractice.mjs",import.meta.url),"utf8"),
   ]);
-  assert.match(page,/Practice 75 answer-checked challenges/);
+  assert.match(page,/Practice 90 answer-checked challenges/);
   assert.match(ui,/gradePracticeAnswerAsync\(caseId,submittedAnswer\)/);
   assert.match(ui,/if\(ticket!==requestSeq\.current\)return/);
   assert.match(ui,/\+\+requestSeq\.current/);

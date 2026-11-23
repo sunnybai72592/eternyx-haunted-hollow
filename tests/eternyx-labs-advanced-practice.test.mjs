@@ -19,10 +19,10 @@ const cases=[
 ];
 const tracks=["dns","http","securitytxt","events","tokens"];
 
-test("twenty-five tracks contain seventy-five unique scenarios preserving previous defensive cases",()=>{
- assert.equal(PRACTICE_TRACKS.length,25);
- assert.equal(PRACTICE_CASES.length,75);
- assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,75);
+test("thirty tracks contain ninety unique scenarios preserving previous defensive cases",()=>{
+ assert.equal(PRACTICE_TRACKS.length,30);
+ assert.equal(PRACTICE_CASES.length,90);
+ assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,90);
  assert.deepEqual(PRACTICE_TRACKS.slice(5,10).map(t=>t.id),tracks);
  assert.deepEqual(PRACTICE_CASES.slice(15,30).map(c=>c.id),cases.map(c=>c[0]));
  for(const track of PRACTICE_TRACKS){
@@ -118,9 +118,9 @@ test("malformed and attack-like answer formats are rejected without falsely reco
 });
 test("cross-track progress is unique, derived from correct answers and never stored or certified",()=>{
  const first=summarizePracticeProgress();
- assert.equal(first.total,75);
+ assert.equal(first.total,90);
  assert.equal(first.passed,0);
- assert.equal(first.byTrack.length,25);
+ assert.equal(first.byTrack.length,30);
  const mixed=summarizePracticeProgress([
   "dns-count","dns-count","dns-owners","http-conflict","events-errors","tokens-b64",
  ]);
@@ -128,7 +128,7 @@ test("cross-track progress is unique, derived from correct answers and never sto
  assert.equal(mixed.byTrack.find(t=>t.id==="dns").passed,2);
  assert.equal(mixed.byTrack.find(t=>t.id==="tokens").passed,1);
  assert.equal(mixed.byTrack.find(t=>t.id==="subnet").passed,0);
- assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(c=>c.id))).passed,75);
+ assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(c=>c.id))).passed,90);
  for(const flag of ["saved","authenticated","certificateAwarded"])
   assert.equal(mixed[flag],false);
  assert.throws(()=>summarizePracticeProgress(["unknown-case"]));
@@ -147,7 +147,7 @@ test("UI correctly shows fifteen tracks, forty-five questions, safe examples and
  assert.match(ui,/setPassed\(new Set\(\)\)/);
  assert.match(ui,/Current tab only/);
  assert.match(ui,/role="alert"/);
- assert.match(page,/Practice 75 answer-checked challenges/);
+ assert.match(page,/Practice 90 answer-checked challenges/);
  assert.match(ops,/getRandomValues/);
  assert.match(engine,/bytes\.fill\(0xa5\)/);
  assert.doesNotMatch(engine,/\bfetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|createServer|WebSocket|navigator\.sendBeacon/);

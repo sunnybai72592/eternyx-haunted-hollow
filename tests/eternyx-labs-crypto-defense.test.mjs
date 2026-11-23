@@ -9,12 +9,12 @@ import {
 } from "../src/lib/eternyxLabsCryptoDefense.mjs";
 const source=path=>readFile(new URL("../"+path,import.meta.url),"utf8");
 
-test("35 distinct real Labs workstations include all five crypto/data-security tools",()=>{
+test("40 distinct real Labs workstations include all five crypto/data-security tools",()=>{
   const ids=labCatalog.map(x=>x.id);
-  assert.equal(ids.length,35);
-  assert.equal(new Set(ids).size,35);
-  assert.equal(new Set(labCatalog.map(x=>x.title)).size,35);
-  assert.deepEqual(ids.slice(-5),["pbkdf2","aesgcm","totp","origins","csvsafe"]);
+  assert.equal(ids.length,40);
+  assert.equal(new Set(ids).size,40);
+  assert.equal(new Set(labCatalog.map(x=>x.title)).size,40);
+  assert.deepEqual(ids.slice(30,35),["pbkdf2","aesgcm","totp","origins","csvsafe"]);
 });
 test("PBKDF2 SHA-256 real Web Crypto matches independent Node PBKDF2 reference",async()=>{
   const text="synthetic-example-only",saltHex="00112233445566778899aabbccddeeff";
@@ -170,8 +170,8 @@ test("all five interactive Labs sections are actually wired, responsive and brow
     source("src/lib/eternyxLabsPractice.mjs"),
   ]);
   assert.match(page,/BrowserCryptoDataDefense selected=\{selected\}/);
-  assert.match(page,/35 working exercises/);
-  assert.match(page,/Search 35 workstations/);
+  assert.match(page,/40 working exercises/);
+  assert.match(page,/Search 40 workstations/);
   for(const id of ["pbkdf2","aesgcm","totp","origins","csvsafe"])
     assert.ok(ui.includes('selected==="'+id+'"'),id);
   assert.match(ui,/role="alert"/);

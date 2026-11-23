@@ -17,6 +17,7 @@ import BrowserDefensiveOperations from "@/components/labs/BrowserDefensiveOperat
 import BrowserAdvancedDiagnostics from "@/components/labs/BrowserAdvancedDiagnostics";
 import BrowserIdentityDefense from "@/components/labs/BrowserIdentityDefense";
 import BrowserCryptoDataDefense from "@/components/labs/BrowserCryptoDataDefense";
+import BrowserAdvancedDataDefense from "@/components/labs/BrowserAdvancedDataDefense";
 
 const startingHtml = '<main><h1>Hello, ETERNYX!</h1><p id="result">Build something real.</p><button id="hello">Run an interaction</button></main>';
 const startingCss = 'body { background: #f8fafc; }\nh1 { color: #4f46e5; }\nbutton { padding: 12px; background: #111827; color: white; border: 0; border-radius: 8px; cursor: pointer; }';
@@ -59,6 +60,11 @@ const labIcons = {
   totp: Clock3,
   origins: Globe2,
   csvsafe: FileSpreadsheet,
+  hkdf: LockKeyhole,
+  ecdsa: FileKey2,
+  aesaad: ShieldSettings,
+  jsonmask: ScanText,
+  jsonhash: Fingerprint,
 };
 type LabId = keyof typeof labIcons;
 type AccessRole = "viewer" | "editor" | "admin";
@@ -120,15 +126,15 @@ export default function EternyxLabs() {
             </span>
             <h1 className="mt-5 text-3xl font-black tracking-tight sm:text-5xl">Learn it. Break it locally. Fix it properly.</h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-              Hands-on web development and security exercises. These thirty-five workstations operate in your browser.
+              Hands-on web development and security exercises. These forty workstations operate in your browser.
               They are not remote virtual machines, internet scanners, or proof of a vulnerability in a real target.
             </p>
             <div className="mt-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">35 working exercises</span>
+              <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">40 working exercises</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">Browser-only execution</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">No outside targets</span>
               <a href="#labs-practice" className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-semibold text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                Practice 75 answer-checked challenges <ArrowRight className="h-3.5 w-3.5" />
+                Practice 90 answer-checked challenges <ArrowRight className="h-3.5 w-3.5" />
               </a>
             </div>
           </div>
@@ -197,7 +203,7 @@ export default function EternyxLabs() {
             <label htmlFor="labs-workstation-search" className="sr-only">Search practical workstations</label>
             <input id="labs-workstation-search" type="search" value={labSearch}
               onChange={(event) => setLabSearch(event.target.value)}
-              placeholder="Search 35 workstations…"
+              placeholder="Search 40 workstations…"
               className="mb-3 w-full rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
@@ -351,6 +357,7 @@ export default function EternyxLabs() {
             <BrowserAdvancedDiagnostics selected={selected} />
             <BrowserIdentityDefense selected={selected} />
             <BrowserCryptoDataDefense selected={selected} />
+            <BrowserAdvancedDataDefense selected={selected} />
           </section>
         </div>
 

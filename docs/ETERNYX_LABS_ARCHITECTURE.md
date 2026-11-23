@@ -4,7 +4,7 @@
 
 Route: /labs (public, browser-only). Navigation entry is visible on desktop and mobile. The Cybersecurity Hub and Developer Studio link to the same route, not separate duplicate labs.
 
-Thirty-five **working**, browser-only exercises (thirty existing plus five cryptography/data-safety workstations):
+Forty **working**, browser-only exercises (thirty-five existing plus five advanced crypto/data-privacy workstations):
 1. Web developer playground — edit HTML, CSS and JavaScript, explicitly run a restricted iframe preview.
 2. DOM XSS practice — inspect the difference between an HTML sink and a text sink with controlled, local input.
 3. HTTP header clinic — deterministic checks against pasted header text; no outgoing HTTP requests.
@@ -41,7 +41,7 @@ Thirty-five **working**, browser-only exercises (thirty existing plus five crypt
 34. Browser origin comparison — normalized scheme, host and port checks without DNS or URL fetching; excludes query/userinfo values from results.
 35. CSV formula neutralizer — RFC 4180-style quoted single-column output with apostrophe prefixing for common formula-like spreadsheet cells.
 
-**Truthful limits:** The thirty-five browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
+**Truthful limits:** The forty browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
 
 ## Boundary and threat model
 
@@ -702,3 +702,10 @@ known vectors, authenticated tamper rejection, boundary parsing,
 wrong-answer and malformed-input checks, prior 60-case preservation,
 accessibility markers, and no-network/no-persistence contracts. Manual
 mobile/desktop and CI checks remain release requirements.
+
+
+## Phase 12 — five advanced cryptographic and structured-data workstations (40 total)
+
+The thirty-five existing Labs stations are retained. Five new genuine, browser-only lessons are added: **HKDF-SHA256** with context separation and fresh or explicit salts, **ECDSA P-256** signed-message verification, **AES-GCM authenticated additional data** tamper rejection, **bounded nested JSON key-name redaction**, and **sorted-key JSON SHA-256 fingerprinting** (explicitly not RFC 8785). The first three and JSON fingerprints use actual secure-context Web Crypto; masking is a bounded local parser, not a promise to eliminate PII. No workstations fetch targets, upload content, store private keys, create certificates, or confer server-verified grades.
+
+Fifteen accompanying open-book scenarios expand the practice center to **90 unique locally answer-checked challenges over 30 tracks**. All expected answers recompute against these actual engines. Async grading rejects absent Web Crypto instead of inventing outputs; synchronous JSON key masking remains local. Original 75 question IDs and ordering remain intact. Production deployment, identity proofs, live virtual machines and trusted results remain separate requirements.
