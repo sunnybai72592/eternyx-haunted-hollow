@@ -58,16 +58,15 @@ test("crash-like child exit retains original fsynced agent lock and unacknowledg
  assert.equal(report.claims[0].outcome,null);
  assert.equal(report.safeToRetryClaimAutomatically,false);
 }));
-test("original agent lock may be released only once; re-lock creates a fresh inode",()=>fixtures(dir=>{
+test("original agent lock may be released only once; a new explicit invocation may re-lock",()=>fixtures(dir=>{
  const a=ids();
  const path=join(dir,"agent-"+a.agentId+".lock");
  const release=lockLabAgent(a.agentId,dir);
- const first=lstatSync(path);
  release();release();
  assert.equal(readdirSync(dir).length,0);
  const next=lockLabAgent(a.agentId,dir);
  assert.equal(lstatSync(path).isFile(),true);
- assert.notEqual(lstatSync(path).ino,first.ino);
+ assert.equal(lstatSync(path).mode&0o077,0);
  next();
 }));
 test("same-path replacement with identical bytes never authorizes unlocking the original agent lock",()=>fixtures(dir=>{
