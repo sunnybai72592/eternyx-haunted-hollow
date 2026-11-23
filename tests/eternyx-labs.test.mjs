@@ -8,10 +8,10 @@ import {
 
 const read = (path) => readFile(new URL("../" + path, import.meta.url), "utf8");
 
-test("twenty distinct lab workstations have real local implementations", () => {
+test("twenty-five distinct lab workstations have real local implementations", () => {
   assert.deepEqual(labCatalog.map((lab) => lab.id),
-    ["web", "xss", "headers", "sql", "access", "codec", "urls", "jwt", "redact", "sha", "subnet", "chmod", "csp", "cors", "cookie", "dns", "http", "securitytxt", "events", "tokens"]);
-  assert.equal(new Set(labCatalog.map((lab) => lab.title)).size, 20);
+    ["web", "xss", "headers", "sql", "access", "codec", "urls", "jwt", "redact", "sha", "subnet", "chmod", "csp", "cors", "cookie", "dns", "http", "securitytxt", "events", "tokens", "ipv6", "cache", "spf", "ratelimit", "sri"]);
+  assert.equal(new Set(labCatalog.map((lab) => lab.title)).size, 25);
 });
 
 test("preview CSP blocks outgoing requests, framing, forms and active resources", () => {
