@@ -110,7 +110,7 @@ test("live Project Lab UI exposes real input, navigation, source restore, previe
   assert.match(page,/window\.confirm\("Replace "/);
   assert.match(page,/id="editor-goto-line"/);
   assert.match(page,/developerLinePosition\(file\.content/);
-  assert.match(page,/restoreSavedDeveloperFile\(old, savedBaseline, file\.name\)/);
+  assert.match(page,/restoreSavedDeveloperFile\(old, savedBaseline, filename\)/);
   assert.match(page,/Export standalone HTML/);
   assert.match(page,/type: mime/);
   assert.match(page,/aria-label="Preview viewport widths"/);

@@ -170,7 +170,7 @@ def create_save_reopen(page):
     expect(page.locator("#project-auto-recovery")).not_to_be_checked()
     expect(page.get_by_text("Select Run preview to render this project")).to_be_visible()
     page.locator("#project-name").fill("Browser Acceptance Project")
-    page.get_by_role("group", name="Project files").get_by_role("button", name="app.js").click()
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="app.js").click()
     editor = page.locator("#project-editor")
     assert "addEventListener" in editor.input_value()
     editor.fill(editor.input_value() + "\n// acceptance marker")
@@ -204,12 +204,12 @@ def editing_and_diagnostics(page):
     page.get_by_role("button", name=re.compile(r"^Restore \(\d+\)$")).click()
     expect(editor).to_have_value(re.compile('"number"'))
     page.get_by_role("button", name="Duplicate file").click()
-    expect(page.get_by_role("group", name="Project files").get_by_role("button", name="config-copy.json")).to_be_visible()
+    expect(page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="config-copy.json")).to_be_visible()
     page.locator("#project-local-file-import").set_input_files({
         "name": "field-notes.md", "mimeType": "text/markdown",
         "buffer": b"First line\nSecond line",
     })
-    expect(page.get_by_role("group", name="Project files").get_by_role("button", name="field-notes.md")).to_be_visible()
+    expect(page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="field-notes.md")).to_be_visible()
     expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
     page.locator("#editor-goto-line").fill("2")
     page.get_by_role("button", name="Go to line").click()
@@ -218,11 +218,30 @@ def editing_and_diagnostics(page):
     page.get_by_role("button", name="Save browser copy").click()
     assert len(store(page, PROJECT_KEY)[0]["files"]) == 6
     page.locator("#project-editor").fill("Unsaved draft that can be reversed")
-    page.get_by_role("button", name="Restore saved file").click()
+    expect(page.get_by_role("heading", name="Saved-vs-working review")).to_be_visible()
+    expect(page.get_by_role("button", name="Undo edit (1)")).to_be_enabled()
+    with page.expect_download() as exported:
+        page.get_by_role("button", name="Export source-free changes").click()
+    review = json.loads(Path(exported.value.path()).read_text(encoding="utf-8"))
+    assert review["schema"] == "eternyx-developer-revisions-v1"
+    assert review["changedFiles"] == 1
+    assert "Unsaved draft" not in json.dumps(review)
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="app.js").click()
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="field-notes.md").click()
+    page.get_by_role("button", name="Undo edit (1)").click()
     expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
+    page.get_by_role("button", name="Redo edit (1)").click()
+    expect(page.locator("#project-editor")).to_have_value("Unsaved draft that can be reversed")
+    page.get_by_role("group", name="Changed project files").get_by_role(
+        "button", name=re.compile("field-notes.md")).click()
+    page.get_by_role("button", name="Open changed line").click()
+    assert page.locator("#project-editor").evaluate("(el) => el.selectionStart") == 0
+    page.get_by_role("button", name="Restore saved file").first.click()
+    expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
+    expect(page.get_by_text("No differences from the last explicitly saved project.")).to_be_visible()
 
 def actual_preflight(page):
-    page.get_by_role("group", name="Project files").get_by_role("button", name="app.js").click()
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="app.js").click()
     editor=page.locator("#project-editor")
     original=editor.input_value()
     editor.fill('const sensitiveValue = "DO_NOT_EXPORT_THIS"; function oops( {')
@@ -288,7 +307,7 @@ def preview_isolation(page):
     })""")
     preview.locator("#hello").click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
-    page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html").click()
     editor=page.locator("#project-editor")
     editor.fill(editor.input_value() + "<!-- newer -->")
     expect(page.get_by_text("Preview is older than your current files")).to_be_visible()
@@ -312,7 +331,7 @@ def recovery_and_tamper(page):
     expect(page.get_by_text("Imported and checksum-verified the project.", exact=False)).to_be_visible()
     assert page.locator('iframe[title="Isolated project preview"]').count() == 0
     page.locator("#project-auto-recovery").check()
-    page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html").click()
     page.locator("#project-editor").fill("<main><h1>Recoverable draft</h1></main>")
     page.wait_for_function("(key) => { try { const records=JSON.parse(localStorage.getItem(key)||'[]'); return records.length > 0; } catch { return false; } }", arg=RECOVERY_KEY, timeout=12000)
     entries=store(page, RECOVERY_KEY)
