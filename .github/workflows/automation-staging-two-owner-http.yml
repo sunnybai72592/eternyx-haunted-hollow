@@ -12,7 +12,7 @@ on:
           - ONE_TEMPORARY_WORKFLOW
         default: INSPECT_ONLY
       test_accounts_review:
-        description: "Reviewer verified two nonanonymous staging-only accounts and dedicated short-lived access JWTs."
+        description: "Reviewer verified two dedicated nonanonymous staging-only password accounts; temporary access tokens are obtained at runtime."
         required: true
         type: choice
         options:
@@ -79,57 +79,36 @@ jobs:
           if(verifyDeployedCore(functions).length!==3)throw Error("Staging core functions unverified");
           console.log("Verified independent staging project and three active core handlers with expected JWT policies.");
           NODE
-      - name: Authenticate both real staging owners and inspect isolation with READ ONLY HTTP calls
+      - name: Authenticate two dedicated staging accounts with fresh access JWTs and verify private ownership
         shell: bash
-        timeout-minutes: 3
+        timeout-minutes: 6
         env:
-          ETERNYX_STAGING_PROJECT_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
-          ETERNYX_PRODUCTION_PROJECT_REF: wcncuarekaofmfurbtbh
-          ETERNYX_STAGING_ENVIRONMENT_CLASS: isolated-test-project
-          ETERNYX_STAGING_PUBLISHABLE_KEY: "${{ vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY }}"
-          ETERNYX_STAGING_OWNER_A_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_JWT }}"
-          ETERNYX_STAGING_OWNER_B_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_JWT }}"
+          ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY: "${{ vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_A_EMAIL: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_EMAIL }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_B_EMAIL: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_EMAIL }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_B_PASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_PASSWORD }}"
         run: |
           set -euo pipefail
-          node scripts/automation-staging-acceptance.mjs --inspect > "$RUNNER_TEMP/automation-two-owner-inspect.json"
-          node --input-type=module - "$RUNNER_TEMP/automation-two-owner-inspect.json" <<'NODE'
+          mode="--inspect"
+          if [ "$ETERNYX_AUTOMATION_TWO_OWNER_MODE" = "ONE_TEMPORARY_WORKFLOW" ]; then
+            mode="--execute"
+          fi
+          node scripts/automation-staging-fresh-auth.mjs "$mode" > "$RUNNER_TEMP/automation-two-owner-verified.json"
+          node --input-type=module - "$RUNNER_TEMP/automation-two-owner-verified.json" <<'NODE'
           import {readFileSync} from "node:fs";
-          import {checkTwoOwnerEvidence} from "./scripts/automation-staging-two-owner-gate.mjs";
-          checkTwoOwnerEvidence(JSON.parse(readFileSync(process.argv[2],"utf8")),"inspect");
-          console.log("Two independent nonanonymous owner identities and private list/history boundaries verified; no writes.");
-          NODE
-      - name: ONE TIME only — save, manually execute, replay, isolate and delete test workflow with explicit write approval
-        if: "${{ inputs.run_mode == 'ONE_TEMPORARY_WORKFLOW' && inputs.write_approval == 'I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN' }}"
-        shell: bash
-        timeout-minutes: 4
-        env:
-          ETERNYX_STAGING_PROJECT_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
-          ETERNYX_PRODUCTION_PROJECT_REF: wcncuarekaofmfurbtbh
-          ETERNYX_STAGING_ENVIRONMENT_CLASS: isolated-test-project
-          ETERNYX_STAGING_PUBLISHABLE_KEY: "${{ vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY }}"
-          ETERNYX_STAGING_OWNER_A_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_JWT }}"
-          ETERNYX_STAGING_OWNER_B_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_JWT }}"
-          ETERNYX_STAGING_EXECUTION_CONSENT: "${{ inputs.write_approval }}"
-        run: |
-          set -euo pipefail
-          node scripts/automation-staging-two-owner-gate.mjs --check-config > /dev/null
-          node scripts/automation-staging-acceptance.mjs --execute --confirm-isolated-staging > "$RUNNER_TEMP/automation-two-owner-write.json"
-          echo "Owner-isolated manual run, replay, foreign-owner denial and temporary workflow cleanup were verified. Run history may remain."
-      - name: Require checked evidence and produce sanitized staging-only acceptance receipt
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module - "$RUNNER_TEMP/automation-two-owner-inspect.json" "$RUNNER_TEMP/automation-two-owner-write.json" "$RUNNER_TEMP/automation-two-owner-verified.json" <<'NODE'
-          import {readFileSync,writeFileSync} from "node:fs";
-          import {validateTwoOwnerGate,checkTwoOwnerEvidence} from "./scripts/automation-staging-two-owner-gate.mjs";
-          const gate=validateTwoOwnerGate(process.env);
-          const inspect=JSON.parse(readFileSync(process.argv[2],"utf8"));
-          checkTwoOwnerEvidence(inspect,"inspect");
-          const path=gate.mode==="execute"?process.argv[3]:process.argv[2];
-          const raw=JSON.parse(readFileSync(path,"utf8"));
-          const result=checkTwoOwnerEvidence(raw,gate.mode);
-          writeFileSync(process.argv[4],JSON.stringify(result,null,2)+"\n",{mode:0o600,flag:"wx"});
-          console.log("Read-only/one-workflow stage acceptance evidence validated without customer IDs, inputs, outputs, tokens, or production readiness claims.");
+          import assert from "node:assert/strict";
+          import {validateTwoOwnerGate} from "./scripts/automation-staging-two-owner-gate.mjs";
+          const intent=validateTwoOwnerGate(process.env);
+          const report=JSON.parse(readFileSync(process.argv[2],"utf8"));
+          assert.equal(report.mode,intent.mode);
+          assert.equal(report.authMethod,"fresh_staging_password_signin");
+          assert.equal(report.freshSessions,2);
+          assert.equal(report.initialInspectionPassed,true);
+          assert.equal(report.tokenValuesPersisted,false);
+          assert.equal(report.releaseAuthorized,false);
+          assert.equal(report.productionReady,false);
+          console.log("Fresh staging-only sessions, two-owner isolation and approved workflow mode verified; no access tokens or test account credentials persisted.");
           NODE
       - name: Publish ONLY the sanitized two-owner staging acceptance receipt
         if: success()
