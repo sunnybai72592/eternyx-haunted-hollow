@@ -155,10 +155,11 @@ export function buildReport(source,inventory,migrations,sourceKind){
   };
 }
 function argsFrom(argv){
-  const o={live:false,json:false,snapshot:null,migrations:null,project:null};
+  const o={live:false,json:false,sourceCheck:false,snapshot:null,migrations:null,project:null};
   for(let i=0;i<argv.length;i++){
     const arg=argv[i];
     if(arg==="--live")o.live=true;
+    else if(arg==="--source-check")o.sourceCheck=true;
     else if(arg==="--json")o.json=true;
     else if(["--snapshot","--migration-receipt","--project-ref"].includes(arg)){
       if(!argv[i+1]||argv[i+1].startsWith("--"))throw Error("Missing value for "+arg);
@@ -166,11 +167,17 @@ function argsFrom(argv){
     }else throw Error("Unknown argument "+arg);
   }
   if(o.live&&o.snapshot)throw Error("Choose --live or --snapshot, not both");
+  if(o.sourceCheck&&(o.live||o.snapshot||o.migrations))throw Error("Source check cannot be combined with runtime evidence");
   return o;
 }
 export async function main(argv=process.argv.slice(2),env=process.env){
   const o=argsFrom(argv);
   const source=await inspectSources();
+  if(o.sourceCheck){
+    if(o.json)process.stdout.write(JSON.stringify({sourceCheck:source.problems.length?"failed":"passed",sourceMigrationCount:source.migrations.length,problems:source.problems,productionReady:false,externalExecutionTriggered:false},null,2)+"\n");
+    else process.stdout.write("Automation source/config check: "+(source.problems.length?"FAILED":"PASSED")+"; hosted runtime and migrations NOT verified.\n");
+    return source.problems.length?1:0;
+  }
   const project=o.project||env.SUPABASE_PROJECT_REF||"";
   let raw=null,kind="source_only";
   if(o.live){raw=await readLiveFunctionInventory(project,env.SUPABASE_ACCESS_TOKEN);kind="management_api_read_only";}
