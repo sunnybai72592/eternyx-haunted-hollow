@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: eternyx-education-hosted-final-result-reads
+  group: eternyx-education-hosted-shared-staging
   cancel-in-progress: false
 
 jobs:

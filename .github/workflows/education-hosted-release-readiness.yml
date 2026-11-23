@@ -1,0 +1,140 @@
+name: ETERNYX Education hosted staging release readiness
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        required: true
+        type: choice
+        options:
+          - preflight
+          - rehearsal
+        default: preflight
+      approve_read_only:
+        required: true
+        type: boolean
+        default: false
+      approve_cbt_write:
+        required: true
+        type: boolean
+        default: false
+      acknowledge_no_retake:
+        required: true
+        type: boolean
+        default: false
+      approve_instructor_review:
+        required: true
+        type: boolean
+        default: false
+      acknowledge_review_persists:
+        required: true
+        type: boolean
+        default: false
+      approve_final_grade:
+        required: true
+        type: boolean
+        default: false
+      acknowledge_immutable_grade:
+        required: true
+        type: boolean
+        default: false
+      acknowledge_full_rehearsal:
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: eternyx-education-hosted-shared-staging
+  cancel-in-progress: false
+jobs:
+  hosted-education-release:
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 40
+    env:
+      ETERNYX_EDU_RELEASE_MODE: ${{ inputs.run_mode }}
+      ETERNYX_EDU_RELEASE_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_RELEASE_CHECKS' || '' }}
+      ETERNYX_EDU_RELEASE_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_full_rehearsal && 'I_ACKNOWLEDGE_STAGING_EXAM_REVIEW_AND_GRADE_ARE_IRREVERSIBLE' || '' }}
+      ETERNYX_EDU_STAGING_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_READ_ONLY' || '' }}
+      ETERNYX_EDU_RESULTS_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY' || '' }}
+      ETERNYX_EDU_WRITE_MODE: ${{ inputs.run_mode == 'rehearsal' && 'write' || 'preflight' }}
+      ETERNYX_EDU_CBT_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_cbt_write && 'I_APPROVE_FRESH_EDUCATION_STAGING_CBT_ATTEMPT' || '' }}
+      ETERNYX_EDU_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_no_retake && 'I_ACKNOWLEDGE_STAGING_ATTEMPT_CANNOT_BE_RETAKEN' || '' }}
+      ETERNYX_EDU_REVIEW_MODE: ${{ inputs.run_mode == 'rehearsal' && 'review' || 'preflight' }}
+      ETERNYX_EDU_REVIEW_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_instructor_review && 'I_APPROVE_SYNTHETIC_INSTRUCTOR_REVIEW_WRITE' || '' }}
+      ETERNYX_EDU_REVIEW_WRITE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_review_persists && 'I_ACKNOWLEDGE_REVIEW_WILL_PERSIST_IN_STAGING' || '' }}
+      ETERNYX_EDU_FINALIZE_MODE: ${{ inputs.run_mode == 'rehearsal' && 'finalize' || 'preflight' }}
+      ETERNYX_EDU_FINALIZE_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_final_grade && 'I_APPROVE_ONE_SYNTHETIC_STAGING_FINAL_GRADE' || '' }}
+      ETERNYX_EDU_FINALIZE_IMMUTABLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_immutable_grade && 'I_ACKNOWLEDGE_OFFICIAL_GRADE_BECOMES_IMMUTABLE' || '' }}
+      ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ inputs.run_mode == 'rehearsal' && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+      ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+      ETERNYX_EDU_STAGING_TEST_ID: ${{ vars.ETERNYX_EDU_STAGING_TEST_ID }}
+      ETERNYX_EDU_STAGING_QUESTION_ID: ${{ vars.ETERNYX_EDU_STAGING_QUESTION_ID }}
+      ETERNYX_EDU_STAGING_OPTION_ID: ${{ vars.ETERNYX_EDU_STAGING_OPTION_ID }}
+      ETERNYX_EDU_STAGING_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_STAGING_ATTEMPT_ID }}
+      ETERNYX_EDU_STAGING_ANSWER_ID: ${{ vars.ETERNYX_EDU_STAGING_ANSWER_ID }}
+      ETERNYX_EDU_WRITE_TEST_ID: ${{ vars.ETERNYX_EDU_WRITE_TEST_ID }}
+      ETERNYX_EDU_WRITE_MCQ_ID: ${{ vars.ETERNYX_EDU_WRITE_MCQ_ID }}
+      ETERNYX_EDU_WRITE_MCQ_OPTION_ID: ${{ vars.ETERNYX_EDU_WRITE_MCQ_OPTION_ID }}
+      ETERNYX_EDU_WRITE_ESSAY_ID: ${{ vars.ETERNYX_EDU_WRITE_ESSAY_ID }}
+      ETERNYX_EDU_REVIEW_TEST_ID: ${{ vars.ETERNYX_EDU_REVIEW_TEST_ID }}
+      ETERNYX_EDU_REVIEW_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_REVIEW_ATTEMPT_ID }}
+      ETERNYX_EDU_REVIEW_ANSWER_ID: ${{ vars.ETERNYX_EDU_REVIEW_ANSWER_ID }}
+      ETERNYX_EDU_REVIEW_AWARDED_POINTS: ${{ vars.ETERNYX_EDU_REVIEW_AWARDED_POINTS }}
+      ETERNYX_EDU_FINALIZE_EXPECTED_SCORE: ${{ vars.ETERNYX_EDU_FINALIZE_EXPECTED_SCORE }}
+      ETERNYX_EDU_FINALIZE_EXPECTED_MAX: ${{ vars.ETERNYX_EDU_FINALIZE_EXPECTED_MAX }}
+      ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT }}
+      ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_A_SCORE: ${{ vars.ETERNYX_EDU_RESULT_A_SCORE }}
+      ETERNYX_EDU_RESULT_A_MAX: ${{ vars.ETERNYX_EDU_RESULT_A_MAX }}
+      ETERNYX_EDU_RESULT_B_SCORE: ${{ vars.ETERNYX_EDU_RESULT_B_SCORE }}
+      ETERNYX_EDU_RESULT_B_MAX: ${{ vars.ETERNYX_EDU_RESULT_B_MAX }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Reject production, unapproved modes, malformed fixtures and unsafe grant configuration
+        run: |
+          node --input-type=module -e '
+            import {validateEducationReleaseConfig} from "./scripts/staging/educationReleaseGate.mjs";
+            try {
+              const c=validateEducationReleaseConfig(process.env);
+              process.stdout.write("Isolated staging release "+c.mode+" authorized for manual checks.\n");
+            } catch {
+              process.stderr.write("Education staging release blocked by preflight.\n");
+              process.exitCode=1;
+            }
+          '
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run ordered real-JWT protected backend acceptance and issue staging-only verdict
+        timeout-minutes: 35
+        run: node scripts/staging/runEducationHostedRelease.mjs
+      - name: Upload sanitized same-run evidence for independent review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-hosted-release-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/education-hosted-readonly.json
+            test-results/education-hosted-cbt-write.json
+            test-results/education-hosted-instructor-final-grade.json
+            test-results/education-trusted-finalization.json
+            test-results/education-hosted-final-results.json
+            test-results/education-hosted-release-readiness.json
+          if-no-files-found: warn
+          retention-days: 7

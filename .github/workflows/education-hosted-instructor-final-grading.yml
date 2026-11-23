@@ -27,7 +27,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: eternyx-education-hosted-instructor-grade-acceptance
+  group: eternyx-education-hosted-shared-staging
   cancel-in-progress: false
 
 jobs:
