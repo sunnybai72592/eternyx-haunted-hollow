@@ -201,13 +201,25 @@ def editing_and_diagnostics(page):
     page.locator("#project-replace-input").fill("count")
     page.get_by_role("button", name="Replace first in active file").click()
     expect(editor).to_have_value(re.compile('"count"'))
-    page.get_by_role("button", name="Restore", exact=False).click()
+    page.get_by_role("button", name=re.compile(r"^Restore \(\d+\)$")).click()
     expect(editor).to_have_value(re.compile('"number"'))
     page.get_by_role("button", name="Duplicate file").click()
     expect(page.get_by_role("group", name="Project files").get_by_role("button", name="config-copy.json")).to_be_visible()
-    # Navigation, source edits and formatting remain explicit; no auto-save.
+    page.locator("#project-local-file-import").set_input_files({
+        "name": "field-notes.md", "mimeType": "text/markdown",
+        "buffer": b"First line\nSecond line",
+    })
+    expect(page.get_by_role("group", name="Project files").get_by_role("button", name="field-notes.md")).to_be_visible()
+    expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
+    page.locator("#editor-goto-line").fill("2")
+    page.get_by_role("button", name="Go to line").click()
+    assert page.locator("#project-editor").evaluate("(el) => el.selectionStart") == 11
+    # Import and code changes are explicit; no auto-save or preview execution.
     page.get_by_role("button", name="Save browser copy").click()
-    assert len(store(page, PROJECT_KEY)[0]["files"]) == 5
+    assert len(store(page, PROJECT_KEY)[0]["files"]) == 6
+    page.locator("#project-editor").fill("Unsaved draft that can be reversed")
+    page.get_by_role("button", name="Restore saved file").click()
+    expect(page.locator("#project-editor")).to_have_value("First line\nSecond line")
 
 def actual_preflight(page):
     page.get_by_role("group", name="Project files").get_by_role("button", name="app.js").click()
@@ -231,9 +243,23 @@ def actual_preflight(page):
 
 def preview_isolation(page):
     assert page.locator('iframe[title="Isolated project preview"]').count() == 0
+    with page.expect_download() as exported:
+        page.get_by_role("button", name="Export standalone HTML").click()
+    html = Path(exported.value.path()).read_text(encoding="utf-8")
+    assert "Content-Security-Policy" in html
+    assert "Hello from the isolated preview!" in html
+    # Explicit export must not start executing user JavaScript.
+    assert page.locator('iframe[title="Isolated project preview"]').count() == 0
     page.get_by_role("button", name="Run preview").click()
     frame=page.locator('iframe[title="Isolated project preview"]')
     expect(frame).to_be_visible()
+    page.get_by_role("button", name="Phone 375").click()
+    expect(frame).to_have_css("width", "375px", timeout=5000)
+    page.get_by_role("button", name="Tablet 768").click()
+    expect(frame).to_have_css("width", "768px", timeout=5000)
+    page.get_by_role("button", name="Desktop 1200").click()
+    expect(frame).to_have_css("width", "1200px", timeout=5000)
+    page.get_by_role("button", name="Fluid", exact=True).click()
     assert frame.get_attribute("sandbox") == "allow-scripts"
     assert frame.get_attribute("referrerpolicy") == "no-referrer"
     doc=frame.get_attribute("srcdoc")

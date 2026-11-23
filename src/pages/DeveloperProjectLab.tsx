@@ -6,6 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  PREVIEW_VIEWPORTS, developerPreviewWidth, developerLinePosition,
+  mergeDeveloperLocalTextFiles, readDeveloperLocalTextFiles,
+  restoreSavedDeveloperFile,
+} from "@/lib/developerLocalWorkflows.mjs";
 import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
 import ProjectRecoveryPanel from "@/components/developer/ProjectRecoveryPanel";
 import { exportDeveloperPreflight, runDeveloperPreflight } from "@/lib/developerProjectPreflight.mjs";
@@ -27,8 +33,8 @@ function readSaved(): Project[] {
   try { return normalizeSavedDeveloperProjects(JSON.parse(localStorage.getItem(PROJECT_STORAGE_KEY) || "[]")); }
   catch { return []; }
 }
-function download(name: string, data: string) {
-  const blob = new Blob([data], { type: "application/json;charset=utf-8" });
+function download(name: string, data: string, mime = "application/json;charset=utf-8") {
+  const blob = new Blob([data], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -50,6 +56,10 @@ export default function DeveloperProjectLab() {
   const [previewSource, setPreviewSource] = useState("");
   const [previewRun, setPreviewRun] = useState(0);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [importReplacing, setImportReplacing] = useState(false);
+  const [importingFiles, setImportingFiles] = useState(false);
+  const [lineTarget, setLineTarget] = useState("1");
+  const [previewMode, setPreviewMode] = useState("fluid");
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const quickOpenRef = useRef<HTMLInputElement>(null);
   const [quickOpen, setQuickOpen] = useState("");
@@ -118,6 +128,7 @@ export default function DeveloperProjectLab() {
     setSavedCopy(markSaved ? JSON.stringify(next) : "");
     setFeedback(null);
     setQuickOpen("");
+    setLineTarget("1");
     setJsValidation(null);
     setJsSource("");
     setPreflight(null);
@@ -218,11 +229,53 @@ export default function DeveloperProjectLab() {
   };
 
   const selectFile = (name: string) => {
+    setLineTarget("1");
     setActiveFile(name);
     setRenameName("");
     setSelection(null);
     setCursor(editorCursorInfo(project.files.find(entry => entry.name === name)?.content || "", 0));
     setQuickOpen("");
+  };
+  const goToLine = () => {
+    try {
+      const location = developerLinePosition(file.content, Number(lineTarget));
+      jumpToMatch({ file: file.name, index: location.index, length: 0 });
+      setCursor(editorCursorInfo(file.content, location.index));
+      alert("Moved to " + file.name + ", line " + location.line + ".");
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Line navigation failed.", true); }
+  };
+  const restoreActiveSaved = () => {
+    if (!savedBaseline || !window.confirm("Restore this file from the last saved project? A checkpoint will preserve the current working version.")) return;
+    const next = commit(old => restoreSavedDeveloperFile(old, savedBaseline, file.name));
+    if (next) {
+      setSelection(null);
+      alert("Restored " + file.name + " from the saved browser version. Save explicitly to persist.");
+    }
+  };
+  const importLocalFiles = async (input: HTMLInputElement) => {
+    const chosen = Array.from(input.files || []);
+    input.value = "";
+    if (!chosen.length || importingFiles) return;
+    setImportingFiles(true);
+    try {
+      const loaded = await readDeveloperLocalTextFiles(chosen);
+      const result = mergeDeveloperLocalTextFiles(project, loaded, { overwrite: importReplacing });
+      if (result.replaced.length && !window.confirm("Replace " + result.replaced.join(", ") + " from your local files? A checkpoint will be created.")) return;
+      const next = commit(() => result.project);
+      if (next) {
+        selectFile(result.selectedName);
+        alert("Imported " + result.added.length + " new and " + result.replaced.length + " replaced local text file(s). Preview was not executed; save explicitly.");
+      }
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Local text import failed.", true); }
+    finally { setImportingFiles(false); }
+  };
+  const exportStandalonePreview = () => {
+    if (!window.confirm("Export a standalone HTML file containing your project JavaScript? Opening it outside ETERNYX may execute that code. Only open trusted code.")) return;
+    try {
+      const html = previewDeveloperProject(project);
+      download("eternyx-standalone-preview.html", html, "text/html;charset=utf-8");
+      alert("Exported an offline HTML preview. It is not a deployment, hosted URL, or security certification.");
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Preview export failed.", true); }
   };
   const trackCursor = (target: HTMLTextAreaElement) => {
     setCursor(editorCursorInfo(target.value, target.selectionStart, target.selectionEnd));
@@ -357,6 +410,20 @@ export default function DeveloperProjectLab() {
               <Input id="add-filename" value={newFileName} maxLength={64} onChange={(e) => setNewFileName(e.target.value)} placeholder="notes.md"
                 className="border-slate-700 bg-slate-950 text-white"/>
               <Button variant="outline" size="sm" disabled={!newFileName.trim() || project.files.length >= MAX_PROJECT_FILES} onClick={createFile}><FilePlus2 className="mr-2 h-4 w-4" />Add file</Button></div>
+            <div className="space-y-2 border-t border-slate-800 pt-3">
+              <Label htmlFor="project-local-file-import">Import local text files</Label>
+              <Input id="project-local-file-import" type="file" multiple accept=".html,.css,.js,.json,.md,.txt"
+                aria-describedby="project-local-file-help" disabled={importingFiles}
+                onChange={event => void importLocalFiles(event.currentTarget)}
+                className="border-slate-700 bg-slate-950 text-xs text-white file:text-cyan-200" />
+              <div className="flex items-start gap-2">
+                <Checkbox id="project-local-replace" checked={importReplacing} onCheckedChange={value => setImportReplacing(value === true)}/>
+                <Label htmlFor="project-local-replace" className="text-xs leading-5 text-slate-300">Allow replacing files with matching names (asks before overwriting)</Label>
+              </div>
+              <p id="project-local-file-help" className="text-xs leading-5 text-slate-400">
+                UTF-8 text only. One explicit import transaction, max 12 files and 120 KB selected. Invalid, binary, or oversized files reject the entire batch. No network upload or automatic preview.
+              </p>
+            </div>
             <div className="space-y-2"><Label htmlFor="rename-filename">Rename selected file</Label>
               <Input id="rename-filename" value={renameName} maxLength={64} onChange={(e) => setRenameName(e.target.value)} placeholder={file.name} className="border-slate-700 bg-slate-950 text-white" />
               <div className="flex gap-2"><Button size="sm" variant="outline" disabled={!renameName.trim() || renameName === file.name} onClick={renameFile}>Rename</Button>
@@ -371,6 +438,16 @@ export default function DeveloperProjectLab() {
             <Textarea id="project-editor" ref={editorRef} value={file.content} onChange={(e) => update((old) => editDeveloperFile(old, file.name, e.target.value))}
               onKeyDown={handleEditorKeyDown} onClick={e => trackCursor(e.currentTarget)} onKeyUp={e => trackCursor(e.currentTarget)} onSelect={e => trackCursor(e.currentTarget)}
               spellCheck={false} className="min-h-[420px] max-h-[70vh] overflow-y-auto border-slate-700 bg-slate-950 font-mono text-sm text-slate-100" />
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1"><Label htmlFor="editor-goto-line">Go to line</Label>
+                <Input id="editor-goto-line" type="number" min={1} max={file.content.split("\n").length}
+                  value={lineTarget} onChange={e => setLineTarget(e.target.value.slice(0,7))}
+                  onKeyDown={e => { if (e.key === "Enter") goToLine(); }}
+                  className="w-24 border-slate-700 bg-slate-950 text-white" /></div>
+              <Button variant="outline" size="sm" onClick={goToLine}>Go to line</Button>
+              <Button variant="outline" size="sm" disabled={!savedBaseline || !savedBaseline.files.some(f => f.name === file.name && f.content !== file.content)}
+                onClick={restoreActiveSaved}>Restore saved file</Button>
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span>Line {cursor.line}, column {cursor.column}</span><span>·</span><span>{cursor.selected} selected</span><span>·</span>
               <span>{file.content.split("\n").length} lines</span><span>·</span><span>{file.content.length} / 20,000 characters</span>
@@ -434,10 +511,22 @@ export default function DeveloperProjectLab() {
         <Card className="border-slate-800 bg-slate-900/70 text-white">
           <CardHeader><CardTitle className="flex items-center gap-2"><WandSparkles className="h-5 w-5 text-cyan-300" />Run preview</CardTitle><CardDescription className="text-slate-400">Uses index.html, all CSS files and all JavaScript files, assembled locally. Only Run executes the preview. JSON/Markdown are editable but not served as network assets.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3"><Button onClick={runPreview}><Play className="mr-2 h-4 w-4" />Run preview</Button>
-              {previewStale && <span className="text-xs text-amber-300">Preview is older than your current files</span>}</div>
-            <div className="overflow-hidden rounded-lg border border-slate-700 bg-white">
-              {previewHtml ? <iframe key={previewRun} title="Isolated project preview" srcDoc={previewHtml} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-[350px] w-full" /> :
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={runPreview}><Play className="mr-2 h-4 w-4" />Run preview</Button>
+              <Button size="sm" variant="outline" onClick={exportStandalonePreview}><Download className="mr-2 h-4 w-4"/>Export standalone HTML</Button>
+              {previewStale && <span className="text-xs text-amber-300">Preview is older than your current files</span>}
+            </div>
+            <div role="group" aria-label="Preview viewport widths" className="flex flex-wrap gap-2">
+              {PREVIEW_VIEWPORTS.map(view => <button key={view.id} type="button" aria-pressed={previewMode === view.id}
+                onClick={() => setPreviewMode(view.id)}
+                className={"rounded-md border px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 " +
+                  (previewMode === view.id ? "border-cyan-400 bg-cyan-950 text-cyan-100" : "border-slate-700 text-slate-300")}>{view.label}</button>)}
+            </div>
+            <p className="text-xs text-slate-400">Preview size: {previewMode === "fluid" ? "container width" : developerPreviewWidth(previewMode) + "px"}; larger widths scroll horizontally on narrow screens.</p>
+            <div className="overflow-x-auto rounded-lg border border-slate-700 bg-white">
+              {previewHtml ? <iframe key={previewRun} title="Isolated project preview" srcDoc={previewHtml}
+                sandbox="allow-scripts" referrerPolicy="no-referrer" style={{width: previewMode === "fluid" ? "100%" : developerPreviewWidth(previewMode) + "px"}}
+                className="block h-[350px] border-0" /> :
                 <div className="flex h-[350px] items-center justify-center text-sm text-slate-600">Select Run preview to render this project</div>}
             </div>
             <p className="text-xs leading-5 text-amber-200"><ShieldCheck className="mr-1 inline h-4 w-4" />Sandboxed opaque-origin frame with restrictive CSP. External requests, forms, and subresources are blocked by preview policy; browser navigation behavior varies. Never run untrusted code or paste secrets. This is not a VM or production security guarantee.</p>

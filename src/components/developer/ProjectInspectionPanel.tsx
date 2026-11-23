@@ -10,6 +10,7 @@ import {
   inspectDeveloperProject, searchDeveloperFiles,
 } from "@/lib/developerProjectInspection.mjs";
 import { normalizeDeveloperProject } from "@/lib/developerProjectLab.mjs";
+import { developerLinePosition } from "@/lib/developerLocalWorkflows.mjs";
 
 type Project = ReturnType<typeof normalizeDeveloperProject>;
 type Result = { file: string; index: number; length: number; line: number; column: number };
@@ -109,6 +110,12 @@ export default function ProjectInspectionPanel({ project, baseline, activeFile, 
             <p className="font-semibold">{item.level.toUpperCase()} · {item.rule}</p>
             {item.file && <p className="break-all">{item.file} · line {item.line}</p>}
             <p>{item.message}</p>
+            {item.file && item.line > 0 && project.files.some(file => file.name === item.file) &&
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => {
+                const target = project.files.find(file => file.name === item.file)!;
+                const location = developerLinePosition(target.content, item.line);
+                onJump({ file: item.file, index: location.index, length: 0, line: location.line, column: 1 });
+              }}>Open location</Button>}
           </div>)}
         </div>
         <p className="text-xs leading-5 text-slate-500">The report contains file names, file lengths and rule findings, but excludes source text, matched substrings and secrets from file bodies. File names themselves may be sensitive—review before sharing.</p>
