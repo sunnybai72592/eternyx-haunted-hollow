@@ -365,6 +365,7 @@ export default function AdminServiceRequests() {
       setFeedback('Request ' + item.id + ' updated in the database.');
       void load();
       void loadQueueCounts();
+      void loadActionCounts();
     }
     setSaving(null);
   };
