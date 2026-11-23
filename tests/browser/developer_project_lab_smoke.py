@@ -306,6 +306,24 @@ def actual_preflight(page):
     assert "quality-missing-target" not in json.dumps(quality_report)
     assert "index.html" not in json.dumps(quality_report)
     editor.fill(html_before)
+    # 3.5: opt in to three cross-file references; prove broken links fail
+    # in both desktop and mobile Chrome without adding a new journey ID.
+    page.get_by_role("button", name="Add integration checks").click()
+    expect(page.get_by_role("group", name="Configured local tests").get_by_role("button", name="Remove test 12")).to_be_visible()
+    integration_marker = "PRIVATE_MISSING_INTEGRATION.js"
+    editor.fill(html_before + '\n<script src="./' + integration_marker + '"></script>')
+    expect(page.get_by_text("Cross-file references:", exact=False)).to_be_visible()
+    page.get_by_role("button", name="Run project tests").click()
+    results_panel = page.get_by_label("Local test results")
+    expect(results_panel.get_by_text("missing-local-reference", exact=False)).to_be_visible(timeout=20000)
+    expect(results_panel.get_by_text("Next step:", exact=False)).to_be_visible()
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export source-free test report").click()
+    integration_report = json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert integration_report["failed"] >= 2
+    assert integration_marker not in json.dumps(integration_report)
+    assert "index.html" not in json.dumps(integration_report)
+    editor.fill(html_before)
     page.get_by_role("button", name="Save browser copy").click()
 
 def preview_isolation(page):
