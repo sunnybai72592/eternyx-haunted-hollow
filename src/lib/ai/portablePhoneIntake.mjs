@@ -87,13 +87,27 @@ export function validatePhoneMoviePlan({files,moviePlan,seconds}){
     throw new Error("Each original phone source needs one authored movie shot and supported output presets.");
   let total=0;
   const shots=moviePlan.shots.map((shot,index)=>{
+    const keys=["caption","frames","rights_ref","source_filename",
+      "start_seconds","fade_in_frames","fade_out_frames"];
     if(!shot||typeof shot!=="object"||Array.isArray(shot)||
-       Object.keys(shot).sort().join(",")!=="caption,frames,rights_ref,source_filename"||
+       !Object.keys(shot).every(key=>keys.includes(key))||
+       !["caption","frames","rights_ref","source_filename"]
+          .every(key=>Object.hasOwn(shot,key))||
        shot.source_filename!==files[index].name||
        !Number.isSafeInteger(shot.frames)||shot.frames<16||
        shot.frames>48||shot.frames%16||
        !Number.isSafeInteger(seconds)||shot.frames>seconds*16)
       throw new Error("Choose a valid 1–3 second movie cut for every original file, in order.");
+    const offset=shot.start_seconds??0;
+    if(!Number.isSafeInteger(offset)||offset<0||
+       offset+shot.frames/16>seconds)
+      throw new Error("Shot start offset plus its duration exceeds the selected source window.");
+    for(const field of ["fade_in_frames","fade_out_frames"]){
+      if(shot[field]===undefined)continue;
+      if(!Number.isSafeInteger(shot[field])||shot[field]<0||
+         shot[field]>Math.min(8,shot.frames/2))
+        throw new Error("Shot fade must be 0–0.5 seconds and no longer than half the cut.");
+    }
     for(const [key,label] of [["caption","Human-written caption"],["rights_ref","Recording/usage rights reference"]]){
       const value=shot[key];
       if(typeof value!=="string"||!value.trim()||value.length>180||
@@ -102,7 +116,10 @@ export function validatePhoneMoviePlan({files,moviePlan,seconds}){
     }
     total+=shot.frames;
     return {source_filename:shot.source_filename,frames:shot.frames,
-            caption:shot.caption,rights_ref:shot.rights_ref};
+            caption:shot.caption,rights_ref:shot.rights_ref,
+            ...(shot.start_seconds===undefined?{}:{start_seconds:offset}),
+            ...(shot.fade_in_frames===undefined?{}:{fade_in_frames:shot.fade_in_frames}),
+            ...(shot.fade_out_frames===undefined?{}:{fade_out_frames:shot.fade_out_frames})};
   });
   if(total>480)throw new Error("Direct movie exceeds 30 seconds / 480 frames.");
   return {kind:"eternyx_offline_phone_movie",version:1,
