@@ -76,7 +76,7 @@ test("report includes only sanitized structural diagnostics, never source code o
   assert.equal(report.counts.warnings,1);
   assert.equal(report.files[0].name,"index.html");
   assert.equal(JSON.stringify(report).includes("SECRET_PASSWORD_4234"),false);
-  assert.equal(JSON.stringify(report).includes("duplicate"),false);
+  assert.equal(JSON.stringify(report).includes("<div"),false);
 });
 
 test("UI enables jump-to-text, deliberate restore-backed replace and manual report export", () => {
