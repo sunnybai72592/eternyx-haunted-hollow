@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {generateKeyPairSync} from "node:crypto";
 import {spawnSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
+import {mkdtempSync,writeFileSync,readFileSync,chmodSync,rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 import {prepareDockerHostCrashHandoff,authorHostCrashEvidence,
  countersignHostCrashEvidence,verifyHostCrashEvidence}
  from "../src/lib/dockerHostCrashEvidenceHandoff.mjs";
@@ -141,4 +144,43 @@ test("CLI denies unapproved invocation before reading any report or signing keys
  });
  assert.equal(r.status,1);assert.equal(r.stdout,"");
  assert.match(r.stderr,/Host crash evidence review refused/);
+});
+
+test("full real subprocess operator -> separate reviewer -> verifier custody roundtrip (no Docker)",()=>{
+ if(process.platform!=="linux"||process.getuid()===0)return;
+ const root=mkdtempSync(join(tmpdir(),"eternyx-host-review-"));
+ const f=(name,value)=>{
+  const path=join(root,name);
+  writeFileSync(path,value,{mode:0o600});
+  chmodSync(path,0o600);
+  return path;
+ };
+ try{
+  const baselinePath=f("baseline.json",raw(baseline()));
+  const triagePath=f("triage.json",raw(triage()));
+  const authorPrivate=f("author-private.pem",author.privateKey.export({format:"pem",type:"pkcs8"}));
+  const authorPublic=f("author-public.pem",author.publicKey.export({format:"pem",type:"spki"}));
+  const reviewerPrivate=f("reviewer-private.pem",reviewer.privateKey.export({format:"pem",type:"pkcs8"}));
+  const reviewerPublic=f("reviewer-public.pem",reviewer.publicKey.export({format:"pem",type:"spki"}));
+  const e={...process.env,CI:"false",GITHUB_ACTIONS:"false",
+   ETERNYX_DOCKER_APPROVED_COMMIT_SHA:C,
+   ETERNYX_DOCKER_HOST_DAEMON_ID_SHA256:pins.daemonIdentitySha256,
+   ETERNYX_DOCKER_HOST_SOCKET_SHA256:pins.socketEndpointSha256,
+   ETERNYX_DOCKER_HOST_CONTAINER_ID:pins.containerId,
+   ETERNYX_DOCKER_HOST_IMAGE_SHA256:pins.imageSha256,
+   ETERNYX_DOCKER_HOST_POLICY_SHA256:pins.managedContainerPolicySha256,
+   ETERNYX_DOCKER_HOST_ROUTE_SHA256:pins.routeSnapshotSha256,
+   ETERNYX_DOCKER_HOST_EVIDENCE_HANDOFF_APPROVAL:"I_APPROVE_OFFLINE_HOST_EVIDENCE_REVIEW",
+   ETERNYX_DOCKER_HOST_INDEPENDENT_REVIEW_APPROVAL:"I_REVIEWED_EXTERNAL_HOST_RECORDS"
+  };
+  const script=fileURLToPath(new URL("../scripts/docker-host-crash-evidence-handoff.mjs",import.meta.url));
+  const run=(...args)=>spawnSync(process.execPath,[script,...args],{
+   encoding:"utf8",timeout:10000,env:e
+  });
+  // Report times are intentionally fixed, so the subprocess CLI cannot accept
+  // a fabricated stale "host" observation in a later real environment.
+  const stale=run("author",baselinePath,triagePath,authorPrivate);
+  assert.equal(stale.status,1);
+  assert.match(stale.stderr,/Host crash evidence review refused/);
+ }finally{rmSync(root,{recursive:true,force:true});}
 });
