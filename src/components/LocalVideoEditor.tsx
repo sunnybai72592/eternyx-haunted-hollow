@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import LocalRenderReview from "@/components/LocalRenderReview";
+import { buildPortableVideoBundle } from "@/lib/ai/portableVideoBundle.mjs";
+import rendererPython from "../../gpu-worker/render_video_timeline.py?raw";
+import storyboardPython from "../../gpu-worker/assemble_video_storyboard.py?raw";
+import auditPython from "../../gpu-worker/audit_video_render.py?raw";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import LocalMotionComposer from "@/components/LocalMotionComposer";
 import LocalLearnedVideoStudio from "@/components/LocalLearnedVideoStudio";
@@ -67,6 +71,8 @@ export default function LocalVideoEditor() {
   const [selectedSource, setSelectedSource] = useState("");
   const [working, setWorking] = useState(false);
   const [audioWorking, setAudioWorking] = useState(false);
+  const [bundleWorking, setBundleWorking] = useState(false);
+  const [bundleProgress, setBundleProgress] = useState("");
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState("");
   const videoVersion = useRef(0);
@@ -164,6 +170,46 @@ export default function LocalVideoEditor() {
     }
   }
   const command = localVideoCommand(profile, quality);
+  const exportPortableBundle = async () => {
+    if (!ready || bundleWorking) return;
+    setBundleWorking(true);
+    setMessage("");
+    setNotice("");
+    setBundleProgress("Verifying actual source media...");
+    try {
+      const output = await buildPortableVideoBundle({
+        sources, shots, soundtrack, profile, quality,
+        rendererSources: {
+          "render_video_timeline.py": rendererPython,
+          "assemble_video_storyboard.py": storyboardPython,
+          "audit_video_render.py": auditPython,
+        },
+        onProgress: (p: { done: number; total: number; phase: string }) =>
+          setBundleProgress(
+            (p.phase === "verify" ? "Verifying actual file " : "Packaging archive entry ") +
+            p.done + "/" + p.total + "..."
+          ),
+      });
+      const url = URL.createObjectURL(output.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = output.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setNotice(
+        "Portable CPU project saved (" +
+        (output.bytes / 1024 / 1024).toFixed(2) + " MiB). Extract the ZIP and run the " +
+        "included local launcher to make video.mp4. Your media was not uploaded."
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not export portable local project.");
+    } finally {
+      setBundleWorking(false);
+      setBundleProgress("");
+    }
+  };
   const chosen = sources.find(source => source.name === selectedSource);
   const total = shots.reduce((sum, shot) => sum + (Number.isFinite(shot.frames) ? shot.frames : 0), 0);
   const updateSound = (patch: Partial<LocalSound>) => {
@@ -343,8 +389,28 @@ export default function LocalVideoEditor() {
           {message && <p role="alert" className="text-sm text-rose-200">{message}</p>}
           {notice && <p role="status" className="text-sm text-emerald-200">{notice}</p>}
           {ready && <p className="text-sm text-emerald-200">Storyboard valid for export: {ready.board.shots.length} cuts · {ready.seconds.toFixed(2)} s. Python will verify each source on render.</p>}
+          <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-950/10 p-3">
+            <p className="font-semibold text-emerald-100">One ZIP · All source clips + actual CPU renderer</p>
+            <p className="text-sm text-slate-300">
+              Download a runnable project with the edited storyboard, only its referenced
+              original MP4s, any licensed soundtrack, SRT preview, three reviewed Python
+              renderer modules, and Windows/macOS/Linux launch instructions.
+              No repository checkout, GPU or paid AI API is needed.
+            </p>
+            <Button disabled={!ready || working || audioWorking || bundleWorking}
+              onClick={() => { void exportPortableBundle(); }}>
+              <Download className="mr-2 h-4 w-4"/>
+              {bundleWorking ? "Preparing verified offline ZIP..." : "Download complete CPU video project (.zip)"}
+            </Button>
+            {bundleProgress && <p role="status" className="text-xs text-emerald-200">{bundleProgress}</p>}
+            <p className="text-xs text-amber-100">
+              This private ZIP contains your original video and soundtrack bytes.
+              Save it only somewhere you trust. Extract it and run the local launcher:
+              Python 3.11+, FFmpeg and FFprobe are required; the MP4 is not rendered in your browser.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!ready || working || audioWorking}
+            <Button disabled={!ready || working || audioWorking || bundleWorking}
               onClick={() => ready && saveDownload(ready.json, "eternyx-video-v2.json", "application/json")}>
               <Download className="mr-2 h-4 w-4"/>Download FFmpeg storyboard
             </Button>

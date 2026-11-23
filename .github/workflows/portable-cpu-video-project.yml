@@ -1,0 +1,51 @@
+name: Portable CPU video project extract and render
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai/portableVideoBundle.mjs"
+      - "tests/portable-video-bundle.test.mjs"
+      - "src/components/LocalVideoEditor.tsx"
+      - "gpu-worker/render_video_timeline.py"
+      - "gpu-worker/assemble_video_storyboard.py"
+      - "gpu-worker/audit_video_render.py"
+      - ".github/workflows/portable-cpu-video-project.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai/portableVideoBundle.mjs"
+      - "tests/portable-video-bundle.test.mjs"
+      - "src/components/LocalVideoEditor.tsx"
+      - "gpu-worker/render_video_timeline.py"
+      - "gpu-worker/assemble_video_storyboard.py"
+      - "gpu-worker/audit_video_render.py"
+      - ".github/workflows/portable-cpu-video-project.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  portable-real-render:
+    name: Extract ZIP and render genuine CPU H264 video with audio, captions and preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Confirm FFmpeg, FFprobe, libx264 and offline Python availability
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Build verified ZIP, extract using stdlib zipfile, run included launcher, verify actual H264
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          CUDA_VISIBLE_DEVICES: ""
+          OMP_NUM_THREADS: "1"
+        run: node --test tests/portable-video-bundle.test.mjs
