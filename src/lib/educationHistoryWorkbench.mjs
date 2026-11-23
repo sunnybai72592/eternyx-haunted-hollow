@@ -1,3 +1,4 @@
+import {validExamId} from "./educationExam.mjs";
 import {
   EDUCATION_HISTORY_PAGE_SIZE,
   educationHistoryAction,
@@ -30,7 +31,7 @@ function attemptDay(row){
 }
 
 function strictOwnerRows(rows,ownerId){
-  if(!Array.isArray(rows)||rows.length>EDUCATION_HISTORY_PAGE_SIZE)
+  if(!validExamId(ownerId)||!Array.isArray(rows)||rows.length>EDUCATION_HISTORY_PAGE_SIZE)
     throw new Error("Only one authenticated history page is permitted.");
   return rows.map(row=>{
     const valid=normalizeOwnedEducationAttempt(row,ownerId);
