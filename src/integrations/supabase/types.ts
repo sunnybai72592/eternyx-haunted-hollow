@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      workspace_team_spaces: {
+        Row: { id: string; owner_id: string; name: string; description: string; status: string; created_at: string; updated_at: string }
+        Insert: { id?: string; owner_id: string; name: string; description?: string; status?: string; created_at?: string; updated_at?: string }
+        Update: { name?: string; description?: string; status?: string; updated_at?: string }
+        Relationships: []
+      }
+      workspace_team_members: {
+        Row: { space_id: string; user_id: string; role: string; joined_at: string }
+        Insert: { space_id: string; user_id: string; role: string; joined_at?: string }
+        Update: { role?: string }
+        Relationships: []
+      }
+      workspace_team_invites: {
+        Row: { id: string; space_id: string; created_by: string; role: string; expires_at: string; created_at: string; revoked_at: string | null; consumed_by: string | null; consumed_at: string | null }
+        Insert: { id?: string; space_id: string; created_by: string; role: string; expires_at: string; created_at?: string; revoked_at?: string | null; consumed_by?: string | null; consumed_at?: string | null }
+        Update: { revoked_at?: string | null; consumed_by?: string | null; consumed_at?: string | null }
+        Relationships: []
+      }
+      workspace_team_tasks: {
+        Row: { id: string; space_id: string; created_by: string; assignee_id: string | null; title: string; details: string; status: string; priority: string; due_on: string | null; completed_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; space_id: string; created_by: string; assignee_id?: string | null; title: string; details?: string; status?: string; priority?: string; due_on?: string | null; completed_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { assignee_id?: string | null; title?: string; details?: string; status?: string; priority?: string; due_on?: string | null; completed_at?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      workspace_team_events: {
+        Row: { id: number; space_id: string; actor_id: string; entity_id: string; event_type: string; created_at: string }
+        Insert: { space_id: string; actor_id: string; entity_id: string; event_type: string; id?: number; created_at?: string }
+        Update: {}
+        Relationships: []
+      }
       workspace_reconciliation_receipts: {
         Row: {
           id: string; owner_id: string; source_session_id: string;
@@ -3027,6 +3057,16 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_team_role: { Args: { p_space_id: string }; Returns: string | null }
+      workspace_team_create: { Args: { p_name: string; p_description?: string }; Returns: string }
+      workspace_team_invite: { Args: { p_space_id: string; p_role?: string }; Returns: Json }
+      workspace_team_accept_invite: { Args: { p_token: string }; Returns: string }
+      workspace_team_revoke_invite: { Args: { p_invite_id: string }; Returns: boolean }
+      workspace_team_member_change: { Args: { p_space_id: string; p_user_id: string; p_role?: string | null }; Returns: boolean }
+      workspace_team_leave: { Args: { p_space_id: string }; Returns: boolean }
+      workspace_team_set_status: { Args: { p_space_id: string; p_status: string }; Returns: boolean }
+      workspace_team_save_task: { Args: { p_space_id: string; p_task_id: string | null; p_title: string; p_details: string; p_status: string; p_priority: string; p_due_on: string | null; p_assignee_id: string | null; p_expected_updated_at?: string | null }; Returns: string }
+      workspace_team_delete_task: { Args: { p_space_id: string; p_task_id: string }; Returns: boolean }
       workspace_reconciliation_record: {
         Args: {
           p_source_session_id: string; p_source_sha256: string;
