@@ -16,6 +16,9 @@ CREATE FUNCTION public.is_admin() RETURNS boolean
     ); $$;
 GRANT USAGE ON SCHEMA public, auth TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
+-- Match the reviewed real auth migration: security-definer checks must
+-- never inherit PostgreSQL's default PUBLIC EXECUTE grant.
+REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
 -- Database and roles above are deliberately synthetic. No production
