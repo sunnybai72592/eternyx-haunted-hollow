@@ -11,6 +11,11 @@ on:
       - 'src/pages/DockerControlReview.tsx'
       - 'tests/docker-release-review.test.mjs'
       - 'tests/sql/docker-release-review-db-acceptance.sql'
+      - 'supabase/migrations/20261123120000_docker_reviewer_accountability_and_event_chain.sql'
+      - 'src/lib/dockerReleaseHistoryIntegrity.mjs'
+      - 'src/components/docker/DockerReleaseReviewerPanel.tsx'
+      - 'tests/docker-independent-reviewer-integrity.test.mjs'
+      - 'tests/sql/docker-independent-reviewer-db-acceptance.sql'
   workflow_dispatch:
 
 permissions:
@@ -29,6 +34,8 @@ jobs:
           node-version: 22
       - name: Verify strict release action contracts and real React wiring
         run: node --test tests/docker-release-review.test.mjs
+      - name: Test WebCrypto SHA-256 history verifier, distinct reviewer contracts and UI
+        run: node --test tests/docker-independent-reviewer-integrity.test.mjs
       - name: Start disposable offline PostgreSQL 17
         run: |
           docker run --detach --rm --network none --name eternyx-docker-release-review-ci -e POSTGRES_PASSWORD=isolated_ci_only postgres:17-alpine
@@ -43,6 +50,10 @@ jobs:
         run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123110000_docker_release_review_history.sql
       - name: Test actual Postgres review lifecycle, service grants, two-owner RLS and history
         run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/docker-release-review-db-acceptance.sql
+      - name: Apply independent reviewer and event chain migration
+        run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123120000_docker_reviewer_accountability_and_event_chain.sql
+      - name: Test owner/reviewer consent, SHA-256 history, update denial and RLS
+        run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/docker-independent-reviewer-db-acceptance.sql
       - name: Destroy disposable database
         if: always()
         run: docker rm --force eternyx-docker-release-review-ci || true
