@@ -425,7 +425,7 @@ def actual_preflight(page):
     assert "index.html" not in json.dumps(new_triage)
     assert new_triage["productionVerified"] is False
     page.get_by_role("button", name="Show all diagnostic findings").click()
-    expect(triage.get_by_text("baseline-not-available", exact=False).first).to_be_visible()
+    expect(triage.get_by_text("untested-project-file", exact=False).first).to_be_visible()
     editor.fill(html_before_triage)
     page.get_by_role("button", name="Save browser copy").click()
 
