@@ -72,8 +72,11 @@ export default function DeveloperProjectLab() {
     setFeedback(null);
   };
   const update = (fn: (old: Project) => Project) => {
-    try { setProject((old) => fn(old)); setFeedback(null); }
-    catch (cause) { alert(cause instanceof Error ? cause.message : "Unable to update file.", true); }
+    try {
+      const next = fn(project);
+      setProject(next);
+      setFeedback(null);
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Unable to update file.", true); }
   };
   const commit = (fn: (old: Project) => Project) => {
     try {
