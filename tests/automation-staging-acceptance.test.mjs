@@ -26,7 +26,7 @@ const env={
 };
 const consent="I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN";
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json"}});
-function makeBackend({wrongOwner=false,failRun=false,leakOutput=false}={}){
+function makeBackend({wrongOwner=false,failRun=false,leakOutput=false,failSaveResponse=false,ambiguousSave=false}={}){
   const calls=[];
   let saved=false,deleted=false,completed=false;
   let runCalls=0,denied=0;
@@ -51,7 +51,11 @@ function makeBackend({wrongOwner=false,failRun=false,leakOutput=false}={}){
       saved&&!deleted&&owner==="a"?[{
         id:workflowId,name:"ETERNYX staging acceptance "+uniqueId.slice(0,8),
         revision:1,active:true,trigger_kind:"manual",
-      }]:[]});
+      },...(ambiguousSave?[{
+        id:"77777777-7777-4777-8777-777777777777",
+        name:"ETERNYX staging acceptance "+uniqueId.slice(0,8),
+        revision:1,active:true,trigger_kind:"manual",
+      }]:[])]:[]});
     if(body.action==="history")return json({
       source:"authenticated_server",rawInputsStored:false,rawOutputsStored:false,
       runs:completed&&owner==="a"?[{
@@ -67,7 +71,9 @@ function makeBackend({wrongOwner=false,failRun=false,leakOutput=false}={}){
       assert.ok(body.name.startsWith("ETERNYX staging acceptance "));
       assert.equal(body.steps.length,4);
       assert.equal(saved,false);
-      saved=true;return json({ok:true,workflow_id:workflowId});
+      saved=true;
+      if(failSaveResponse)throw Error("Simulated connection lost after server committed a save");
+      return json({ok:true,workflow_id:workflowId});
     }
     if(body.action==="run"){
       assert.equal(body.workflowId,workflowId);
@@ -178,4 +184,53 @@ test("invalid HTTP responses block without returning untrusted errors or secrets
   const config=validateConfiguration(env,"inspect",false);
   const transport=createTransport(config,async()=>new Response("some-private-token", {status:502}));
   await assert.rejects(transport.identity(env.ETERNYX_STAGING_OWNER_A_JWT),/staging_authentication_failed/);
+});
+
+test("an ambiguously committed save is rediscovered only by exact owner-owned new name and cleaned up",async()=>{
+  const backend=makeBackend({failSaveResponse:true});
+  const config=validateConfiguration({...env,ETERNYX_STAGING_EXECUTION_CONSENT:consent},"execute",true);
+  await assert.rejects(runAcceptance(config,{
+    fetcher:backend.fetcher,uuid:()=>uniqueId,
+  }),/staging_transport_unavailable/);
+  const after=backend.state();
+  assert.equal(after.saved,true);
+  assert.equal(after.deleted,true);
+  assert.equal(after.runCalls,0);
+  assert.equal(backend.calls.filter(x=>x==="a:delete").length,1);
+});
+test("multiple newly created matching workflows trigger manual intervention, never unsafe deletion",async()=>{
+  const backend=makeBackend({failSaveResponse:true,ambiguousSave:true});
+  const config=validateConfiguration({...env,ETERNYX_STAGING_EXECUTION_CONSENT:consent},"execute",true);
+  await assert.rejects(runAcceptance(config,{
+    fetcher:backend.fetcher,uuid:()=>uniqueId,
+  }),/staging_ambiguous_created_workflow/);
+  assert.equal(backend.state().deleted,false);
+  assert.equal(backend.calls.filter(x=>x==="a:delete").length,0);
+});
+test("staging hard-denies known production even if caller attempts to falsify the declared production project",()=>{
+  for(const change of [
+    {ETERNYX_PRODUCTION_PROJECT_REF:"abcdefghijklmnopqrst"},
+    {ETERNYX_PRODUCTION_PROJECT_REF:"bbbbbbbbbbbbbbbbbbbb"},
+    {ETERNYX_PRODUCTION_PROJECT_REF:productionRef,
+      ETERNYX_STAGING_PROJECT_REF:productionRef},
+  ])assert.throws(()=>validateConfiguration({...env,...change},"inspect",false),
+    /staging_project_boundary/);
+});
+test("untrusted oversized streamed HTTP body and malformed Content-Length are rejected before JSON decoding",async()=>{
+  const config=validateConfiguration(env,"inspect",false);
+  const big=ReadableStream.from
+    ?ReadableStream.from([new Uint8Array(120001)]):
+      new ReadableStream({start(controller){controller.enqueue(new Uint8Array(120001));controller.close();}});
+  const transport=createTransport(config,async()=>new Response(big,{
+    status:200,headers:{"content-type":"application/json"},
+  }));
+  await assert.rejects(transport.identity(env.ETERNYX_STAGING_OWNER_A_JWT),/staging_response_too_large/);
+  const invalid=createTransport(config,async()=>new Response('{"id":"ignored"}',{
+    status:200,headers:{"content-length":"NaN","content-type":"application/json"},
+  }));
+  await assert.rejects(invalid.identity(env.ETERNYX_STAGING_OWNER_A_JWT),/staging_invalid_response/);
+  const rejected=createTransport(config,async()=>new Response(new Uint8Array([0xff,0xfe]),{
+    status:200,headers:{"content-type":"application/json"},
+  }));
+  await assert.rejects(rejected.identity(env.ETERNYX_STAGING_OWNER_A_JWT),/staging_invalid_response/);
 });

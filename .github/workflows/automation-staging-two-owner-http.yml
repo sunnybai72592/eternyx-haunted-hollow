@@ -1,0 +1,141 @@
+name: Automation isolated staging two-real-account HTTP acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "INSPECT_ONLY reads records; ONE_TEMPORARY_WORKFLOW saves/runs/deletes one test workflow."
+        required: true
+        type: choice
+        options:
+          - INSPECT_ONLY
+          - ONE_TEMPORARY_WORKFLOW
+        default: INSPECT_ONLY
+      test_accounts_review:
+        description: "Reviewer verified two nonanonymous staging-only accounts and dedicated short-lived access JWTs."
+        required: true
+        type: choice
+        options:
+          - NOT_REVIEWED
+          - STAGING_TEST_ACCOUNTS_REVIEWED
+        default: NOT_REVIEWED
+      write_approval:
+        description: "Only for ONE_TEMPORARY_WORKFLOW; acknowledges workflow write, one run, replay, deletion, and retained audit history."
+        required: true
+        type: choice
+        options:
+          - NOT_APPROVED
+          - I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN
+        default: NOT_APPROVED
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-automation-staging-core-release
+  cancel-in-progress: false
+
+jobs:
+  two-real-owners:
+    if: "${{ github.ref == 'refs/heads/main' && inputs.test_accounts_review == 'STAGING_TEST_ACCOUNTS_REVIEWED' && (inputs.run_mode == 'INSPECT_ONLY' || (inputs.run_mode == 'ONE_TEMPORARY_WORKFLOW' && inputs.write_approval == 'I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN')) }}"
+    name: Real two-owner Auth, isolation, manual workflow, idempotency and cleanup
+    environment: automation-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      ETERNYX_AUTOMATION_STAGING_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+      ETERNYX_AUTOMATION_PRODUCTION_REF: wcncuarekaofmfurbtbh
+      ETERNYX_AUTOMATION_TWO_OWNER_MODE: "${{ inputs.run_mode }}"
+      ETERNYX_AUTOMATION_TWO_OWNER_REVIEW: "${{ inputs.test_accounts_review }}"
+      ETERNYX_AUTOMATION_TWO_OWNER_WRITE_CONSENT: "${{ inputs.write_approval }}"
+    steps:
+      - name: Check out reviewed main without persisted checkout credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deny production or unapproved staging write mode BEFORE reading account secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/automation-staging-two-owner-gate.mjs --check-config > "$RUNNER_TEMP/automation-two-owner-intent.json"
+      - name: Independently verify the exact separate staging project and three active core functions via read-only Management GET
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: "${{ secrets.ETERNYX_AUTOMATION_STAGING_MANAGEMENT_TOKEN }}"
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {validateTwoOwnerGate} from "./scripts/automation-staging-two-owner-gate.mjs";
+          import {fetchStageManagement,inspectStageProject,verifyDeployedCore} from "./scripts/automation-staging-core-release.mjs";
+          const target=validateTwoOwnerGate(process.env);
+          const base="https://api.supabase.com/v1/projects/"+target.stagingRef;
+          const raw=await fetchStageManagement(base,process.env.SUPABASE_ACCESS_TOKEN);
+          inspectStageProject(raw,target.stagingRef);
+          const functions=await fetchStageManagement(base+"/functions",process.env.SUPABASE_ACCESS_TOKEN);
+          if(verifyDeployedCore(functions).length!==3)throw Error("Staging core functions unverified");
+          console.log("Verified independent staging project and three active core handlers with expected JWT policies.");
+          NODE
+      - name: Authenticate both real staging owners and inspect isolation with READ ONLY HTTP calls
+        shell: bash
+        timeout-minutes: 3
+        env:
+          ETERNYX_STAGING_PROJECT_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+          ETERNYX_PRODUCTION_PROJECT_REF: wcncuarekaofmfurbtbh
+          ETERNYX_STAGING_ENVIRONMENT_CLASS: isolated-test-project
+          ETERNYX_STAGING_PUBLISHABLE_KEY: "${{ vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY }}"
+          ETERNYX_STAGING_OWNER_A_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_JWT }}"
+          ETERNYX_STAGING_OWNER_B_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_JWT }}"
+        run: |
+          set -euo pipefail
+          node scripts/automation-staging-acceptance.mjs --inspect > "$RUNNER_TEMP/automation-two-owner-inspect.json"
+          node --input-type=module - "$RUNNER_TEMP/automation-two-owner-inspect.json" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import {checkTwoOwnerEvidence} from "./scripts/automation-staging-two-owner-gate.mjs";
+          checkTwoOwnerEvidence(JSON.parse(readFileSync(process.argv[2],"utf8")),"inspect");
+          console.log("Two independent nonanonymous owner identities and private list/history boundaries verified; no writes.");
+          NODE
+      - name: ONE TIME only — save, manually execute, replay, isolate and delete test workflow with explicit write approval
+        if: "${{ inputs.run_mode == 'ONE_TEMPORARY_WORKFLOW' && inputs.write_approval == 'I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN' }}"
+        shell: bash
+        timeout-minutes: 4
+        env:
+          ETERNYX_STAGING_PROJECT_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+          ETERNYX_PRODUCTION_PROJECT_REF: wcncuarekaofmfurbtbh
+          ETERNYX_STAGING_ENVIRONMENT_CLASS: isolated-test-project
+          ETERNYX_STAGING_PUBLISHABLE_KEY: "${{ vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY }}"
+          ETERNYX_STAGING_OWNER_A_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_JWT }}"
+          ETERNYX_STAGING_OWNER_B_JWT: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_JWT }}"
+          ETERNYX_STAGING_EXECUTION_CONSENT: "${{ inputs.write_approval }}"
+        run: |
+          set -euo pipefail
+          node scripts/automation-staging-two-owner-gate.mjs --check-config > /dev/null
+          node scripts/automation-staging-acceptance.mjs --execute --confirm-isolated-staging > "$RUNNER_TEMP/automation-two-owner-write.json"
+          echo "Owner-isolated manual run, replay, foreign-owner denial and temporary workflow cleanup were verified. Run history may remain."
+      - name: Require checked evidence and produce sanitized staging-only acceptance receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module - "$RUNNER_TEMP/automation-two-owner-inspect.json" "$RUNNER_TEMP/automation-two-owner-write.json" "$RUNNER_TEMP/automation-two-owner-verified.json" <<'NODE'
+          import {readFileSync,writeFileSync} from "node:fs";
+          import {validateTwoOwnerGate,checkTwoOwnerEvidence} from "./scripts/automation-staging-two-owner-gate.mjs";
+          const gate=validateTwoOwnerGate(process.env);
+          const inspect=JSON.parse(readFileSync(process.argv[2],"utf8"));
+          checkTwoOwnerEvidence(inspect,"inspect");
+          const path=gate.mode==="execute"?process.argv[3]:process.argv[2];
+          const raw=JSON.parse(readFileSync(path,"utf8"));
+          const result=checkTwoOwnerEvidence(raw,gate.mode);
+          writeFileSync(process.argv[4],JSON.stringify(result,null,2)+"\n",{mode:0o600,flag:"wx"});
+          console.log("Read-only/one-workflow stage acceptance evidence validated without customer IDs, inputs, outputs, tokens, or production readiness claims.");
+          NODE
+      - name: Publish ONLY the sanitized two-owner staging acceptance receipt
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-automation-two-owner-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/automation-two-owner-verified.json
+          if-no-files-found: error
+          retention-days: 7
