@@ -755,10 +755,11 @@ export async function auditCompleteIndependentReviewCase({
       name,await safeRead(join(source.folder,name),owner,max),
     ]
   )));
-  const snapshot=await verifyStableOfflineCaseSnapshot({
+  const checkedSnapshot=await verifyStableOfflineCaseSnapshot({
     folder:source.folder,owner,mode:checkpoint.mode,
     expectedFiles:{...source.caseSourceFiles,...finalFiles},
   });
+  const snapshot={...checkedSnapshot,sessionId,mode:checkpoint.mode};
   await recheckReviewerKeys(keys,{owner});
   return composeOfflineCaseAudit({
     sessionId,mode:checkpoint.mode,operatorFingerprint,
