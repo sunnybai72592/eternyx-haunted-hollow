@@ -186,15 +186,16 @@ export async function runSecurityHttpRevocation(config,opts,fetchImpl=globalThis
  passed(report.checks,"owned-and-revocable-engagements");
  // Real owner-access, opposite owner deny, and anonymous denial across all seven tables.
  const scoped={};
+ const anonymousResults=[];
  for(const table of REQUIRED_STAGING_TABLES){
   const select=table==="pentest_evidence"?"id,owner_id,engagement_id,storage_path":"id,owner_id,engagement_id";
   const fixtureA=table==="pentest_engagements"?a:
     oneId(asArray(await get("/rest/v1/"+table,config.tokenA,{select,
-      engagement_id:"eq."+opts.engagementA,owner_id:"eq."+ownerA,limit:2}),table+" A"),
+      engagement_id:"eq."+opts.engagementA,owner_id:"eq."+ownerA,limit:1}),table+" A"),
       ownerA,table+" A");
   const fixtureB=table==="pentest_engagements"?b:
     oneId(asArray(await get("/rest/v1/"+table,config.tokenB,{select,
-      engagement_id:"eq."+opts.engagementB,owner_id:"eq."+ownerB,limit:2}),table+" B"),
+      engagement_id:"eq."+opts.engagementB,owner_id:"eq."+ownerB,limit:1}),table+" B"),
       ownerB,table+" B");
   // Non-engagement table fixture count/id are validated separately because they are generated UUIDs.
   if(table!=="pentest_engagements"){
@@ -214,8 +215,9 @@ export async function runSecurityHttpRevocation(config,opts,fetchImpl=globalThis
   requireOk(([401,403,404].includes(unauth.status))||
     (unauth.status===200&&unauth.isJson&&Array.isArray(unauth.data)&&unauth.data.length===0),
     "Unauthenticated request exposed "+table+" row.");
-  passed(report.checks,"anonymous-denial:"+table);
+  anonymousResults.push("anonymous-denial:"+table);
  }
+ for(const id of anonymousResults)passed(report.checks,id);
  const ea=scoped.pentest_evidence.fixtureA,eb=scoped.pentest_evidence.fixtureB;
  const pathA=safeStoragePath(ea),pathB=safeStoragePath(eb);
  const owned=await Promise.all([get(pathA,config.tokenA),get(pathB,config.tokenB)]);
