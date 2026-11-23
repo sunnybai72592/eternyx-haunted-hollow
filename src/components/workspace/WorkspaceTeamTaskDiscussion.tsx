@@ -15,10 +15,10 @@ type Comment=Database["public"]["Tables"]["workspace_team_task_comments"]["Row"]
 type Step=Database["public"]["Tables"]["workspace_team_task_steps"]["Row"];
 
 export default function WorkspaceTeamTaskDiscussion({
-  owner, spaceId, taskId, role, active, disabled, onChanged,
+  owner, spaceId, taskId, role, active, disabled, onChanged, refreshKey,
 }: {
   owner:string;spaceId:string;taskId:string;role:string;
-  active:boolean;disabled:boolean;onChanged:()=>void;
+  active:boolean;disabled:boolean;onChanged:()=>void;refreshKey:number;
 }) {
   const [comments,setComments]=useState<Comment[]>([]);
   const [steps,setSteps]=useState<Step[]>([]);
@@ -29,6 +29,7 @@ export default function WorkspaceTeamTaskDiscussion({
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const token=useRef(0);
+  const previousRefresh=useRef(refreshKey);
   const identity=useRef({owner,spaceId,taskId});
   identity.current={owner,spaceId,taskId};
   const editor=(role==="owner"||role==="editor")&&active;
@@ -85,6 +86,18 @@ export default function WorkspaceTeamTaskDiscussion({
     })();
     return ()=>{token.current++;};
   },[owner,spaceId,taskId]);
+
+  useEffect(()=>{
+    if(previousRefresh.current===refreshKey)return;
+    previousRefresh.current=refreshKey;
+    const expected={owner,spaceId,taskId};
+    const version=token.current;
+    void (async()=>{
+      try {await checkIdentity(expected);await load(expected,version);}
+      catch(failure){if(version===token.current)setError(
+        failure instanceof Error?failure.message:"Live task update could not be loaded");}
+    })();
+  },[refreshKey,owner,spaceId,taskId]);
 
   const run=async(action:()=>Promise<void>,message:string)=>{
     if(disabled||busy||loading||!editor)return;

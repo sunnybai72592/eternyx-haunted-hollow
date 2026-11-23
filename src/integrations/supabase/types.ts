@@ -67,6 +67,12 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_team_read_cursors: {
+        Row: { space_id: string; user_id: string; last_seen_event_id: number; updated_at: string }
+        Insert: { space_id: string; user_id: string; last_seen_event_id?: number; updated_at?: string }
+        Update: { last_seen_event_id?: number; updated_at?: string }
+        Relationships: []
+      }
       workspace_team_events: {
         Row: { id: number; space_id: string; actor_id: string; entity_id: string; event_type: string; created_at: string }
         Insert: { space_id: string; actor_id: string; entity_id: string; event_type: string; id?: number; created_at?: string }
@@ -3086,6 +3092,10 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_team_mark_events_seen: {
+        Args: { p_space_id: string; p_event_id: number }
+        Returns: number
+      }
       workspace_team_post_comment: {
         Args: {p_space_id:string;p_task_id:string;p_body:string};Returns:string
       }
