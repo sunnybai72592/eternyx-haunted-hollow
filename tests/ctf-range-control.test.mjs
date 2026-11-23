@@ -128,7 +128,7 @@ test("account session dashboard links are discoverable and don't claim hosted ac
   assert.ok(guide.includes('to="/labs/sessions"'));
   assert.match(page, /Not available yet/);
   assert.match(page, /session reservations/i);
-  assert.match(page, /hostedAccessAvailable === true/);
+  assert.match(page, /canRequestRangeSession\(provider, sessions, state === "ready"\)/);
   assert.match(page, /supabase\.functions\.invoke\("ctf-range-control"/);
   assert.match(page, /Nothing is launched or billed when the service is unavailable/);
   assert.doesNotMatch(page, /Math\.random|localStorage\.setItem|fakeInstanceId|mockInstanceId|mockResults/i);

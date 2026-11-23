@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Clock3, CloudOff, Container, LockKeyhole,
@@ -6,6 +6,10 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
+import {
+  createRangeOwnerFence,parseRangeProviderStatus,parseRangeSessionsResponse,
+  parseRangeReservationReply,parseRangeStopReply,canRequestRangeSession,RANGE_ACTIVE_STATES,
+} from "@/lib/eternyxRangeSessionClient.mjs";
 
 type SessionStatus = "queued" | "provisioning" | "running" | "stopping" | "stopped" | "expired" | "failed";
 type RangeSession = {
@@ -28,7 +32,7 @@ type ProviderStatus = {
 
 const cta = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 const outlined = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border/70 bg-background/70 px-4 py-2.5 text-sm font-semibold transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
-const activeStates = new Set<SessionStatus>(["queued", "provisioning", "running", "stopping"]);
+const activeStates = new Set<SessionStatus>(RANGE_ACTIVE_STATES as SessionStatus[]);
 const safelyFormatted = (input: string) => {
   const d = new Date(input);
   return Number.isFinite(d.getTime()) ? d.toLocaleString() : "Unknown";
@@ -49,17 +53,8 @@ async function rangeCall(action: string, fields: Record<string, string> = {}) {
     body: { action, ...fields },
   });
   if (error) {
-    let text = error.message || "The range controller is unavailable.";
-    try {
-      const response = error.context;
-      if (response && typeof response.json === "function") {
-        const detail = await response.json();
-        if (typeof detail?.error === "string" && detail.error.length <= 240) text = detail.error;
-      }
-    } catch {
-      // Keep the transport error when a response body is not available.
-    }
-    throw new Error(text);
+    // Never display untrusted transport/error body containing paths, tokens or backend details.
+    throw new Error("The authenticated range controller is unavailable.");
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("The cyber range returned an invalid response.");
@@ -67,17 +62,12 @@ async function rangeCall(action: string, fields: Record<string, string> = {}) {
   return data as Record<string, unknown>;
 }
 
-function readSessionList(raw: unknown): RangeSession[] {
-  if (!Array.isArray(raw)) throw new Error("The session list returned an invalid response.");
-  return raw.filter((record): record is RangeSession =>
-    !!record && typeof record === "object" &&
-    typeof record.id === "string" &&
-    typeof record.challenge_pack === "string" &&
-    typeof record.requested_at === "string" &&
-    typeof record.expires_at === "string" &&
-    typeof record.updated_at === "string" &&
-    typeof record.status === "string" &&
-    Object.hasOwn(statuses, record.status));
+function currentAuthenticatedOwner(): string | null {
+  const auth = useAuthStore.getState();
+  return auth.isAuthenticated ? auth.user?.id ?? null : null;
+}
+function publicRangeError(): string {
+  return "Session controller is unavailable or returned an invalid response. Recheck the service.";
 }
 
 export default function EternyxRangeSessions() {
@@ -89,97 +79,102 @@ export default function EternyxRangeSessions() {
   const [errorText, setErrorText] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const ownerId = isAuthenticated ? user?.id ?? null : null;
+  const fence = useRef(createRangeOwnerFence());
+  const pendingAction = useRef(false);
+  const actionSequence = useRef(0);
 
-  const load = useCallback(async () => {
-    const [status, results] = await Promise.all([rangeCall("status"), rangeCall("sessions")]);
-    if (typeof status.providerOnline !== "boolean" ||
-        typeof status.hostedAccessAvailable !== "boolean" ||
-        typeof status.sessionDurationMinutes !== "number" ||
-        !Array.isArray(results.sessions) ||
-        results.source !== "authenticated_server") {
-      throw new Error("The provider and session service returned an invalid response.");
+  const load = useCallback(async (): Promise<boolean> => {
+    if (!ownerId || currentAuthenticatedOwner() !== ownerId) return false;
+    const ticket = fence.current.start(ownerId);
+    try {
+      const [status, results] = await Promise.all([rangeCall("status"), rangeCall("sessions")]);
+      const validatedProvider = parseRangeProviderStatus(status);
+      const validatedSessions = parseRangeSessionsResponse(results) as RangeSession[];
+      // Reject responses from a prior auth identity or an older refresh.
+      if (!fence.current.accepts(ticket, currentAuthenticatedOwner())) return false;
+      setProvider(validatedProvider);
+      setSessions(validatedSessions);
+      setErrorText("");
+      setState("ready");
+      return true;
+    } catch {
+      if (!fence.current.accepts(ticket, currentAuthenticatedOwner())) return false;
+      // Clear stale private records and capacity status; never show old data after a failed refresh.
+      setProvider(null);
+      setSessions([]);
+      setState("unavailable");
+      setErrorText(publicRangeError());
+      return false;
     }
-    setProvider({
-      providerOnline: status.providerOnline,
-      maxConcurrentSessions: typeof status.maxConcurrentSessions === "number" ? status.maxConcurrentSessions : 0,
-      hostedAccessAvailable: status.hostedAccessAvailable,
-      sessionDurationMinutes: status.sessionDurationMinutes,
-      message: typeof status.message === "string" ? status.message : "Provider status checked.",
-    });
-    setSessions(readSessionList(results.sessions));
-    setErrorText("");
-    setState("ready");
-  }, []);
+  }, [ownerId]);
 
   useEffect(() => {
-    let alive = true;
-    if (!isAuthenticated || !user) {
-      setState("idle"); setSessions([]); setProvider(null); return;
+    fence.current.invalidate();
+    ++actionSequence.current;
+    pendingAction.current = false;
+    setBusy(false);
+    setMessage("");
+    setProvider(null);
+    setSessions([]);
+    setErrorText("");
+    if (!ownerId || currentAuthenticatedOwner() !== ownerId) {
+      setState("idle");
+      return () => { fence.current.invalidate(); ++actionSequence.current; };
     }
-    setState("loading"); setMessage("");
-    Promise.all([rangeCall("status"), rangeCall("sessions")]).then(([status, results]) => {
-      if (!alive) return;
-      if (typeof status.providerOnline !== "boolean" ||
-          typeof status.hostedAccessAvailable !== "boolean" ||
-          !Array.isArray(results.sessions) || results.source !== "authenticated_server") {
-        throw new Error("Invalid range controller response.");
-      }
-      setProvider({
-        providerOnline: status.providerOnline,
-        maxConcurrentSessions: typeof status.maxConcurrentSessions === "number" ? status.maxConcurrentSessions : 0,
-        hostedAccessAvailable: status.hostedAccessAvailable,
-        sessionDurationMinutes: typeof status.sessionDurationMinutes === "number" ? status.sessionDurationMinutes : 15,
-        message: typeof status.message === "string" ? status.message : "Provider status checked.",
-      });
-      setSessions(readSessionList(results.sessions));
-      setState("ready"); setErrorText("");
-    }).catch((error) => {
-      if (!alive) return;
-      setState("unavailable");
-      setErrorText(error instanceof Error ? error.message : "Session controller is unavailable.");
-    });
-    return () => { alive = false; };
-  }, [isAuthenticated, user?.id]);
+    setState("loading");
+    void load();
+    return () => {
+      fence.current.invalidate();
+      ++actionSequence.current;
+    };
+  }, [ownerId, load]);
 
   const active = useMemo(() => sessions.filter((session) => activeStates.has(session.status)), [sessions]);
-  const canRequest = state === "ready" && provider?.providerOnline === true &&
-    provider?.hostedAccessAvailable === true && active.length === 0;
+  const canRequest = canRequestRangeSession(provider, sessions, state === "ready") &&
+    active.length === 0 && !busy && !pendingAction.current;
 
   const refresh = async () => {
+    if (!ownerId || pendingAction.current || busy || currentAuthenticatedOwner() !== ownerId) return;
     setBusy(true); setMessage("");
     try { await load(); }
-    catch (error) {
-      setState("unavailable");
-      setErrorText(error instanceof Error ? error.message : "Cannot check range controller.");
-    } finally { setBusy(false); }
+    finally { if (currentAuthenticatedOwner() === ownerId && !pendingAction.current) setBusy(false); }
   };
 
-  const request = async () => {
-    if (!canRequest) return; // Not a security boundary; backend independently enforces quotas.
+  const runAction = async (action: "request" | "stop", sessionId?: string) => {
+    if (pendingAction.current || busy || !ownerId || currentAuthenticatedOwner() !== ownerId) return;
+    if (action === "request" && !canRequest) return;
+    if (action === "stop" && (!sessionId || !sessions.some(s =>
+      s.id === sessionId && ["queued", "provisioning", "running"].includes(s.status)))) return;
+    pendingAction.current = true;
+    const generation = ++actionSequence.current;
+    const isCurrent = () => generation === actionSequence.current &&
+      currentAuthenticatedOwner() === ownerId;
     setBusy(true); setMessage("");
     try {
-      const reply = await rangeCall("request", { pack: "http-basics-v1" });
-      if (reply.accepted !== true) throw new Error("Reservation was not accepted.");
-      setMessage("Reservation stored, pending the isolated provider. There is no direct access URL yet.");
-      await load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create a session.");
-    } finally { setBusy(false); }
+      if (action === "request") {
+        const receipt = parseRangeReservationReply(await rangeCall("request", { pack: "http-basics-v1" }));
+        if (!isCurrent()) return;
+        setMessage("Reservation " + receipt.status + ". Provider allocation and secure ingress are separate.");
+      } else {
+        const receipt = parseRangeStopReply(await rangeCall("stop", { sessionId: sessionId! }), sessionId!);
+        if (!isCurrent()) return;
+        setMessage(receipt.status === "stopping"
+          ? "Stop requested. Capacity remains reserved until cleanup is confirmed."
+          : "Queued reservation cancelled.");
+      }
+      if (isCurrent()) await load();
+    } catch {
+      if (isCurrent()) setMessage("Session request could not be confirmed. Refresh provider status before retrying.");
+    } finally {
+      if (isCurrent()) {
+        pendingAction.current = false;
+        setBusy(false);
+      }
+    }
   };
-
-  const stop = async (sessionId: string) => {
-    setBusy(true); setMessage("");
-    try {
-      const reply = await rangeCall("stop", { sessionId });
-      if (typeof reply.status !== "string") throw new Error("Stop confirmation was invalid.");
-      setMessage(reply.status === "stopping"
-        ? "Stop requested. Worker cleanup must finish before the slot is released."
-        : "Queued reservation cancelled.");
-      await load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to request session stop.");
-    } finally { setBusy(false); }
-  };
+  const request = () => runAction("request");
+  const stop = (sessionId: string) => runAction("stop", sessionId);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
