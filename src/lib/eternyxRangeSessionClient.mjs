@@ -11,7 +11,7 @@ const SESSION_KEYS = Object.freeze(["id","challenge_pack","status","requested_at
 const idPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isObject=value=>!!value && typeof value==="object" && !Array.isArray(value);
 const isId=value=>typeof value==="string"&&idPattern.test(value);
-const isoTime=value=>typeof value==="string"&&value.length<=35&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/.test(value)&&Number.isFinite(Date.parse(value));
+const isoTime=value=>typeof value==="string"&&value.length<=35&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(value)&&Number.isFinite(Date.parse(value));
 const validOptionalTime=value=>value===null||isoTime(value);
 function fail(){throw Error("Invalid authenticated range controller response.");}
 

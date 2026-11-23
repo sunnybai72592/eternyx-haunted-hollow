@@ -37,6 +37,16 @@ test("owner sessions have bounded shape and private fields never reach renderer"
   assert.equal(JSON.stringify(list).includes("private"),false);
   assert.ok(Object.isFrozen(list[0]));
 });
+test("PostgreSQL timestamptz UTC offsets and zoned timestamps survive valid parsing",()=>{
+  const record={...row(),requested_at:"2026-11-22T18:00:00+00:00",
+    updated_at:"2026-11-22T21:00:00+03:00",
+    expires_at:"2026-11-22T18:15:00.123456+00:00"};
+  const sessions=parseRangeSessionsResponse({
+    source:"authenticated_server",hostedAccessAvailable:false,sessions:[record],
+  });
+  assert.equal(sessions.length,1);
+  assert.equal(sessions[0].requested_at,record.requested_at);
+});
 test("sessions reject unknown owner sources, IDs, duplicates, statuses and timestamps",()=>{
   const base={source:"authenticated_server",hostedAccessAvailable:false,sessions:[row()]};
   const bad=[
