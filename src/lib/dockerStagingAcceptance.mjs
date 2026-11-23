@@ -67,6 +67,11 @@ export async function runDockerStagingAcceptance(raw,{
  // manifest may the optional Auth password grant create fresh test sessions.
  const probe=fresh?await freshSessionProvider(config.probe):config.probe;
  validateDockerHostedProbeConfig(probe);
+ // A session provider may supply ONLY JWTs. It cannot change the vetted
+ // staging host, API key or either independently pinned workspace fixture.
+ if(fresh&&["stagingUrl","pinnedStagingHost","productionHost","publishableKey",
+  "ownerAWorkspaceId","ownerBWorkspaceId"].some(key=>probe[key]!==config.probe[key]))
+  throw Error("Fresh Auth provider attempted to change independently pinned staging context.");
  const authentication=await runDockerHostedAuthProbe(probe,{
   fetcher:hostedFetch,now:observedAt
  });
