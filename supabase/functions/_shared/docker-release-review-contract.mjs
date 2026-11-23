@@ -20,6 +20,18 @@ export function parseDockerReleaseReviewAction(raw){
     !REF.test(raw.stagingRef||"")||!validNote(raw.note))return null;
   return raw;
  }
+ if(raw.action==="release_invite_reviewer"){
+  if(!exact(raw,["action","reviewId","reviewerId","note"])||
+    !UUID.test(raw.reviewId||"")||!UUID.test(raw.reviewerId||"")||
+    !validNote(raw.note))return null;
+  return raw;
+ }
+ if(raw.action==="release_reviewer_respond"){
+  if(!exact(raw,["action","reviewId","candidateSha256","decision","note"])||
+    !UUID.test(raw.reviewId||"")||!HEX64.test(raw.candidateSha256||"")||
+    !["accept","decline"].includes(raw.decision)||!validNote(raw.note))return null;
+  return raw;
+ }
  if(raw.action==="release_decide"){
   if(!exact(raw,["action","reviewId","state","note"])||
     !UUID.test(raw.reviewId||"")||
