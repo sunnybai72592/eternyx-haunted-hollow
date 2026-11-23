@@ -27,12 +27,21 @@ jobs:
             --name eternyx-security-case-ledger-ci \
             -e POSTGRES_PASSWORD="$local_password" postgres:17-alpine
           unset local_password
-          for attempt in $(seq 1 45); do
+          # The postgres image briefly starts a temporary init server that then stops.
+          # Require multiple successful real SQL sessions across the restart window.
+          consecutive=0
+          for attempt in $(seq 1 60); do
             if docker exec eternyx-security-case-ledger-ci \
-                 pg_isready -U postgres >/dev/null 2>&1; then break; fi
+                 psql -U postgres -d postgres -Atqc 'select 1' 2>/dev/null | grep -qx 1; then
+              consecutive=$((consecutive + 1))
+              if [ "$consecutive" -ge 3 ]; then break; fi
+            else
+              consecutive=0
+            fi
             sleep 1
           done
-          docker exec eternyx-security-case-ledger-ci pg_isready -U postgres
+          [ "$consecutive" -ge 3 ] || { docker logs eternyx-security-case-ledger-ci; exit 1; }
+          docker exec eternyx-security-case-ledger-ci psql -U postgres -d postgres -Atqc 'select 1' | grep -qx 1
       - name: Bootstrap synthetic auth and private storage
         run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/security-case-ledger-bootstrap.sql
       - name: Apply existing engagement and evidence migrations
