@@ -13,6 +13,7 @@ import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
+import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 
 type RequestRow = {
   id: string; service_key: string; title: string; description: string;
@@ -297,6 +298,7 @@ export default function MyServiceRequests() {
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Private service desk</p><h1 className="mt-2 text-3xl font-bold sm:text-4xl">My service requests</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Only your account and authorized administrators can read your briefs. Statuses reflect actual administrator updates.</p></div>
         <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); void loadPulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
       </header>
+      {userId && <ServiceDeskReadiness mode="customer" />}
       {userId && <ServiceActionPulse
         heading="My service action center"
         description="Exact counts of your requests. Choose a card to clear other search filters and focus on one real type of work."
@@ -367,7 +369,7 @@ export default function MyServiceRequests() {
           <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />
         </Card>
       )}
-      {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The service desk may require its database migration to be deployed. No results are being simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
+      {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The database request failed. The connection, API exposure, or migration might be unavailable; this is not an empty inbox. Use the read-only feature checks above and retry. No results are simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
         : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
         : <div className="space-y-4">{visibleRows.map((item) => {
