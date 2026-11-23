@@ -107,15 +107,38 @@ export function createSafeClient(url, key) {
   });
 }
 
+class AcceptanceEvidenceError extends Error {}
+
 const enforce = (predicate, description) => {
-  if (!predicate) throw new Error('Acceptance failed: ' + description);
+  if (!predicate) throw new AcceptanceEvidenceError('Acceptance failed: ' + description);
 };
+
+// An anonymous 200 with zero rows or an explicit PostgreSQL permission
+// denial are positive evidence of privacy. A 404, 5xx, timeout, malformed
+// payload or failed transport proves nothing and MUST fail the release gate.
+// Grant denial does not prove RLS: the separate catalog and A/B reads still run.
+export function assertAnonymousIsolation(result, resource) {
+  enforce(result && typeof result === 'object', resource + ': anonymous probe returned no evidence');
+  const { data, error, status } = result;
+  if (error) {
+    enforce(error.code === '42501' && (status === 401 || status === 403)
+      && (data == null),
+    resource + ': anonymous access was not a verified permission denial');
+    return;
+  }
+  enforce((status === 200 || status === 206) && Array.isArray(data)
+    && data.length === 0,
+  resource + ': anonymous privacy evidence was missing or leaked data');
+}
 
 async function rows(client, table, field, value, columns = 'id', limit = 4) {
   const { data, error } = await client.from(table)
     .select(columns).eq(field, value).limit(limit);
-  if (error) throw new Error('A required staging query failed for ' + table);
-  return data ?? [];
+  if (error || !Array.isArray(data) || data.length > limit
+      || !data.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))) {
+    throw new AcceptanceEvidenceError('A required staging query failed for ' + table);
+  }
+  return data;
 }
 
 async function exactlyOne(client, table, field, value, columns = 'id') {
@@ -197,7 +220,7 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
   enforce(reviews.length > 0, 'Real scope review fixture is missing');
   const { data: responses, error: responseError } = await a.from('service_scope_responses')
     .select('id,review_id').in('review_id', reviews.map((r) => r.id)).limit(2);
-  enforce(!responseError && Boolean(responses?.length), 'A saved owner scope response is required');
+  enforce(!responseError && Array.isArray(responses) && responses.length > 0 && responses.every((r) => r && typeof r.review_id === 'string'), 'A saved owner scope response is required');
   const reviewId = responses[0].review_id;
   await none(b, 'service_scope_reviews', 'request_id', aRequest);
   await none(b, 'service_scope_responses', 'review_id', reviewId);
@@ -208,7 +231,7 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
   enforce(questions.length > 0, 'Real clarification question fixture is missing');
   const { data: answers, error: answerError } = await a.from('service_clarification_answers')
     .select('id,question_id').in('question_id', questions.map((q) => q.id)).limit(2);
-  enforce(!answerError && Boolean(answers?.length), 'A saved owner clarification answer is required');
+  enforce(!answerError && Array.isArray(answers) && answers.length > 0 && answers.every((r) => r && typeof r.question_id === 'string'), 'A saved owner clarification answer is required');
   const questionId = answers[0].question_id;
   await none(b, 'service_clarification_questions', 'request_id', aRequest);
   await none(b, 'service_clarification_answers', 'question_id', questionId);
@@ -235,12 +258,21 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
   await none(b, 'service_request_triage', 'request_id', aRequest);
   success('real admin-only triage data is absent from customer reads');
 
-  const anonCheck = await anon.from('service_requests').select('id').eq('id', aRequest).limit(1);
-  enforce(!anonCheck.data?.length, 'Anonymous role can access private service requests');
-  const anonJournal = await anon.from('service_request_journal')
-    .select('event_key').eq('request_id', aRequest).limit(1);
-  enforce(!anonJournal.data?.length, 'Anonymous role can access the private journal');
-  success('anonymous participant access blocked');
+  // Verify each sensitive Phase 13/14 resource separately. A failed REST
+  // call is not a passing RLS assertion; only explicit denial/empty evidence is.
+  const privateAnonResources = [
+    ['service_requests', 'id', aRequest, 'id'],
+    ['service_customer_amendment_queue', 'id', aRequest, 'id'],
+    ['service_admin_amendment_queue', 'id', aRequest, 'id'],
+    ['service_brief_amendments', 'request_id', aRequest, 'id'],
+    ['service_request_journal', 'request_id', aRequest, 'event_key'],
+    ['service_request_triage', 'request_id', aRequest, 'request_id'],
+  ];
+  for (const [resource, field, value, columns] of privateAnonResources) {
+    const result = await anon.from(resource).select(columns).eq(field, value).limit(1);
+    assertAnonymousIsolation(result, resource);
+  }
+  success('anonymous access denied across request, amendment, journal and triage resources');
 
   process.stdout.write('STAGING SERVICE DATA-API ACCEPTANCE: PASSED\n');
   return true;
@@ -258,7 +290,9 @@ if (cli) {
     } catch (e) {
       // Never log full SDK errors: they may include identifiers, URLs,
       // response metadata or credentials.
-      const safe = e instanceof Error ? e.message : 'Unexpected failure';
+      const safe = e instanceof AcceptanceEvidenceError
+        ? e.message
+        : 'Staging configuration, network or runtime validation failed';
       process.stderr.write('SERVICES STAGING ACCEPTANCE FAILED: ' + safe + '\n');
       process.exitCode = 1;
     }
