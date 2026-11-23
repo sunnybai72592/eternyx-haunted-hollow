@@ -8,6 +8,10 @@ import { useAuthStore } from "@/store/authStore";
 import { examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
 import { createEducationAnswerSaveQueue } from "@/lib/educationAnswerSaveQueue.mjs";
 import {
+ educationDeadlineSafety, educationSubmissionReadScope,
+ educationSubmissionRecoveryMessage, verifyEducationOwnedSubmission,
+} from "@/lib/educationSubmissionRecovery.mjs";
+import {
   createEducationExamAnswer, educationChoiceSelectionStatus,
   projectEducationExamReviewAnswers, restoreEducationExamAnswers,
   validateEducationExamDetails, validateEducationExamOptions,
@@ -57,6 +61,10 @@ export default function TestInterface() {
   const restoredAttemptRef = useRef<string | null>(null);
   const [answerSaveStatus, setAnswerSaveStatus] = useState<"idle" | "saving" | "saved" | "unsaved">("idle");
   const [answerSaveFailed, setAnswerSaveFailed] = useState(false);
+  const [submissionUncertain, setSubmissionUncertain] = useState(false);
+  const [statusCheckBusy, setStatusCheckBusy] = useState(false);
+  const statusCheckRef = useRef(false);
+  const submissionGenerationRef = useRef(0);
 
   const testQuery = useQuery<Exam>({
     queryKey: ["education-exam", user?.id, testId],
@@ -121,6 +129,9 @@ export default function TestInterface() {
     if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
     answerSaveTimerRef.current = null;
     saveQueueRef.current?.dispose();
+    submissionGenerationRef.current += 1;
+    statusCheckRef.current = false;
+    submittingRef.current = false;
     saveQueueScopeRef.current = scope;
     saveQueueRef.current = atomicCbtEnabled && scope && attemptQuery.data?.id
       ? createEducationAnswerSaveQueue((answer: Answer) => saveCbtAnswer(attemptQuery.data!.id, answer))
@@ -132,6 +143,11 @@ export default function TestInterface() {
     setConfirmSubmit(false);
     setAnswerSaveStatus("idle");
     setAnswerSaveFailed(false);
+    setSubmissionUncertain(false);
+    setStatusCheckBusy(false);
+    setNotice("");
+    setRemaining(null);
+    expirySubmitRequested.current = false;
   }, [enabled, user?.id, attemptQuery.data?.id]);
 
   useEffect(() => {
@@ -215,16 +231,91 @@ export default function TestInterface() {
   }, []);
 
   const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
-  const expired = remaining === 0;
-  const canEdit = attemptQuery.data?.status === "in_progress" && !submitting && !expired &&
+  // Fail closed on a missing/invalid start time; never grant extra exam time.
+  const deadlineSafety = educationDeadlineSafety(attemptQuery.data?.status, deadline);
+  const expired = deadlineSafety.expired;
+  const canEdit = attemptQuery.data?.status === "in_progress" && !submitting &&
+    !statusCheckBusy && deadlineSafety.editAllowed &&
     (!atomicCbtEnabled || (restoredAnswersQuery.isSuccess &&
       !!saveQueueRef.current && saveQueueScopeRef.current === user?.id + ":" + attemptQuery.data.id));
+
+  const readOwnedSubmissionStatus = useCallback(async (
+    attemptId: string, ownerId: string, expectedTestId: string,
+  ) => {
+    const scope = educationSubmissionReadScope(attemptId, ownerId, expectedTestId);
+    // READ the existing attempt: never invoke start_cbt_attempt to verify.
+    const {data, error} = await supabase.from("user_attempts")
+      .select("id,user_id,test_id,status,start_time,end_time")
+      .eq("id",scope.attemptId).eq("user_id",scope.ownerId)
+      .eq("test_id",scope.testId).maybeSingle();
+    if(error || !data)throw new Error("The attempt could not be verified.");
+    return verifyEducationOwnedSubmission(data,attemptId,ownerId,expectedTestId);
+  }, []);
+
+  // Reconcile only the exact existing attempt after a verified owner-scoped
+  // read. This restores an original clock if the initial start_time was
+  // corrupted in query state, without calling start_cbt_attempt again.
+  const recordVerifiedAttempt = useCallback((
+    receipt: { id:string;status:string;startedAt:string },
+    ownerId:string,assessmentId:string,
+  ) => {
+    queryClient.setQueryData<Attempt>(
+      ["education-active-exam-attempt",ownerId,assessmentId],
+      existing => existing?.id===receipt.id
+        ? {...existing,status:receipt.status,start_time:receipt.startedAt}
+        : existing,
+    );
+  },[queryClient]);
+
+  const checkSubmissionStatus = useCallback(async () => {
+    if(statusCheckRef.current || submittingRef.current || !user?.id ||
+       !attemptQuery.data?.id || !validExamId(testId))return;
+    const generation=submissionGenerationRef.current;
+    statusCheckRef.current=true;
+    setStatusCheckBusy(true);
+    setNotice("");
+    try{
+      const receipt=await readOwnedSubmissionStatus(attemptQuery.data.id,user.id,testId!);
+      if(generation!==submissionGenerationRef.current)return;
+      recordVerifiedAttempt(receipt,user.id,testId!);
+      if(receipt.confirmed){
+        setSubmissionUncertain(false);
+        void queryClient.invalidateQueries({queryKey:["education-owned-attempt-list",user.id]});
+        toast.success(receipt.flagged
+          ?"Server confirms a flagged, submitted attempt."
+          :"Server confirms your assessment was submitted.");
+        navigate("/test-results/"+receipt.id,{replace:true});
+      }else{
+        setSubmissionUncertain(true);
+        setNotice(educationSubmissionRecoveryMessage(
+          receipt,examDeadline(receipt.startedAt,testQuery.data?.duration_minutes)));
+      }
+    }catch{
+      if(generation===submissionGenerationRef.current){
+        setSubmissionUncertain(true);
+        setNotice("The server could not verify submission status. Nothing has been confirmed. Check your connection and retry this status check; do not start another assessment.");
+      }
+    }finally{
+      if(generation===submissionGenerationRef.current){
+        statusCheckRef.current=false;
+        setStatusCheckBusy(false);
+      }
+    }
+  },[attemptQuery.data?.id,user?.id,testId,testQuery.data?.duration_minutes,
+    readOwnedSubmissionStatus,recordVerifiedAttempt,queryClient,navigate]);
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
-    if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
+    if (submittingRef.current || statusCheckRef.current || !attemptQuery.data ||
+        !testQuery.data || !user || !validExamId(testId)) return;
+    const generation=submissionGenerationRef.current;
     if (attemptQuery.data.status !== "in_progress") {
       if (["submitted", "auto_submitted"].includes(attemptQuery.data.status))
         navigate("/test-results/" + attemptQuery.data.id, { replace: true });
       else setNotice("This attempt cannot be submitted from the exam editor. Check its server status.");
+      return;
+    }
+    if (!educationDeadlineSafety("in_progress",deadline).deadlineKnown) {
+      setSubmissionUncertain(true);
+      setNotice("This attempt's original deadline cannot be verified. No submission was sent. Check the server status before proceeding.");
       return;
     }
     if (atomicCbtEnabled && (!restoredAnswersQuery.isSuccess || !saveQueueRef.current)) {
@@ -235,6 +326,7 @@ export default function TestInterface() {
     setSubmitting(true);
     setConfirmSubmit(false);
     setNotice("");
+    setSubmissionUncertain(false);
     try {
       const attemptId = attemptQuery.data.id;
       if (atomicCbtEnabled) {
@@ -243,12 +335,13 @@ export default function TestInterface() {
         } catch (error) {
           // Past-deadline writes are denied by the server. Finalize the attempt
           // regardless; stale local text must never bypass the deadline.
-          if (!dueToExpiry) throw error;
+          if (!dueToExpiry && Date.now() < deadline!) throw error;
         }
         const result = await submitCbtAttempt(attemptId);
-        if (!["submitted", "auto_submitted"].includes(result.status)) {
-          throw new Error("The server did not confirm assessment submission.");
+        if (result.id !== attemptId || !["submitted", "auto_submitted"].includes(result.status)) {
+          throw new Error("The server did not confirm this exact assessment submission.");
         }
+        if(generation!==submissionGenerationRef.current)return;
         void queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
         toast.success("Assessment submission recorded.");
         navigate("/test-results/" + attemptId, { replace: true });
@@ -274,17 +367,43 @@ export default function TestInterface() {
       }).eq("id", attemptId).eq("user_id", user.id).eq("status", "in_progress")
         .select("id").maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error("The attempt was not updated. Please check its server status.");
+      if (!data || data.id!==attemptId)
+        throw new Error("The attempt was not confirmed. Please check its server status.");
+      if(generation!==submissionGenerationRef.current)return;
       void queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
       toast.success("Assessment submission recorded.");
       navigate("/test-results/" + attemptId, { replace: true });
     } catch {
-      setNotice("The assessment could not be submitted. Your answers are still in this tab. Check your connection and retry; server deadline enforcement must be verified.");
+      // A lost HTTP response does NOT establish that submission failed.
+      // Verify the exact owner + test + attempt before offering a retry.
+      if(generation!==submissionGenerationRef.current)return;
+      setSubmissionUncertain(true);
+      try{
+        const receipt=await readOwnedSubmissionStatus(attemptQuery.data.id,user.id,testId!);
+        if(generation!==submissionGenerationRef.current)return;
+        recordVerifiedAttempt(receipt,user.id,testId!);
+        if(receipt.confirmed){
+          setSubmissionUncertain(false);
+          void queryClient.invalidateQueries({queryKey:["education-owned-attempt-list",user.id]});
+          toast.success("Server confirms your assessment submission.");
+          navigate("/test-results/"+receipt.id,{replace:true});
+        }else{
+          setNotice(educationSubmissionRecoveryMessage(
+            receipt,examDeadline(receipt.startedAt,testQuery.data?.duration_minutes)));
+        }
+      }catch{
+        if(generation===submissionGenerationRef.current)
+          setNotice("Submission could not be confirmed. The server status check is unavailable; do not assume the attempt failed or start another exam. Retry the status check.");
+      }
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      if(generation===submissionGenerationRef.current){
+        submittingRef.current=false;
+        setSubmitting(false);
+      }
     }
-  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers, queryClient, restoredAnswersQuery.isSuccess]);
+  }, [attemptQuery.data, testQuery.data, user, testId, deadline, answers, navigate,
+    flushPendingAnswers, readOwnedSubmissionStatus, recordVerifiedAttempt,
+    queryClient, restoredAnswersQuery.isSuccess]);
   submitRef.current = submitExam;
 
   // A resumed attempt may already be submitted. Do not show editable
@@ -425,7 +544,8 @@ export default function TestInterface() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-primary sm:text-3xl">{exam.title}</h1>
         <div role="timer" aria-label="Time remaining" className="flex items-center gap-2 rounded-lg border border-primary/30 bg-card px-4 py-2 font-mono">
-          <Clock3 aria-hidden="true" className="h-4 w-4" />{remaining === null ? "Loading…" : examClock(remaining)}
+          <Clock3 aria-hidden="true" className="h-4 w-4" />
+          {!deadlineSafety.deadlineKnown ? "Unverified" : remaining === null ? "Loading…" : examClock(remaining)}
         </div>
       </div>
       <p className="text-xs text-muted-foreground">The clock follows the stored attempt start time. Final deadlines and grading require server-side enforcement.</p>
@@ -442,6 +562,25 @@ export default function TestInterface() {
       {visibilityNotice && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" />
         <AlertDescription>Tab visibility changed during this attempt. This alone is not proof of a screen lock or misconduct.</AlertDescription></Alert>}
       {notice && <Alert variant="destructive"><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+      {!deadlineSafety.deadlineKnown && <Alert variant="destructive">
+        <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+        <AlertDescription>
+          The server's original exam deadline cannot be verified. Editing and submission are disabled
+          until the attempt's status and start time can be checked. No extra exam time is granted.
+        </AlertDescription>
+      </Alert>}
+      {(submissionUncertain || !deadlineSafety.deadlineKnown) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <Button variant="outline" disabled={submitting || statusCheckBusy}
+            onClick={() => void checkSubmissionStatus()}>
+            {statusCheckBusy ? "Checking server status…" : "Check server submission status"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            This reads the existing owner-scoped attempt. It does not create another attempt,
+            resubmit answers, extend the exam clock or publish a grade.
+          </p>
+        </div>
+      )}
       {atomicCbtEnabled && restoredAnswersQuery.isSuccess && (
         <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
           <span className={answerSaveFailed ? "text-destructive" : "text-muted-foreground"}>
@@ -467,7 +606,7 @@ export default function TestInterface() {
       )}
       {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription className="flex flex-wrap items-center justify-between gap-3">
         <span>Time has elapsed. Submit to confirm the server recorded your attempt; late answer edits cannot be accepted.</span>
-        <Button size="sm" variant="outline" disabled={submitting}
+        <Button size="sm" variant="outline" disabled={submitting || statusCheckBusy}
           onClick={() => void submitExam(true)}>Retry submission</Button>
       </AlertDescription></Alert>}
       <Card className="border-border bg-card">
@@ -568,7 +707,7 @@ export default function TestInterface() {
       </section>
       <nav aria-label="Exam question navigation" className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="outline" disabled={questionIndex === 0 || submitting} onClick={() => setQuestionIndex(i => Math.max(0, i - 1))}>Previous</Button>
-        <Button variant="destructive" disabled={submitting} onClick={() => setConfirmSubmit(true)}><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Submit assessment</Button>
+        <Button variant="destructive" disabled={submitting || statusCheckBusy || !deadlineSafety.deadlineKnown} onClick={() => setConfirmSubmit(true)}><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Submit assessment</Button>
         <Button disabled={questionIndex === count - 1 || submitting} onClick={() => setQuestionIndex(i => Math.min(count - 1, i + 1))}>Next</Button>
       </nav>
       <AlertDialog open={confirmSubmit} onOpenChange={setConfirmSubmit}>
@@ -594,7 +733,8 @@ export default function TestInterface() {
           )}
           <div className="flex flex-wrap justify-end gap-2">
             <AlertDialogCancel disabled={submitting}>Continue assessment</AlertDialogCancel>
-            <AlertDialogAction disabled={submitting} onClick={() => void submitExam(expired)}>Confirm submission</AlertDialogAction>
+            <AlertDialogAction disabled={submitting || statusCheckBusy || !deadlineSafety.deadlineKnown}
+              onClick={() => void submitExam(expired)}>Confirm submission</AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>

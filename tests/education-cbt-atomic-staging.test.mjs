@@ -127,8 +127,8 @@ test("15: refresh recovery scopes previously saved answers to this account's att
 
 test("16: the atomic submission path requires an affirmative server outcome", () => {
   assert.match(exam, /const result = await submitCbtAttempt\(attemptId\)/);
-  assert.match(exam, /if \(!\["submitted", "auto_submitted"\]\.includes\(result\.status\)\)/);
-  assert.match(exam, /if \(!dueToExpiry\) throw error/);
+  assert.match(exam, /if \(result\.id !== attemptId \|\| !\["submitted", "auto_submitted"\]\.includes\(result\.status\)\)/);
+  assert.match(exam, /if \(!dueToExpiry && Date\.now\(\) < deadline!\) throw error/);
   assert.match(client, /This answer was not saved: attempt ended or expired/);
 });
 
