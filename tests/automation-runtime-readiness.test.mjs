@@ -99,7 +99,7 @@ test("live probe sends one GET to the fixed management endpoint, not a mutation"
   });
   assert.equal(count,1);
   assert.equal(checkFunctions(received).problems.length,0);
-  assert.throws(()=>checkFunctions(received.map(x=>({...x,verify_jwt:"true"}))).problems===0);
+  assert.equal(checkFunctions(received.map(x=>({...x,verify_jwt:"true"}))).problems.filter(x=>x.code==="deployed_jwt_mismatch").length,Object.keys(REQUIRED_FUNCTIONS).length);
 });
 test("live probe masks HTTP auth failures and rejects invalid project refs",async()=>{
   const token="test-token-not-a-real-secret-value";
