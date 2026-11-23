@@ -1,0 +1,104 @@
+name: Automation + Docker combined offline PostgreSQL 17 migration replay
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/automation-docker-postgres17-replay.yml'
+      - 'scripts/automation-postgres17-replay-plan.mjs'
+      - 'scripts/automation-fresh-staging-mirror.mjs'
+      - 'scripts/automation-migration-collision-baseline.json'
+      - 'tests/automation-postgres17-replay-plan.test.mjs'
+      - 'supabase/migrations/**'
+      - 'tests/sql/automation-control-db-smoke.sql'
+      - 'tests/sql/docker-lab-db-acceptance.sql'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined-isolated-postgres:
+    name: Actually replay Automation + Docker SQL together in networkless PG17
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MIRROR_PATH: /tmp/eternyx-combined-sql-mirror-${{ github.run_id }}-${{ github.run_attempt }}
+      REPLAY_PLAN: /tmp/eternyx-combined-sql-mirror-${{ github.run_id }}-${{ github.run_attempt }}/ordered-replay.txt
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22 for the offline planner
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify source fingerprints and replay security boundaries
+        run: |
+          node --test tests/automation-postgres17-replay-plan.test.mjs
+          node scripts/automation-migration-collision-forensics.mjs > "$RUNNER_TEMP/historical-collisions.json"
+      - name: Create unlinked migration mirror and verify ordered two-pillar plan
+        shell: bash
+        run: |
+          node scripts/automation-fresh-staging-mirror.mjs --create-fresh-local-mirror --output "$MIRROR_PATH" > "$RUNNER_TEMP/automation-mirror-evidence.json"
+          node scripts/automation-postgres17-replay-plan.mjs --mirror "$MIRROR_PATH" --plan "$REPLAY_PLAN" > "$RUNNER_TEMP/automation-dual-pillar-plan.json"
+      - name: Start disposable network-isolated PostgreSQL 17
+        shell: bash
+        run: |
+          docker run --detach --rm --network none --name eternyx-automation-docker-replay \
+            -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-automation-docker-replay pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-automation-docker-replay pg_isready -U postgres
+      - name: Bootstrap only disposable synthetic identities and Supabase roles
+        run: docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply combined SQL migrations in the fresh mirror's unique timestamp order
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          echo "Combined SQL replay: NOT a Supabase production deployment" > "$RUNNER_TEMP/automation-cross-pillar-result.txt"
+          while IFS= read -r migration; do
+            if [[ ! "$migration" =~ ^20[0-9]{12}_[A-Za-z0-9_-]+\.sql$ ]]; then
+              echo "::error::Untrusted migration filename in replay plan"
+              exit 1
+            fi
+            file="$MIRROR_PATH/supabase/migrations/$migration"
+            if [ ! -f "$file" ]; then
+              echo "::error::Mirror SQL file is missing"
+              exit 1
+            fi
+            if ! docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file" > /dev/null 2> "$RUNNER_TEMP/automation-psql-error.txt"; then
+              echo "::error title=Cross-pillar SQL migration failed::$migration"
+              echo "FAILED: $migration" >> "$RUNNER_TEMP/automation-cross-pillar-result.txt"
+              sed -n '1,30p' "$RUNNER_TEMP/automation-psql-error.txt"
+              exit 1
+            fi
+            count=$((count+1))
+          done < "$REPLAY_PLAN"
+          echo "Migrations successfully applied to disposable PostgreSQL 17: $count" | tee -a "$RUNNER_TEMP/automation-cross-pillar-result.txt"
+          if [ "$count" -lt 28 ]; then
+            echo "::error::Incomplete migration replay"
+            exit 1
+          fi
+      - name: Verify owner isolation, quotas, idempotency and safe workflow actions
+        run: docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-control-db-smoke.sql
+      - name: Verify actual Docker owner isolation, permits, receipts and incident holds
+        run: docker exec --interactive eternyx-automation-docker-replay psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/docker-lab-db-acceptance.sql
+      - name: Publish local-only sanitized migration replay outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-automation-docker-offline-pg17-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/automation-cross-pillar-result.txt
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove disposable PostgreSQL regardless of result
+        if: always()
+        run: docker rm --force eternyx-automation-docker-replay || true
