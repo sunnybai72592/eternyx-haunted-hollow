@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, Download, ShieldAlert, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,7 @@ export default function WorkspaceReadinessPanel({
   owner, disabled,
 }: {owner:string;disabled:boolean}) {
   const [report,setReport]=useState<Report|null>(null);
+  const [reportOwner,setReportOwner]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const ownerRef=useRef(owner);
@@ -20,14 +21,23 @@ export default function WorkspaceReadinessPanel({
     ownerRef.current=owner;
     nonce.current++;
   }
+  useEffect(()=>{
+    nonce.current++;
+    setReport(null);
+    setReportOwner(null);
+    setBusy(false);
+    setError("");
+  },[owner]);
+  const visibleReport=reportOwner===owner?report:null;
   const check=async()=>{
     if(disabled || busy || !owner)return;
     const token=++nonce.current;
-    setBusy(true);setError("");setReport(null);
+    setBusy(true);setError("");setReport(null);setReportOwner(null);
     try {
       const result=await checkWorkspaceReadiness(supabase,owner);
       if(nonce.current!==token || ownerRef.current!==owner)return;
       setReport(result as Report);
+      setReportOwner(owner);
     } catch {
       if(nonce.current===token && ownerRef.current===owner)
         setError("Workspace reachability could not be checked. No project data was modified.");
@@ -36,8 +46,8 @@ export default function WorkspaceReadinessPanel({
     }
   };
   const download=()=>{
-    if(!report)return;
-    const body=workspaceReadinessSafeReport(report);
+    if(!visibleReport)return;
+    const body=workspaceReadinessSafeReport(visibleReport);
     const url=URL.createObjectURL(new Blob([body],{type:"application/json"}));
     const link=document.createElement("a");
     link.href=url;link.download="eternyx-workspace-readiness.json";link.click();
@@ -60,18 +70,18 @@ export default function WorkspaceReadinessPanel({
       {busy?"Checking account and APIs…":"Run read-only checks"}
     </Button>
     {error&&<p role="alert" className="text-xs text-destructive">{error}</p>}
-    {report&&<div className="space-y-3 rounded-lg border border-border p-3 text-xs">
-      <p role="status" className={report.release_gate==="blocked"?
+    {visibleReport&&<div className="space-y-3 rounded-lg border border-border p-3 text-xs">
+      <p role="status" className={visibleReport.release_gate==="blocked"?
         "text-amber-400 font-medium":"text-cyan-300 font-medium"}>
-        {report.release_gate==="blocked"?"Read-only readiness blocked":
+        {visibleReport.release_gate==="blocked"?"Read-only readiness blocked":
           "API reachability confirmed — manual release review still required"} ·
-        {" "+(report.summary?.pass??0)} passed, {report.summary?.fail??0} failed
+        {" "+(visibleReport.summary?.pass??0)} passed, {visibleReport.summary?.fail??0} failed
       </p>
       <p className="text-muted-foreground">
-        Checked {new Date(report.checked_at).toLocaleString()}
+        Checked {new Date(visibleReport.checked_at).toLocaleString()}
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
-        {report.checks.map(entry=><div key={entry.key}
+        {visibleReport.checks.map(entry=><div key={entry.key}
           className="rounded-md border border-border/70 p-2">
           <p className={entry.status==="pass"?"text-cyan-300":"text-amber-400"}>
             {entry.status==="pass"?"Reachable":"Could not verify"} · {entry.title}
