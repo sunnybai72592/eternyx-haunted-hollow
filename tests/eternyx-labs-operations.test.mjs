@@ -183,7 +183,7 @@ test("offline engines and React workstations are integrated with explicit safety
     read("src/pages/EternyxLabs.tsx"),
   ]);
   assert.match(page,/BrowserDefensiveOperations selected=\{selected\}/);
-  assert.match(page,/20 working exercises/);
+  assert.match(page,/25 working exercises/);
   assert.match(page,/Search 25 workstations/);
   for(const id of ["dns","http","securitytxt","events","tokens"])
     assert.ok(ui.includes('selected==="'+id+'"'),id);
