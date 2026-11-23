@@ -336,7 +336,11 @@ export default function TestInterface() {
       setNotice("This attempt's original deadline cannot be verified. No submission was sent. Check the server status before proceeding.");
       return;
     }
-    if (atomicCbtEnabled && (!restoreReady || !restoredAnswersQuery.isSuccess || !saveQueueRef.current)) {
+    // Before the original deadline, do not submit with an unhydrated draft.
+    // After expiry, the existing server attempt must still be finalizable
+    // without replaying any unsaved, possibly late private answer changes.
+    const deadlinePassed = deadline !== null && Date.now() >= deadline;
+    if (atomicCbtEnabled && !restoreReady && !deadlinePassed) {
       setNotice("Your existing saved answers are not ready. Do not submit until the server has restored the attempt.");
       return;
     }
@@ -348,13 +352,18 @@ export default function TestInterface() {
     try {
       const attemptId = attemptQuery.data.id;
       if (atomicCbtEnabled) {
-        try {
-          await flushPendingAnswers();
-        } catch (error) {
-          // Past-deadline writes are denied by the server. Finalize the attempt
-          // regardless; stale local text must never bypass the deadline.
-          if (!dueToExpiry && Date.now() < deadline!) throw error;
+        if (restoreReady) {
+          try {
+            // This flush is only for a fully hydrated owner-scoped queue.
+            await flushPendingAnswers();
+          } catch (error) {
+            // Once the original deadline has passed, only finalization may
+            // proceed. The server must deny any late answer admission.
+            if (!dueToExpiry && Date.now() < deadline!) throw error;
+          }
         }
+        // If restoration was unavailable after expiry, no answer payload
+        // is resent: ask the server to finalize this SAME attempt.
         const result = await submitCbtAttempt(attemptId);
         if (result.id !== attemptId || !["submitted", "auto_submitted"].includes(result.status)) {
           throw new Error("The server did not confirm this exact assessment submission.");
@@ -629,7 +638,8 @@ export default function TestInterface() {
         </div>
       )}
       {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-        <span>Time has elapsed. Submit to confirm the server recorded your attempt; late answer edits cannot be accepted.</span>
+        <span>Time has elapsed. Submit to confirm the server recorded your attempt; late answer edits cannot be accepted.
+          If saved-answer restoration was unavailable, the attempt can still be finalized without resending answers.</span>
         <Button size="sm" variant="outline" disabled={submitting || statusCheckBusy}
           onClick={() => void submitExam(true)}>Retry submission</Button>
       </AlertDescription></Alert>}
