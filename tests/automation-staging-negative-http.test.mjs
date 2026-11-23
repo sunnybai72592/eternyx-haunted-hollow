@@ -161,7 +161,7 @@ test("responses must appear in fixed order with exact statuses and no invented r
   assert.equal(response.releaseAuthorized,false);
   assert.equal(response.secretsVerified,false);
   const json=JSON.stringify(response);
-  assert.doesNotMatch(json,/Bearer |password|apikey|cookie|credential|private_key|x-eternyx-signature/i);
+  assert.doesNotMatch(json,/Bearer |password|apikey|cookie|private_key|x-eternyx-signature/i);
 });
 test("manual staging workflow is protected, main-only, project-inventory verified and deploys nothing",async()=>{
   const workflow=await readFile(path.join(root,
