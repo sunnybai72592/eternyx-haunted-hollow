@@ -134,7 +134,7 @@ export function parseAutomationControlRequest(value) {
     if(beforeTime&&(
        typeof value.beforeCreatedAt!=="string"||
        value.beforeCreatedAt.length>45||
-       !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value.beforeCreatedAt)||
+       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value.beforeCreatedAt)||
        Number.isNaN(Date.parse(value.beforeCreatedAt))||
        typeof value.beforeId!=="string"||!UUID_RE.test(value.beforeId))){
       return {ok:false,reason:"invalid_coverage_cursor"};
