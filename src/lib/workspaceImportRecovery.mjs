@@ -84,3 +84,18 @@ export async function verifyExistingImportFile(storage, path, expectedBytes, exp
   }
   return true;
 }
+
+
+// A client-side freshness check, not an authorization substitute: every
+// sensitive DB/Storage operation still depends on server-side owner RLS.
+export async function assertWorkspaceImportOwner(client, expectedOwner) {
+  if (!client?.auth?.getUser || typeof expectedOwner !== "string" || !expectedOwner) {
+    throw new Error("A signed-in account is required for a private restore");
+  }
+  const { data, error } = await client.auth.getUser();
+  if (error || !data?.user?.id || data.user.id !== expectedOwner) {
+    throw new Error("The signed-in account changed or its session expired. " +
+      "Restore stopped before the next private operation; sign in and reselect your archive.");
+  }
+  return true;
+}
