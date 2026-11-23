@@ -107,6 +107,7 @@ async function main(){
       process.stdout.write(JSON.stringify({claimId:journal.claimId,alreadyAcknowledged:true})+"\n");
       return;
     }
+    requireDurableTerminalBeforeReceipt(journal,journal.outcome);
     const ack=await send("receipt",journal.claimId,journal.outcome);
     validateDockerReceiptAcknowledgement(ack,journal.claimId,journal.outcome);
     appendLabEvent(journal.claimId,"receipt_accepted");
