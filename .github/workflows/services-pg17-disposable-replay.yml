@@ -38,6 +38,8 @@ on:
       - "tests/services-phase39-definer-safety.test.mjs"
       - "scripts/services-phase40-consistent-staging-evidence.mjs"
       - "tests/services-phase40-consistent-evidence.test.mjs"
+      - "scripts/services-phase41-registered-staging-project.mjs"
+      - "tests/services-phase41-registered-project.test.mjs"
       - ".github/workflows/services-staging-acceptance.yml"
       - ".github/workflows/services-pg17-disposable-replay.yml"
   workflow_dispatch:
@@ -66,7 +68,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
