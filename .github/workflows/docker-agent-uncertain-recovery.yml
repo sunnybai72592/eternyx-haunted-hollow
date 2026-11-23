@@ -1,0 +1,35 @@
+name: Signed Docker agent uncertain-outcome recovery hold (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/docker-agent-uncertain-recovery.yml"
+      - "scripts/docker-lab-agent.mjs"
+      - "src/lib/dockerAgentAttemptDisposition.mjs"
+      - "tests/docker-agent-attempt-disposition.test.mjs"
+      - "docs/DOCKER_LAB_RECOVERY.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-agent-outcome:
+    name: Assert ambiguous Docker attempts preserve lock and cannot send false receipts
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check signed agent and outcome gate syntax
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerAgentAttemptDisposition.mjs
+          node --check tests/docker-agent-attempt-disposition.test.mjs
+      - name: Execute actual fsynced local journals, uncertain hold and strict replay tests
+        run: |
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-lab-recovery.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
