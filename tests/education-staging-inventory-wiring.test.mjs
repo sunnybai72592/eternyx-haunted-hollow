@@ -8,7 +8,7 @@ const release=readFileSync(new URL("../.github/workflows/education-hosted-releas
 test("standalone inventory uses exactly the same staging inputs as hosted release",()=>{
  const keys=[...COMMON_KEYS,...WRITE_KEYS];
  for(const key of keys){
-  const target=new RegExp("^      "+key+": \\$\\{\\{ (?:vars|secrets)\\."+key+" \\}\\}$","m");
+  const target=new RegExp("^[ ]{6,10}"+key+": \\$\\{\\{ (?:vars|secrets)\\."+key+" \\}\\}$","m");
   assert.match(inventory,target,key);
   assert.ok(release.includes(key+": \${{"),key);
  }

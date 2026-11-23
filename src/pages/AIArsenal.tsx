@@ -53,7 +53,7 @@ const plannedStudios = [
   },
   {
     name: "AI Agents Studio",
-    description: "Design manual agent plans and approval checkpoints locally; no autonomous agent or external execution.",
+    description: "Create and review local agent plans with optional AI Chat step suggestions and safety critiques; no autonomous agent or external execution.",
     icon: Bot,
   },
 ];
@@ -187,7 +187,7 @@ const AIArsenal = () => {
                       <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-primary">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio", "AI Audio Studio"].includes(studio.name) ? "Local tools + opt-in AI Chat" : ["AI Audio Studio", "AI Document Intelligence", "AI Research Studio", "AI Agents Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio", "AI Audio Studio", "AI Agents Studio"].includes(studio.name) ? "Local tools + opt-in AI Chat" : ["AI Audio Studio", "AI Document Intelligence", "AI Research Studio", "AI Agents Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
                     </div>
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>

@@ -21,17 +21,12 @@ jobs:
     name: Two-student real-JWT and PostgREST authorization acceptance
     runs-on: ubuntu-latest
     environment: rls-staging
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' }}
     timeout-minutes: 12
     env:
       ETERNYX_EDU_STAGING_READ_APPROVAL: ${{ inputs.approve_education_read_only && 'I_APPROVE_EDUCATION_STAGING_READ_ONLY' || '' }}
-      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
       ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
       ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
-      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
-      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
-      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
-      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
-      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
       ETERNYX_EDU_STAGING_TEST_ID: ${{ vars.ETERNYX_EDU_STAGING_TEST_ID }}
       ETERNYX_EDU_STAGING_QUESTION_ID: ${{ vars.ETERNYX_EDU_STAGING_QUESTION_ID }}
       ETERNYX_EDU_STAGING_OPTION_ID: ${{ vars.ETERNYX_EDU_STAGING_OPTION_ID }}
@@ -46,6 +41,13 @@ jobs:
           node-version: 22
           cache: npm
       - name: Explicitly reject unapproved or unsafe staging configuration
+        env:
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
         run: |
           node --input-type=module -e '
             import { validateEducationReadOnlyConfig } from "./scripts/staging/educationHostedReadOnlyConfig.mjs";
@@ -61,6 +63,13 @@ jobs:
         run: npm ci
       - name: Query real staging Auth and Data API with two test identities
         timeout-minutes: 7
+        env:
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
         run: node scripts/staging/verifyEducationHostedReadOnly.mjs
       - name: Verify sanitized evidence contains all required passing cases
         if: always()

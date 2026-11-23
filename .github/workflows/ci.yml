@@ -45,6 +45,11 @@ jobs:
           node --check scripts/workspace-team-staging-write-roles.mjs
           node --check src/lib/workspaceRoleWriteAcceptance.mjs
           node --check tests/workspace-role-write-acceptance.test.mjs
+      - name: Validate Phase 24 private Storage acceptance offline
+        run: |
+          node --check scripts/workspace-team-staging-storage.mjs
+          node --check src/lib/workspaceStorageAcceptance.mjs
+          node --check tests/workspace-storage-acceptance.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
@@ -91,12 +96,21 @@ jobs:
           trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
           curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:4173/ >/dev/null
           "$RUNNER_TEMP/eternyx-browser/bin/python" tests/browser/preview_smoke.py
+          "$RUNNER_TEMP/eternyx-browser/bin/python" tests/browser/developer_project_lab_smoke.py --base-url http://127.0.0.1:4173
       - name: Upload local-preview browser acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eternyx-preview-browser-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-results/browser-preview-acceptance.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload Developer Project Lab Chrome acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-developer-project-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/developer-project-browser-acceptance.json
           if-no-files-found: warn
           retention-days: 14
 

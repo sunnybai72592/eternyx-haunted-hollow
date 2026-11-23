@@ -18,7 +18,7 @@ test("Agent Studio has protected lazy-loaded route and explicit navigation link"
   assert.ok(app.includes('const AIAgentsStudio = lazy(() => import("./pages/AIAgentsStudio"));'));
   assert.ok(app.includes('path="/ai-arsenal/agents" element={<RequireAuth><AIAgentsStudio /></RequireAuth>}'));
   assert.ok(hub.includes('to="/ai-arsenal/agents"'));
-  assert.ok(hub.includes("Local workspace ready · AI disabled"));
+  assert.ok(hub.includes("optional AI Chat step suggestions"));
 });
 test("steps are proposed, bounded and external actions always require approval", () => {
   const steps = agent.createAgentStep([], research);
@@ -90,14 +90,16 @@ test("formatted plan states all execution limitations accurately", () => {
   const steps = agent.createAgentStep([], research);
   const text = agent.formatLocalAgentPlan(agent.buildLocalAgentPlan("Goal", "", [], steps));
   assert.match(text, /LOCAL DRAFT ONLY/);
-  assert.match(text, /No AI planning, background task/);
+  assert.match(text, /This export describes local draft state only/);
   assert.match(text, /does not authorize execution/);
 });
-test("UI does not call providers, external services, execute actions or persist data", () => {
+test("local agent steps cannot run or authorize actions; separate AI chat is opt-in", () => {
   assert.doesNotMatch(page + helper, /supabase\.functions\.invoke|ai-generation-job-enqueue|fetch\(|\beval\(|localStorage\.|sessionStorage\./);
-  assert.match(page, /No AI agent has been started/);
-  assert.match(page, /Nothing is executed, scheduled, sent or charged/);
+  assert.match(page, /No autonomous agent has been started/);
+  assert.match(page, /No external actions are ever run, scheduled or approved/);
   assert.match(page, /await navigator\.clipboard\.writeText\(preview\)/);
+  assert.match(page, /aiPlan\.run\("ai\.agents\.plan", prompt\)/);
+  assert.match(page, /aiReview\.run\("ai\.agents\.review", prompt\)/);
   assert.match(page, /role="alert"/);
   assert.match(page, /aria-live="polite"/);
 });

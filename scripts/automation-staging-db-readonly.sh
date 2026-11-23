@@ -18,7 +18,13 @@ if [[ -z "${ETERNYX_AUTOMATION_STAGING_PGPASSWORD:-}" ]] ||
   exit 2
 fi
 # Avoid inherited libpq profiles and TLS overrides. Secure cleanup on error.
-unset PGSERVICE PGSERVICEFILE PGPASSFILE PGSSLKEY PGSSLCERT PGOPTIONS PGREQUIRESSL
+# PGHOSTADDR can bypass the DNS host selected by the target-ref check.
+# Clearing inherited libpq settings blocks implicit connection, credential,
+# certificate, transport, and routing overrides before explicit pinning.
+unset PGSERVICE PGSERVICEFILE PGPASSFILE PGSSLKEY PGSSLCERT PGOPTIONS PGREQUIRESSL \
+  PGHOSTADDR PGSSLPASSWORD PGSSLCRL PGSSLCRLDIR PGGSSENCMODE PGTARGETSESSIONATTRS \
+  PGREQUIREAUTH PGCHANNELBINDING PGSSLMINPROTOCOLVERSION PGSSLMAXPROTOCOLVERSION \
+  PGHOST PGUSER PGPORT PGDATABASE PGSSLROOTCERT PGSSLMODE PGCONNECT_TIMEOUT
 umask 077
 ca_file="$(mktemp)"
 result_file="$(mktemp)"

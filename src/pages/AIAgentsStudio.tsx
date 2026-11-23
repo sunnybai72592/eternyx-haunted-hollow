@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowLeft, ArrowUp, Bot, ClipboardCopy, FileCheck2, RotateCcw, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Bot, ClipboardCopy, Download, FileCheck2, RotateCcw, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFeaturesForStudio } from "@/lib/ai/registry";
+import { useAIStudioChat } from "@/hooks/useAIStudioChat";
+import {
+  prepareAgentSuggestionPrompt, prepareAgentReviewPrompt,
+  parseAgentAISuggestions, AgentAIReviewError,
+  type AgentAISuggestion,
+} from "@/lib/ai/agent-ai-assist";
 import {
   AGENT_STEP_KINDS, AGENT_TOOL_SCOPES, LocalAgentPlanError, MAX_AGENT_STEPS,
   buildLocalAgentPlan, createAgentStep, formatLocalAgentPlan,
@@ -38,9 +44,15 @@ const AIAgentsStudio = () => {
   const [plan, setPlan] = useState<AgentPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<AgentAISuggestion[] | null>(null);
+  const aiPlan = useAIStudioChat();
+  const aiReview = useAIStudioChat();
   const preview = plan ? formatLocalAgentPlan(plan) : "";
 
   const invalidate = () => {
+    aiPlan.invalidate();
+    aiReview.invalidate();
+    setSuggestions(null);
     setPlan(null);
     setError(null);
     setNotice(null);
@@ -97,6 +109,78 @@ const AIAgentsStudio = () => {
       setError(describe(value));
     }
   };
+  const askAIForPlan = () => {
+    setError(null);
+    setNotice(null);
+    setSuggestions(null);
+    try {
+      const prompt = prepareAgentSuggestionPrompt(goal, constraints);
+      void aiPlan.run("ai.agents.plan", prompt);
+    } catch (failure) {
+      setError(failure instanceof AgentAIReviewError
+        ? "Provide a goal and constraints that fit the AI Chat request budget. Nothing was submitted."
+        : "Unable to prepare AI plan suggestions.");
+    }
+  };
+  const inspectAISuggestions = () => {
+    if (!aiPlan.result) return;
+    try {
+      const candidates = parseAgentAISuggestions(aiPlan.result);
+      if (steps.length + candidates.length > MAX_AGENT_STEPS) {
+        setError("Too many suggestions to import. Remove local steps first; nothing was imported.");
+        return;
+      }
+      setSuggestions(candidates);
+      setNotice("AI suggestions validated as local draft data only. Review all text and explicitly confirm before importing.");
+      setError(null);
+    } catch {
+      setSuggestions(null);
+      setError("The AI response was not valid safe step JSON. Review it manually; no steps were imported.");
+    }
+  };
+  const importAISuggestions = () => {
+    if (!suggestions?.length || steps.length + suggestions.length > MAX_AGENT_STEPS) return;
+    if (!window.confirm(
+      "Import these AI suggestions as LOCAL PROPOSED STEPS only? This does NOT run them or grant tool permissions. Review the content before accepting.",
+    )) return;
+    try {
+      let next = [...steps];
+      for (const suggested of suggestions) {
+        // New IDs and manual validation; model-supplied IDs, status,
+        // permissions and execution flags are never imported.
+        next = createAgentStep(next, {
+          id: crypto.randomUUID(), title: suggested.title,
+          details: suggested.details, kind: suggested.kind,
+        });
+      }
+      setSteps(next);
+      invalidate();
+      setNotice("Reviewed AI suggestions imported as proposed local steps only. No agent started.");
+    } catch {
+      setError("Suggestions could not be imported safely. Your existing steps were kept.");
+    }
+  };
+  const askAIForReview = () => {
+    if (!plan) return;
+    try {
+      const prompt = prepareAgentReviewPrompt(formatLocalAgentPlan(plan));
+      setError(null);
+      setNotice(null);
+      void aiReview.run("ai.agents.review", prompt);
+    } catch {
+      setError("This proposed plan is too long for AI Chat review. Shorten the plan; nothing was truncated or submitted.");
+    }
+  };
+  const exportPlan = () => {
+    if (!plan) return;
+    const url = URL.createObjectURL(new Blob([preview], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "eternyx-agent-plan-draft.txt";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice("Local plan export requested; no agent was executed.");
+  };
   const copy = async () => {
     if (!plan) return;
     try {
@@ -131,16 +215,18 @@ const AIAgentsStudio = () => {
           <h1 className="mt-4 text-3xl font-bold sm:text-5xl">AI Agents Studio</h1>
           <p className="mt-4 max-w-3xl text-slate-300">Plan multi-step work, describe potential tool boundaries and identify steps needing future approval.</p>
           <Badge variant="outline" className="mt-4 border-amber-400/30 text-amber-200">
-            Local planning workspace · AI disabled
+            Local drafts · optional AI Chat review
           </Badge>
         </section>
 
         <Alert className="border-amber-400/30 bg-amber-950/20 text-amber-100">
           <ShieldCheck className="h-4 w-4" />
           <AlertDescription>
-            No AI agent has been started. This is a manually authored plan, not autonomous AI planning.
-            Nothing is executed, scheduled, sent or charged. A proposed tool scope does not grant permission.
-            All external actions require separately enforced future approval; local drafts disappear on refresh.
+            No autonomous agent has been started. Manual planning, editing and exports remain local; no tools are executed.
+            Optional AI Chat requests send the selected goal, constraints or plan text to an external AI provider,
+            use existing ai.chat credits and save chat history ONLY when clicked. A proposed scope grants no permission.
+            AI step suggestions require separate human inspection and confirmation before becoming local draft steps.
+            No external actions are ever run, scheduled or approved in this studio.
           </AlertDescription>
         </Alert>
 
@@ -246,7 +332,51 @@ const AIAgentsStudio = () => {
         </Card>
 
         <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
-          <CardHeader><CardTitle className="text-white">4. Preview & export</CardTitle>
+          <CardHeader>
+            <CardTitle className="text-white">4. Optional AI step suggestions</CardTitle>
+            <CardDescription className="text-slate-400">
+              Use ETERNYX AI Chat to suggest research, drafting and review tasks. AI cannot run them or grant access.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-300">
+              Explicit opt-in: sending the goal and constraints to the configured external AI provider
+              uses existing ai.chat credits and saves a chat session. There are no automatic retries.
+              Suggested steps are untrusted text; they must be inspected and manually imported.
+            </p>
+            <Button type="button" disabled={!goal.trim() || aiPlan.loading} onClick={askAIForPlan}>
+              <Bot className="mr-2 h-4 w-4" />{aiPlan.loading ? "Requesting AI suggestions…" : "Suggest steps with AI Chat"}
+            </Button>
+            {aiPlan.error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" />
+              <AlertDescription>{aiPlan.error}</AlertDescription></Alert>}
+            {aiPlan.result && <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-950 p-3">
+              <Badge variant="outline">Untrusted AI plan suggestions · not executed</Badge>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-200">{aiPlan.result}</pre>
+              <Button type="button" variant="outline" onClick={inspectAISuggestions}>
+                <FileCheck2 className="mr-2 h-4 w-4" />Validate suggested steps for review
+              </Button>
+            </div>}
+            {suggestions && <section className="space-y-3 rounded-lg border border-cyan-500/30 bg-slate-950 p-3">
+              <p className="text-sm text-cyan-200">
+                Human review required: {suggestions.length} proposed research/draft/review steps.
+                No external or paid steps accepted. Importing does not grant permission or run anything.
+              </p>
+              {suggestions.map((suggested, i) => (
+                <div key={i} className="rounded-md border border-slate-700 p-3 text-sm">
+                  <strong>{i + 1}. {suggested.title}</strong>
+                  <Badge variant="outline" className="ml-2">{suggested.kind}</Badge>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-300">{suggested.details}</p>
+                </div>
+              ))}
+              <Button type="button" disabled={steps.length + suggestions.length > MAX_AGENT_STEPS} onClick={importAISuggestions}>
+                Import reviewed suggestions as local proposed steps
+              </Button>
+            </section>}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
+          <CardHeader><CardTitle className="text-white">5. Preview, AI review & export</CardTitle>
             <CardDescription className="text-slate-400">Copy the proposed plan for human review; it will not run.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
@@ -265,9 +395,31 @@ const AIAgentsStudio = () => {
                   This is not an autonomous agent or permission grant.
                 </p>
                 <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-xs text-slate-300">{preview}</pre>
-                <Button type="button" variant="outline" onClick={copy}>
-                  <ClipboardCopy className="mr-2 h-4 w-4" />Copy proposed plan
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={copy}>
+                    <ClipboardCopy className="mr-2 h-4 w-4" />Copy proposed plan
+                  </Button>
+                  <Button type="button" variant="outline" onClick={exportPlan}>
+                    <Download className="mr-2 h-4 w-4" />Download local draft
+                  </Button>
+                </div>
+                <section className="space-y-3 rounded-lg border border-violet-400/20 p-3">
+                  <h3 className="font-semibold">Optional AI quality and safety review</h3>
+                  <p className="text-xs text-slate-400">
+                    A separate click sends this bounded draft to the external ETERNYX AI Chat provider,
+                    using ai.chat credits and saved history. It only generates advice, never performs work.
+                    Oversized plans are refused locally rather than silently truncated.
+                  </p>
+                  <Button type="button" disabled={aiReview.loading} onClick={askAIForReview}>
+                    {aiReview.loading ? "Reviewing with AI…" : "Review this plan with AI Chat"}
+                  </Button>
+                  {aiReview.error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" />
+                    <AlertDescription>{aiReview.error}</AlertDescription></Alert>}
+                  {aiReview.result && <div className="space-y-2">
+                    <Badge variant="outline">AI critique · advisory only</Badge>
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-800 p-3 text-xs text-slate-200">{aiReview.result}</pre>
+                  </div>}
+                </section>
               </div>
             )}
             {error && <Alert role="alert" variant="destructive">
