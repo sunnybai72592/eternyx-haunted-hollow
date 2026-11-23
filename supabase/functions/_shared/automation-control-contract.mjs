@@ -41,6 +41,10 @@ const fields = {
   incidentClosurePreflight: ["action","incidentId"],
   incidentClosureHistory: ["action","incidentId"],
   incidentClosureDecision: ["action","incidentId","incidentRevision","planRevision","decision","note","requestKey"],
+  incidentReopenPreflight: ["action","incidentId"],
+  incidentReopenHistory: ["action","incidentId"],
+  incidentReopenDecision: ["action","incidentId","incidentRevision","planRevision","evidenceId","decision","reason","note","requestKey"],
+  incidentAuditTrace: ["action","incidentId"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -115,6 +119,31 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(["incidentReopenPreflight","incidentReopenHistory","incidentAuditTrace"].includes(action)){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
+      return {ok:false,reason:"invalid_incident_id"};
+    }
+    return {ok:true,action,incidentId:value.incidentId};
+  }
+  if(action==="incidentReopenDecision"){
+    if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)||
+       typeof value.evidenceId!=="string"||!UUID_RE.test(value.evidenceId)||
+       !Number.isInteger(value.incidentRevision)||value.incidentRevision<1||
+       value.incidentRevision>2147483647||
+       !Number.isInteger(value.planRevision)||value.planRevision<1||
+       value.planRevision>2147483647||
+       !["hold","approve"].includes(value.decision)||
+       !["new_evidence","recurrence","incomplete_review","other"].includes(value.reason)||
+       typeof value.note!=="string"||value.note.trim().length<12||
+       value.note.trim().length>500||
+       typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_reopen_decision"};
+    }
+    return {ok:true,action,incidentId:value.incidentId,evidenceId:value.evidenceId,
+      incidentRevision:value.incidentRevision,planRevision:value.planRevision,
+      decision:value.decision,reason:value.reason,note:value.note.trim(),
+      requestKey:value.requestKey};
   }
   if(action==="incidentClosurePreflight"||action==="incidentClosureHistory"){
     if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
