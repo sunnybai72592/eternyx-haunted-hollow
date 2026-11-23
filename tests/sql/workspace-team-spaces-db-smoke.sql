@@ -140,6 +140,34 @@ BEGIN
     PERFORM public.workspace_team_save_task(sid,NULL,'Intrusion','','todo','normal',NULL,NULL,NULL);
     RAISE EXCEPTION 'Nonmember wrote task';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_team_delete_task(sid,
+      pg_catalog.current_setting('test.team17.task')::uuid);
+    RAISE EXCEPTION 'Nonmember deleted someone else team task';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_team_invite(sid,'editor');
+    RAISE EXCEPTION 'Nonmember created a team invitation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_team_set_status(sid,'archived');
+    RAISE EXCEPTION 'Nonmember archived another team';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_team_member_change(sid,
+      '22222222-2222-4222-8222-222222222222',NULL);
+    RAISE EXCEPTION 'Nonmember removed another team participant';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_team_leave(sid);
+    RAISE EXCEPTION 'Nonmember created a fake team leave event';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_team_revoke_invite((
+      SELECT id FROM public.workspace_team_invites WHERE space_id=sid LIMIT 1));
+    -- RLS returns no row for outsider; null ID must still fail closed.
+    RAISE EXCEPTION 'Nonmember revoked another team invitation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END;
 $team$;
 
