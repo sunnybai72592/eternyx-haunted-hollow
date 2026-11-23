@@ -135,3 +135,43 @@ are included in \`manifest.json\` with byte size and SHA-256. Any failure preven
 the publication of a partial finished movie while keeping genuine prepared
 source clips for recovery. Old direct movie plans default to "contain";
 conversion-only packages remain unchanged.
+
+## Native-motion cinematic delivery (CPU only)
+
+The direct phone-video form now adds an optional **Cinematic** quality preset.
+Choosing it does not add a conversion or export step: download the same private
+ZIP and launch the same offline runner. Standard and High retain their
+previous verified 16 FPS / 256px-class and 16 FPS / 512px-class behavior.
+
+Cinematic preserves **24 genuine decoded frames per second** from original
+24, 30 or higher-FPS footage (dropping excess source frames as necessary),
+instead of manufacturing extra frames by repeating them. It keeps up to
+**1280×720 landscape, 720×1280 portrait or 720×720 square** source detail in
+prepared clips and outputs at those dimensions. Smaller camera sources may
+be upscaled for the finished canvas, but **no fine detail is invented**.
+Cinematic H.264 uses libx264 medium / CRF 18 with the same privacy rules.
+
+The underlying v2 timeline now supports an explicitly declared 24 FPS
+storyboard, while old storyboards without that field remain strictly 16 FPS.
+Only cinematic accepts a 24 FPS board. Source normalization, decoded output
+frame counts, poster dimensions, SRT/VTT cue times, optional VP9 WebM and
+selectable-caption MP4 all verify the actual 24 FPS timebase. The
+manifest records the actual FPS, dimensions, bytes and SHA-256 receipts.
+
+To reduce unnecessary CPU work, **all direct-to-movie launches** now normalize
+only the longest requested source cut (1–3 seconds), not the entire nominal
+30-second source window. They still verify the full original SHA-256 before
+processing; cuts extending past actual decoded footage fail without inventing
+frames or publishing an incomplete finished movie. The conversion-only
+workflow retains its independent 16 FPS behavior.
+
+**Important editability constraint:** The existing optional editable draft
+and Studio v2 reimport only accept 16 FPS prepared clips. The cinematic path
+therefore deliberately **does not issue a misleading 16 FPS editable draft**
+for its 24 FPS originals; its actual verified local prepared clips and
+24 FPS storyboard remain available for further compatible editing. Editing
+native cinematic clips using the legacy 16 FPS interface is not yet supported.
+
+This is still real-footage editing, not AI scene generation. Cinematic uses
+more CPU time and disk than High, with the existing 30-second/eight-shot
+limits. No cloud media uploads, paid GPU or external API are required.
