@@ -13,6 +13,7 @@ import {join,resolve,dirname,basename} from "node:path";
 import {
   publishOfflineEvidence,assertNoOfflineStageResidue,
 } from "./firecracker-offline-atomic-publish.mjs";
+import {readPrivateOfflineEvidence} from "./firecracker-private-safe-read.mjs";
 import {validSessionId} from
   "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
@@ -44,28 +45,9 @@ async function trustedDir(dir,owner){
     throw Error("Reviewer case directory is not privately owned");
 }
 async function readSafe(file,owner,max){
-  let info;
-  try{info=await lstat(file);}
-  catch(err){
-    if(err?.code==="ENOENT")return null;
-    throw err;
-  }
-  if(!info.isFile()||info.uid!==owner||info.nlink!==1||
-     (info.mode&0o077)!==0||info.size<1||info.size>max)
-    throw Error("Unsafe offline reviewer import file");
-  const fd=await open(file,constants.O_RDONLY|constants.O_NOFOLLOW);
-  try{
-    const a=await fd.stat();
-    if(a.dev!==info.dev||a.ino!==info.ino||a.size!==info.size)
-      throw Error("Reviewer file changed during open");
-    const data=await fd.readFile();
-    const b=await fd.stat();
-    if(b.dev!==a.dev||b.ino!==a.ino||b.size!==a.size||
-       b.mtimeMs!==a.mtimeMs||b.ctimeMs!==a.ctimeMs||
-       data.length!==a.size)
-      throw Error("Reviewer file mutated during read");
-    return data;
-  }finally{await fd.close();}
+  return readPrivateOfflineEvidence({
+    path:file,owner,maxBytes:max,allowMissing:true,
+  });
 }
 async function writeExclusive(file,data,owner){
   await publishOfflineEvidence({
