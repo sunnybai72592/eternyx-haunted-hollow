@@ -67,10 +67,12 @@ jobs:
           cache: npm
       - name: Validate exact local-only browser source and Python syntax
         run: |
-          node --test tests/education-atomic-local-browser-contract.test.mjs tests/education-results-review-browser-contract.test.mjs tests/education-study-paths.test.mjs
+          node --test tests/education-atomic-local-browser-contract.test.mjs tests/education-results-review-browser-contract.test.mjs
           python3 -m py_compile tests/browser/education_atomic_local.py tests/browser/education_results_review_local.py tests/browser/education_study_paths_local.py
       - name: Install locked frontend dependencies (no remote secrets)
         run: npm ci
+      - name: Exercise Study Paths parser, authoring and export security contracts
+        run: node --test tests/education-study-paths.test.mjs
       - name: Build isolated atomic CBT UI with fake host and no production credentials
         run: npm run build
       - name: Run real desktop and mobile Chrome against intercepted synthetic API
