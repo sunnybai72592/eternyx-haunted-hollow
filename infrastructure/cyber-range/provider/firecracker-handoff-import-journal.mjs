@@ -9,7 +9,10 @@
 import {createHash,timingSafeEqual} from "node:crypto";
 import {constants} from "node:fs";
 import {lstat,open,realpath} from "node:fs/promises";
-import {join,resolve} from "node:path";
+import {join,resolve,dirname,basename} from "node:path";
+import {
+  publishOfflineEvidence,assertNoOfflineStageResidue,
+} from "./firecracker-offline-atomic-publish.mjs";
 import {validSessionId} from
   "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
@@ -65,18 +68,9 @@ async function readSafe(file,owner,max){
   }finally{await fd.close();}
 }
 async function writeExclusive(file,data,owner){
-  const fd=await open(file,constants.O_CREAT|constants.O_EXCL|
-    constants.O_NOFOLLOW|constants.O_WRONLY,0o600);
-  try{
-    const start=await fd.stat();
-    if(!start.isFile()||start.uid!==owner||start.nlink!==1||
-       (start.mode&0o077)!==0||start.size!==0)
-      throw Error("Untrusted new reviewer import file");
-    await fd.writeFile(data);
-    await fd.sync();
-    if((await fd.stat()).size!==data.length)
-      throw Error("Incomplete reviewer import write");
-  }finally{await fd.close();}
+  await publishOfflineEvidence({
+    folder:dirname(file),name:basename(file),data,owner,
+  });
 }
 async function syncFolder(folder){
   const fd=await open(folder,constants.O_DIRECTORY|constants.O_RDONLY);
@@ -108,6 +102,7 @@ function record({sessionId,operatorSignerFingerprint,transportSha256,
 }
 const bytes=m=>Buffer.from(JSON.stringify(m)+"\n","utf8");
 async function markers(folder,owner){
+  await assertNoOfflineStageResidue(folder,owner);
   const [p,c]=await Promise.all([
     readSafe(join(folder,IMPORT_PENDING),owner,SMALL),
     readSafe(join(folder,IMPORT_COMMITTED),owner,SMALL),
