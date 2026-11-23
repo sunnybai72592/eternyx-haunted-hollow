@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { evaluateCybersecurityReleaseGate, REQUIRED_STAGING_TABLES, REQUIRED_CHECKS } from "@/lib/securityStagingReadiness.mjs";
 import { inspectStagingDossier, EVIDENCE_IDS, DOSSIER_LIMIT } from "@/lib/securityStagingDossier.mjs";
+import { validateMigrationObservation } from "@/lib/securityMigrationObservation.mjs";
+import { evaluateStagingRecoveryReadiness } from "@/lib/securityStagingRecoveryReadiness.mjs";
 
 const MAX_REPORT_BYTES=48*1024;
 type Report={observedAt:string;[key:string]:unknown};
@@ -50,6 +52,9 @@ export default function SecurityReleaseReadiness(){
   const [dossier,setDossier]=useState<Awaited<ReturnType<typeof inspectStagingDossier>>|null>(null);
   const [dossierError,setDossierError]=useState("");
   const [dossierBusy,setDossierBusy]=useState(false);
+  const [migrationObservation,setMigrationObservation]=useState<Record<string,unknown>|null>(null);
+  const [migrationError,setMigrationError]=useState("");
+  const recovery=evaluateStagingRecoveryReadiness(migrationObservation);
   const gate=evaluateCybersecurityReleaseGate(uploaded);
   async function importReport(file?:File){
     setUploaded(null);setError("");setFileLabel("");
@@ -93,6 +98,20 @@ export default function SecurityReleaseReadiness(){
     }catch(e){
       setDossierError(e instanceof Error?e.message:"Staging dossier inspection failed.");
     }finally{setDossierBusy(false);}
+  }
+  async function importMigration(file?:File){
+    setMigrationObservation(null);setMigrationError("");
+    if(!file)return;
+    if(file.size<1||file.size>48*1024){
+      setMigrationError("Migration observation JSON must be 48 KiB or less.");return;
+    }
+    try{
+      const parsed:unknown=JSON.parse(await file.text());
+      const result=validateMigrationObservation(parsed);
+      setMigrationObservation(result as Record<string,unknown>);
+    }catch{
+      setMigrationError("Migration observation rejected: wrong project, missing checks or unsupported report.");
+    }
   }
   return <main className="min-h-screen bg-background text-foreground"><div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
     <Link to="/cybersecurity" className="inline-flex items-center gap-2 text-sm text-cyan-300"><ArrowLeft className="h-4 w-4"/>Cybersecurity Hub</Link>
@@ -143,7 +162,20 @@ export default function SecurityReleaseReadiness(){
         <p className="text-xs text-amber-100">All {EVIDENCE_IDS.length} categories are included in this checklist. {dossier.warning} Source fingerprints cannot prove a migration was deployed to staging.</p>
       </div>}
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>4. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
+    <Card><CardHeader><CardTitle>4. Staging migration history and recovery readiness</CardTitle>
+      <CardDescription>Import an operator-produced, read-only PostgreSQL migration history observation. This can demonstrate that baseline migration versions were observed on the configured staging connection, but it cannot authenticate migration bytes or prove that the proposed ledger was properly deployed.</CardDescription>
+    </CardHeader><CardContent className="space-y-4">
+      <Label htmlFor="security-migration-observation">Wave 15 staging migration observation (48 KiB maximum)</Label>
+      <Input id="security-migration-observation" type="file" accept=".json,application/json" onChange={e=>void importMigration(e.target.files?.[0])}/>
+      {migrationError&&<p role="alert" className="text-sm text-rose-200">{migrationError}</p>}
+      <p className="flex items-center gap-2 text-sm font-medium text-amber-100"><FileWarning className="h-4 w-4"/>{migrationObservation?"Baseline migration versions reported as observed; indexed ledger migration UNVERIFIED":"Real staging migration-history observation not established"}</p>
+      {migrationObservation&&<p className="text-xs text-muted-foreground">Operator-reported staging reference: {String(migrationObservation.stagingProjectRef)} · Ledger tables: {String(migrationObservation.ledgerTables)} · Observed: {new Date(String(migrationObservation.observedAt)).toLocaleString()}</p>}
+      <p className="text-xs text-muted-foreground">A recorded migration version is not proof of matching source SQL, an approved deployment, or a completed backup restore.</p>
+      <h3 className="text-sm font-semibold">Separate recovery evidence requirements</h3>
+      <ul className="space-y-2">{recovery.requirements.map(item=><li key={item.id} className="flex gap-3 rounded-lg border border-border bg-background p-3 text-sm"><ShieldAlert className="h-4 w-4 shrink-0 text-amber-200"/><span>{item.description} — <strong>not verified</strong></span></li>)}</ul>
+      <p className="text-xs text-amber-100">{recovery.conclusion}</p>
+    </CardContent></Card>
+    <Card><CardHeader><CardTitle>5. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
       <p role="status" className="flex items-center gap-2 font-semibold text-amber-200"><ShieldAlert className="h-5 w-5"/>Production release: BLOCKED</p>
       <ol className="space-y-3">{gate.blockers.map((item,index)=><li key={item} className="flex gap-3 rounded-lg border border-border bg-background p-3 text-sm"><span className="font-semibold text-amber-200">{index+1}.</span><span>{item}</span></li>)}</ol>
       <p className="text-xs text-muted-foreground">No deployment button, schema write, role change, fake readiness score or release override exists on this page.</p>

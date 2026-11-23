@@ -13,6 +13,10 @@ on:
       - "scripts/security-ledger-staging-writes.mjs"
       - "tests/security-ledger-staging-writes.test.mjs"
       - "tests/security-ledger-catalog-gate.test.mjs"
+      - "scripts/sql/security-staging-migration-history.sql"
+      - "scripts/security-staging-migration-history.mjs"
+      - "src/lib/securityMigrationObservation.mjs"
+      - "tests/security-staging-migration-history.test.mjs"
       - ".github/workflows/security-case-ledger-sql.yml"
   workflow_dispatch:
 
@@ -58,6 +62,20 @@ jobs:
           docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261111220000_pentest_evidence_and_audit.sql
       - name: Apply proposed ledger SQL ONLY inside disposable PostgreSQL
         run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staged-security-case-ledger.sql
+      - name: Rehearse read-only migration-history observations in disposable PostgreSQL only
+        run: |
+          set -euo pipefail
+          # Synthetic CLI migration bookkeeping in disposable PostgreSQL; NOT remote Supabase history.
+          docker exec eternyx-security-case-ledger-ci \
+            psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -q \
+              -c "CREATE SCHEMA supabase_migrations;
+                  CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY);
+                  INSERT INTO supabase_migrations.schema_migrations(version) VALUES
+                    ('20261111210000'),('20261111220000');"
+          docker exec -i eternyx-security-case-ledger-ci \
+            psql -X -qAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < scripts/sql/security-staging-migration-history.sql \
+            | node scripts/security-staging-migration-history.mjs --evaluate-raw
       - name: Exercise two real database roles, revoked scopes and immutable history
         run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/security-case-ledger-db-smoke.sql
       - name: Verify 60 live PostgreSQL catalog invariants in read-only transaction
