@@ -11,6 +11,8 @@ on:
       - "scripts/automation-migration-collision-baseline.json"
       - "docs/sql/eternyx/services-phase29-disposable-*.sql"
       - "tests/services-pg17-replay-plan.test.mjs"
+      - "tests/services-pg17-role-isolation-phase30.test.mjs"
+      - "docs/sql/eternyx/services-phase30-disposable-rls-acceptance.sql"
       - ".github/workflows/services-pg17-disposable-replay.yml"
   workflow_dispatch:
 
@@ -38,7 +40,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
@@ -92,7 +94,11 @@ jobs:
           test "$index" -eq 13
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
             < docs/sql/eternyx/services-phase29-disposable-catalog-assert.sql
-          echo "PASS: isolated Services PG17 replay and catalog checks (no remote deployment)"
+          # Real database RLS, not regex-based policy existence checks.
+          # Synthetic A/B/admin/anon fixtures roll back inside this transaction.
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < docs/sql/eternyx/services-phase30-disposable-rls-acceptance.sql
+          echo "PASS: isolated Services PG17 replay, catalog and four-actor SQL RLS checks (no remote deployment)"
 
       # No Supabase secrets, no linked project, no production/staging database
       # connection and no artifact upload containing DB rows.
