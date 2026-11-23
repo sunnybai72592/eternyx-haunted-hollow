@@ -12,7 +12,7 @@ const studio = readFileSync(new URL("../src/pages/DeveloperStudio.tsx", import.m
 const command = readFileSync(new URL("../src/components/developer/DeveloperCommandCenter.tsx", import.meta.url), "utf8");
 
 test("catalog covers unique routed tools without dead links or unrecognized categories", () => {
-  assert.ok(developerTools.length >= 25);
+  assert.ok(developerTools.length >= 27);
   assert.equal(new Set(developerTools.map((item) => item.id)).size, developerTools.length);
   const categories = new Set(developerCategories.map((category) => category.id));
   for (const item of developerTools) {
