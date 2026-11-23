@@ -7,7 +7,10 @@ import { readFileSync,lstatSync,mkdirSync,openSync,writeSync,closeSync,constants
 import { join,isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import {lockLabAgent,reserveLabClaim,appendLabEvent,readLabClaim,labPostcondition} from "../src/lib/dockerLabRecovery.mjs";
-import { isLocalEndpoint,verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
+import { verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
+import {validateSignedAgentEnginePins,validateSignedAgentSocket,
+  validateSignedAgentEngineObserved,validateSignedAgentTarget}
+  from "../src/lib/dockerSignedAgentEngineGate.mjs";
 import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
 import { verifyPinnedDockerLabPermit } from "../src/lib/dockerLabPermitGuard.mjs";
@@ -43,14 +46,18 @@ function docker(args,ms=8000){
   return r.stdout.trim();
 }
 function localContext(){
-  if(process.env.DOCKER_HOST&&!isLocalEndpoint(process.env.DOCKER_HOST))
-    throw new Error("Remote Docker endpoints are forbidden.");
+  if(process.platform!=="linux"||typeof process.getuid!=="function"||
+      process.getuid()===0||process.env.GITHUB_ACTIONS==="true"||process.env.CI==="true")
+    throw new Error("Signed Docker execution requires a non-root operator Linux host outside CI.");
+  const pins=validateSignedAgentEnginePins(process.env);
+  validateSignedAgentSocket(lstatSync(pins.socketPath),process.getuid());
   const name=docker(["context","show"]);
-  if(!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$/.test(name))throw new Error("Invalid Docker context.");
+  if(name!==pins.context)throw new Error("Selected signed-agent Docker context is not independently approved.");
   let addr;
   try{addr=JSON.parse(docker(["context","inspect",name,"--format","{{json .Endpoints.docker.Host}}"]));}
-  catch{throw new Error("Cannot inspect local Docker context.");}
-  if(!isLocalEndpoint(addr))throw new Error("Only local Docker Engine is supported.");
+  catch{throw new Error("Cannot inspect pinned signed-agent Docker context.");}
+  const info=JSON.parse(docker(["--context",name,"info","--format","{{json .}}"]));
+  validateSignedAgentEngineObserved({pins,context:name,endpoint:addr,info});
   return name;
 }
 function audit(data){
@@ -140,6 +147,8 @@ async function main(){
     const raw=docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]);
     const before=JSON.parse(raw);
     verifyManagedTarget(before,permit.containerId);
+    validateSignedAgentTarget(before,permit.containerId,permit.operation,
+      validateSignedAgentEnginePins(process.env));
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
     // Set uncertainty BEFORE fsync. Even an interrupted/partially written
     // attempted event must never be downgraded into a guard_denied receipt.
@@ -147,8 +156,11 @@ async function main(){
     appendLabEvent(permit.claimId,"attempted");
     audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:"attempted"});
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired after attempt reservation.");
+    if(localContext()!==context)throw Error("Signed-agent Docker context changed before mutation.");
     docker(["--context",context,"container",permit.operation,permit.containerId],20000);
     const after=JSON.parse(docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]));
+    validateSignedAgentTarget(after,permit.containerId,permit.operation,
+      validateSignedAgentEnginePins(process.env),{stage:"after"});
     if(!labPostcondition(permit.operation,before,after))throw Error("Docker postcondition unconfirmed.");
     postconditionConfirmed=true;
   }catch{
