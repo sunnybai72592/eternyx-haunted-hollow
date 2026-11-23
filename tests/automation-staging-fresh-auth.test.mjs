@@ -207,8 +207,8 @@ test("actual local HTTP exercises password sign-ins + Auth /user + private read-
     assert.equal(report.tokenValuesPersisted,false);
     assert.equal(report.productionReady,false);
     assert.equal(report.manualWorkflowVerified,false);
-    assert.ok(hits.every(h=>h.url.includes("grant_type=password")?!
-      !h.auth&&h.apikey==="sb_publishable_OFFLINE_AUTH_FIXTURE":true));
+    assert.ok(hits.filter(h=>h.url.includes("grant_type=password"))
+      .every(h=>h.auth===undefined&&h.apikey==="sb_publishable_OFFLINE_AUTH_FIXTURE"));
     assert.ok(hits.filter(h=>h.url.includes("automation-control"))
       .every(h=>["list","history"].includes(JSON.parse(h.body).action)));
     const reportText=JSON.stringify(report);
