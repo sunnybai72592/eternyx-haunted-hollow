@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   PROJECT_SCHEMA, MAX_PROJECT_FILES, MAX_SAVED_PROJECTS, addDeveloperFile,
-  checkDeveloperFileName, checkDeveloperProject, createDeveloperProject,
+  checkProjectFileName, checkDeveloperProject, createDeveloperProject,
   editDeveloperFile, exportDeveloperProject, importDeveloperProject,
   normalizeDeveloperProject, normalizeSavedDeveloperProjects,
   previewDeveloperProject, removeDeveloperFile, renameDeveloperFile,
