@@ -1,0 +1,29 @@
+name: Docker Edge HTTP integration acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-edge-http-integration.yml'
+      - 'tests/docker-edge-http-integration.test.mjs'
+      - 'supabase/functions/_shared/docker-dispatch-handler.mjs'
+      - 'supabase/functions/_shared/docker-action-verifier.mjs'
+      - 'supabase/functions/_shared/docker-command-contract.mjs'
+      - 'supabase/functions/docker-command-dispatch/index.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  edge-http-integration:
+    name: Real loopback HTTP, real Ed25519, replay & fail-closed receipts
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22 WebCrypto
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exercise production dispatch HTTP handler with isolated local adapters
+        run: node --test tests/docker-edge-http-integration.test.mjs
