@@ -63,6 +63,6 @@ test("UI is wired to quarantine on tab hide, focus, and lost membership",()=>{
   'document.addEventListener("visibilitychange",resume)',
   'setInterval(resume,60000)',
   'const currentRole=verifiedSpaceId===selectedId',
-  'if(!rows.some(space=>space.id===selectedId))',
+  'if(selectedId && !rows.some(space=>space.id===selectedId))',
  ])assert.ok(component.includes(anchor),"Missing browser quarantine: "+anchor);
 });
