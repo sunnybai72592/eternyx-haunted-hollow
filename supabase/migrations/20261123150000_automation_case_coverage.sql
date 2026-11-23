@@ -69,6 +69,9 @@ BEGIN
    'scope','best_effort_multi_request_not_atomic_snapshot',
    'checkedAt',inspected_at,'ownerCaseTotalAtRead',owner_total,
    'pageSize',p_page_size,'returned',n,'rows',rows,
+   'requestedCursor',CASE WHEN p_before_created_at IS NULL THEN NULL
+     ELSE jsonb_build_object('beforeCreatedAt',p_before_created_at,
+       'beforeId',p_before_id) END,
    'pageInconsistent',inconsistent,
    'pageHistoricalClosedAfterReopen',historical,
    'pageCasesWithNoEvidence',missing_evidence,
