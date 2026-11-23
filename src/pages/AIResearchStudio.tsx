@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ClipboardCopy, FileCheck2, Link2, RotateCcw, Search, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, ClipboardCopy, Download, FileCheck2, Link2, RotateCcw, Search, ShieldCheck, Trash2, Upload, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,12 @@ import {
   type ResearchSource,
   type ResearchStance,
 } from "@/lib/ai/research-local-tools";
+import {
+  MAX_RESEARCH_BACKUP_BYTES,
+  ResearchBackupError, assessResearchCoverage, formatResearchCoverage,
+  readResearchBackupFile, serializeResearchBackup,
+  type ResearchBackup,
+} from "@/lib/ai/research-backup-tools";
 
 const features = getFeaturesForStudio("research");
 
@@ -48,12 +54,21 @@ const AIResearchStudio = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const ai = useAIStudioChat();
+  const [pendingBackup, setPendingBackup] = useState<ResearchBackup | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const backupReadVersion = useRef(0);
 
   const counts = countResearchStances(evidence);
+  const coverage = assessResearchCoverage(sources, evidence);
   const visibleEvidence = filterResearchEvidence(sources, evidence, filterText);
   const brief = formatLocalResearchBrief(sources, evidence);
 
   const invalidate = () => {
+    // A new notebook state invalidates any backup preview and in-flight
+    // file read. Never replace newer user changes with a stale file.
+    backupReadVersion.current += 1;
+    setPendingBackup(null);
+    setBackupBusy(false);
     ai.invalidate();
     setDraft(null);
     setError(null);
@@ -150,6 +165,78 @@ const AIResearchStudio = () => {
       setError(describe(failure));
     }
   };
+  const downloadLocalText = (content: string, fileName: string, mime = "text/plain;charset=utf-8") => {
+    const url = URL.createObjectURL(new Blob([content], { type: mime }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice("Local download requested. No notebook data was uploaded or submitted to AI.");
+    setError(null);
+  };
+  const downloadBackup = () => {
+    try {
+      const text = serializeResearchBackup({ sources, evidence, question, mode });
+      downloadLocalText(text, "eternyx-research-notebook-v1.json", "application/json");
+    } catch {
+      setError("The notebook could not be exported safely. Review reference and note limits.");
+      setNotice(null);
+    }
+  };
+  const selectBackupFile = async (file: File | null) => {
+    const version = ++backupReadVersion.current;
+    setPendingBackup(null);
+    setError(null);
+    setNotice(null);
+    setBackupBusy(!!file);
+    if (!file) return;
+    try {
+      const parsed = await readResearchBackupFile(file);
+      if (version !== backupReadVersion.current) return;
+      setPendingBackup(parsed);
+      setNotice("Backup validated locally. Review its counts, then explicitly confirm replacement. Nothing has been restored yet.");
+    } catch (failure) {
+      if (version === backupReadVersion.current) {
+        const message: Record<string, string> = {
+          invalid_file: "Select a nonempty JSON backup smaller than 512 KiB; the format must be a local ETERNYX notebook backup.",
+          too_large: "Backup exceeds 512 KiB. No partial notebook was imported.",
+          invalid_json: "The file does not contain valid JSON. No notebook data was changed.",
+          invalid_schema: "Unrecognized notebook version or unexpected fields. No data was imported.",
+          invalid_source: "A reference has invalid or duplicate IDs, URLs or metadata. No data was imported.",
+          invalid_evidence: "Evidence contains invalid IDs, tags, missing source links or oversized text. No data was imported.",
+        };
+        setError(failure instanceof ResearchBackupError
+          ? message[failure.code] : "Backup could not be validated locally.");
+      }
+    } finally {
+      if (version === backupReadVersion.current) setBackupBusy(false);
+    }
+  };
+  const restoreBackup = () => {
+    if (!pendingBackup || backupBusy) return;
+    if (!window.confirm(
+      "REPLACE your current in-memory research notebook with this validated backup? " +
+      "This is not a merge. All current unsaved sources, notes, and AI results will be replaced. " +
+      "A saved download is needed to preserve your old work.",
+    )) return;
+    const imported = pendingBackup;
+    setSources([...imported.sources]);
+    setEvidence([...imported.evidence]);
+    setQuestion(imported.question);
+    setMode(imported.mode);
+    setSourceId(imported.sources[0]?.id ?? "");
+    setSourceTitle("");
+    setSourceUrl("");
+    setSourcePublisher("");
+    setStance("supports");
+    setClaim("");
+    setExcerpt("");
+    setNotes("");
+    setFilterText("");
+    invalidate();
+    setNotice("Validated notebook restored locally. Nothing was uploaded, persisted remotely or sent to AI.");
+  };
   const copyAIResult = async () => {
     if (!ai.result) return;
     try {
@@ -174,6 +261,9 @@ const AIResearchStudio = () => {
     if ((sources.length || evidence.length) && !window.confirm("Clear all local references and evidence notes?")) return;
     setSources([]);
     setEvidence([]);
+    backupReadVersion.current += 1;
+    setPendingBackup(null);
+    setBackupBusy(false);
     setSourceTitle("");
     setSourceUrl("");
     setSourcePublisher("");
@@ -357,7 +447,107 @@ const AIResearchStudio = () => {
 
         <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
           <CardHeader>
-            <CardTitle className="text-white">3. Research brief & request draft</CardTitle>
+            <CardTitle className="text-white">3. Local notebook backup, restore & evidence coverage</CardTitle>
+            <CardDescription className="text-slate-400">
+              Download a full, versioned JSON copy of your notebook and restore it with strict
+              reference/evidence validation. All operations here are local; no cloud persistence or AI request.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-amber-200">
+              This backup contains your complete user-entered URLs, excerpts, notes and question as plain text.
+              Store it privately. Nothing is saved automatically, and losing the tab without a download can lose your notes.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={downloadBackup}
+                disabled={!sources.length && !evidence.length && !question.trim()}>
+                <Download className="mr-2 h-4 w-4"/>Download notebook backup (.json)
+              </Button>
+              <Button type="button" variant="outline" disabled={!sources.length}
+                onClick={() => downloadLocalText(brief, "eternyx-research-brief.txt")}>
+                <Download className="mr-2 h-4 w-4"/>Download research brief (.txt)
+              </Button>
+              <Button type="button" variant="outline" disabled={!sources.length}
+                onClick={() => downloadLocalText(formatResearchCoverage(coverage), "eternyx-source-coverage.txt")}>
+                <Download className="mr-2 h-4 w-4"/>Download source coverage (.txt)
+              </Button>
+            </div>
+            <label htmlFor="research-backup-import" className="block space-y-2 text-sm text-slate-300">
+              <span>Import version 1 ETERNYX notebook JSON · maximum {(MAX_RESEARCH_BACKUP_BYTES / 1024).toLocaleString()} KiB</span>
+              <input id="research-backup-import" type="file" accept=".json,application/json"
+                disabled={backupBusy}
+                onChange={e => {
+                  void selectBackupFile(e.target.files?.[0] ?? null);
+                  e.currentTarget.value = "";
+                }}
+                className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-fuchsia-700 file:px-3 file:py-1 file:text-white"
+              />
+            </label>
+            {backupBusy && <p role="status" className="text-xs text-cyan-200">Validating backup locally; no notebook changed…</p>}
+            {pendingBackup && (
+              <section aria-label="Validated notebook import preview"
+                className="space-y-3 rounded-lg border border-cyan-500/20 bg-slate-950 p-4">
+                <Badge variant="outline">Validated version {pendingBackup.version} · not restored</Badge>
+                <p className="text-sm text-slate-200">
+                  Backup contains {pendingBackup.sources.length} references and {pendingBackup.evidence.length}
+                  {" "}evidence notes; request mode: {pendingBackup.mode}.
+                </p>
+                <p className="text-xs text-slate-400">
+                  Replace only, no automatic merge. Current notebook has {sources.length} references
+                  and {evidence.length} notes. Restoration replaces the in-memory state and
+                  hides stale AI responses. External URLs are not opened.
+                </p>
+                <Button type="button" onClick={restoreBackup} disabled={backupBusy}>
+                  <Upload className="mr-2 h-4 w-4"/>Confirm replacement with validated backup
+                </Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  backupReadVersion.current += 1;
+                  setPendingBackup(null);
+                  setNotice("Import cancelled. Your current notebook was kept.");
+                }}>Cancel import</Button>
+              </section>
+            )}
+            <section aria-label="Local source evidence coverage"
+              className="space-y-3 rounded-lg border border-slate-700 bg-slate-950 p-4">
+              <h3 className="font-semibold text-white">Source-linked evidence coverage (unverified)</h3>
+              <p role="status" className="text-sm text-slate-300">
+                {coverage.sourcesWithEvidence} of {coverage.totalSources} sources have notes.
+                {" "}{coverage.sourcesWithoutEvidence} sources have no evidence.
+                {" "}{coverage.tagDisagreements.length} identically worded claim groups have opposing user tags.
+              </p>
+              <p className="text-xs text-slate-400">{coverage.caveat}</p>
+              <ul className="max-h-56 space-y-1 overflow-auto text-xs text-slate-300">
+                {coverage.perSource.map(item => (
+                  <li className="break-words rounded border border-slate-800 p-2" key={item.sourceId}>
+                    {item.title}: {item.evidenceCount} notes ({item.supports} supports,
+                    {" "}{item.challenges} challenges, {item.context} context)
+                  </li>
+                ))}
+              </ul>
+              {coverage.tagDisagreements.length > 0 && <details>
+                <summary className="cursor-pointer text-sm text-fuchsia-200">
+                  Review potentially opposing user-assigned stance tags
+                </summary>
+                <ul className="mt-2 max-h-40 space-y-2 overflow-auto">
+                  {coverage.tagDisagreements.map((entry, index) => (
+                    <li key={index} className="break-words rounded border border-slate-800 p-2 text-xs text-slate-300">
+                      {entry.claim} · {entry.supportingSources} supporting source tags /
+                      {" "}{entry.challengingSources} challenging source tags
+                    </li>
+                  ))}
+                </ul>
+              </details>}
+              <p className="text-xs text-amber-200">
+                These are counts of your labels, never source-quality ratings, proven contradictions,
+                verified citations, or live research findings.
+              </p>
+            </section>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
+          <CardHeader>
+            <CardTitle className="text-white">4. Research brief & request draft</CardTitle>
             <CardDescription className="text-slate-400">
               Copy your manually compiled notes, prepare a request, or explicitly submit the notebook to AI Chat for an unverified synthesis.
               No source is fetched, and AI synthesis consumes existing chat credits only when you choose to submit.
