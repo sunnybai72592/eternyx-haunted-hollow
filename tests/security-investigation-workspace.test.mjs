@@ -80,7 +80,7 @@ test("workspace uses real owner-scoped engagements, private storage, audited evi
  assert.match(page,/from\("pentest-evidence"\)\.remove/);
  assert.match(page,/owner_id: userId, engagement_id: selected\.id/);
  assert.match(page,/verifyEvidenceOwnership/);
- assert.match(page,/\\.range\(offset, offset \+ PAGE_SIZE - 1\)/);
+ assert.match(page,/\.range\(offset, offset \+ PAGE_SIZE - 1\)/);
  assert.match(page,/loadToken\.current/);
  assert.match(page,/INVESTIGATION_MARKER/);
  assert.match(page,/if \(registered\.error\)/);
