@@ -19,6 +19,11 @@ export const labCatalog = Object.freeze([
   { id: "csp", title: "CSP policy lint", area: "Web hardening", level: "Intermediate", description: "Review pasted Content-Security-Policy directives for common risky configurations." },
   { id: "cors", title: "CORS response trainer", area: "API security", level: "Intermediate", description: "Simulate a bounded browser response-sharing check from pasted CORS headers." },
   { id: "cookie", title: "Cookie attribute clinic", area: "Session security", level: "Intermediate", description: "Inspect synthetic Set-Cookie attributes without showing the cookie value." },
+  { id: "dns", title: "DNS zone record clinic", area: "Network fundamentals", level: "Intermediate", description: "Check A, CNAME, MX and TXT training records without querying DNS." },
+  { id: "http", title: "HTTP request framing review", area: "Web security", level: "Intermediate", description: "Review offline HTTP/1.x request framing and ambiguous headers." },
+  { id: "securitytxt", title: "Security.txt review", area: "Security disclosure", level: "Foundations", description: "Inspect security-contact metadata without visiting or messaging the site." },
+  { id: "events", title: "Security event correlation", area: "Defensive operations", level: "Intermediate", description: "Correlate synthetic login events and spot bounded timing patterns." },
+  { id: "tokens", title: "Secure random token generator", area: "Crypto basics", level: "Intermediate", description: "Generate fresh local random bytes using browser Web Crypto." },
 ]);
 
 export const sampleHeaders = [
