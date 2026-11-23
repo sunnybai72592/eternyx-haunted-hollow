@@ -204,7 +204,8 @@ test("38 lost HTTP acknowledgment triggers a verified status read before declari
 test("39 real confirmed result navigates to exact recorded attempt",()=>{
  assert.match(ui,/if\(receipt\.confirmed\)/);
  assert.match(ui,/navigate\("\/test-results\/"\+receipt\.id,\{replace:true\}\)/);
- assert.match(ui,/invalidateQueries\(\{queryKey:\["education-owned-attempt-list",user\.id\]\}\)/);
+ assert.match(ui,/educationExamAffectedQueryKeys\(ownerId\)/);
+ assert.match(ui,/refreshOwnedExamViews\(user\.id\)/);
 });
 test("40 unexpected or mismatched atomic RPC receipt cannot claim submission",()=>{
  assert.match(ui,/result\.id !== attemptId/);
