@@ -11,6 +11,7 @@ import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
 import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklist";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import WorkspaceRecoveryCenter from "@/components/workspace/WorkspaceRecoveryCenter";
+import WorkspaceRecoveryForkPanel from "@/components/workspace/WorkspaceRecoveryForkPanel";
 import WorkspaceGlobalSearch from "@/components/workspace/WorkspaceGlobalSearch";
 import WorkspaceTaskFocus from "@/components/workspace/WorkspaceTaskFocus";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,9 @@ export default function DigitalWorkspace() {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [resumeFingerprint, setResumeFingerprint] = useState<string | null>(null);
+  const [forkTarget, setForkTarget] = useState<{
+    sessionId: string; sourceHash: string; projectId: string; projectName: string;
+  } | null>(null);
   const [recoveryRefreshKey, setRecoveryRefreshKey] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
@@ -144,6 +148,7 @@ export default function DigitalWorkspace() {
     setActivity([]);
     setProjectId(null);
     setResumeFingerprint(null);
+    setForkTarget(null);
     setRecoveryRefreshKey(0);
     setLoadedOwner(null);
     setError("");
@@ -677,6 +682,12 @@ export default function DigitalWorkspace() {
                   else setNotice(message);
                 });
               }} />
+            {forkTarget && <WorkspaceRecoveryForkPanel key={owner + ":" + forkTarget.sessionId}
+              target={forkTarget} owner={owner} disabled={busy || loading}
+              onClose={(message) => {
+                setForkTarget(null);
+                if (message) setNotice(message);
+              }} />}
             <WorkspaceRecoveryCenter owner={owner} disabled={busy || loading}
               projects={projects} refreshKey={recoveryRefreshKey}
               onCheckpoint={(id) => {
@@ -696,7 +707,15 @@ export default function DigitalWorkspace() {
                   document.getElementById("workspace-project-panel")
                     ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
               }}
+              onFork={(target) => {
+                setResumeFingerprint(null);
+                setForkTarget(target);
+                window.setTimeout(() =>
+                  document.getElementById("workspace-recovery-fork")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+              }}
               onResume={(fingerprint) => {
+                setForkTarget(null);
                 setResumeFingerprint(fingerprint);
                 (document.getElementById("workspace-import-file") as HTMLInputElement | null)?.click();
               }}

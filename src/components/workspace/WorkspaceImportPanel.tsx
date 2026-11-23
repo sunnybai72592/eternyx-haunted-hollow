@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { parseWorkspaceRestore } from "@/lib/workspaceRestore.mjs";
 import { parseWorkspaceFullBackup, WORKSPACE_BACKUP_MAX_DOCUMENT_BYTES } from "@/lib/workspaceFullBackup.mjs";
 import { parseWorkspaceArchiveV3 } from "@/lib/workspaceChecklistArchive.mjs";
+import { validateWorkspaceRecoveryForkHeader } from "@/lib/workspaceRecoveryFork.mjs";
 import { WORKSPACE_BUCKET } from "@/lib/workspaceRules.mjs";
 import {
   importManifest, itemRestoreBatches, sha256Hex, taskRestoreBatches,
@@ -35,6 +36,7 @@ export default function WorkspaceImportPanel({
   const [source, setSource] = useState("");
   const [sourceHash, setSourceHash] = useState("");
   const [sourceVersion, setSourceVersion] = useState(1);
+  const [isRecoveryFork, setIsRecoveryFork] = useState(false);
   const [importNotice, setImportNotice] = useState("");
   const inFlight = useRef(false);
   const [error, setError] = useState("");
@@ -47,6 +49,7 @@ export default function WorkspaceImportPanel({
     setPreview(null);
     setSource("");
     setSourceHash("");
+    setIsRecoveryFork(false);
     setImportNotice("");
     setError("");
     setProgress("");
@@ -61,6 +64,7 @@ export default function WorkspaceImportPanel({
       const sourceBytes = new Uint8Array(await file.arrayBuffer());
       const content = new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes);
       const header = JSON.parse(content);
+      const forkMarker = validateWorkspaceRecoveryForkHeader(header?.recovery_fork);
       const validated = header?.format_version === 3
         ? await parseWorkspaceArchiveV3(content)
         : header?.format_version === 2
@@ -74,6 +78,7 @@ export default function WorkspaceImportPanel({
       setPreview(validated);
       setSourceHash(fingerprint);
       setSourceVersion(header.format_version);
+      setIsRecoveryFork(Boolean(forkMarker));
       setSource(file.name);
       if (resumeFingerprint) onResumeConsumed?.();
     } catch (failure) {
@@ -87,7 +92,9 @@ export default function WorkspaceImportPanel({
       "Restore or RESUME this verified archive into its account-owned project? " +
       preview.tasks.length + " tasks, " + (preview.stepCount ?? 0) + " checklist steps, " +
       preview.items.length + " notes/links and " + (preview.files?.length ?? 0) + " private files. " +
-      "The same exact file will reuse its previous import instead of creating duplicates. " +
+      (isRecoveryFork
+        ? "This is a SEPARATELY RESTORABLE recovery copy. It will not overwrite your protected partial project. "
+        : "The same exact file will reuse its previous import instead of creating duplicates. ") +
       "Different files create separate projects; batches and Storage are not globally atomic."
     )) return;
     inFlight.current = true;
@@ -283,6 +290,11 @@ export default function WorkspaceImportPanel({
       <p className="break-all text-muted-foreground">From {source}</p>
       <p>{preview.tasks.length} tasks · {preview.stepCount ?? 0} checklist steps · {preview.items.length} notes/links · {preview.files?.length ?? 0} verified file(s) · {preview.filesSkipped} skipped file manifest(s)</p>
       <p className="text-muted-foreground">SHA-256 file fingerprint: {sourceHash.slice(0, 12)}… · Resume-safe</p>
+      {isRecoveryFork && <p className="text-amber-400">
+        Separate recovery copy detected. This will create or resume a DISTINCT private
+        project and will NOT merge or overwrite the original partially restored project.
+        Provenance fields are informational, not a digital signature.
+      </p>}
       <Button size="sm" type="button" disabled={busy || disabled} onClick={() => void run()}>
         <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Restore or resume
       </Button>
