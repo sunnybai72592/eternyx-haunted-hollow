@@ -52,7 +52,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(false);
   const ownerRef=useRef(owner);
-  const epoch=useRef(0);
+  const spacesEpoch=useRef(0);
+  const detailsEpoch=useRef(0);
   const resumeInFlight=useRef(false);
   ownerRef.current=owner;
   const selected=spaces.find(s=>s.id===selectedId)??null;
@@ -87,7 +88,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     if(queryError)throw new Error(queryError.message);
     // Data API results cannot be reused after a mid-request Auth change.
     await assureOwner(expectedOwner);
-    if(ownerRef.current!==expectedOwner || epoch.current!==token)return null;
+    if(ownerRef.current!==expectedOwner || spacesEpoch.current!==token)return null;
     const rows=(data??[]) as Space[];
     const chosen=chooseWorkspaceTeam(rows,selectedId,prefer);
     if(!rows.some(space=>space.id===selectedId)) {
@@ -102,7 +103,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const loadDetails=async(id:string,expectedOwner:string,token:number,available:Space[]=spaces)=>{
     const target=available.find(space=>space.id===id);
     if(!target) {
-      if(epoch.current===token){quarantineTeam();setSelectedId(null);}
+      if(detailsEpoch.current===token){quarantineTeam();setSelectedId(null);}
       return;
     }
     const isOwner=target?.owner_id===expectedOwner;
@@ -121,7 +122,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       m.error?.message??t.error?.message??e.error?.message??i.error?.message??"Team query failed");
     // Protect against a user switch while the four queries were in flight.
     await assureOwner(expectedOwner);
-    if(ownerRef.current!==expectedOwner || epoch.current!==token)return;
+    if(ownerRef.current!==expectedOwner || detailsEpoch.current!==token)return;
     try {
       verifyWorkspaceTeamDetails({
         space:target,owner:expectedOwner,spaceId:id,
@@ -143,7 +144,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setVerifiedSpaceId(id);
   };
   useEffect(()=>{
-    const token=++epoch.current;
+    const token=++spacesEpoch.current;
+    detailsEpoch.current++; // invalidate a previous owner's detail queries
     setSpaces([]);setSelectedId(null);setMembers([]);setTasks([]);
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
@@ -155,15 +157,15 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         await assureOwner(owner);
         await loadSpaces(owner,token);
       }catch(failure){
-        if(epoch.current===token && ownerRef.current===owner)setError(errorMessage(failure));
+        if(spacesEpoch.current===token && ownerRef.current===owner)setError(errorMessage(failure));
       }finally{
-        if(epoch.current===token && ownerRef.current===owner)setLoading(false);
+        if(spacesEpoch.current===token && ownerRef.current===owner)setLoading(false);
       }
     })();
-    return ()=>{epoch.current++;};
+    return ()=>{spacesEpoch.current++;detailsEpoch.current++;};
   },[owner]);
   useEffect(()=>{
-    const token=++epoch.current;
+    const token=++detailsEpoch.current;
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
@@ -175,31 +177,32 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         await assureOwner(owner);
         await loadDetails(selectedId,owner,token);
       }catch(failure){
-        if(epoch.current===token && ownerRef.current===owner){
+        if(detailsEpoch.current===token && ownerRef.current===owner){
           quarantineTeam();
           setError(errorMessage(failure));
         }
       }finally{
-        if(epoch.current===token && ownerRef.current===owner)setLoading(false);
+        if(detailsEpoch.current===token && ownerRef.current===owner)setLoading(false);
       }
     })();
-    return ()=>{epoch.current++;};
+    return ()=>{detailsEpoch.current++;};
   },[owner,selectedId]);
 
   const refresh=async(target?:string|null)=>{
-    // Every refresh is its own generation. Slower stale responses cannot
-    // repopulate data after a newer refresh or account/selection change.
-    const token=++epoch.current;
+    // Independent request generations: list refresh must NOT be cancelled
+    // just because the selected-team detail effect initialized.
+    const spaceToken=++spacesEpoch.current;
+    const detailToken=++detailsEpoch.current;
     try {
       await assureOwner(owner);
-      const chosen=await loadSpaces(owner,token,target??selectedId);
+      const chosen=await loadSpaces(owner,spaceToken,target??selectedId);
       if(chosen && chosen===selectedId) {
         // A new selection gets its own guarded detail effect.
-        await loadDetails(chosen,owner,token);
+        await loadDetails(chosen,owner,detailToken);
       }
     }catch(failure){
-      if(epoch.current===token && ownerRef.current===owner)
-        quarantineTeam(); // Network failure is not a revocation, but stale UI must be hidden.
+      if(spacesEpoch.current===spaceToken && ownerRef.current===owner)
+        quarantineTeam(); // Network failure is not revocation, but stale UI must be hidden.
       throw failure;
     }
   };
@@ -209,7 +212,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const resume=()=>{
       if(!alive||disabled)return;
       if(document.visibilityState==="hidden"){
-        epoch.current++;
+        spacesEpoch.current++;detailsEpoch.current++;
         quarantineTeam();
         return;
       }
