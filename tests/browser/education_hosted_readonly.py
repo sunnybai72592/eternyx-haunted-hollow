@@ -58,6 +58,9 @@ def login(page, email, password):
     page.get_by_label("Email address", exact=True).fill(email)
     page.get_by_label("Password", exact=True).fill(password)
     page.get_by_role("button", name="Sign in to ETERNYX", exact=True).click()
+    # Never navigate away while the actual password-login promise is pending.
+    # React Router changes the URL only once the staging Auth session succeeds.
+    page.wait_for_url(ORIGIN + "/education", timeout=20000)
     page.goto(ORIGIN + "/education/history", wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="My assessments", exact=True)).to_be_visible(timeout=20000)
     # Require a protected-route session, not a public Education landing page.
