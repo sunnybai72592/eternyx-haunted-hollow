@@ -10,7 +10,7 @@ test("actual 90 challenges are searchable and track/status/bookmark filtering is
   assert.equal(PRACTICE_CASES.length,90);assert.equal(PRACTICE_TRACKS.length,30);
   assert.equal(filterPracticeTracks().length,30);
   assert.equal(filterPracticeCases("subnet",{query:"broadcast"}).length,1);
-  assert.deepEqual(filterPracticeTracks({query:"sUbNeT"}).map(t=>t.id),["subnet","ipv6"]);
+  assert.deepEqual(filterPracticeTracks({query:"sUbNeT"}).map(t=>t.id),["subnet","ipv6","cidrcheck"]);
   assert.equal(filterPracticeCases("subnet",{status:"done",passedIds:["subnet-network"]}).length,1);
   assert.equal(filterPracticeCases("subnet",{status:"todo",passedIds:["subnet-network"]}).length,2);
   assert.deepEqual(filterPracticeTracks({bookmarksOnly:true,bookmarkedIds:["subnet-network"]}).map(t=>t.id),["subnet"]);
