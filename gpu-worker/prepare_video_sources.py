@@ -78,11 +78,14 @@ def inspect_input(path):
     }
 
 
-def normalize_one(source, output, *, start_seconds=0, seconds=60):
+def normalize_one(source, output, *, start_seconds=0, seconds=60, cinematic=False):
     if type(start_seconds) is not int or not 0 <= start_seconds < MAX_INPUT_DURATION:
         raise ValueError("Start offset must be an integer from 0 to 299 seconds")
     if type(seconds) is not int or not 1 <= seconds <= MAX_OUTPUT_SECONDS:
         raise ValueError("Output limit must be an integer from 1 to 60 seconds")
+    if type(cinematic) is not bool:
+        raise ValueError("Cinematic normalization must be a boolean")
+    fps = 24 if cinematic else FPS
     original = inspect_input(source)
     if start_seconds >= original["reported_duration_seconds"]:
         raise ValueError("Requested start is beyond the source video")
@@ -91,19 +94,31 @@ def normalize_one(source, output, *, start_seconds=0, seconds=60):
         raise ValueError("Requested interval is too short for 16 FPS")
     # FFmpeg autorotates MOV/MP4 phone footage by default, then preserves aspect
     # without stretching or upscaling to a larger size. Require even H264 dimensions.
-    filtergraph = (
-        "fps=16:round=near,"
-        "scale=w='min(512,iw)':h='min(512,ih)':"
-        "force_original_aspect_ratio=decrease:force_divisible_by=2,"
-        "setsar=1,format=yuv420p"
-    )
+    if cinematic:
+        # Keep up to real 720p native detail from landscape OR portrait sources.
+        # The filter runs after FFmpeg's automatic phone rotation correction.
+        filtergraph = (
+            "fps=24:round=near,"
+            "scale=w='min(iw,if(gte(iw,ih),1280,720))':"
+            "h='min(ih,if(gte(iw,ih),720,1280))':"
+            "force_original_aspect_ratio=decrease:force_divisible_by=2,"
+            "setsar=1,format=yuv420p"
+        )
+    else:
+        filtergraph = (
+            "fps=16:round=near,"
+            "scale=w='min(512,iw)':h='min(512,ih)':"
+            "force_original_aspect_ratio=decrease:force_divisible_by=2,"
+            "setsar=1,format=yuv420p"
+        )
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-threads", "1",
            "-ss", str(start_seconds), "-protocol_whitelist", "file,pipe",
            "-i", str(source), "-map", "0:v:0", "-an", "-sn", "-dn",
            "-map_metadata", "-1", "-map_chapters", "-1",
-           "-vf", filtergraph, "-frames:v", str(seconds * FPS),
-           "-t", str(seconds), "-r", str(FPS),
-           "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+           "-vf", filtergraph, "-frames:v", str(seconds * fps),
+           "-t", str(seconds), "-r", str(fps),
+           "-c:v", "libx264", "-preset", "veryfast" if cinematic else "ultrafast",
+           "-crf", "19" if cinematic else "23",
            "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output)]
     try:
         run = subprocess.run(cmd, capture_output=True, check=False, timeout=120)
@@ -114,17 +129,17 @@ def normalize_one(source, output, *, start_seconds=0, seconds=60):
     if not output.is_file() or not 0 < output.stat().st_size <= MAX_SOURCE_BYTES:
         raise ValueError("Prepared MP4 missing or exceeds the renderer source limit")
     # Re-count real decoded frames, not a predicted number.
-    width, height, frames = video_info(probe(output, count_frames=True))
-    if frames > seconds * FPS or frames > MAX_OUTPUT_FRAMES:
+    width, height, frames = video_info(probe(output, count_frames=True), expected_fps=fps)
+    if frames > seconds * fps or frames > MAX_OUTPUT_SECONDS * fps:
         raise ValueError("Prepared video has more frames than requested")
     return {**original, "prepared_width": width, "prepared_height": height,
-            "prepared_fps": f"{FPS}/1", "prepared_frames": frames,
-            "prepared_duration_seconds": frames / FPS,
+            "prepared_fps": f"{fps}/1", "prepared_frames": frames,
+            "prepared_duration_seconds": frames / fps,
             "prepared_sha256": sha256(output),
             "prepared_bytes": output.stat().st_size}
 
 
-def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60):
+def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60, cinematic=False):
     if folder.is_symlink() or not folder.is_dir():
         raise ValueError("Input must be a real local directory, not a symlink")
     if destination.exists() or destination.is_symlink():
@@ -147,7 +162,7 @@ def prepare(folder, destination, *, clips=None, start_seconds=0, seconds=60):
         rows = []
         for i, (name, path) in enumerate(originals, 1):
             target = stage / f"clip-{i:02d}.mp4"
-            info = normalize_one(path, target, start_seconds=start_seconds, seconds=seconds)
+            info = normalize_one(path, target, start_seconds=start_seconds, seconds=seconds, cinematic=cinematic)
             rows.append({
                 "source_filename": name, "source_sha256": sha256(path),
                 "prepared_filename": target.name, **info,
