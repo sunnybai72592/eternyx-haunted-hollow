@@ -9,6 +9,10 @@
 --
 -- Expected boolean true for catalog_checks_passed; zero checks failed.
 -- Any false or missing check is a BLOCKER, never a "warning" to waive.
+-- Every listed Services table/view MUST grant authenticated SELECT;
+-- each sensitive row still relies on its active RLS and owner/admin policy.
+-- An authenticated GRANT is necessary for valid client reads but insufficient
+-- to establish customer isolation without separate A/B/Admin/anon tests.
 
 WITH
 expected_objects(name, required_kind, require_rls, require_invoker, forbid_anon_select, allow_auth_select) AS (
@@ -17,13 +21,13 @@ expected_objects(name, required_kind, require_rls, require_invoker, forbid_anon_
     ('service_customer_amendment_queue', 'view', false, true, true, true),
     ('service_admin_amendment_queue', 'view', false, true, true, true),
     ('service_request_journal', 'view', false, true, true, true),
-    ('service_requests', 'table', true, false, true, false),
-    ('service_request_activity', 'table', true, false, true, false),
-    ('service_scope_reviews', 'table', true, false, true, false),
-    ('service_scope_responses', 'table', true, false, true, false),
-    ('service_clarification_questions', 'table', true, false, true, false),
-    ('service_clarification_answers', 'table', true, false, true, false),
-    ('service_request_triage', 'table', true, false, true, false)
+    ('service_requests', 'table', true, false, true, true),
+    ('service_request_activity', 'table', true, false, true, true),
+    ('service_scope_reviews', 'table', true, false, true, true),
+    ('service_scope_responses', 'table', true, false, true, true),
+    ('service_clarification_questions', 'table', true, false, true, true),
+    ('service_clarification_answers', 'table', true, false, true, true),
+    ('service_request_triage', 'table', true, false, true, true)
 ),
 observed_objects AS (
   SELECT e.name, e.required_kind, e.require_rls, e.require_invoker,
