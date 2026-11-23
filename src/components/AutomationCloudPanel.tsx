@@ -142,14 +142,25 @@ export default function AutomationCloudPanel({
   }
   async function refresh() {
     const owner = userId;
-    const response = await callAutomation("list");
-    if (ownerRef.current !== owner) throw Error("Automation account changed; retry the request.");
-    if (response.source !== "authenticated_server") throw new Error("The server could not verify the workflow list.");
-    const verified=readWorkflows(response.workflows);
-    setWorkflows(verified);
-    setBackendStatus("available");
-    setLoaded(true);
-    return verified;
+    try {
+      const response = await callAutomation("list");
+      if (ownerRef.current !== owner) throw Error("Automation account changed; retry the request.");
+      if (response.source !== "authenticated_server") throw new Error("The server could not verify the workflow list.");
+      const verified=readWorkflows(response.workflows);
+      setWorkflows(verified);
+      setBackendStatus("available");
+      setLoaded(true);
+      return verified;
+    } catch (cause) {
+      // This also protects callers outside manage(), including template install.
+      if (ownerRef.current === owner) {
+        setBackendStatus("unavailable");
+        setLoaded(false); setWorkflows([]); setHistory([]); setSelectedId(null);
+        setOutput(null); setPreviewResult(null);
+        pendingRun.current = null; pendingPreview.current = null;
+      }
+      throw cause;
+    }
   }
   function select(workflow: SavedWorkflow) {
     pendingRun.current = null; pendingPreview.current = null;
