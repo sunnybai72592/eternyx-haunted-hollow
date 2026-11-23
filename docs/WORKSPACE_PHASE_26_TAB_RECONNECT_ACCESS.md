@@ -22,7 +22,7 @@ repopulate a newly selected team if their responses arrive out of order.
 - A team selection is always made from the latest server-visible list;
   revoked teams cannot survive as stale local selected IDs.
 - A detail panel is displayed only for a **verified owner + team selection**
-  and is immediately hidden on team switching or browser tab hiding.
+  and is immediately hidden on team switching or browser tab hiding.\n  The team-name selection list is also suppressed until fresh server membership\n  queries finish, avoiding flashes of stale revoked team names.
 - Tab visibility, returning browser focus, and one-minute foreground checks
   schedule real session and membership revalidation. Cached details are
   quarantined during the recheck. No Realtime delivery is counted from a
