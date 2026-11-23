@@ -171,7 +171,7 @@ test('Phase 21 contains no schema writes and separates timeout correlation from 
   assert.match(docs,/no new SQL migration/i);
   assert.match(docs,/customer A[\s\S]*customer B[\s\S]*administrator/i);
   assert.match(docs,/not\s+proven[\s\S]*cause/i);
-  assert.match(docs,/Phase 13 before Phase 14/i);
+  assert.match(docs,/Phase 13\s+before\s+Phase 14/i);
   assert.match(docs,/read receipts/i);
   const audit=await read('docs/sql/eternyx/services-phase21-db-load-audit.sql');
   assert.match(audit,/pg_catalog\.pg_stat_activity/);
