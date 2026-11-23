@@ -407,7 +407,7 @@ def warped(previous,decisions,strength):
 
 
 def sample_frames(base,adapter,motion,label,seconds,seed,strength=75,
-                  stability=45,variation=6,seeded_motion=False):
+                  stability=45,variation=6,seeded_motion=False,decision_fn=None):
     if label not in adapter["tags"] or label not in motion["tags"]:
         raise ValueError("Style label needs trained appearance AND spatial-motion weights")
     if type(seconds) is not int or not 1<=seconds<=MAX_SECONDS:
@@ -436,8 +436,13 @@ def sample_frames(base,adapter,motion,label,seconds,seed,strength=75,
     previous_motion=[4]*TILES
     innovation=[0.]*(v2.N*3)
     for t in range(1,seconds*FPS):
-        new_motion=tile_decisions(motion,label,previous_motion,t,seconds*FPS,
-                                  seeded=seeded_motion,rng=rng)
+        new_motion=(decision_fn(motion,label,previous_motion,t,seconds*FPS,rng)
+                    if decision_fn is not None else
+                    tile_decisions(motion,label,previous_motion,t,seconds*FPS,
+                                   seeded=seeded_motion,rng=rng))
+        if (not isinstance(new_motion,list) or len(new_motion)!=TILES or
+                any(type(x) is not int or not 0<=x<CLASSES for x in new_motion)):
+            raise ValueError("Custom causal tile motion must be exactly 12 valid directions")
         older_warped=warped(older,new_motion,strength)
         recent_warped=warped(recent,new_motion,strength)
         updated=bytearray(v2.N)
@@ -465,7 +470,7 @@ def sample_frames(base,adapter,motion,label,seconds,seed,strength=75,
 
 def generate(base_path,tag_path,motion_path,label,output,seconds=2,seed=42,
              strength=75,stability=45,variation=6,seeded_motion=False,
-             profile="landscape",quality="standard"):
+             profile="landscape",quality="standard",decision_fn=None):
     validate_output_dir(output)
     if profile not in ("landscape","portrait","square") or quality not in ("standard","high"):
         raise ValueError("Unsupported offline spatial-neural output preset")
@@ -477,7 +482,7 @@ def generate(base_path,tag_path,motion_path,label,output,seconds=2,seed=42,
     if motion["base_model_sha256"]!=sha256(base_path) or motion["tag_model_sha256"]!=sha256(tag_path):
         raise ValueError("Spatial motion weights mismatch base and learned-tag SHA-256")
     frames=sample_frames(base,adapter,motion,label,seconds,seed,strength,
-                         stability,variation,seeded_motion)
+                         stability,variation,seeded_motion,decision_fn)
     raw=b"".join(frames)
     stage=Path(tempfile.mkdtemp(prefix=".eternyx-spatial-sample-",dir=output.parent))
     try:
