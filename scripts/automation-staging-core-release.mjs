@@ -35,6 +35,18 @@ export function parseCatalog(text){
     remoteMigrationHistoryReconciled:false,
     releaseAuthorized:false};
 }
+export function validateCatalogReport(raw){
+  if(!raw||typeof raw!=="object"||Array.isArray(raw)||
+     raw.schema!=="eternyx-automation-staging-function-catalog-v1"||
+     raw.automation_rpc_catalog_present!==true||
+     raw.automation_rls_enabled!==true||
+     raw.automation_schema_present!==true||
+     raw.onlyReadOnlyCatalogQueries!==true||
+     raw.releaseAuthorized!==false||
+     raw.remoteMigrationHistoryReconciled!==false)
+    deny("catalog_report_unverified");
+  return true;
+}
 export function validateStageProbe(raw,target){
   if(!raw||typeof raw!=="object"||Array.isArray(raw)||
      raw.schema!=="eternyx-automation-staging-db-probe-result-v1"||
