@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import net from "node:net";
+import { verifyHostedDeveloperReleaseObservations, verifyHostedDeveloperRuntimeSafety } from "./developer-staging-provenance.mjs";
 
 export const DEVELOPER_STAGING_CONFIRMATION = "RUN_DEVELOPER_STAGING_READ_ONLY";
 export const DEVELOPER_BROWSER_CASES = Object.freeze([
@@ -71,6 +72,8 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     observed.add(result.viewport + "/" + result.case);
   }
   if (observed.size !== expected.size) fail("incomplete staging case coverage.");
+  const release = verifyHostedDeveloperReleaseObservations(value.release_observations, sourceCommit);
+  const runtime = verifyHostedDeveloperRuntimeSafety(value);
   return {
     result: "browser-acceptance-passed",
     environment: "operator-specified staging",
@@ -78,7 +81,9 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     checked_source_revision: sourceCommit,
     developer_case_count: observed.size,
     viewports: DEVELOPER_BROWSER_VIEWPORTS,
-    notes: "Real hosted public Project Lab browser flows only; deployed artifact identity, protected backend and production readiness are unverified.",
+    observed_release: release,
+    runtime_safety: runtime,
+    notes: "Observed hosted HTML, JavaScript and release manifest match the checkout revision. This is unsigned release provenance; protected backend and production readiness are unverified.",
     production_verified: false,
   };
 }
@@ -111,6 +116,24 @@ function main() {
     const report = JSON.parse(fs.readFileSync(path,"utf8"));
     const summary = verifyDeveloperStagingEvidence(report, config, process.env.GITHUB_SHA);
     process.stdout.write(JSON.stringify(summary,null,2) + "\n");
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      const lines = [
+        "## ETERNYX Developer Studio — hosted staging acceptance",
+        "",
+        "Target host: " + summary.target_host,
+        "Developer Chrome journeys: " + summary.developer_case_count + "/14 passed",
+        "Observed public build ID: " + summary.observed_release.build_id,
+        "Manifest, HTML and JS match checkout SHA: YES",
+        "Runtime exceptions / first-party asset failures / attempted writes: 0 / 0 / 0",
+        "Blocked external requests: " + summary.runtime_safety.blocked_external_requests,
+        "",
+        "Staging UI acceptance: PASS (observed, unsigned release metadata)",
+        "Protected backend verification: NOT TESTED",
+        "Production certification: NO",
+        "",
+      ];
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n"));
+    }
     return;
   }
   fail("use --source-check, --check-config or --verify-report <file>.");
