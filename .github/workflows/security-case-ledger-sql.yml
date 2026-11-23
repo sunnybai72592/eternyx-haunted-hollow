@@ -6,6 +6,10 @@ on:
       - "scripts/sql/staged-security-case-ledger.sql"
       - "tests/sql/security-case-ledger-bootstrap.sql"
       - "tests/sql/security-case-ledger-db-smoke.sql"
+      - "scripts/sql/security-ledger-catalog-gate.sql"
+      - "scripts/security-ledger-catalog-gate.mjs"
+      - "tests/sql/security-ledger-rollback-drill.sql"
+      - "tests/security-ledger-catalog-gate.test.mjs"
       - ".github/workflows/security-case-ledger-sql.yml"
   workflow_dispatch:
 
@@ -53,6 +57,23 @@ jobs:
         run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staged-security-case-ledger.sql
       - name: Exercise two real database roles, revoked scopes and immutable history
         run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/security-case-ledger-db-smoke.sql
+      - name: Verify 60 live PostgreSQL catalog invariants in read-only transaction
+        run: |
+          set -euo pipefail
+          docker exec -i eternyx-security-case-ledger-ci \
+            psql -X -qAt -F '|' -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < scripts/sql/security-ledger-catalog-gate.sql \
+            | node scripts/security-ledger-catalog-gate.mjs --evaluate
+      - name: Prove transaction rollback restores disabled RLS in disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          docker exec -i eternyx-security-case-ledger-ci \
+            psql -X -q -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < tests/sql/security-ledger-rollback-drill.sql
+          docker exec -i eternyx-security-case-ledger-ci \
+            psql -X -qAt -F '|' -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < scripts/sql/security-ledger-catalog-gate.sql \
+            | node scripts/security-ledger-catalog-gate.mjs --evaluate
       - name: Destroy disposable PostgreSQL
         if: always()
         run: docker rm -f eternyx-security-case-ledger-ci || true
