@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Copy, ExternalLink, Globe2, Play, ShieldAlert, TerminalSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { buildCurlCommand, formatApiResponseBody, validateApiRequest } from "@/lib/apiWorkbenchUtils.mjs";
+import { buildCurlCommand, formatApiResponseBody } from "@/lib/apiWorkbenchUtils.mjs";
+import ApiWorkspacePanel from "@/components/developer/ApiWorkspacePanel";
+import { API_HISTORY_STORAGE, normalizeApiHistory, recordApiHistory, resolveApiDraft, runApiAssertions } from "@/lib/apiWorkspaceUtils.mjs";
 
 type ApiResult = {
   status: number;
@@ -21,6 +23,7 @@ type ApiResult = {
 
 const MAX_RESPONSE_BYTES = 1_000_000;
 const REQUEST_TIMEOUT_MS = 30_000;
+const initialHistory = () => { try { return normalizeApiHistory(JSON.parse(localStorage.getItem(API_HISTORY_STORAGE) || "[]")); } catch { return []; } };
 
 async function readResponse(response: Response) {
   if (!response.body) return { text: "", truncated: false };
@@ -60,6 +63,27 @@ export default function ApiEngineeringWorkbench() {
   const [curl, setCurl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [envText, setEnvText] = useState("");
+  const [history, setHistory] = useState(initialHistory);
+  const [assertionResults, setAssertionResults] = useState<{ name: string; passed: boolean; detail: string }[]>([]);
+  const [expectations, setExpectations] = useState({ status: "200", maxDurationMs: "", jsonPath: "", equals: "" });
+
+  useEffect(() => {
+    try { localStorage.setItem(API_HISTORY_STORAGE, JSON.stringify(normalizeApiHistory(history))); }
+    catch { /* Some browsers block storage; the current session remains usable. */ }
+  }, [history]);
+
+  const draft = { method, url, headers, body };
+  const loadTemplate = (template: { method: string; url: string }) => {
+    setMethod(template.method);
+    setUrl(template.url);
+    setHeaders("");
+    setBody("");
+    setResult(null);
+    setAssertionResults([]);
+    setCurl("");
+    setError("");
+  };
 
   const copy = async (value: string, label: string) => {
     try {
@@ -72,7 +96,8 @@ export default function ApiEngineeringWorkbench() {
 
   const prepareCurl = () => {
     try {
-      setCurl(buildCurlCommand({ url, method, headers, body }));
+      const request = resolveApiDraft(draft, envText);
+      setCurl(buildCurlCommand({ url: request.url, method: request.method, headers: request.headers.map(([k, v]) => k + ": " + v).join("\n"), body: request.body }));
       setError("");
       toast.success("cURL command generated locally.");
     } catch (cause) {
@@ -84,16 +109,18 @@ export default function ApiEngineeringWorkbench() {
   const sendRequest = async () => {
     let request;
     try {
-      request = validateApiRequest({ url, method, headers, body });
+      request = resolveApiDraft(draft, envText);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Invalid request.");
       setResult(null);
+      setAssertionResults([]);
       return;
     }
 
     setBusy(true);
     setError("");
     setResult(null);
+    setAssertionResults([]);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const started = performance.now();
@@ -111,7 +138,7 @@ export default function ApiEngineeringWorkbench() {
       const received = await readResponse(response);
       const responseHeaders = Array.from(response.headers.entries())
         .map(([name, value]) => name + ": " + value).join("\n");
-      setResult({
+      const nextResult = {
         status: response.status,
         statusText: response.statusText,
         ok: response.ok,
@@ -119,7 +146,13 @@ export default function ApiEngineeringWorkbench() {
         headers: responseHeaders || "No response headers exposed by the browser.",
         body: formatApiResponseBody(received.text, response.headers.get("content-type") || ""),
         truncated: received.truncated,
-      });
+      };
+      setResult(nextResult);
+      setAssertionResults(runApiAssertions(nextResult, expectations));
+      setHistory((current) => recordApiHistory(current, {
+        url: request.url, method: request.method, status: response.status,
+        durationMs: nextResult.durationMs, at: new Date().toISOString(),
+      }));
     } catch (cause) {
       const message = cause instanceof Error && cause.name === "AbortError"
         ? "Request timed out after 30 seconds."
@@ -141,11 +174,15 @@ export default function ApiEngineeringWorkbench() {
         <section className="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-950/70 via-slate-950 to-violet-950/60 p-7 sm:p-10">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">ETERNYX · API engineering</p>
           <h1 className="mt-3 text-4xl font-bold sm:text-5xl">API <span className="text-cyan-300">Workbench</span></h1>
-          <p className="mt-4 max-w-2xl leading-7 text-slate-300">Compose HTTP requests, inspect live responses, measure latency, and export reproducible cURL commands. Requests are sent directly from your browser only when you press Send.</p>
+          <p className="mt-4 max-w-2xl leading-7 text-slate-300">Compose browser HTTP requests, save sanitized templates, use session-only environment values, and assert response status, latency, or JSON fields. Sending requires an explicit click.</p>
           <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-400">
-            {["HTTP methods", "Custom headers", "Request bodies", "Response inspector", "cURL export"].map((item) => <span key={item} className="rounded-full border border-slate-700 px-3 py-1.5">{item}</span>)}
+            {["Request collections", "Session environments", "Request history", "Import/export", "Response assertions"].map((item) => <span key={item} className="rounded-full border border-slate-700 px-3 py-1.5">{item}</span>)}
           </div>
         </section>
+
+        <ApiWorkspacePanel draft={draft} onLoad={loadTemplate} envText={envText} onEnvText={setEnvText}
+          expectations={expectations} onExpectations={(value) => { setExpectations(value); setAssertionResults([]); }}
+          assertions={assertionResults} history={history} onClearHistory={() => setHistory([])} busy={busy} />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <Card className="border-slate-800 bg-slate-900/70 text-white">
@@ -201,8 +238,8 @@ export default function ApiEngineeringWorkbench() {
         <section className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5 sm:p-6">
           <h2 className="flex items-center gap-2 font-semibold text-amber-200"><ShieldAlert className="h-5 w-5" /> Security, privacy & browser limits</h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300">
-            <li>Requests are sent directly from your browser after you choose Send. ETERNYX does not proxy or store them.</li>
-            <li>Do not paste production secrets into shared devices. Credentials are not saved by this tool; use temporary test tokens where possible.</li>
+            <li>Requests are sent directly from your browser only when you choose Send. ETERNYX does not proxy them. Sanitized collections and origin-only response history are stored in this browser; environment values and full request/response content are not persisted by these new workspace features.</li>
+            <li>Do not paste production secrets into shared devices. Authorization headers and request bodies are never saved to collections or history. Export files omit them. Temporary test tokens are preferable.</li>
             <li>Browser CORS policy may block requests even when an API works in a server-side client. This tool cannot bypass CORS.</li>
             <li>Only HTTP and HTTPS URLs are accepted. Request timeout is 30 seconds and displayed response content is capped at 1 MB.</li>
             <li>Browser JavaScript cannot expose every restricted response header; the displayed headers are those made available by the endpoint and browser.</li>
