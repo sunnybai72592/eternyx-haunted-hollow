@@ -11,3 +11,9 @@ For the protected GitHub environment \`rls-staging\`, add the new secret \`ETERN
 Manual \`preflight\` and \`rehearsal\` both require explicit read-only approval. The check runs BEFORE any Education attempt or grading write. Failure blocks subsequent stages and uploads no fabricated pass. The output contains only fixed pass labels and GitHub SHA/run/attempt provenance with no project URL, user IDs, grade values, credentials or SQL details. The SQL contains no DDL or DML, and no production state or flags are changed.
 
 Until an operator provisions staging, installs reviewed SQL/RPCs, configures the protected environment and runs the workflow successfully, the feature is **NOT staging-verified and NOT approved for production**.
+
+### Release artifact binding and coverage extension
+
+The aggregate staging verdict now independently validates the audit report from the **same GitHub commit, run and attempt**, requires all **31** fixed metadata checks, and refuses missing/stale/malformed or extra-field evidence before any rehearsal subprocess runs. Every stage inherits a sanitized environment with no staging PostgreSQL password; the password is scoped to the single SQL-audit action step rather than to the entire job. This prevents ordinary student/instructor test processes from receiving database credentials.
+
+Seven additional privilege checks block direct insertion of attempt scores/max scores/timestamps, direct attempt end-time changes, and unauthorized answer correctness, text insertion and option changes. Passing SQL privilege tests alone never replaces actual JWT RLS policy tests.

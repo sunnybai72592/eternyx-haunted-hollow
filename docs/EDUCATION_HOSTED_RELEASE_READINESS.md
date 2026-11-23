@@ -31,3 +31,7 @@ The runner strips service-role credentials from *every subprocess except trusted
 
 ### Release decision
 \`read_only_preflight_passed\` and \`staging_rehearsal_passed\` both explicitly set \`production_release_approved=false\`. Production stays **NO-GO** until a reviewer separately verifies staging migrations/grants, the actual deployed backend and Edge Function versions, negative student/teacher authorization tests, the complete same-attempt exam/grade UX, CI/browser coverage, recovery/rollback and backup, and approves gradual rollout. Never turn on the CBT flag from this workflow or infer that a green source build establishes backend security.
+
+### Mandatory live metadata evidence in combined verdict
+
+The release orchestrator now **requires** the staging PostgreSQL metadata result from this exact SHA/run/attempt before executing its first hosted student/instructor check. The final summarized report has a `database_metadata_gate` with a pass count; an unverified or stale report cannot be translated into a green release verdict. The SQL audit's database password is supplied only to its GitHub Actions step and is stripped from all child processes. A total of **31** fixed permission/RLS/function/trigger checks are required. This remains a staging-only source gate until it runs against a separately approved backend.

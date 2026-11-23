@@ -8,6 +8,7 @@ import { validateEducationHostedCbtConfig, CBT_STAGING_CASES } from "./education
 import { validateEducationHostedReviewConfig, REVIEW_STAGE_CASES } from "./educationHostedReviewConfig.mjs";
 import { validateEducationTrustedFinalizerConfig, TRUSTED_FINALIZER_CASES } from "./educationTrustedFinalizerConfig.mjs";
 import { validateEducationResultsReadConfig, RESULTS_CASES } from "./educationHostedResultsConfig.mjs";
+import { assertEducationDbEvidence, DATABASE_CHECKS } from "./educationHostedDbMetadata.mjs";
 
 const requiredModes = Object.freeze(["preflight", "rehearsal"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,7 +66,9 @@ export const EDUCATION_RELEASE_STAGES = Object.freeze({
   ]),
 });
 
-export function summarizeEducationReleaseEvidence(mode, entries, provenance) {
+export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbEvidence) {
+  // Mandatory direct release-bound audit evidence, not only a green CI step.
+  assertEducationDbEvidence(dbEvidence,provenance);
   const stages = EDUCATION_RELEASE_STAGES[mode];
   if (!stages || !Array.isArray(entries) || entries.length !== stages.length ||
       !provenance || !/^[0-9a-f]{40}$/.test(provenance.sha || "") ||
@@ -112,7 +115,9 @@ export function summarizeEducationReleaseEvidence(mode, entries, provenance) {
     source_sha:provenance.sha, github_run_id:String(provenance.runId),
     github_run_attempt:String(provenance.attempt),
     outcome:mode === "rehearsal" ? "staging_rehearsal_passed" : "read_only_preflight_passed",
-    verified_stages:reviewed, production_tested:false,
+    verified_stages:reviewed,
+    database_metadata_gate:Object.freeze({status:"passed",checks:DATABASE_CHECKS.length}),
+    production_tested:false,
     production_certified:false, production_release_approved:false,
   });
 }
