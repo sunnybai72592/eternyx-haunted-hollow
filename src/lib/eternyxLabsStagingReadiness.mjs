@@ -12,8 +12,8 @@ export const LABS_STAGING_SCHEMA="eternyx.labs.staging-readonly.v1";
 export const LABS_STAGING_APPROVAL="I_APPROVE_LABS_READONLY_STAGING";
 export const LABS_STAGING_REQUIRED_CHECKS=Object.freeze([
   "staging-target-pinned","two-distinct-authenticated-owners",
-  "ctf-catalog-a","ctf-catalog-b","ctf-progress-a","ctf-progress-b",
-  "range-provider-a","range-provider-b","range-sessions-a","range-sessions-b",
+  "ctf-catalog-a","ctf-progress-a","range-provider-a","range-sessions-a",
+  "ctf-catalog-b","ctf-progress-b","range-provider-b","range-sessions-b",
   "ctf-unauthenticated-denied","range-unauthenticated-denied",
 ]);
 const REF=/^[a-z]{20}$/;

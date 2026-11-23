@@ -59,7 +59,11 @@
     "docker:lab:preflight": "node scripts/docker-lab-assurance.mjs preflight",
     "docker:lab:review": "node scripts/docker-lab-review.mjs acceptance",
     "docker:staging:auth:check": "node scripts/docker-hosted-auth-probe.mjs --check-config",
-    "docker:staging:auth:run": "node scripts/docker-hosted-auth-probe.mjs --run"
+    "docker:staging:auth:run": "node scripts/docker-hosted-auth-probe.mjs --run",
+    "labs:staging:explain": "node scripts/labs-staging-readonly.mjs --explain",
+    "labs:staging:config": "node scripts/labs-staging-readonly.mjs --check-config",
+    "labs:staging:read-only": "node scripts/labs-staging-readonly.mjs --run",
+    "labs:staging:tests": "node --test tests/eternyx-labs-staging-readonly.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
