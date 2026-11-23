@@ -929,3 +929,119 @@ npm run build
 Tests run with disposable in-memory keys and fabricated source bytes. Neither
 CI nor this feature enables public Labs, allocates paid VMs or GPUs, makes
 external AI requests, or performs a real-host hardware acceptance test.
+
+
+## Supplemental offline runtime-observation metadata audit
+
+This read-only tool offers an **additional cross-check** of operational data
+captured by the human operator on the dedicated offline KVM host. It is
+deliberately **not part of the previously signed review**, sealed checkpoint
+or a substitute for an independent inspection of real host logs. Unlike a
+hardware quote, operator-supplied JSON can be fabricated or changed. **The
+auditor must separately authenticate the source host and preserve genuine
+original records.**
+
+### Operator-controlled supplemental files
+
+The manually staged private reviewer case already contains the actual,
+reviewer-hashed transcripts:
+\`supervisor-journal.txt\`, \`cgroup-death.txt\`, and, if applicable,
+\`guest-challenge.txt\` and \`timeout-result.txt\`.
+
+The reviewer may additionally stage the following **bounded (maximum
+4096 bytes), root-owned 0600, single-link files** in the same private folder:
+
+| Required mode | Supplemental JSON | Bound reviewed transcript |
+| --- | --- | --- |
+| All | \`runtime-supervisor.json\` | \`supervisor-journal.txt\` |
+| All | \`runtime-cgroup.json\` | \`cgroup-death.txt\` |
+| Guest vsock | \`runtime-guest.json\` | \`guest-challenge.txt\` |
+| Watchdog 900s | \`runtime-timeout.json\` | \`timeout-result.txt\` |
+
+All JSON must be **canonical one-line UTF-8**, \`JSON.stringify(document) +
+"\\n"\`. The exact schema fields are:
+\`schemaVersion\` (1), \`classification\` (one of the four fixed
+\`operator-collected-KIND-observation\` strings), \`sessionId\`,
+\`unit\`, \`capturedAt\`, \`sourceSha256\`, and \`observations\`.
+
+The \`sourceSha256\` MUST be computed from the exact **unchanged raw
+transcript file**, not from a retyped example. The \`sessionId\` and
+\`unit\` must match the signed operator receipt. The \`capturedAt\` time
+must fall between the original host preflight and the signed receipt
+timestamp, and within 24 hours before the receipt.
+
+The fixed \`observations\` schema for each KIND is:
+
+\`\`\`json
+{
+  "supervisor": {
+    "jailed": true,
+    "hostNetworkDenied": true,
+    "externalWatchdogArmed": true,
+    "cgroupEnforced": true,
+    "publicIngressEnabled": false,
+    "cloudProvisioningAllowed": false
+  },
+  "cgroup": {
+    "descendantCount": 0,
+    "dead": true,
+    "teardownVerified": true
+  },
+  "guest": {
+    "localVsockOnly": true,
+    "challengeResponseVerified": true,
+    "guestServiceFunctional": true,
+    "guestIdentityCryptographicallyProven": false
+  },
+  "expiry": {
+    "deadlineSeconds": 900,
+    "systemdTimeoutResult": "timeout",
+    "cgroupDescendantCount": 0,
+    "fullExpiryObserved": true,
+    "cloudProvisioningAllowed": false
+  }
+}
+\`\`\`
+
+This block illustrates the **four separate \`observations\` objects**, not
+an acceptable actual evidence file. Never fill fields from assumptions or
+copy fixture values into real records. A recorded \`true\` must correspond
+to actual observed host outcomes. Missing proofs must lead to review
+rejection or further investigation, not fabricated metadata.
+
+### Read-only verification (requires prior signed disposition)
+
+\`\`\`bash
+sudo node scripts/cyber-range-independent-review.mjs \
+  --audit-runtime \
+  --session UUID \
+  --operator-sha EXTERNALLY_PINNED_OPERATOR_SPKI_SHA256 \
+  --reviewer-sha EXTERNALLY_PINNED_REVIEWER_SPKI_SHA256
+\`\`\`
+
+The auditor first re-verifies the prior operator signature, reviewer
+endorsement, disposition signature, preflight/image metadata and import
+journal before reading these optional sidecars. Exact signed mode determines
+which sidecars are needed. It refuses wrong sessions/units, unsupported fields,
+extra/missing modes, digest mismatches, invalid or reordered capture times,
+noncanonical JSON and any implied public/hardware-attestation claims.
+
+It reports \`sidecarsIncludedInEarlierSignedReview:false\`,
+\`rawHostLogsSemanticallyVerified:false\`,
+\`independentSourceAuthenticityVerified:false\`,
+\`physicalHostAttested:false\`, and \`productionReady:false\`.
+**A successful result only establishes internal consistency**. An attacker
+with access to operator-supplied records could produce matching sidecars and
+transcripts. An independently trusted physical-host acceptance process is
+still required, and public Labs stay disabled.
+
+### Zero-cost regressions
+
+\`\`\`bash
+node --test tests/ctf-firecracker-runtime-observations.test.mjs
+npm test
+npm run build
+\`\`\`
+
+The tests use artificial records and in-memory keys. They cannot execute
+Firecracker, call cloud APIs, create paid instances, or authorize public labs.
