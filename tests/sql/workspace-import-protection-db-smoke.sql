@@ -103,7 +103,7 @@ DECLARE sess jsonb;
 DECLARE sid uuid;
 DECLARE claim jsonb;
 BEGIN
-  sess := public.workspace_import_begin(repeat('g',64),3,'File recovery','',0,0,0,1);
+  sess := public.workspace_import_begin(repeat('4',64),3,'File recovery','',0,0,0,1);
   sid := (sess->>'session_id')::uuid;
   claim := public.workspace_import_claim_file(
     sid,0,'report.txt',12,'text/plain',repeat('c',64));
@@ -124,7 +124,7 @@ DO $check$
 DECLARE sid uuid;
 BEGIN
   SELECT id INTO sid FROM public.workspace_import_sessions
-    WHERE source_sha256=repeat('g',64);
+    WHERE source_sha256=repeat('4',64);
   BEGIN
     PERFORM public.workspace_import_set_hold(sid,true,'No');
     RAISE EXCEPTION 'Completed session allowed a hold';
