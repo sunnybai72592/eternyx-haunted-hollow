@@ -4,8 +4,9 @@
 import {openSync,closeSync,fstatSync,readFileSync,lstatSync,constants} from "node:fs";
 import {isAbsolute,join} from "node:path";
 import {createPublicKey} from "node:crypto";
-import {DOCKER_RELEASE_SOURCE_PATHS,DOCKER_STAGING_EVIDENCE_CHECKS,
+import {DOCKER_RELEASE_SOURCE_PATHS,
  makeDockerStagingSourceSnapshot,reviewDockerStagingEvidence} from "../src/lib/dockerStagingParity.mjs";
+import {DOCKER_STAGING_EVIDENCE_CHECKS} from "../src/lib/dockerStagingEvidence.mjs";
 const usage="Usage: node scripts/docker-staging-parity.mjs snapshot COMMIT_SHA | review /ABS/SNAPSHOT.json /ABS/SIGNED.json /ABS/PINNED-OPERATOR.pub /ABS/STAGING-AUTH.json /ABS/ARTIFACT-DIR";
 function safeRead(path,max=262144,sensitive=false){
  if(!isAbsolute(path))throw Error("Absolute operator evidence path required.");

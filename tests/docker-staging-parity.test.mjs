@@ -184,5 +184,6 @@ test("CLI is offline only and never invokes Docker, deploy, SQL or HTTP",()=>{
  const script=readFileSync(new URL("../scripts/docker-staging-parity.mjs",import.meta.url),"utf8");
  assert.doesNotMatch(script,/\bfetch\(|execFileSync|spawnSync|Deno\.Command|docker\.sock|supabase functions deploy/);
  assert.match(script,/ETERNYX_DOCKER_STAGING_PARITY_REVIEW/);
- assert.match(script,/productionDeploymentAuthorized/);
+ const policy=readFileSync(new URL("../src/lib/dockerStagingParity.mjs",import.meta.url),"utf8");
+ assert.match(policy,/productionDeploymentAuthorized:false/);
 });
