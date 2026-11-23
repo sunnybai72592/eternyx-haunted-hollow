@@ -223,7 +223,7 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-1 text-xs text-muted-foreground" role="status">
           <Radio className="h-3.5 w-3.5"/>
-          {connection==="connected"?"Realtime subscribed":
+          {connection==="connected"?"Realtime connected · delivery not yet verified":
             connection==="connecting"?"Connecting…":"Realtime unavailable · refresh manually"}
         </span>
         <Button size="sm" variant="outline" type="button"

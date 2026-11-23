@@ -140,8 +140,14 @@ export async function runWorkspaceStagingAcceptance(config,clientFactory=createS
   gate(!!shared.id,"missing-team-task");
   for(const client of [owner,editor,viewer]){
     await one(client,"workspace_team_tasks",{id:task,space_id:space});
-    await one(client,"workspace_team_task_comments",{task_id:task,space_id:space});
-    await one(client,"workspace_team_task_steps",{task_id:task,space_id:space});
+    // Multiple legitimate comments and checklist items must not fail a
+    // read-only fixture check: require at least one of each, not exactly one.
+    gate((await selectRows(client,"workspace_team_task_comments",
+      {task_id:task,space_id:space},"id",1)).length===1,
+      "comment-fixture-missing");
+    gate((await selectRows(client,"workspace_team_task_steps",
+      {task_id:task,space_id:space},"id",1)).length===1,
+      "checklist-fixture-missing");
   }
   checks.push("shared_task_comment_checklist");
   for(const table of ["workspace_team_members","workspace_team_tasks",
