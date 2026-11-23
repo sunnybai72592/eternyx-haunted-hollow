@@ -1,0 +1,215 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync,mkdtempSync,writeFileSync,mkdirSync,existsSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join,resolve} from "node:path";
+import {execFileSync,spawnSync} from "node:child_process";
+import {createHash} from "node:crypto";
+import {
+  buildPortableVideoBundle,PORTABLE_BUNDLE_LIMITS,
+} from "../src/lib/ai/portableVideoBundle.mjs";
+const root=resolve(new URL("../",import.meta.url).pathname);
+const pythonFiles=["render_video_timeline.py","assemble_video_storyboard.py","audit_video_render.py"];
+const rendererSources=Object.fromEntries(pythonFiles.map(
+  name=>[name,readFileSync(join(root,"gpu-worker",name),"utf8")]));
+const digest=value=>createHash("sha256").update(value).digest("hex");
+const media=(name,buffer,extras={})=>({
+  name,size:buffer.length,sha256:digest(buffer),file:new Blob([buffer]),...extras,
+});
+const shot=(source,overrides={})=>({
+  sourceName:source.name,startFrame:0,frames:16,
+  caption:"A genuine original video clip",
+  rightsRef:"owned-recorded-footage",
+  fadeInFrames:0,fadeOutFrames:0,...overrides,
+});
+function settings(sources,shots,extra={}){
+  return {sources,shots,rendererSources,profile:"landscape",
+    quality:"standard",...extra};
+}
+function fixtureDir(){
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-portable-real-"));
+  return dir;
+}
+function toolsReady(){
+  return ["python3","ffmpeg","ffprobe"].every(cmd=>
+    spawnSync(cmd,["-version"],{encoding:"utf8",timeout:12000}).status===0);
+}
+function extractedZip(zipPath,dest){
+  const script=[
+    "import zipfile,sys,json",
+    "with zipfile.ZipFile(sys.argv[1]) as f:",
+    " assert f.testzip() is None",
+    " assert len(f.namelist())==len(set(f.namelist()))",
+    " assert all(not x.startswith('/') and '..' not in x.split('/') for x in f.namelist())",
+    " f.extractall(sys.argv[2])",
+    " print(json.dumps(f.namelist()))",
+  ].join("\n");
+  const result=spawnSync("python3",["-c",script,zipPath,dest],
+    {encoding:"utf8",timeout:120000});
+  assert.equal(result.status,0,result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+test("produces the exact runnable project and real original media inside bounded ZIP",async()=>{
+  const source=media("demo.mp4",Buffer.from("real original bytes"));
+  const timeline=shot(source,{frames:8});
+  const updates=[];
+  const result=await buildPortableVideoBundle(settings([source],[timeline],{
+    onProgress:e=>updates.push(e),
+  }));
+  assert.equal(result.filename,"eternyx-offline-video-project.zip");
+  assert.equal(result.entryCount,10);
+  assert.equal(result.manifest.format,"eternyx-portable-cpu-video");
+  assert.equal(result.manifest.version,1);
+  assert.equal(result.manifest.frames,8);
+  assert.deepEqual(result.manifest.sources,[{
+    path:"media/demo.mp4",sha256:source.sha256,bytes:source.size,kind:"video",
+  }]);
+  assert.ok(result.blob instanceof Blob);
+  assert.equal(result.blob.type,"application/zip");
+  assert.ok(updates.some(e=>e.phase==="verify"));
+  assert.ok(updates.some(e=>e.phase==="pack"));
+  assert.equal(updates.at(-1).done,result.entryCount);
+  assert.ok(result.bytes>source.size);
+  assert.ok(result.bytes<PORTABLE_BUNDLE_LIMITS.maxZipBytes);
+  if(!toolsReady())return;
+  const directory=fixtureDir(),zipPath=join(directory,"test.zip");
+  writeFileSync(zipPath,Buffer.from(await result.blob.arrayBuffer()));
+  const unpack=join(directory,"unpacked");mkdirSync(unpack);
+  const names=extractedZip(zipPath,unpack);
+  for(const name of [
+    "media/demo.mp4","eternyx-video-v2.json","captions-preview.srt",
+    "render_video_timeline.py","assemble_video_storyboard.py",
+    "audit_video_render.py","render-windows.cmd",
+    "render-macos-linux.sh","README.txt","bundle-manifest.json",
+  ])assert.ok(names.includes(name),name+" missing");
+  assert.equal(readFileSync(join(unpack,"media","demo.mp4")).toString(),"real original bytes");
+  assert.deepEqual(JSON.parse(readFileSync(join(unpack,"eternyx-video-v2.json"),"utf8")).shots[0].file,
+                   "demo.mp4");
+  assert.match(readFileSync(join(unpack,"README.txt"),"utf8"),/No Python packages, GPU/);
+  assert.match(readFileSync(join(unpack,"render-windows.cmd"),"utf8"),/py -3 render_video_timeline\.py/);
+  assert.match(readFileSync(join(unpack,"render-macos-linux.sh"),"utf8"),/python3 render_video_timeline\.py/);
+});
+
+test("never bundles unused private source clips after shot deletion",async()=>{
+  const used=media("shown.mp4",Buffer.from("shown")),
+        unused=media("secret.mp4",Buffer.from("never leak me"));
+  const result=await buildPortableVideoBundle(settings([used,unused],[shot(used)]));
+  assert.deepEqual(result.manifest.sources.map(x=>x.path),["media/shown.mp4"]);
+  assert.equal(result.entryCount,10);
+  if(!toolsReady())return;
+  const dir=fixtureDir(),zip=join(dir,"out.zip"),unpacked=join(dir,"extracted");
+  mkdirSync(unpacked);
+  writeFileSync(zip,Buffer.from(await result.blob.arrayBuffer()));
+  const names=extractedZip(zip,unpacked);
+  assert.ok(!names.includes("media/secret.mp4"));
+  assert.ok(!readFileSync(zip).includes(Buffer.from("never leak me")));
+});
+
+test("bundled soundtrack and captions preserve actual rights/bytes, not reconstructed proxies",async()=>{
+  const video=media("sample.mp4",Buffer.from("fake sample mp4 content")),
+        audio=media("music.wav",Buffer.from("local soundtrack bytes"),{
+          rightsRef:"owner music license",volumePercent:35});
+  const result=await buildPortableVideoBundle(settings([video],
+    [shot(video,{caption:"<hello> مرحبا & local",fadeInFrames:2})],{soundtrack:audio}));
+  assert.equal(result.entryCount,11);
+  assert.deepEqual(result.manifest.sources.map(x=>x.kind),["video","audio"]);
+  assert.equal(result.manifest.sources[1].sha256,audio.sha256);
+  if(!toolsReady())return;
+  const dir=fixtureDir(),zip=join(dir,"bundle.zip"),unpacked=join(dir,"unpacked");
+  mkdirSync(unpacked);writeFileSync(zip,Buffer.from(await result.blob.arrayBuffer()));
+  extractedZip(zip,unpacked);
+  assert.equal(readFileSync(join(unpacked,"media","music.wav"),"utf8"),
+               "local soundtrack bytes");
+  const board=JSON.parse(readFileSync(join(unpacked,"eternyx-video-v2.json"),"utf8"));
+  assert.equal(board.soundtrack.source_sha256,audio.sha256);
+  assert.equal(board.soundtrack.rights_ref,"owner music license");
+  assert.equal(board.soundtrack.volume_percent,35);
+  assert.match(readFileSync(join(unpacked,"captions-preview.srt"),"utf8"),/<hello> مرحبا & local/);
+});
+
+test("rejects source tampering, missing rights, bad content, and unsafe ZIP entries",async()=>{
+  const source=media("clip.mp4",Buffer.from("actual footage"));
+  const invalid=[
+    settings([source],[shot(source)],{
+      sources:[{...source,file:new Blob([Buffer.from("changed footage")])}]}),
+    settings([source],[shot(source)],{
+      sources:[{...source,file:new Blob([Buffer.from("short")])}]}),
+    settings([source],[shot(source,{rightsRef:""})]),
+    settings([source],[shot(source,{caption:""})]),
+    settings([source],[shot(source,{frames:481})]),
+    settings([source],[shot(source)],{profile:"mp4;touch /tmp/unsafe"}),
+    settings([source],[shot(source)],{quality:"gpu"}),
+    settings([source],[shot(source)],{rendererSources:{}}),
+    settings([source],[shot(source)],{rendererSources:{
+      ...rendererSources,"render_video_timeline.py":"# fake",
+    }}),
+  ];
+  for(const input of invalid){
+    await assert.rejects(buildPortableVideoBundle(input));
+  }
+  assert.throws(()=>settings([source],[shot(source)]).sources.length===0);
+});
+
+test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output manifest",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir();
+  const videoPath=join(dir,"real-original.mp4"),
+        audioPath=join(dir,"real-song.wav");
+  const sourceRender=spawnSync("ffmpeg",[
+    "-nostdin","-hide_banner","-v","error","-y",
+    "-f","lavfi","-i","testsrc2=size=96x56:rate=16:duration=2",
+    "-threads","1","-c:v","libx264","-pix_fmt","yuv420p",videoPath,
+  ],{timeout:45000,encoding:"utf8"});
+  assert.equal(sourceRender.status,0,sourceRender.stderr);
+  const soundRender=spawnSync("ffmpeg",[
+    "-nostdin","-hide_banner","-v","error","-y",
+    "-f","lavfi","-i","sine=frequency=440:sample_rate=44100:duration=2",
+    "-c:a","pcm_s16le",audioPath,
+  ],{timeout:45000,encoding:"utf8"});
+  assert.equal(soundRender.status,0,soundRender.stderr);
+  const source=media("real-original.mp4",readFileSync(videoPath)),
+        audio=media("real-song.wav",readFileSync(audioPath),{
+          rightsRef:"test waveform ownership",volumePercent:25,
+        });
+  const project=await buildPortableVideoBundle(settings([source],[
+    shot(source,{frames:16,caption:"Real approved clip",fadeInFrames:3}),
+    shot(source,{startFrame:16,frames:16,caption:"Real second cut",fadeOutFrames:3}),
+  ],{soundtrack:audio}));
+  const zip=join(dir,"eternyx-project.zip"),unpacked=join(dir,"unpacked");
+  mkdirSync(unpacked);
+  writeFileSync(zip,Buffer.from(await project.blob.arrayBuffer()));
+  const members=extractedZip(zip,unpacked);
+  assert.ok(members.includes("media/real-original.mp4"));
+  assert.ok(members.includes("media/real-song.wav"));
+  const runner=spawnSync("sh",["render-macos-linux.sh"],{
+    cwd:unpacked,encoding:"utf8",timeout:180000,
+  });
+  assert.equal(runner.status,0,runner.stderr+"\n"+runner.stdout);
+  const out=join(unpacked,"eternyx-video-output");
+  assert.ok(existsSync(join(out,"video.mp4")));
+  assert.ok(existsSync(join(out,"preview.html")));
+  assert.ok(existsSync(join(out,"captions.srt")));
+  const summary=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+  assert.equal(summary.total_frames,32);
+  assert.equal(summary.shots.length,2);
+  assert.equal(summary.model_generation,false);
+  assert.equal(summary.video.sha256,digest(readFileSync(join(out,"video.mp4"))));
+  const frames=spawnSync("ffprobe",[
+    "-v","error","-count_frames","-show_entries",
+    "stream=codec_type,width,height,nb_read_frames",
+    "-of","json",join(out,"video.mp4"),
+  ],{encoding:"utf8",timeout:20000});
+  assert.equal(frames.status,0,frames.stderr);
+  const streams=JSON.parse(frames.stdout).streams;
+  const actual=streams.find(x=>x.codec_type==="video");
+  assert.equal(actual.width,256);
+  assert.equal(actual.height,144);
+  assert.equal(Number(actual.nb_read_frames),32);
+  assert.ok(streams.some(x=>x.codec_type==="audio"));
+  const second=spawnSync("sh",["render-macos-linux.sh"],{
+    cwd:unpacked,encoding:"utf8",timeout:30000,
+  });
+  assert.notEqual(second.status,0,"The CPU renderer must refuse overwriting previous output");
+});
