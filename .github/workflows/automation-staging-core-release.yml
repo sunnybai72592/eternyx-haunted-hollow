@@ -143,6 +143,23 @@ jobs:
           },null,2)+"\n",{mode:0o600,flag:"wx"});
           console.log("Three staging core functions ACTIVE with expected JWT policies. Real user flows remain unverified.");
           NODE
+      - name: Exercise five negative-only staging HTTP denials after deployed function inventory succeeds
+        shell: bash
+        timeout-minutes: 2
+        env:
+          ETERNYX_AUTOMATION_NEGATIVE_HTTP_CONSENT: I_APPROVE_STAGING_NEGATIVE_HTTP
+        run: |
+          set -euo pipefail
+          node scripts/automation-staging-negative-http.mjs --run-negative-only > "$RUNNER_TEMP/eternyx-staging-negative-http.json"
+          echo "Staging core HTTP unauthorized access correctly denied without valid credentials or execution requests."
+      - name: Publish sanitized staging negative HTTP evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-automation-core-staging-http-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/eternyx-staging-negative-http.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Publish sanitized staged-function inventory only (no secrets or customer data)
         if: success()
         uses: actions/upload-artifact@v4

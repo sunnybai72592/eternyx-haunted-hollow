@@ -1,0 +1,72 @@
+name: Automation isolated staging core negative-only HTTP security
+
+on:
+  workflow_dispatch:
+    inputs:
+      negative_http_approval:
+        type: choice
+        description: "Only an independently verified isolated STAGING project. Five credentialless denial checks; NO workflow executions."
+        required: true
+        options:
+          - NOT_APPROVED
+          - I_APPROVE_STAGING_NEGATIVE_HTTP
+        default: NOT_APPROVED
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-automation-staging-core-release
+  cancel-in-progress: false
+
+jobs:
+  negative-staging-security:
+    if: "${{ github.ref == 'refs/heads/main' && inputs.negative_http_approval == 'I_APPROVE_STAGING_NEGATIVE_HTTP' }}"
+    runs-on: ubuntu-latest
+    name: Reject unsigned, unauthenticated Automation HTTP calls against approved staging ONLY
+    environment: automation-staging
+    timeout-minutes: 6
+    env:
+      ETERNYX_AUTOMATION_STAGING_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+      ETERNYX_AUTOMATION_PRODUCTION_REF: wcncuarekaofmfurbtbh
+      ETERNYX_AUTOMATION_NEGATIVE_HTTP_CONSENT: "${{ inputs.negative_http_approval }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify separate healthy staging project and all three deployed functions BEFORE HTTP requests
+        env:
+          SUPABASE_ACCESS_TOKEN: "${{ secrets.ETERNYX_AUTOMATION_STAGING_MANAGEMENT_TOKEN }}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {inspectNegativeTarget} from "./scripts/automation-staging-negative-http.mjs";
+          import {fetchStageManagement,inspectStageProject,verifyDeployedCore} from "./scripts/automation-staging-core-release.mjs";
+          const target=inspectNegativeTarget(process.env);
+          const base="https://api.supabase.com/v1/projects/"+target.stagingRef;
+          const project=await fetchStageManagement(base,process.env.SUPABASE_ACCESS_TOKEN);
+          inspectStageProject(project,target.stagingRef);
+          const raw=await fetchStageManagement(base+"/functions",process.env.SUPABASE_ACCESS_TOKEN);
+          const core=verifyDeployedCore(raw);
+          if(core.length!==3)throw Error("Staging core function inventory incomplete");
+          console.log("Independent isolated staging project and three active core JWT policies verified.");
+          NODE
+      - name: Exercise five bounded credentialless negative-only HTTP requests, no valid commands or secrets
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/automation-staging-negative-http.mjs --run-negative-only > "$RUNNER_TEMP/eternyx-staging-negative-http.json"
+          echo "Five credentialless staging HTTP security denials confirmed; no workflow, signed webhook, or scheduler tick attempted."
+      - name: Save only sanitized status codes, never server response bodies
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-automation-negative-http-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/eternyx-staging-negative-http.json
+          retention-days: 7
+          if-no-files-found: error
