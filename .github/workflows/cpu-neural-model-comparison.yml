@@ -1,0 +1,44 @@
+name: CPU neural v1 v2 matched comparison
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/compare_cpu_neural_video.py"
+      - "gpu-worker/tests/test_compare_cpu_neural_video.py"
+      - "gpu-worker/train_tiny_neural_video.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - ".github/workflows/cpu-neural-model-comparison.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/compare_cpu_neural_video.py"
+      - "gpu-worker/tests/test_compare_cpu_neural_video.py"
+      - "gpu-worker/train_tiny_neural_video.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - ".github/workflows/cpu-neural-model-comparison.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  matched-comparison:
+    name: Compare same-source CPU neural models and real H264 videos
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require local CPU H264 and FFprobe
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Train both real models on the same decoded clips, measure free-running MSE and verify 3 playable MP4s
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_compare_cpu_neural_video.py' -v
