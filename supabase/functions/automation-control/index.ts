@@ -121,6 +121,41 @@ serve(async (req: Request) => {
       return reply({...data,integritySource:data.source,
         source:"authenticated_server",externalExecutionTriggered:false});
     }
+    if(request.action==="incidentAuditHandoffAssessment"){
+      const {data,error}=await supabase.rpc("automation_case_audit_handoff_assessment",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"handoff_assessment_unavailable");
+      return reply({...data,handoffSource:data.source,
+        source:"authenticated_server",ciVerified:false,deploymentVerified:false,
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentAuditHandoffHistory"){
+      const {data,error}=await supabase.rpc("automation_case_audit_handoff_history",{
+        p_user_id:user.id,p_package_id:request.packageId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"handoff_history_unavailable");
+      return reply({...data,handoffSource:data.source,
+        source:"authenticated_server",releaseVerified:false,
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentAuditHandoffAttest"){
+      const {data,error}=await supabase.rpc("automation_attest_case_audit_handoff",{
+        p_user_id:user.id,p_package_id:request.packageId,
+        p_review_id:request.reviewId,p_incident_revision:request.incidentRevision,
+        p_note:request.note,p_ack_owner_review:request.ackOwnerReview,
+        p_ack_ci_unverified:request.ackCiUnverified,
+        p_ack_deployment_unverified:request.ackDeploymentUnverified,
+        p_ack_worker_unverified:request.ackWorkerUnverified,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"handoff_attestation_failed");
+      return reply({...data,source:"authenticated_server",ownerAttestationOnly:true,
+        automaticRelease:false,externalExecutionTriggered:false});
+    }
     if(request.action==="incidentAuditPackageInbox"){
       const {data,error}=await supabase.rpc("automation_case_audit_package_inbox",{
         p_user_id:user.id,p_incident_id:request.incidentId,
