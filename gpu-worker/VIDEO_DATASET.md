@@ -776,3 +776,59 @@ python gpu-worker/train_tagged_neural_video.py compare \
 Creates a real MP4 for each style at `candidate-01/render/video.mp4` and `candidate-02/render/video.mp4`, plus a 512×144 `comparison.mp4` and `comparison-report.json`. Matching SHA-256 only confirms locally self-attested file identity, not digital signature or license ownership.
 
 **Critical limitation:** A tiny per-tag output adapter can learn source-specific colors and texture priors, **not language semantics, novel objects, prompt adherence, photorealism, or scene structure**. Calling a training clip `sunrise` does not give the network a human understanding of sunrise. Do not describe this as a full text-to-video AI model. It remains low-resolution abstract experimentation despite finished MP4 exports. Trained adapters might encode statistics from original footage: keep them private. No paid GPU, external AI inference API, cloud media upload, model download or new subscription integration is required.
+
+
+
+## Neural v2 · Genuine trained local spatial movement (CPU, 4×3 regions)
+
+The **Neural v2 · Learned local motion for trained tags (CPU)** Studio now has a new research track: learn *regional* shifts in small neural video frames from real source video pairs instead of sampling a single full-frame shift from each tag's empirical global histogram. It reuses your trained **neural v2 base** and **human-labelled style adapters**, leaves both frozen, and does not claim natural-language text-to-video.
+
+### Seven improvements in one offline workflow
+
+1. **Real local observed per-region movement:** The 48×28 frame is partitioned into 4×3 = 12 tiles. For each observed pair of real 16 FPS source frames, the system measures mean RGB block-matching error at nine local shifts (dx/dy in {-1,0,1}), using actual source pixels. Low-detail/uniform tiles can be ambiguous; block matching is a coarse motion-label proxy, not optical flow ground truth.
+2. **Actual neural conditional motion training:** A per-tag **9-class softmax, 8 weights/class (seven spatial RGB/edge/position features plus a bias)** is trained with gradient descent on real prior-frame tiles and their observed shift classes. Earlier v2 neural weights and per-tag 3×17 RGB style adapters are unchanged. Different tags learn different probabilities from their own approved recordings.
+3. **Independent heldout diagnostics and fair baselines:** The first 75% of each original training source provides the shift labels and the final 25% is excluded from gradient updates and prior counts. The training report records before/after training cross-entropy, heldout cross-entropy, heldout classifier accuracy, a stationary-shift baseline and the original training's majority-shift baseline. The classifier is not guaranteed to beat either baseline.
+4. **Coherent regional synthesis:** For a selected real trained tag and frame, the model predicts a distribution for each of 12 tiles. The seeded decoder samples region shifts and interpolates neighboring displacement vectors at pixel level to reduce hard tile boundaries; the bounded 0–100% **spatial motion strength** controls warp amplitude. The existing learned tag color/style neural output still predicts each next-frame color and is combined with temporal stability and seeded innovation.
+5. **Actual CPU H.264 output:** Newly sampled 48×28 RGB neural frames are encoded to real libx264 video and fed to the established v2 storyboard renderer for a finished 256×144 MP4, SRT, manifest and independent source/model/MP4 SHA-256 origin receipt. These are abstract low-detail learned textures—not realistic scenes.
+6. **Meaningful before/after comparison:** A create-only, atomic comparison batch generates one real MP4 with the original **global** tagged movement and a second with **regional** tagged motion under the same tag, duration and random seed. A genuine 512×144 H.264 side-by-side video shows the original at left and regional at right, with actual decoded frame counts, SHA-256 and byte sizes verified.
+7. **Browser-local Studio evidence:** The Studio exposes safe CPU commands for training, generating and comparing; users can select real `motion-model.json` and training report for a WebCrypto SHA-256 file check and see heldout classifier accuracy alongside static/majority baselines. A separate comparison-report import allows checksum verification and independent playback of actual local MP4s. Real FFmpeg integration tests and JS tests reject unknown labels, changed source hashes, nonfinite weights, malformed provenance, unsafe settings and partial files.
+
+### Example command flow
+
+After running the prior v2 and tag training tracks (using the *same* original approved MP4 files):
+
+```sh
+python gpu-worker/train_spatial_motion_video.py train \
+  --base ./eternyx-neural-v2-model/model.json \
+  --tags ./eternyx-neural-style-tags/tag-model.json \
+  --input ./local-video-media \
+  --output ./eternyx-neural-spatial-motion \
+  --epochs 2 --seed 42
+```
+
+The new directory contains `motion-model.json` plus `training-report.json`. The original models and MP4 source files remain untouched. Its SHA-256 pins the frozen tag model and frozen base model.
+
+```sh
+python gpu-worker/train_spatial_motion_video.py generate \
+  --base ./eternyx-neural-v2-model/model.json \
+  --tags ./eternyx-neural-style-tags/tag-model.json \
+  --motion ./eternyx-neural-spatial-motion/motion-model.json \
+  --output ./eternyx-neural-spatial-video \
+  --tag warm --seconds 1 --seed 42 --strength 85 \
+  --stability 45 --variation 6
+```
+
+Creates `clip-01.mp4`, `render/video.mp4`, video storyboard/SRT/manifest, and `generation-report.json` recording real decoded frame count, model and source clip SHA, final video SHA, raw frame hash and frame-change metrics.
+
+```sh
+python gpu-worker/train_spatial_motion_video.py compare \
+  --base ./eternyx-neural-v2-model/model.json \
+  --tags ./eternyx-neural-style-tags/tag-model.json \
+  --motion ./eternyx-neural-spatial-motion/motion-model.json \
+  --output ./eternyx-neural-spatial-comparison \
+  --tag warm --seconds 1 --seed 42 --strength 85
+```
+
+Exports original global-movement and learned local-movement clips, `comparison.mp4` and a receipt with exact actual file hashes and decoded frame counts.
+
+**Interpretation:** The model learns only coarse **4×3 local 1-pixel displacement classes**. Small shifts on a 48×28 frame, even upscaled to 256×144, do not constitute a production video synthesis system or physically realistic optical flow. Higher heldout classifier accuracy does not directly imply better aesthetics, apparent smoothness, semantic fidelity or longer-term dynamics. Keep approved source recordings and derived neural weights private. Offline Python standard library + locally installed FFmpeg only—no paid GPU, remote AI API, third-party model download or media upload.
