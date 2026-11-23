@@ -556,3 +556,45 @@ Auditions are limited to **three candidates** and **four seconds each** to keep 
 For inspection, select the shared `audition-report.json`, then one to three actual candidate `video.mp4` files from those local folders (the filenames can be identical). WebCrypto SHA-256 checks each file's real bytes against the matching candidate entry, and the Studio presents **independent playback**, seeds, frame counts and measured raw RGB deltas side by side. This is a local, **self-attested integrity comparison**, not a trusted signature or an automated preference/ranking. Listen/watch and make your own creative judgment; users should not interpret a lower raw frame delta as universally better video.
 
 All of these improvements use the **same existing tiny neural checkpoint schema** and CPU-only ffmpeg generator; no retraining is required to try the new sampling controls. There is no paid GPU, external AI inference API, high-resolution model, text-to-video capability, cloud upload or subscription feature. Measured improvements on small input clips must not be generalized to professional AI-generated video quality.
+
+
+
+## CPU neural v2: learned higher-detail 48×28 video and honest multi-step evaluation
+
+AI Video Studio now includes **Neural v2 · Two-frame motion and richer 48×28 detail (CPU)**, an optional new neural architecture beside the original v1. **This does not overwrite v1 weights**, and v1 checkpoints cannot masquerade as v2 weights.
+
+The earlier real neural baseline trains on 32×18 decoded frames using one previous frame. V2 introduces seven concrete changes:
+
+1. **2.33× more learned spatial pixels** per frame: 48×28 = 1,344 positions, instead of v1's 32×18 = 576. Finished output is still upscaled by the existing conventional FFmpeg renderer; **pixel count is not equivalent to photorealism**.
+2. **Two-frame causal context:** a 24-input → 16-hidden → 3-output MLP predicts the next RGB color from RGB pixels in the two previous frames, four immediate current-frame neighbors, spatial coordinates and temporal position. All weights/biases are trained with genuine bounded SGD and tanh/sigmoid activations, using local Python standard library only.
+3. **Held-out one-step model vs persistence:** final 25% temporal window is excluded from training, measured using real target pixels, and compared to the previous-frame predictor. We do not assume v2 wins.
+4. **True four-step free-running holdout:** starting only from the last two training-prefix frames, the model predicts successive quantized frames; its next-step inputs are its **own predictions**, not the unseen held-out targets. Recorded MSE is compared to a static last-training-frame baseline across the same held-out time steps. This better exposes autoregressive drift than teacher-forced one-step MSE; it is not a quality score.
+5. **Real-seeded inference:** sample 1–8 seconds at 16 FPS with trained neural weights, learned aggregate color initialization, empirical motion shifts, adjustable temporal stability and correlated stochastic variation. Samples are newly computed RGB pixels, not a replay of input MP4 footage.
+6. **Verified local MP4:** each run creates a real 48×28 H.264 `clip-01.mp4`, an editable v2 storyboard, a finished `render/video.mp4`, renderer manifest/SRT/preview and a distinct neural-origin `generation-report.json` with SHA-256 of the model, uncompressed generated RGB frames, source clip and final video.
+7. **Studio integrity and independent tests:** browser UI provides bounded offline commands and SHA-256 checks of selected real `model.json`/training report and actual finished `video.mp4`/generation report, with local playable video. Dedicated FFmpeg CI checks training gradients, contextual features, real 48×28 output, causal rollout, video hashes, supported aspect ratios, malformed model rejection, rights/source-path protections and atomic rollback.
+
+### Training example
+
+Create `./local-video-media` containing 1–8 locally owned/licensed constant **16 FPS** MP4 clips (at least nine frames each; each at most 64 MiB, source resolution no greater than 512×512). The previous smartphone-import converter can normalize ordinary MOV/MP4 phone footage.
+
+```sh
+python gpu-worker/train_spatiotemporal_neural_video.py train \
+  --input ./local-video-media --output ./eternyx-neural-v2-model \
+  --rights-ref owner-reviewed-video --seed 42 --epochs 2
+```
+
+The model processes the first 64 frames (4 seconds) of each input at the small learned resolution. The final 25% of each temporal source window is held out. The create-only output directory contains `model.json` with learned matrices, aggregate grid, empirical motion prior and source SHA-256 metadata; `training-report.json` records architecture, sampled training/holdout examples, one-step MSE, baseline MSE and causal four-step rollout MSE. Training uses 1–4 CPU epochs with a bounded number of pixel samples per input pair. No neural pretrained checkpoints or model downloads are accessed.
+
+### Sampling example
+
+```sh
+python gpu-worker/train_spatiotemporal_neural_video.py generate \
+  --model ./eternyx-neural-v2-model/model.json \
+  --output ./eternyx-neural-v2-video --seconds 2 --seed 42 \
+  --profile landscape --quality standard \
+  --stability 45 --variation 6
+```
+
+The create-only output directory contains `clip-01.mp4`, `eternyx-video-v2.json`, `render/video.mp4`, `render/manifest.json`, `render/captions.srt`, `render/preview.html` and `generation-report.json`. The generation report records the measured raw pixel frame differences and independent MP4 SHA-256, while the renderer receipt describes only the downstream conventional editing/encoding operation.
+
+**Interpretation/limits:** A 48×28 neural texture is an incremental research baseline, **not** photorealistic video, prompt-to-video, diffusion inference or a production generative model. More detail and two-frame context provide more learned information, but no guaranteed improvement in subjective quality or temporal consistency. Check the holdout metrics and visually inspect the actual MP4. Neural weights and aggregate color statistics may reveal details about local footage; keep model files private. All training, sampling and checking are local/offline; no paid GPU, remote AI API, subscription enforcement or media upload occurs.
