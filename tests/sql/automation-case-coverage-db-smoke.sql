@@ -66,7 +66,7 @@ BEGIN
    RAISE EXCEPTION 'Missing timestamp keyset accepted';
  END IF;
 
- cursor_data:=NULL;
+ cursor_data:='null'::jsonb;
  LOOP
    SELECT public.automation_incident_coverage_page(
      alice,20,(cursor_data->>'beforeCreatedAt')::timestamptz,
@@ -106,12 +106,12 @@ BEGIN
    END LOOP;
    IF page_no<3 THEN
      IF page->>'returned'<>'20' OR page->>'hasMore'<>'true' OR
-        page->'nextCursor' IS NULL THEN
+        page->'nextCursor'='null'::jsonb THEN
         RAISE EXCEPTION 'Expected nonterminal full page: %',page;
      END IF;
    ELSE
      IF page->>'returned'<>'5' OR page->>'hasMore'<>'false'
-        OR page->'nextCursor' IS NOT NULL THEN
+        OR page->'nextCursor'<>'null'::jsonb THEN
        RAISE EXCEPTION 'Last keyset page is not terminal: %',page;
      END IF;
    END IF;
