@@ -1,0 +1,42 @@
+name: CPU neural learned style tags
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/train_tagged_neural_video.py"
+      - "gpu-worker/tests/test_train_tagged_neural_video.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - ".github/workflows/cpu-learned-tag-video.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/train_tagged_neural_video.py"
+      - "gpu-worker/tests/test_train_tagged_neural_video.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - ".github/workflows/cpu-learned-tag-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-tag-learning:
+    name: Train local style-conditioned neural weights and render real tagged H264 videos
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify local FFmpeg/FFprobe libx264 availability
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Train actual frozen-base neural tag adapters and test real MP4 bytes without API or GPU
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_train_tagged_neural_video.py' -v
