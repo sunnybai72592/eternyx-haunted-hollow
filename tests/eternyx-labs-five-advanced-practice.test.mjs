@@ -34,7 +34,7 @@ test("fifteen new questions remain present as Labs grows to 60 scenarios and 20 
   assert.equal(PRACTICE_CASES.length,60);
   assert.equal(PRACTICE_TRACKS.length,20);
   assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,60);
-  assert.deepEqual(PRACTICE_CASES.slice(30).map(c=>c.id),expected.map(x=>x[0]));
+  assert.deepEqual(PRACTICE_CASES.slice(30,45).map(c=>c.id),expected.map(x=>x[0]));
   assert.deepEqual(PRACTICE_TRACKS.slice(10).map(t=>t.id),tracks);
   for(const track of PRACTICE_TRACKS)
     assert.equal(PRACTICE_CASES.filter(x=>x.track===track.id).length,3);
