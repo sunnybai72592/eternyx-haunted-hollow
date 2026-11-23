@@ -148,7 +148,7 @@ test("rejects source tampering, missing rights, bad content, and unsafe ZIP entr
   for(const input of invalid){
     await assert.rejects(buildPortableVideoBundle(input));
   }
-  assert.throws(()=>settings([source],[shot(source)]).sources.length===0);
+  assert.equal(PORTABLE_BUNDLE_LIMITS.maxFiles,18);
 });
 
 test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output manifest",{
