@@ -589,7 +589,7 @@ export default function AdminServiceRequests() {
       <AdminWorkspaceNav />
       <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Business operations</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Service request desk</h1><p className="mt-2 text-sm text-muted-foreground">Review submitted briefs and publish factual, customer-visible status updates. No payment or fulfillment is triggered here.</p></div>
-        <Button variant="outline" onClick={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
+        <Button variant="outline" onClick={() => { void load(); invalidateCountCards(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
       </header>
       <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Administrator queue sharing and export">
         <Button type="button" variant="outline" size="sm" disabled={!currentAdminFocus()}
@@ -776,7 +776,7 @@ export default function AdminServiceRequests() {
             {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); invalidateCountCards(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
             {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => { void load(); invalidateCountCards(); }} />}
-            {openAmendments === item.id && <ServiceBriefAmendments requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
+            {openAmendments === item.id && <ServiceBriefAmendments requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => { void load(); invalidateCountCards(); }} />}
             {openJournal === item.id && <ServiceRequestJournal requestId={item.id} ownerId={item.user_id} />}
           </Card>;
         })}</div>}
