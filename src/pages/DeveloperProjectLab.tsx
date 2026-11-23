@@ -14,6 +14,11 @@ import {
 } from "@/lib/developerLocalWorkflows.mjs";
 import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
 import ProjectRecoveryPanel from "@/components/developer/ProjectRecoveryPanel";
+import ProjectRevisionReviewPanel from "@/components/developer/ProjectRevisionReviewPanel";
+import {
+  createDeveloperEditHistory, developerEditHistoryCounts,
+  editDeveloperWithHistory, stepDeveloperEditHistory,
+} from "@/lib/developerRevisionTools.mjs";
 import { exportDeveloperPreflight, runDeveloperPreflight } from "@/lib/developerProjectPreflight.mjs";
 import { replaceDeveloperFileText } from "@/lib/developerProjectInspection.mjs";
 import { duplicateDeveloperFile, editorCursorInfo, editorTabChange, exportJavascriptValidationReport, filterProjectFilenames, formatProjectJson, normalizeProjectWhitespace, validateProjectJavascript } from "@/lib/developerEditorUtils.mjs";
@@ -45,6 +50,7 @@ function download(name: string, data: string, mime = "application/json;charset=u
 
 export default function DeveloperProjectLab() {
   const [project, setProject] = useState<Project>(() => createDeveloperProject("starter", crypto.randomUUID()));
+  const [editHistory, setEditHistory] = useState(() => createDeveloperEditHistory(project.id));
   const [activeFile, setActiveFile] = useState("index.html");
   const [newFileName, setNewFileName] = useState("");
   const [renameName, setRenameName] = useState("");
@@ -72,6 +78,7 @@ export default function DeveloperProjectLab() {
   const [preflightRunning, setPreflightRunning] = useState(false);
   const [selection, setSelection] = useState<{ file: string; index: number; length: number } | null>(null);
   const file = project.files.find((item) => item.name === activeFile) || project.files[0];
+  const editCounts = developerEditHistoryCounts(editHistory, project, file.name);
   const currentSource = JSON.stringify(project.files);
   const fileMatches = useMemo(() => filterProjectFilenames(project, quickOpen), [project, quickOpen]);
   const jsStale = jsValidation !== null && jsSource !== currentSource;
@@ -99,7 +106,10 @@ export default function DeveloperProjectLab() {
   }, [selection, file.name]);
 
   const jumpToMatch = (match: { file: string; index: number; length: number }) => {
+    const selectedFile = project.files.find(item => item.name === match.file);
+    if (!selectedFile) return;
     setActiveFile(match.file);
+    setCursor(editorCursorInfo(selectedFile.content, match.index, match.index + match.length));
     setSelection({ file: match.file, index: match.index, length: match.length });
   };
   const replaceActiveText = (query: string, replacement: string, all: boolean) => {
@@ -119,6 +129,7 @@ export default function DeveloperProjectLab() {
   const safeTransition = () => !dirty || window.confirm("You have unsaved project changes. Continue and discard them?");
   const applyProject = (next: Project, markSaved = false) => {
     setProject(next);
+    setEditHistory(createDeveloperEditHistory(next.id));
     setActiveFile(next.files[0].name);
     setRenameName("");
     setNewFileName("");
@@ -147,6 +158,7 @@ export default function DeveloperProjectLab() {
       const next = fn(project);
       setCheckpoints((list) => [...list, project].slice(-5));
       setProject(next);
+      setEditHistory(createDeveloperEditHistory(next.id));
       setFeedback(null);
       return next;
     } catch (cause) {
@@ -218,6 +230,7 @@ export default function DeveloperProjectLab() {
     const previous = checkpoints.at(-1);
     if (!previous) return;
     setProject(previous);
+    setEditHistory(createDeveloperEditHistory(previous.id));
     setActiveFile(previous.files.some((entry) => entry.name === activeFile) ? activeFile : previous.files[0].name);
     setCheckpoints((items) => items.slice(0, -1));
     setPreviewHtml(null);
@@ -244,12 +257,14 @@ export default function DeveloperProjectLab() {
       alert("Moved to " + file.name + ", line " + location.line + ".");
     } catch (cause) { alert(cause instanceof Error ? cause.message : "Line navigation failed.", true); }
   };
-  const restoreActiveSaved = () => {
-    if (!savedBaseline || !window.confirm("Restore this file from the last saved project? A checkpoint will preserve the current working version.")) return;
-    const next = commit(old => restoreSavedDeveloperFile(old, savedBaseline, file.name));
+  const restoreSavedFile = (filename: string) => {
+    if (!savedBaseline || !window.confirm("Restore " + filename + " from the last saved project? A checkpoint will preserve your current working version.")) return;
+    const next = commit(old => restoreSavedDeveloperFile(old, savedBaseline, filename));
     if (next) {
+      setActiveFile(filename);
       setSelection(null);
-      alert("Restored " + file.name + " from the saved browser version. Save explicitly to persist.");
+      setCursor(editorCursorInfo(next.files.find(entry => entry.name === filename)?.content || "", 0));
+      alert("Restored " + filename + " from the last saved browser version. Save explicitly to persist.");
     }
   };
   const importLocalFiles = async (input: HTMLInputElement) => {
@@ -280,15 +295,39 @@ export default function DeveloperProjectLab() {
   const trackCursor = (target: HTMLTextAreaElement) => {
     setCursor(editorCursorInfo(target.value, target.selectionStart, target.selectionEnd));
   };
+  const editTextWithHistory = (content: string) => {
+    try {
+      const next = editDeveloperWithHistory(editHistory, project, file.name, content);
+      setProject(next.project);
+      setEditHistory(next.history);
+      setFeedback(null);
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Unable to update file.", true); }
+  };
+  const travelEditorHistory = (direction: "undo" | "redo") => {
+    try {
+      const next = stepDeveloperEditHistory(editHistory, project, file.name, direction);
+      if (!next.changed) return;
+      setProject(next.project);
+      setEditHistory(next.history);
+      setSelection(null);
+      setCursor(editorCursorInfo(next.project.files.find(entry => entry.name === file.name)!.content, 0));
+      setFeedback(null);
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Editor history unavailable.", true); }
+  };
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (key === "z" || key === "y")) {
+      event.preventDefault();
+      travelEditorHistory(key === "y" || event.shiftKey ? "redo" : "undo");
+      return;
+    }
     if (event.key !== "Tab") return;
     event.preventDefault();
     const target = event.currentTarget;
     try {
       const next = editorTabChange(file.content, target.selectionStart, target.selectionEnd, event.shiftKey);
       if (next.value === file.content) return;
-      const updated = editDeveloperFile(project, file.name, next.value);
-      setProject(updated);
+      editTextWithHistory(next.value);
       setCursor(editorCursorInfo(next.value, next.start, next.end));
       window.requestAnimationFrame(() => editorRef.current?.setSelectionRange(next.start, next.end));
     } catch (cause) { alert(cause instanceof Error ? cause.message : "Unable to indent.", true); }
@@ -435,7 +474,7 @@ export default function DeveloperProjectLab() {
           <CardHeader><CardTitle>Code editor · {file.name}</CardTitle><CardDescription className="text-slate-400">Plain text editor. Changes remain in memory until you click Save browser copy or Export. No compilation or IntelliSense is claimed.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
             <Label htmlFor="project-editor">File contents</Label>
-            <Textarea id="project-editor" ref={editorRef} value={file.content} onChange={(e) => update((old) => editDeveloperFile(old, file.name, e.target.value))}
+            <Textarea id="project-editor" ref={editorRef} value={file.content} onChange={e => editTextWithHistory(e.target.value)}
               onKeyDown={handleEditorKeyDown} onClick={e => trackCursor(e.currentTarget)} onKeyUp={e => trackCursor(e.currentTarget)} onSelect={e => trackCursor(e.currentTarget)}
               spellCheck={false} className="min-h-[420px] max-h-[70vh] overflow-y-auto border-slate-700 bg-slate-950 font-mono text-sm text-slate-100" />
             <div className="flex flex-wrap items-end gap-2">
@@ -446,20 +485,22 @@ export default function DeveloperProjectLab() {
                   className="w-24 border-slate-700 bg-slate-950 text-white" /></div>
               <Button variant="outline" size="sm" onClick={goToLine}>Go to line</Button>
               <Button variant="outline" size="sm" disabled={!savedBaseline || !savedBaseline.files.some(f => f.name === file.name && f.content !== file.content)}
-                onClick={restoreActiveSaved}>Restore saved file</Button>
+                onClick={() => restoreSavedFile(file.name)}>Restore saved file</Button>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span>Line {cursor.line}, column {cursor.column}</span><span>·</span><span>{cursor.selected} selected</span><span>·</span>
               <span>{file.content.split("\n").length} lines</span><span>·</span><span>{file.content.length} / 20,000 characters</span>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" disabled={!editCounts.undo} onClick={() => travelEditorHistory("undo")}>Undo edit ({editCounts.undo})</Button>
+              <Button size="sm" variant="outline" disabled={!editCounts.redo} onClick={() => travelEditorHistory("redo")}>Redo edit ({editCounts.redo})</Button>
               <Button size="sm" variant="outline" disabled={project.files.length >= MAX_PROJECT_FILES} onClick={duplicateFile}><Files className="mr-2 h-4 w-4" />Duplicate file</Button>
               <Button size="sm" variant="outline" disabled={!file.name.toLowerCase().endsWith(".json")} onClick={formatSelectedJson}><FileJson className="mr-2 h-4 w-4" />Format JSON</Button>
               <Button size="sm" variant="outline" onClick={cleanWhitespace}><Scissors className="mr-2 h-4 w-4" />Clean whitespace</Button>
               <Button size="sm" variant="outline" onClick={() => { const blob = new Blob([file.content],{ type:"text/plain;charset=utf-8" }); const href = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=href; a.download=file.name; a.click(); URL.revokeObjectURL(href); }}>
                 <Download className="mr-2 h-4 w-4" />Download file</Button>
             </div>
-            <div className="flex flex-wrap justify-between gap-2"><span className="text-xs text-slate-400">Shortcuts: Ctrl+S save · Ctrl+Enter preview · Ctrl+P quick open · Tab / Shift+Tab indent</span>
+            <div className="flex flex-wrap justify-between gap-2"><span className="text-xs text-slate-400">Shortcuts: Ctrl+S save · Ctrl+Enter preview · Ctrl+P quick open · Ctrl+Z undo · Ctrl+Shift+Z / Ctrl+Y redo · Tab / Shift+Tab indent</span>
               <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={createCheckpoint}><Save className="mr-2 h-4 w-4" />Checkpoint</Button>
                 <Button size="sm" variant="outline" disabled={checkpoints.length === 0} onClick={restore}><RotateCcw className="mr-2 h-4 w-4" />Restore ({checkpoints.length})</Button></div></div>
           </CardContent>
@@ -468,6 +509,7 @@ export default function DeveloperProjectLab() {
 
       <ProjectInspectionPanel project={project} baseline={savedBaseline} activeFile={file.name}
         onJump={jumpToMatch} onReplace={replaceActiveText} />
+      <ProjectRevisionReviewPanel project={project} savedBaseline={savedBaseline} onJump={jumpToMatch} onRestore={restoreSavedFile} />
       <ProjectRecoveryPanel project={project} dirty={dirty} onRestore={handleRecovery} />
       <Card className="border-slate-800 bg-slate-900/70 text-white">
         <CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-cyan-300" />Unified project preflight</CardTitle>
