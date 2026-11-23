@@ -1,15 +1,20 @@
-import {useEffect,useMemo,useState} from "react";
+import {useLayoutEffect,useMemo,useState} from "react";
 import {Link} from "react-router-dom";
 import {useQuery} from "@tanstack/react-query";
-import {ArrowLeft,ArrowRight,BookOpen,Clock3,RefreshCw,Search,ShieldCheck} from "lucide-react";
+import {ArrowLeft,ArrowRight,BookOpen,Clock3,Download,RefreshCw,Search,ShieldCheck} from "lucide-react";
 import {supabase} from "@/integrations/supabase/client";
 import {useAuthStore} from "@/store/authStore";
 import {formatAssessmentDate,assessmentDuration} from "@/lib/educationResults.mjs";
 import {
+ buildEducationHistoryPageCsv,educationHistoryDisplayedSummary,
+ educationHistoryResumeFocus,educationHistorySafeAction,
+ organizeEducationHistoryPage,validateEducationHistoryDates,
+} from "@/lib/educationHistoryWorkbench.mjs";
+import {
  EDUCATION_HISTORY_PAGE_SIZE,
  educationHistoryAction,educationHistoryFilter,educationHistoryHasNext,
  educationHistoryPageSummary,educationHistoryRange,educationHistoryStatus,
- filterEducationHistoryPage,normalizeOwnedEducationAttempt,
+ normalizeOwnedEducationAttempt,
 } from "@/lib/educationAttemptHistory.mjs";
 import {Button} from "@/components/ui/button";
 import {Badge} from "@/components/ui/badge";
@@ -22,16 +27,31 @@ type HistoryAttempt={
 };
 type HistoryPage={items:HistoryAttempt[];count:number|null};
 
+function downloadHistoryCsv(csv:string,page:number){
+ const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+ const anchor=document.createElement("a");
+ anchor.href=url;
+ anchor.download="eternyx-private-history-page-"+(page+1)+".csv";
+ anchor.click();
+ window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
 export default function EducationHistory(){
  const {user,isAuthenticated,isLoading:authLoading}=useAuthStore();
  const [page,setPage]=useState(0);
  const [status,setStatus]=useState<"all"|"in_progress"|"completed">("all");
  const [search,setSearch]=useState("");
+ const [fromDate,setFromDate]=useState("");
+ const [toDate,setToDate]=useState("");
+ const [sort,setSort]=useState<"newest"|"oldest"|"title">("newest");
+ const [focus,setFocus]=useState<"all"|"resume"|"submitted">("all");
+ const [exportError,setExportError]=useState("");
  const [accountScope,setAccountScope]=useState(user?.id??null);
  const active= !authLoading&&isAuthenticated&&!!user?.id;
- useEffect(()=>{
+ useLayoutEffect(()=>{
   if(accountScope!==(user?.id??null)){
    setAccountScope(user?.id??null);setPage(0);setStatus("all");setSearch("");
+   setFromDate("");setToDate("");setSort("newest");setFocus("all");setExportError("");
   }
  },[accountScope,user?.id]);
  const history=useQuery<HistoryPage>({
@@ -77,15 +97,46 @@ export default function EducationHistory(){
    return result;
   },
  });
- const shown=useMemo(()=>filterEducationHistoryPage(
-  history.data?.items??[],titles.data,search),
-  [history.data?.items,titles.data,search]);
+ const dateRangeValid=useMemo(()=>{
+  try{validateEducationHistoryDates(fromDate,toDate);return true;}
+  catch{return false;}
+ },[fromDate,toDate]);
+ const shown=useMemo(()=>!active||accountScope!==user?.id||!dateRangeValid?[]:
+  organizeEducationHistoryPage(history.data?.items??[],titles.data,{
+   search,from:fromDate,to:toDate,sort,focus,
+  },user!.id),
+  [active,accountScope,history.data?.items,titles.data,search,fromDate,toDate,sort,focus,user?.id,dateRangeValid]);
+ const visibleSummary=useMemo(()=>active&&accountScope===user?.id
+   ? educationHistoryDisplayedSummary(shown,user!.id)
+   : {visible:0,inProgress:0,submitted:0,flagged:0},
+  [active,accountScope,shown,user?.id]);
+ const resumeItems=useMemo(()=>active&&accountScope===user?.id
+  ? educationHistoryResumeFocus(history.data?.items??[],user!.id):[],
+  [active,accountScope,history.data?.items,user?.id]);
  const summary=useMemo(()=>educationHistoryPageSummary(history.data?.items??[]),
   [history.data?.items]);
  const hasNext=educationHistoryHasNext(page,history.data?.count??null,history.data?.items.length??0);
  const reload=()=>{
   void history.refetch();
   if(ids.length)void titles.refetch();
+ };
+ const clearLocal=()=>{
+  setSearch("");setFromDate("");setToDate("");setSort("newest");setFocus("all");
+  setExportError("");
+ };
+ const downloadCurrentPage=()=>{
+  if(!active||accountScope!==user?.id||!history.isSuccess||
+     (ids.length>0&&titles.isPending)||!shown.length)return;
+  try{
+   const csv=buildEducationHistoryPageCsv(shown,titles.data,user!.id,{
+    page,filters:"Only currently displayed page "+(page+1)+"; server status "+status+
+      "; local focus "+focus,
+   });
+   downloadHistoryCsv(csv,page);
+   setExportError("");
+  }catch{
+   setExportError("Could not safely export this page. Refresh your history and try again.");
+  }
  };
  return <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6 sm:py-12">
   <div className="mx-auto max-w-5xl space-y-6">
@@ -101,6 +152,7 @@ export default function EducationHistory(){
     <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
      Browse your recorded exam attempts, continue an unfinished assessment, or reopen a submitted result.
      Only server-returned attempts for your signed-in account appear. This page never displays unverified scores.
+     Search, dates and sorting apply to the loaded page only—not your entire history.
     </p>
    </header>
    {!authLoading&&!isAuthenticated&&<Alert>
@@ -127,6 +179,10 @@ export default function EducationHistory(){
        </h2>
        <p className="mt-1 text-xs text-muted-foreground">
         This page: {summary.inProgress} in progress · {summary.submitted} submitted · {summary.flagged} flagged
+       </p>
+       <p className="mt-1 text-xs text-muted-foreground">
+        Displayed after local filters: {visibleSummary.inProgress} in progress ·
+        {visibleSummary.submitted} submitted · {visibleSummary.flagged} flagged
        </p>
       </div>
       <Button variant="outline" onClick={reload} disabled={history.isFetching||titles.isFetching}>
@@ -155,10 +211,82 @@ export default function EducationHistory(){
        </div>
       </div>
      </div>
+     <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+       <label htmlFor="history-from-utc" className="mb-2 block text-sm font-medium">Started on or after (UTC)</label>
+       <input id="history-from-utc" type="date" value={fromDate}
+        max={toDate||undefined}
+        onChange={event=>{
+         const value=event.target.value;
+         if(toDate&&value>toDate)setToDate("");
+         setFromDate(value);
+        }}
+        className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"/>
+      </div>
+      <div>
+       <label htmlFor="history-to-utc" className="mb-2 block text-sm font-medium">Started on or before (UTC)</label>
+       <input id="history-to-utc" type="date" value={toDate}
+        min={fromDate||undefined}
+        onChange={event=>{
+         const value=event.target.value;
+         if(fromDate&&value<fromDate)setFromDate("");
+         setToDate(value);
+        }}
+        className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"/>
+      </div>
+      <div>
+       <label htmlFor="history-local-sort" className="mb-2 block text-sm font-medium">Sort this page</label>
+       <select id="history-local-sort" value={sort}
+        onChange={event=>setSort(event.target.value as typeof sort)}
+        className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="title">Assessment title A–Z</option>
+       </select>
+      </div>
+      <div>
+       <label htmlFor="history-local-focus" className="mb-2 block text-sm font-medium">Focus on this page</label>
+       <select id="history-local-focus" value={focus}
+        onChange={event=>setFocus(event.target.value as typeof focus)}
+        className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+        <option value="all">All loaded attempts</option>
+        <option value="resume">Ready to resume</option>
+        <option value="submitted">Submitted attempts</option>
+       </select>
+      </div>
+     </div>
+     {!dateRangeValid&&<p role="alert" className="mt-2 text-xs text-destructive">
+      This UTC date range is invalid. Adjust the dates before reviewing or exporting.
+     </p>}
+     <p className="mt-3 text-xs text-muted-foreground">
+      Date, title search, focus and sorting operate only on the {history.data.items.length} attempt records loaded on page {page+1}.
+      Dates use UTC. The server-wide status selector above is separate.
+     </p>
+     {(search||fromDate||toDate||sort!=="newest"||focus!=="all")&&
+      <Button variant="ghost" size="sm" className="mt-3" onClick={clearLocal}>Clear page filters</Button>}
      {titles.error&&<p role="note" className="mt-3 text-xs text-muted-foreground">
       Some assessment titles are restricted or unavailable. Your attempt history is still accessible.
      </p>}
     </section>
+    {resumeItems.length>0&&<section aria-label="Resume your loaded assessments"
+      className="rounded-xl border border-primary/20 bg-card p-4">
+     <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="font-semibold">Continue an unfinished assessment</h2>
+      <Button size="sm" variant="outline" onClick={()=>{setFocus("resume");setSearch("");setFromDate("");setToDate("");}}>
+       Show unfinished on this page
+      </Button>
+     </div>
+     <div className="mt-3 flex flex-wrap gap-2">
+      {resumeItems.map(item=><Button key={item.attemptId} asChild variant="outline" className="min-h-11">
+       <Link to={item.path}>{titles.data?.[item.testId]??"Assessment title unavailable"}
+        <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4"/></Link>
+      </Button>)}
+     </div>
+     <p className="mt-2 text-xs text-muted-foreground">
+      Only unique unfinished tests found on this loaded page are linked here.
+      The assessment service rechecks ownership and deadlines when opening an exam.
+     </p>
+    </section>}
     <section aria-label="Your assessment attempts" className="space-y-3">
      <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
       {shown.length} {shown.length===1?"attempt":"attempts"} displayed on page {page+1}
@@ -171,10 +299,10 @@ export default function EducationHistory(){
       <Button asChild variant="outline" className="mt-4"><Link to="/education">Browse assessments</Link></Button>
      </div>}
      {history.data.items.length>0&&shown.length===0&&<p className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
-      No titles on this page match your search. Try clearing the search or changing page.
+      No titles on this page match your search or other page filters. Try clearing the search or changing page.
      </p>}
      {shown.map(attempt=>{
-      const action=educationHistoryAction(attempt,user!.id);
+      const action=educationHistorySafeAction(attempt,history.data.items,user!.id);
       const title=titles.data?.[attempt.test_id]??"Assessment title unavailable";
       return <Card key={attempt.id} className="border-border bg-card">
        <CardHeader className="space-y-2">
@@ -198,6 +326,20 @@ export default function EducationHistory(){
       </Card>;
      })}
     </section>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+     <div>
+      <p className="text-sm font-semibold">Download this page</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+       CSV contains only the {shown.length} displayed, owner-checked attempt records.
+       No answers, scores, grades or certificates are included.
+      </p>
+     </div>
+     <Button variant="outline" disabled={!shown.length||history.isFetching||
+       (ids.length>0&&titles.isPending)} onClick={downloadCurrentPage}>
+      <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Download displayed (.csv)
+     </Button>
+     {exportError&&<p role="alert" className="w-full text-sm text-destructive">{exportError}</p>}
+    </div>
     <nav aria-label="Assessment history pages" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
      <Button variant="outline" disabled={page===0||history.isFetching}
       onClick={()=>{setPage(p=>Math.max(0,p-1));setSearch("");}}>Previous page</Button>
@@ -206,7 +348,7 @@ export default function EducationHistory(){
       onClick={()=>{setPage(p=>p+1);setSearch("");}}>Next page</Button>
     </nav>
     <p className="text-xs text-muted-foreground">
-     History entries are not certificates. Official grades are shown only on the individual result page
+     History entries are not certificates. CSV exports are private personal records. Official grades are shown only on the individual result page
      and require the configured verified-results service. Access and exam deadlines are enforced by the server.
     </p>
    </>}
