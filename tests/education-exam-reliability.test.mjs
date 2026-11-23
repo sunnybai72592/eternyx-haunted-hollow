@@ -66,7 +66,8 @@ test("10: visibility does not falsely accuse cheating or forcibly submit",()=>{
 });
 test("11: failed submission and zero-question exams render safe states",()=>{
   assert.match(source,/This assessment has no available questions/);
-  assert.match(source,/The assessment could not be submitted/);
+  assert.match(source,/Submission could not be confirmed/);
+  assert.match(source,/readOwnedSubmissionStatus/);
   assert.match(source,/!exam\.questions\.length/);
 });
 test("12: no server-side integrity promises; readable accessible navigation",()=>{
