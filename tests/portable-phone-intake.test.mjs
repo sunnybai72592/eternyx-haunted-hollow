@@ -89,7 +89,7 @@ test("private ZIP rejects path injection, fake sources, oversized media and unsa
     {files:[local("bad.mov",Buffer.alloc(0))]},
     {start:-1},{start:300},{start:true},{start:1.5},
     {seconds:0},{seconds:61},{seconds:true},
-    {pythonSources:{}},{pythonSources:{...pythonSources,launch_phone_intake.py:""}},
+    {pythonSources:{}},{pythonSources:{...pythonSources,"launch_phone_intake.py":""}},
   ]){
     await assert.rejects(buildPortablePhoneIntake({...base(),...changes}));
   }
