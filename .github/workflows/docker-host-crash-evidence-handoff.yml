@@ -1,0 +1,31 @@
+name: Docker real-host evidence custody (OFFLINE ONLY)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-host-crash-evidence-handoff.yml'
+      - 'src/lib/dockerHostCrashEvidenceHandoff.mjs'
+      - 'scripts/docker-host-crash-evidence-handoff.mjs'
+      - 'tests/docker-host-crash-evidence-handoff.test.mjs'
+      - 'docs/DOCKER_HOST_CRASH_EVIDENCE_HANDOFF.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-evidence-review:
+    name: Test evidence consistency, independent Ed25519 signers and fail-closed flags
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify source and CLI syntax (no Docker access)
+        run: |
+          node --check src/lib/dockerHostCrashEvidenceHandoff.mjs
+          node --check scripts/docker-host-crash-evidence-handoff.mjs
+      - name: Review-protocol regression tests only (synthetic data, real ephemeral keys)
+        run: node --test tests/docker-host-crash-evidence-handoff.test.mjs
