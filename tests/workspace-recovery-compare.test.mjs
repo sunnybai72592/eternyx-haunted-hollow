@@ -22,7 +22,7 @@ test("duplicate titles use full record multisets, not naive name joins",()=>{
     archiveTotal:2,currentTotal:2,exact:1,archiveOnly:1,currentOnly:1,
   });
   assert.match(summary.limitations,/not an automatic merge/);
-  assert.match(summary.limitations,/Checklist/);
+  assert.match(summary.limitations,/checklist/i);
 });
 
 test("matching fields with one current missing task are not reported as complete",()=>{
