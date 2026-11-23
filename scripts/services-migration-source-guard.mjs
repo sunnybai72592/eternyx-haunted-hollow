@@ -78,7 +78,7 @@ export function auditServicesSource({ phase13, phase14, forensics }) {
   // Each amendment yields TWO independently useful events: initial
   // customer submission and subsequent admin acknowledgement. Merely
   // finding the source table once could hide a removed journal branch.
-  const amendmentReads = p14.match(/FROM\\s+public\\.service_brief_amendments\\s+a\\b/gi) ?? [];
+  const amendmentReads = p14.match(/FROM\s+public\.service_brief_amendments\s+a\b/gi) ?? [];
   if (amendmentReads.length !== 2) fail('phase14_amendment_branches_incomplete');
 
   // Ban accidental owner/admin-private stream unioning, even if the table
