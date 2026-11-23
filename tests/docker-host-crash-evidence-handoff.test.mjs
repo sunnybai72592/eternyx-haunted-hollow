@@ -146,7 +146,7 @@ test("CLI denies unapproved invocation before reading any report or signing keys
  assert.match(r.stderr,/Host crash evidence review refused/);
 });
 
-test("full real subprocess operator -> separate reviewer -> verifier custody roundtrip (no Docker)",()=>{
+test("actual CLI subprocess author -> distinct reviewer -> verifier with ephemeral private files",()=>{
  if(process.platform!=="linux"||process.getuid()===0)return;
  const root=mkdtempSync(join(tmpdir(),"eternyx-host-review-"));
  const f=(name,value)=>{
@@ -156,8 +156,11 @@ test("full real subprocess operator -> separate reviewer -> verifier custody rou
   return path;
  };
  try{
-  const baselinePath=f("baseline.json",raw(baseline()));
-  const triagePath=f("triage.json",raw(triage()));
+  // Only synthetic report fixtures are used; the CLI is real, the Docker host is not.
+  const b=baseline(),t=triage();
+  b.capturedAt=new Date(Date.now()-120000).toISOString();
+  t.observedAt=new Date(Date.now()-60000).toISOString();
+  const baselinePath=f("baseline.json",raw(b)),triagePath=f("triage.json",raw(t));
   const authorPrivate=f("author-private.pem",author.privateKey.export({format:"pem",type:"pkcs8"}));
   const authorPublic=f("author-public.pem",author.publicKey.export({format:"pem",type:"spki"}));
   const reviewerPrivate=f("reviewer-private.pem",reviewer.privateKey.export({format:"pem",type:"pkcs8"}));
@@ -177,10 +180,22 @@ test("full real subprocess operator -> separate reviewer -> verifier custody rou
   const run=(...args)=>spawnSync(process.execPath,[script,...args],{
    encoding:"utf8",timeout:10000,env:e
   });
-  // Report times are intentionally fixed, so the subprocess CLI cannot accept
-  // a fabricated stale "host" observation in a later real environment.
-  const stale=run("author",baselinePath,triagePath,authorPrivate);
-  assert.equal(stale.status,1);
-  assert.match(stale.stderr,/Host crash evidence review refused/);
+  const authored=run("author",baselinePath,triagePath,authorPrivate);
+  assert.equal(authored.status,0,authored.stderr);
+  const authoredPath=f("authored.json",authored.stdout);
+  const signed=run("countersign",authoredPath,baselinePath,triagePath,
+   authorPublic,reviewerPrivate);
+  assert.equal(signed.status,0,signed.stderr);
+  const packagePath=f("dual.json",signed.stdout);
+  const verified=run("verify",packagePath,baselinePath,triagePath,
+   authorPublic,reviewerPublic);
+  assert.equal(verified.status,0,verified.stderr);
+  assert.equal(JSON.parse(verified.stdout).twoDistinctKeySignaturesVerified,true);
+  assert.equal(JSON.parse(verified.stdout).productionDeploymentAuthorized,false);
+  writeFileSync(triagePath,raw({...t,claimOperation:"restart"}),{mode:0o600});
+  const tampered=run("verify",packagePath,baselinePath,triagePath,
+   authorPublic,reviewerPublic);
+  assert.equal(tampered.status,1);
+  assert.equal(tampered.stdout,"");
  }finally{rmSync(root,{recursive:true,force:true});}
 });
