@@ -193,3 +193,27 @@ test("lesson authoring and learning controls are wired to actual data transforma
  assert.deepEqual((compiled.diagnostics??[]).filter(x=>x.category===ts.DiagnosticCategory.Error)
    .map(x=>x.messageText),[]);
 });
+
+
+const workflow=read(".github/workflows/education-atomic-browser-ci.yml");
+const browserSource=read("tests/browser/education_study_paths_local.py");
+test("Study Paths has genuine desktop and mobile Chrome acceptance in existing offline Education CI",()=>{
+ for(const key of ["src/pages/EducationStudyPaths.tsx","tests/browser/education_study_paths_local.py",
+  "tests/education-study-paths.test.mjs","education-study-paths-local-browser.json"])
+  assert.ok(workflow.includes(key),key);
+ assert.match(workflow,/python" tests\/browser\/education_study_paths_local\.py/);
+ for(const check of [
+   "author_real_lesson_and_export_path",
+   "unanswered_lesson_cannot_be_marked_complete",
+   "activity_reflection_enables_manual_completion",
+   "private_resume_roundtrip_restores_progress",
+   "safe_csv_export_neutralizes_formulas",
+   "privileged_key_import_fails_closed",
+   "no_private_study_data_sent_to_external_hosts",
+ ])assert.ok(browserSource.includes(check),check);
+ assert.match(browserSource,/1440.*900/);
+ assert.match(browserSource,/390.*844/);
+ assert.match(browserSource,/route\.abort\(\)/);
+ assert.doesNotMatch(browserSource,/staging_password|service_role|screenshot\(|storage_state\(/);
+ assert.doesNotMatch(workflow,/\$\{\{\s*secrets\./);
+});

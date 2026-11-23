@@ -32,7 +32,6 @@ def exercise(browser,label,viewport,out):
     page=context.new_page()
     page.set_default_timeout(15000)
     leaked=[]
-    blocked_hosts=[]
 
     def guard(route):
         request=route.request
@@ -43,7 +42,6 @@ def exercise(browser,label,viewport,out):
             value=request.url+"\n"+(request.post_data or "")
             if SENSITIVE in value or "Private observation notes" in value:
                 leaked.append("sensitive_offsite_request")
-            blocked_hosts.append("third_party_denied")
             route.abort()
 
     page.route("**/*",guard)
@@ -54,16 +52,16 @@ def exercise(browser,label,viewport,out):
         page.locator("#study-author-title").fill("Local CP Learning Path")
         page.locator("#study-author-description").fill("One actual author-written lesson.")
         page.get_by_role("button",name="Add lesson").click()
-        page.locator("#study-author-title").last.fill("Reference Electrode Basics")
-        page.locator("#study-author-objective").fill("Describe the role of a reference electrode.")
-        page.locator("#study-author-reading").fill(
+        page.locator("#study-author-lesson-title").fill("Reference Electrode Basics")
+        page.locator("#study-author-lesson-objective").fill("Describe the role of a reference electrode.")
+        page.locator("#study-author-lesson-reading").fill(
             "A reference electrode provides a stable potential against which a structure is measured. "
             "Surface conditions and instrument connection affect interpretation."
         )
-        page.locator("#study-author-activity_prompt").fill(
+        page.locator("#study-author-lesson-activity_prompt").fill(
             "Record a potential measurement from a safe simulated example."
         )
-        page.locator("#study-author-reflection_prompt").fill(
+        page.locator("#study-author-lesson-reflection_prompt").fill(
             "What factors can change your measurement?"
         )
         expect(page.get_by_role("button",name="Export validated path (.json)")).to_be_enabled()
@@ -126,7 +124,7 @@ def exercise(browser,label,viewport,out):
               page.get_by_role("button",name="Reopen lesson").is_visible())
 
         check(out,label,"no_private_study_data_sent_to_external_hosts",
-              leaked==[] and len(blocked_hosts)>=0)
+              leaked==[])
     finally:
         context.close()
 

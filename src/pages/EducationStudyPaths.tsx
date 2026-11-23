@@ -259,12 +259,12 @@ export default function EducationStudyPaths(){
                 ["activity_prompt","Practical activity instructions",2000,4],
                 ["reflection_prompt","Reflection question",2000,3],
               ] as const).map(([key,label,max,rows])=><div key={key}>
-                <label className="mb-1 block text-sm font-medium" htmlFor={"study-author-"+key}>{label}</label>
+                <label className="mb-1 block text-sm font-medium" htmlFor={"study-author-lesson-"+key}>{label}</label>
                 {key==="title"
-                  ?<input id={"study-author-"+key} value={authorLesson[key]}
+                  ?<input id={"study-author-lesson-"+key} value={authorLesson[key]}
                     onChange={e=>patchLesson(key,e.target.value)} maxLength={max}
                     className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base"/>
-                  :<textarea id={"study-author-"+key} value={authorLesson[key]}
+                  :<textarea id={"study-author-lesson-"+key} value={authorLesson[key]}
                     onChange={e=>patchLesson(key,e.target.value)} maxLength={max} rows={rows}
                     className="w-full rounded-lg border border-input bg-background p-3 text-base whitespace-pre-wrap"/>}
               </div>)}
