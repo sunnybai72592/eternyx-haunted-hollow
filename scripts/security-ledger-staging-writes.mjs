@@ -2,6 +2,9 @@
 // Real database role emulation, NOT an actual JWT-based HTTP acceptance test.
 // Prevent mistakes by refusing anything but a specifically designated staging DB.
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { WRITE_RECEIPT_SCHEMA, validateWriteReceipt } from "../src/lib/securityStagingWriteReceipt.mjs";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,8 +43,8 @@ export function buildPostgresCommand(validated) {
 }
 function main(){
  const command=process.argv[2]??"--explain";
- if(process.argv.length>3||!["--explain","--check-config","--run"].includes(command)){
-  process.stderr.write("Only --explain, --check-config and --run are supported.\n");return 2;
+ if(process.argv.length>3||!["--explain","--check-config","--run","--run-json"].includes(command)){
+  process.stderr.write("Only --explain, --check-config, --run and --run-json are supported.\n");return 2;
  }
  if(command==="--explain"){
   process.stdout.write("Wave 12 requires two EXISTING staging Auth users and reviewed indexed-ledger schema.\n"+
@@ -67,6 +70,23 @@ function main(){
   process.stderr.write("STAGING WRITE BLOCKED: transactional acceptance failed or lacked rollback proof. "+
     "Connection is closed and any uncommitted transaction must be reviewed; no production approval.\n");
   return 1;
+ }
+ if(command==="--run-json"){
+  const source=readFileSync(resolve(fileURLToPath(new URL("../"+WAVE12_STAGING_SQL,import.meta.url))));
+  const receipt=validateWriteReceipt({
+   schema:WRITE_RECEIPT_SCHEMA,stagingProjectRef:validated.stagingRef,
+   productionProjectRef:validated.productionRef,observedAt:new Date().toISOString(),
+   status:"operator-reported-pass",mode:"database-role-emulation-not-http-jwt",
+   transactionRolledBack:true,
+   sourceSha256:createHash("sha256").update(source).digest("hex"),
+   productionAuthorized:false,limitations:[
+    "This unsigned receipt records a local operator's database-role emulation result, not an independent attestation.",
+    "PostgreSQL rollback testing does not prove JWT-level HTTP access, migration rollout, or production recovery.",
+   ]
+  });
+  process.stdout.write(JSON.stringify(receipt,null,2)+"\n");
+  process.stderr.write("STAGING-ONLY operator-reported transactional write/rollback PASS; production BLOCKED.\n");
+  return 0;
  }
  process.stdout.write("PASS: Wave 12 staging database-role write/revoke/rollback rehearsal (unsigned, not JWT HTTP acceptance).\n");
  process.stdout.write("PRODUCTION RELEASE REMAINS BLOCKED.\n");

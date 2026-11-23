@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { evaluateCybersecurityReleaseGate, REQUIRED_STAGING_TABLES, REQUIRED_CHECKS } from "@/lib/securityStagingReadiness.mjs";
+import { inspectStagingDossier, EVIDENCE_IDS, DOSSIER_LIMIT } from "@/lib/securityStagingDossier.mjs";
 
 const MAX_REPORT_BYTES=48*1024;
 type Report={observedAt:string;[key:string]:unknown};
@@ -46,6 +47,9 @@ export default function SecurityReleaseReadiness(){
   const [fileLabel,setFileLabel]=useState("");
   const [httpReport,setHttpReport]=useState<Report|null>(null);
   const [httpError,setHttpError]=useState("");
+  const [dossier,setDossier]=useState<Awaited<ReturnType<typeof inspectStagingDossier>>|null>(null);
+  const [dossierError,setDossierError]=useState("");
+  const [dossierBusy,setDossierBusy]=useState(false);
   const gate=evaluateCybersecurityReleaseGate(uploaded);
   async function importReport(file?:File){
     setUploaded(null);setError("");setFileLabel("");
@@ -76,6 +80,20 @@ export default function SecurityReleaseReadiness(){
       setHttpReport(data);
     }catch{setHttpError("Revocation report JSON is malformed.");}
   }
+  async function importDossier(file?:File){
+    setDossier(null);setDossierError("");
+    if(!file)return;
+    if(file.size<1||file.size>DOSSIER_LIMIT){
+      setDossierError("Dossier must be a valid JSON file of 128 KiB or less.");return;
+    }
+    setDossierBusy(true);
+    try{
+      const checked=await inspectStagingDossier(await file.text());
+      setDossier(checked);
+    }catch(e){
+      setDossierError(e instanceof Error?e.message:"Staging dossier inspection failed.");
+    }finally{setDossierBusy(false);}
+  }
   return <main className="min-h-screen bg-background text-foreground"><div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
     <Link to="/cybersecurity" className="inline-flex items-center gap-2 text-sm text-cyan-300"><ArrowLeft className="h-4 w-4"/>Cybersecurity Hub</Link>
     <header className="rounded-3xl border border-cyan-300/20 bg-card p-7">
@@ -105,7 +123,27 @@ export default function SecurityReleaseReadiness(){
         <p className="mt-2 text-xs text-muted-foreground">Engagement-attestation revocation is not JWT/session revocation. The owner may still read historical private evidence under existing policy. No result authorizes deployment.</p>
       </div>
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>3. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
+    <Card><CardHeader><CardTitle>3. Consolidated staging evidence dossier</CardTitle>
+      <CardDescription>Review a locally assembled Wave 14 dossier linking existing two-user staging checks, pre/post-revocation observations, PostgreSQL catalog evidence, and transactional rollback. The file digest checks consistency only; no signature, operator identity or real deployment is authenticated.</CardDescription>
+    </CardHeader><CardContent className="space-y-4">
+      <Label htmlFor="security-staging-dossier">Unsigned local staging evidence dossier (128 KiB maximum)</Label>
+      <Input id="security-staging-dossier" type="file" accept=".json,application/json" disabled={dossierBusy} onChange={e=>void importDossier(e.target.files?.[0])}/>
+      {dossierError&&<p role="alert" className="text-sm text-rose-200">{dossierError}</p>}
+      {!dossier&&<p className="text-sm text-muted-foreground">No combined staging evidence verified. Missing results are not treated as passing checks. Generate a dossier locally with the staging evidence CLI after gathering actual isolated-staging artifacts.</p>}
+      {dossier&&<div className="space-y-3">
+        <p role="status" className="flex items-center gap-2 text-sm text-amber-200"><ShieldAlert className="h-4 w-4"/>Production BLOCKED · {dossier.core.summary.provided} submitted artifacts · {dossier.core.summary.missing} missing requirements</p>
+        <p className="text-xs text-muted-foreground">Project: {dossier.core.stagingRef} · Created: {new Date(dossier.core.createdAt).toLocaleString()} · No independently authenticated attestation</p>
+        <div className="rounded-lg border border-border bg-background p-3 text-xs">
+          <p className="font-medium">Dossier SHA-256 (content consistency only)</p>
+          <p className="mt-1 break-all font-mono">{dossier.checksum}</p>
+        </div>
+        <ul className="space-y-2">{dossier.core.evidence.map(entry=><li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm">
+          <span>{entry.scope}</span><span className={entry.status==="missing"?"text-amber-200":"text-cyan-200"}>{entry.status==="missing"?"Missing":"Locally validated · unsigned"}</span>
+        </li>)}</ul>
+        <p className="text-xs text-amber-100">All {EVIDENCE_IDS.length} categories are included in this checklist. {dossier.warning} Source fingerprints cannot prove a migration was deployed to staging.</p>
+      </div>}
+    </CardContent></Card>
+    <Card><CardHeader><CardTitle>4. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
       <p role="status" className="flex items-center gap-2 font-semibold text-amber-200"><ShieldAlert className="h-5 w-5"/>Production release: BLOCKED</p>
       <ol className="space-y-3">{gate.blockers.map((item,index)=><li key={item} className="flex gap-3 rounded-lg border border-border bg-background p-3 text-sm"><span className="font-semibold text-amber-200">{index+1}.</span><span>{item}</span></li>)}</ol>
       <p className="text-xs text-muted-foreground">No deployment button, schema write, role change, fake readiness score or release override exists on this page.</p>
