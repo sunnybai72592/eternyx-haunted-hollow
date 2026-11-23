@@ -1,0 +1,42 @@
+name: CPU neural temporal coherence evaluation
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/select_temporal_coherence.py"
+      - "gpu-worker/tests/test_select_temporal_coherence.py"
+      - "gpu-worker/learn_tagged_spatial_motion.py"
+      - ".github/workflows/cpu-neural-temporal-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/select_temporal_coherence.py"
+      - "gpu-worker/tests/test_select_temporal_coherence.py"
+      - "gpu-worker/learn_tagged_spatial_motion.py"
+      - ".github/workflows/cpu-neural-temporal-coherence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  coherence:
+    name: Select causally validated temporal coherence and render real CPU H264
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require local H264 FFmpeg and FFprobe
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Run genuine neural-motion inner/outer isolation and MP4 regression suite
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_select_temporal_coherence.py' -v
