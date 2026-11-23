@@ -2677,6 +2677,19 @@ export type Database = {
       }
     }
     Views: {
+      service_request_journal: {
+        Row: {
+          request_id: string
+          event_key: string
+          actor_id: string | null
+          occurred_at: string
+          stream: "conversation" | "scope" | "clarifications" | "brief_changes"
+          event_kind: string
+          title: string
+          detail: string | null
+        }
+        Relationships: []
+      }
       service_admin_amendment_queue: {
         Row: {
           id: string
