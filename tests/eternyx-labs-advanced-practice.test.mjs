@@ -120,7 +120,7 @@ test("cross-track progress is unique, derived from correct answers and never sto
  const first=summarizePracticeProgress();
  assert.equal(first.total,45);
  assert.equal(first.passed,0);
- assert.equal(first.byTrack.length,10);
+ assert.equal(first.byTrack.length,15);
  const mixed=summarizePracticeProgress([
   "dns-count","dns-count","dns-owners","http-conflict","events-errors","tokens-b64",
  ]);
