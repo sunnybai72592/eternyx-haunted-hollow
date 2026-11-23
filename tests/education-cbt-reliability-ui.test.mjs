@@ -6,6 +6,7 @@ const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const exam=read("src/pages/TestInterface.tsx");
 const catalog=read("src/pages/Education.tsx");
 const results=read("src/pages/TestResults.tsx");
+const resultEvidence=read("src/lib/educationResultEvidence.mjs");
 const review=read("src/components/education/EducationWrittenReviewPanel.tsx");
 const guide=read("docs/EDUCATION_CBT_RELIABILITY_MILESTONE.md");
 const testId="10000000-0000-4000-8000-000000000001";
@@ -103,7 +104,8 @@ test("16. Expiry shows a manual submission retry without extending deadline",()=
  assert.match(exam,/late answer edits cannot be accepted/);
 });
 test("17. Results do not expose saved option database UUIDs to students or exports",()=>{
- assert.match(results,/Selected option recorded/);
+ assert.match(resultEvidence,/Selected option recorded/);
+ assert.match(results,/normalizeEducationResultEvidence\(/);
  assert.doesNotMatch(results,/user_answer: answer\.short_answer_text \|\| answer\.selected_option_id/);
 });
 test("18. Results provide manual grade recheck without polling",()=>{
