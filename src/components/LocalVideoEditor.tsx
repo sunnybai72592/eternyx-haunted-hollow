@@ -11,6 +11,7 @@ import auditPython from "../../gpu-worker/audit_video_render.py?raw";
 import localLauncherPython from "../../gpu-worker/launch_portable_video.py?raw";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import LocalVideoTimeline from "@/components/LocalVideoTimeline";
+import LocalVideoSequenceReview from "@/components/LocalVideoSequenceReview";
 import {
   newTimelineHistory,commitTimelineHistory,undoTimelineHistory,
   redoTimelineHistory,resetTimelineHistory,timelineHistoryStatus,
@@ -492,6 +493,18 @@ export default function LocalVideoEditor() {
         )}
 
         {sources.length > 0 && (
+          <LocalVideoSequenceReview
+            sources={sources} shots={shots} soundtrack={soundtrack}
+            profile={profile} quality={quality}
+            disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
+            onJumpToShot={index=>{
+              document.getElementById("local-video-shot-"+index)
+                ?.scrollIntoView({behavior:"smooth",block:"center"});
+            }}
+          />
+        )}
+
+        {sources.length > 0 && (
           <section className="space-y-4" aria-labelledby="local-shot-title">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 id="local-shot-title" className="font-semibold">Real shot cuts · {shots.length} / 8 · {(total / 16).toFixed(2)} / 30 seconds</h3>
@@ -500,7 +513,7 @@ export default function LocalVideoEditor() {
               }}><Plus className="mr-1 h-4 w-4"/>Add another cut</Button>
             </div>
             {shots.map((shot, i) => (
-              <div key={i} className="space-y-3 rounded-lg border border-slate-700 bg-slate-950/70 p-3">
+              <div key={i} id={"local-video-shot-"+i} className="space-y-3 rounded-lg border border-slate-700 bg-slate-950/70 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="font-semibold text-slate-100">Shot {i + 1}</h4>
                   <div className="flex flex-wrap gap-1">
