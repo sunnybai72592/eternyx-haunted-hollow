@@ -210,7 +210,7 @@ export default function ServiceDeskReadiness({
         (item.reason ? ' — ' + item.reason : '')),
     ];
     try {
-      await navigator.clipboard.writeText(safeLines.join('\\n'));
+      await navigator.clipboard.writeText(safeLines.join('\n'));
       if (viewerKeyRef.current === viewerKey) {
         setNotice('Availability summary copied without account IDs, query contents or secrets.');
       }
