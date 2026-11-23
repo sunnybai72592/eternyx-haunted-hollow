@@ -25,18 +25,18 @@ function get(value,name){
 }
 export function validateConfiguration(env,mode,confirmed){
   if(!["inspect","execute"].includes(mode))fail("mode_invalid");
-  const staging=get(env.ETERN YX_STAGING_PROJECT_REF,"staging_ref");
-  const production=get(env.ETERN YX_PRODUCTION_PROJECT_REF,"production_ref");
+  const staging=get(env.ETERNYX_STAGING_PROJECT_REF,"staging_ref");
+  const production=get(env.ETERNYX_PRODUCTION_PROJECT_REF,"production_ref");
   if(!PROJECT_REF.test(staging)||!PROJECT_REF.test(production)||staging===production){
     fail("project_boundary");
   }
-  if(env.ETERN YX_STAGING_ENVIRONMENT_CLASS!=="isolated-test-project")fail("not_isolated");
-  const key=get(env.ETERN YX_STAGING_PUBLISHABLE_KEY,"publishable_key");
+  if(env.ETERNYX_STAGING_ENVIRONMENT_CLASS!=="isolated-test-project")fail("not_isolated");
+  const key=get(env.ETERNYX_STAGING_PUBLISHABLE_KEY,"publishable_key");
   if(!key.startsWith("sb_publishable_")||key.length>250)fail("unsafe_api_key");
-  const jwtA=get(env.ETERN YX_STAGING_OWNER_A_JWT,"owner_a");
-  const jwtB=get(env.ETERN YX_STAGING_OWNER_B_JWT,"owner_b");
+  const jwtA=get(env.ETERNYX_STAGING_OWNER_A_JWT,"owner_a");
+  const jwtB=get(env.ETERNYX_STAGING_OWNER_B_JWT,"owner_b");
   if(!JWT.test(jwtA)||!JWT.test(jwtB)||jwtA===jwtB)fail("owner_credentials");
-  if(mode==="execute"&&(!confirmed||env.ETERN YX_STAGING_EXECUTION_CONSENT!==WRITE_CONSENT)){
+  if(mode==="execute"&&(!confirmed||env.ETERNYX_STAGING_EXECUTION_CONSENT!==WRITE_CONSENT)){
     fail("explicit_write_consent_required");
   }
   return {ref:staging,key,jwtA,jwtB,mode,
@@ -68,7 +68,7 @@ function safeHistory(data){
     if(!row||!correctUuid(row.id)||ids.has(row.id)||row.status!=="completed"||
        !Array.isArray(row.trace)||row.trace.length>12||
        !Number.isSafeInteger(row.output_lines)||row.output_lines<0||
-       !correctUuid(row.workflow_id)||typeof row.created_at!=="string"||
+       !(row.workflow_id===null||correctUuid(row.workflow_id))||typeof row.created_at!=="string"||
        !Number.isFinite(Date.parse(row.created_at))||
        ["input","output","raw_input","raw_output","input_ciphertext","output_ciphertext"].some(k=>k in row)||
        row.trace.some(t=>!t||typeof t!=="object"||
