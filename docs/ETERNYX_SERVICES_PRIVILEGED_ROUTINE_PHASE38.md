@@ -8,7 +8,7 @@ Phase 37 checks actual effective SQL permissions of the staging auditor. Those c
 
 Phase 38 adds **three additional strictly read-only PostgreSQL catalog checks** to the *same* Phase 36 protected staging audit transaction, before the A/B/admin/anonymous application acceptance can sign in.
 
-1. **No executable volatile SECURITY DEFINER functions in `public` or `eternyx_private`.** The audit checks actual EXECUTE plus schema USAGE, using `pg_proc` metadata rather than blindly counting existing functions. PostgreSQL trigger and event-trigger return types are excluded from the callable function test, since those cannot be invoked directly with a normal SELECT.
+1. **No executable volatile SECURITY DEFINER functions in `public` or `eternyx_private`.** The audit checks actual EXECUTE plus schema USAGE, using `pg_proc` metadata rather than blindly counting existing functions. PostgreSQL trigger functions and event-trigger functions are excluded by return type from the callable function test, since those cannot be invoked directly with a normal SELECT.
 2. **Private helper schema is not usable by the auditor.** No effective `USAGE` on `eternyx_private`—even a helper with minimal grants should remain out of an independent SQL auditor's reach.
 3. **No executable SECURITY DEFINER procedures in the project schemas.** Procedural entry points are separately tested even if their implementation or volatility classification changes.
 
