@@ -20,7 +20,7 @@ import {
   buildStudySharePathJson,buildStudyShareOutline,
   STUDY_REVISION_INTERVALS,
 } from "@/lib/educationStudyRevision.mjs";
-import {buildStudyRevisionAgenda,buildStudyRevisionWeek,buildStudyRevisionCalendarIcs} from "@/lib/educationRevisionAgenda.mjs";
+import {buildStudyRevisionAgenda,buildStudyOverdueBacklog,buildStudyRevisionWeek,buildStudyRevisionCalendarIcs} from "@/lib/educationRevisionAgenda.mjs";
 
 type Lesson={
   number:number;title:string;objective:string;reading:string;
@@ -72,6 +72,7 @@ export default function EducationStudyPaths(){
     [path,records,revision,asOfUtc]);
   const agenda=useMemo(()=>path?buildStudyRevisionAgenda(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
   const week=useMemo(()=>path?buildStudyRevisionWeek(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
+  const overdueBacklog=useMemo(()=>path?buildStudyOverdueBacklog(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
   const shownLessons=useMemo(()=>{
     if(!path)return [];
     return path.lessons.filter(l=>{
@@ -193,11 +194,14 @@ export default function EducationStudyPaths(){
   };
   const reviewedToday=()=>{
     if(!path||!record?.completed)return;
+    // The selected snapshot date is only for inspection; never treat it as a
+    // real review timestamp or allow future-dated self-reported work.
+    const actualUtcDay=new Date().toISOString().slice(0,10);
     try{
       setRevision(recordStudyManualReview(
-        path,records,revision,current,asOfUtc,reviewConfidence) as Revision[]);
-      setMessage("Manual review recorded for "+asOfUtc+
-        " (UTC). The next due date follows your chosen interval; no notification is scheduled.");
+        path,records,revision,current,actualUtcDay,reviewConfidence) as Revision[]);
+      setMessage("Manual review recorded for "+actualUtcDay+
+        " (UTC), regardless of the calendar preview date. No notification is scheduled.");
       setError("");
     }catch{setError("A completed lesson and valid review date are required to record revision.");}
   };
@@ -466,6 +470,14 @@ export default function EducationStudyPaths(){
             </div>
             <div className="space-y-2">
               <h3 className="font-semibold">Next seven UTC calendar days</h3>
+              {overdueBacklog.length>0&&<div className="rounded-lg border border-border p-3 text-sm">
+                <strong>Overdue backlog · {overdueBacklog.length}</strong>
+                <p className="mt-1 text-xs text-muted-foreground">Past-due reviews remain visible separately from upcoming dates.</p>
+                {overdueBacklog.map(item=><button type="button" key={item.number}
+                  onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                  className="mt-1 block w-full text-left text-primary hover:underline">
+                  {item.number}. {item.title} · {item.due_on}</button>)}
+              </div>}
               {week.map(day=><div key={day.date} className="rounded-lg border border-border p-3 text-sm">
                 <strong>{day.date}</strong> · {day.lessons.length} scheduled
                 {day.lessons.map(item=><button type="button" key={item.number}
