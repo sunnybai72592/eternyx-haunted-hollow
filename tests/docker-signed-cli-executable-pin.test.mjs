@@ -12,7 +12,16 @@ import {
  signedDockerCliEnvironment
 } from "../src/lib/dockerSignedCliExecutableGate.mjs";
 
-const CLI="/usr/bin/ls";
+// Ubuntu runner images may replace /usr/bin/ls with a coreutils symlink.
+ // Select a real root-owned binary without EVER executing it.
+const CLI=["/usr/bin/git","/usr/bin/bash","/bin/bash","/usr/bin/env"].find(p=>{
+ try{
+  const st=lstatSync(p);
+  return st.isFile()&&!st.isSymbolicLink()&&st.uid===0&&
+   (st.mode&0o022)===0&&(st.mode&0o111)!==0;
+ }catch{return false;}
+});
+if(!CLI)throw Error("No regular root-owned system binary available for offline pin fixture.");
 const pins=()=>({
  ETERNYX_DOCKER_AGENT_CLI_PATH:CLI,
  ETERNYX_DOCKER_AGENT_CLI_SHA256:
