@@ -35,7 +35,7 @@ npm run workspace:staging:write
 
 Config validation is offline, without login or writes. The actual test
 **creates genuine staging task records**, comments, checklist steps, and
-associated immutable event history. It cleans up only tasks created during
+associated server-recorded event history. It cleans up only tasks created during
 the run and verifies that the server recorded their deletion events.
 **Events remain in the shared team activity history after cleanup**, by
 design; deleting tasks does not roll back their audit trail.
@@ -60,8 +60,7 @@ The test **fails closed** on missing migrations/functions/roles, missing
 fixtures, unexpected permissions, malformed responses, row mismatches,
 timeouts and cleanup problems. When cleanup fails, do not retry blindly:
 inspect the isolated staging team and manually remove only test-created
-tasks with the `ETERN YX` / `ETERN YX STAGING ROLE PROBE` marker
-(spelling in the actual test is `ETERNYX STAGING ROLE PROBE`), then
+tasks with the `ETERNYX STAGING ROLE PROBE` marker, then
 recreate a clean preflight team if needed.
 
 The output contains fixed check labels only, not passwords, JWTs, UUIDs or
