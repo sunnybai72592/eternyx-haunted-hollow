@@ -12,6 +12,7 @@ import {
 } from "@/lib/eternyxLabs.mjs";
 import BrowserSecurityToolkit from "@/components/labs/BrowserSecurityToolkit";
 import BrowserSecurityFoundations from "@/components/labs/BrowserSecurityFoundations";
+import LabsPracticeChallenges from "@/components/labs/LabsPracticeChallenges";
 
 const startingHtml = '<main><h1>Hello, ETERNYX!</h1><p id="result">Build something real.</p><button id="hello">Run an interaction</button></main>';
 const startingCss = 'body { background: #f8fafc; }\nh1 { color: #4f46e5; }\nbutton { padding: 12px; background: #111827; color: white; border: 0; border-radius: 8px; cursor: pointer; }';
@@ -102,6 +103,9 @@ export default function EternyxLabs() {
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">15 working exercises</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">Browser-only execution</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">No outside targets</span>
+              <a href="#labs-practice" className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-semibold text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                Practice 15 answer-checked challenges <ArrowRight className="h-3.5 w-3.5" />
+              </a>
             </div>
           </div>
         </header>
@@ -321,6 +325,8 @@ export default function EternyxLabs() {
             <BrowserSecurityFoundations selected={selected} />
           </section>
         </div>
+
+        <LabsPracticeChallenges />
 
         <section className="grid gap-4 md:grid-cols-3">
           <Link to="/black-hat-pentesting" className="group rounded-2xl border border-border/70 bg-card/70 p-5 transition hover:border-primary/40">

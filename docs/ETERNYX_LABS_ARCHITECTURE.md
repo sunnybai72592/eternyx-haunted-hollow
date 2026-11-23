@@ -171,3 +171,66 @@ CI is not a substitute for manual desktop and mobile interaction testing.
 This work does **not** activate hosted Labs, paid GPU/cloud services,
 public customer execution, subscriptions or live external target testing.
 The earlier Firecracker hardware/approval requirements remain separate.
+
+
+## Local practice challenges — answer-checked, not trusted certification
+
+An additional **practice and check** section on /labs contains 15 real
+deterministic scenarios across five tracks. It is separate from the fifteen
+free workstations and does not change the number of workstations:
+
+1. **IPv4 subnetting** — /24 network address, /27 conventional usable
+   address count, and /31 point-to-point upper address.
+2. **UNIX permissions** — three ordinary requested-mode/umask examples.
+3. **CSP** — three static-policy warning-count scenarios: hardened baseline,
+   insecure script tokens, and duplicate directives.
+4. **CORS** — three simplified response-sharing decisions for an exact
+   origin with credentials, a wildcard with credentials, and same-origin.
+5. **Cookie attributes** — three warning-count exercises for a valid
+   host-prefix cookie, a misconfigured host-prefix cookie, and a session
+   cookie with missing HttpOnly.
+
+The answer key is derived **at grading time** from the same tested
+calculator/linter functions as the underlying workstations. There is no
+random score, placeholder data, manually granted progress, fake certificate
+or hidden remote backend. Every question has a sample scenario, a bounded
+answer input, a hint, an explanation and a retryable local check. The
+answer and the instructional explanation appear after a checked submission.
+
+The interface offers a track switcher, per-track question list, keyboard
+accessible labels, screen-reader status and error announcements, next-case
+navigation, a verified-in-this-tab count of *unique correctly answered
+questions* and a reset button. Multiple correct attempts on one question
+cannot inflate the count. Wrong answers do not increase progress.
+
+### Trust, persistence and cost boundaries
+
+This is intentionally **open-book frontend practice**. Answer keys are
+derivable from the shipped browser code. Progress is React in-memory state:
+it may reset when the page unmounts or refreshes. Nothing is persisted in
+localStorage, sessionStorage, a user profile, Supabase, or a training
+backend. The feature does not create verified learner progress, an exam,
+assessment authorization, certificates, XP, credentials, a ranking or any
+server-side audit event.
+
+No network, shell, filesystem mutation, Firecracker launch, Docker
+provisioning, paid GPU/cloud, external AI model, target scan or public
+hosted Labs activation is introduced. The earlier offline hardware
+acceptance and signed evidence chain remain separate.
+
+### No-cost acceptance tests
+
+Run:
+
+    node --test tests/eternyx-labs-practice.test.mjs
+    node --test tests/eternyx-labs-foundations.test.mjs
+    node --test tests/eternyx-labs.test.mjs
+    npm test
+    npm run build
+
+The tests confirm exactly five tracks with three unique scenarios each,
+all fifteen real computed answers, wrong answers, malformed inputs,
+normalization, duplicate-proof progress, explicit absence of trusted
+certification and unmodified iframe security rules. Manual browser
+verification should also cover track switching, keyboard navigation,
+hints, wrong/correct feedback, result reset on edits, and mobile layouts.
