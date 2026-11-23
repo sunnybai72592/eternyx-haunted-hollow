@@ -6,6 +6,10 @@
  * No user IDs, UUIDs, answer content, error details, tokens or URLs are logged.
  */
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
+import {
+  isExplicitAuthorizationDenial, isDeniedOrNoVisibleRow,
+} from "./educationHostedMutationDenial.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import {
   validateEducationHostedCbtConfig,
@@ -16,7 +20,7 @@ const reportPath="test-results/education-hosted-cbt-write.json";
 const syntheticEssay="Synthetic staging exercise: polarization shifts the metal potential.";
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const completed=[];
-let config, studentA, studentB, guest, accountA, accountB, attemptId;
+let config, studentA, studentB, guest, accountA, accountB, attemptId, essayAnswerId;
 let twoVerified=false,signedOut=false,writesAttempted=false,attemptCreated=false;
 function must(value){if(!value)throw new Error("Synthetic staging gate failed");}
 function success(result){must(result && !result.error);return result.data;}
@@ -200,6 +204,9 @@ async function main(){
     must(rows.every(x=>x.attempt_id===attemptId) &&
       rows.some(x=>x.question_id===f.mcqId && x.selected_option_id===f.mcqOptionId) &&
       rows.some(x=>x.question_id===f.essayId && x.short_answer_text===syntheticEssay));
+    const essay=rows.find(x=>x.question_id===f.essayId);
+    must(essay && typeof essay.id==="string" && uuid.test(essay.id));
+    essayAnswerId=essay.id;
   });
   await gate("student-a-attempt-in-progress",async()=>{
     const r=exactRows(await studentA.from("user_attempts")
@@ -224,6 +231,68 @@ async function main(){
     must(permissionDenied(await studentB.rpc("submit_cbt_attempt",
       {p_attempt_id:attemptId})));
   });
+  // Negative direct Data API mutation probes are NEVER run by the safe preflight.
+  // They are deliberately attempted only after operator write approval and only
+  // against the synthetic attempt created in THIS run. If a broken grant permits
+  // any of them, STOP: preserve the fixture for manual incident review.
+  await gate("student-a-cannot-forge-attempt-score",async()=>{
+    const r=await studentA.from("user_attempts")
+      .update({score:777,max_score:777}).eq("id",attemptId).select("id");
+    must(isExplicitAuthorizationDenial(r));
+  });
+  await gate("student-a-cannot-finalize-attempt-directly",async()=>{
+    const r=await studentA.from("user_attempts")
+      .update({status:"submitted"}).eq("id",attemptId).select("id");
+    must(isExplicitAuthorizationDenial(r));
+  });
+  await gate("student-a-cannot-insert-forged-attempt",async()=>{
+    const r=await studentA.from("user_attempts").insert({
+      id:randomUUID(),user_id:accountA,test_id:f.testId,
+      status:"submitted",score:777,max_score:777,
+      start_time:new Date().toISOString(),end_time:new Date().toISOString(),
+    }).select("id");
+    must(isExplicitAuthorizationDenial(r));
+  });
+  await gate("student-a-cannot-forge-written-answer-points",async()=>{
+    const r=await studentA.from("user_answers")
+      .update({points_awarded:777,is_correct:true})
+      .eq("id",essayAnswerId).select("id");
+    must(isExplicitAuthorizationDenial(r));
+  });
+  await gate("student-a-cannot-bypass-answer-save-rpc",async()=>{
+    const r=await studentA.from("user_answers")
+      .update({short_answer_text:"Synthetic direct-table bypass attempt"})
+      .eq("id",essayAnswerId).select("id");
+    must(isExplicitAuthorizationDenial(r));
+  });
+  await gate("student-b-cannot-forge-a-attempt-score",async()=>{
+    const r=await studentB.from("user_attempts")
+      .update({score:777}).eq("id",attemptId).select("id");
+    must(isDeniedOrNoVisibleRow(r));
+  });
+  await gate("student-b-cannot-forge-a-answer-points",async()=>{
+    const r=await studentB.from("user_answers")
+      .update({points_awarded:777}).eq("id",essayAnswerId).select("id");
+    must(isDeniedOrNoVisibleRow(r));
+  });
+  await gate("anonymous-cannot-forge-a-attempt-score",async()=>{
+    const r=await guest.from("user_attempts")
+      .update({score:777}).eq("id",attemptId).select("id");
+    must(isDeniedOrNoVisibleRow(r));
+  });
+  await gate("all-synthetic-records-unchanged-after-direct-tamper",async()=>{
+    const attempts=exactRows(await studentA.from("user_attempts")
+      .select("id,user_id,test_id,status,score,max_score")
+      .eq("test_id",f.testId).eq("user_id",accountA),1);
+    must(attempts[0].id===attemptId && attempts[0].status==="in_progress" &&
+      attempts[0].score===null && attempts[0].max_score===null);
+    const answer=exactRows(await studentA.from("user_answers")
+      .select("id,attempt_id,short_answer_text,is_correct,points_awarded")
+      .eq("id",essayAnswerId),1)[0];
+    must(answer.attempt_id===attemptId&&answer.short_answer_text===syntheticEssay &&
+      answer.is_correct===null && answer.points_awarded===null);
+  });
+
   await gate("student-a-submits-staging-exam",async()=>{
     const r=success(await studentA.rpc("submit_cbt_attempt",
       {p_attempt_id:attemptId}));

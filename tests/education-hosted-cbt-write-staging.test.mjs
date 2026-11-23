@@ -58,7 +58,7 @@ test("2. Neither the write-approval token nor acknowledgement alone can activate
   assert.throws(()=>validateEducationHostedCbtConfig(y),/acknowledgement/);
   y.ETERNYX_EDU_IRREVERSIBLE_ACK=EDUCATION_CBT_IRREVERSIBLE_ACK;
   assert.equal(validateEducationHostedCbtConfig(y).mode,"write");
-  assert.equal(validateEducationHostedCbtConfig(y).expectedCases.length,37);
+  assert.equal(validateEducationHostedCbtConfig(y).expectedCases.length,46);
 });
 test("3. Arbitrary mode, missing mode or wrong approval constants fail closed",()=>{
   for(const mode of [undefined,"Write","write-now","production","","read-only",null]){
@@ -110,9 +110,9 @@ test("7. All four reviewed exam/question/option fixture IDs are valid and distin
 });
 test("8. Both acceptance modes have exact fixed, nonduplicate case names",()=>{
   assert.equal(CBT_PREFLIGHT_CASES.length,16);
-  assert.equal(CBT_WRITE_CASES.length,20);
+  assert.equal(CBT_WRITE_CASES.length,29);
   assert.equal(CBT_STAGING_CASES.preflight.length,17);
-  assert.equal(CBT_STAGING_CASES.write.length,37);
+  assert.equal(CBT_STAGING_CASES.write.length,46);
   for(const x of Object.values(CBT_STAGING_CASES))assert.equal(new Set(x).size,x.length);
   assert.ok(CBT_STAGING_CASES.write.includes("student-b-cannot-save-a-answer"));
   assert.ok(CBT_STAGING_CASES.write.includes("student-a-has-pending-unverified-result"));
@@ -168,8 +168,18 @@ test("14. Official results must remain ungraded, matching exact five-field recei
   assert.match(runner,/student-a-has-pending-unverified-result/);
   assert.match(runner,/r\.score===null&&r\.max_score===null/);
 });
-test("15. Only approved exam RPCs may mutate; no direct table or admin writes",()=>{
-  assert.doesNotMatch(runner,/\.insert\(|\.upsert\(|\.update\(|\.delete\(|\.remove\(|\.functions\.invoke\(|auth\.admin\./);
+test("15. Direct table mutation attempts are negative probes after opt-in write gate only",()=>{
+  const guard=runner.indexOf('if(config.mode!=="write")return;');
+  const firstDirect=runner.indexOf('.update({score:777,max_score:777})');
+  assert.ok(guard>0 && firstDirect>guard);
+  assert.match(runner,/student-a-cannot-insert-forged-attempt/);
+  assert.match(runner,/student-a-cannot-forge-written-answer-points/);
+  assert.match(runner,/student-b-cannot-forge-a-answer-points/);
+  assert.match(runner,/anonymous-cannot-forge-a-attempt-score/);
+  assert.match(runner,/all-synthetic-records-unchanged-after-direct-tamper/);
+  assert.match(runner,/isExplicitAuthorizationDenial\(r\)/);
+  assert.match(runner,/isDeniedOrNoVisibleRow\(r\)/);
+  assert.doesNotMatch(runner,/\.upsert\(|\.delete\(|\.remove\(|\.functions\.invoke\(|auth\.admin\./);
   assert.doesNotMatch(runner,/getSupabaseSecretKey|SUPABASE_SERVICE_ROLE_KEY|sb_secret_/);
   assert.match(runner,/hosted_sql_deployed_by_test:false/);
   assert.match(runner,/automatic_cleanup_performed:false/);
@@ -255,9 +265,36 @@ test("21. Node validates scripts' JS syntax without live connections",()=>{
     "scripts/staging/educationHostedCbtWriteConfig.mjs",
     "scripts/staging/verifyEducationHostedCbtWrite.mjs",
     "scripts/staging/verifyEducationHostedCbtEvidence.mjs",
+    "scripts/staging/educationHostedMutationDenial.mjs",
   ]){
     const result=spawnSync(process.execPath,["--check",
       new URL("../"+path,import.meta.url).pathname],{encoding:"utf8",timeout:10000});
     assert.equal(result.status,0,result.stderr||result.stdout);
   }
+});
+
+
+// A denied write must be a real permission result; other SQL failures do not
+// prove that the row or column grants are safe.
+import {
+  isExplicitAuthorizationDenial, isDeniedOrNoVisibleRow,
+} from "../scripts/staging/educationHostedMutationDenial.mjs";
+test("22. Explicit Postgres permission failures prove direct-write rejection",()=>{
+  assert.equal(isExplicitAuthorizationDenial({error:{code:"42501",message:"insufficient privilege"}}),true);
+  assert.equal(isExplicitAuthorizationDenial({error:{code:"PGRST301",message:"permission denied"}}),true);
+  assert.equal(isExplicitAuthorizationDenial({error:{code:"23505",message:"duplicate key"}}),false);
+  assert.equal(isExplicitAuthorizationDenial({error:{code:"23502",message:"null value violates not-null"}}),false);
+  assert.equal(isExplicitAuthorizationDenial({error:{code:"PGRST116",message:"0 rows"}}),false);
+  assert.equal(isExplicitAuthorizationDenial({error:{code:"",message:"Network connection timeout"}}),false);
+  assert.equal(isExplicitAuthorizationDenial({data:[],error:null}),false);
+  assert.equal(isExplicitAuthorizationDenial(null),false);
+});
+test("23. An invisible non-owner write needs an exact empty RETURNING and follow-up owner check",()=>{
+  assert.equal(isDeniedOrNoVisibleRow({data:[],error:null}),true);
+  assert.equal(isDeniedOrNoVisibleRow({data:[{id:"row"}],error:null}),false);
+  assert.equal(isDeniedOrNoVisibleRow({data:null,error:null}),false);
+  assert.equal(isDeniedOrNoVisibleRow({data:[],error:{code:"23505",message:"duplicate"}}),false);
+  assert.match(runner,/\.select\("id"\)/);
+  assert.match(runner,/attempts\[0\]\.score===null && attempts\[0\]\.max_score===null/);
+  assert.match(runner,/answer\.is_correct===null && answer\.points_awarded===null/);
 });
