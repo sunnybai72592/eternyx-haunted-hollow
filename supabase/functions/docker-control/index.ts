@@ -18,7 +18,7 @@ const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status
 const reasonStatus:Record<string,number>={
   invalid_request:400,not_found:404,expired:410,idempotency_conflict:409,
   already_decided:409,policy_disabled:403,agent_unavailable:409,
-  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,incident_hold:423,release_required:409,not_escalated:409,invalid_transition:409,independent_reviewer_required:409,reviewer_already_assigned:409,reviewer_finalized:409,candidate_mismatch:409,
+  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,incident_hold:423,release_required:409,not_escalated:409,invalid_transition:409,history_unavailable:409,history_incomplete:409,independent_reviewer_required:409,reviewer_already_assigned:409,reviewer_finalized:409,candidate_mismatch:409,
 };
 const reasonMessage:Record<string,string>={
   invalid_request:"Invalid Docker control request",
@@ -41,6 +41,8 @@ const reasonMessage:Record<string,string>={
   reviewer_already_assigned:"This release already has a different assigned reviewer; create a new review for reassignment",
   reviewer_finalized:"Reviewer response is final and cannot be changed",
   candidate_mismatch:"Reviewer candidate SHA-256 does not match the invited release",
+  history_unavailable:"Complete release audit exceeds the bounded export or contains no events",
+  history_incomplete:"Release history changed or is incomplete; retry after review activity settles",
 };
 serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
@@ -157,6 +159,10 @@ serve(async(req:Request)=>{
         p_reviewer_id:owner,p_review_id:parsed.reviewId,
         p_candidate_sha256:parsed.candidateSha256,
         p_decision:parsed.decision,p_note:parsed.note,
+      }));
+    }else if(parsed.action==="release_export_audit"){
+      ({data,error}=await supabase.rpc("docker_release_export_audit",{
+        p_owner_id:owner,p_review_id:parsed.reviewId,
       }));
     }else if(parsed.action==="release_decide"){
       ({data,error}=await supabase.rpc("docker_release_decide_review",{
