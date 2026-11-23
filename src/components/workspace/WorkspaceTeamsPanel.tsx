@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Archive, CheckCircle2, ClipboardCopy, FolderKanban, History, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Archive, CheckCircle2, ClipboardCopy, FolderKanban, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
+import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
 import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
   normalizeTeamTaskDraft, teamCanEdit, teamCanInvite, teamMemberLabel,
-  validateTeamInviteToken, WORKSPACE_TEAM_EVENT_LABELS,
+  validateTeamInviteToken,
   WORKSPACE_TEAM_PRIORITIES, WORKSPACE_TEAM_STATUSES,
 } from "@/lib/workspaceTeamUtils.mjs";
 
@@ -43,6 +44,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [draft,setDraft]=useState<Draft>(freshDraft);
   const [taskFilter,setTaskFilter]=useState("all");
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
+  const [liveRevision,setLiveRevision]=useState(0);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState(false);
@@ -103,7 +105,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const token=++epoch.current;
     setSpaces([]);setSelectedId(null);setMembers([]);setTasks([]);
     setEvents([]);setInvites([]);setRevealedToken(null);
-    setTaskFilter("all");setDiscussionTaskId(null);
+    setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     setLoading(true);
     void (async()=>{
@@ -122,7 +124,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const token=++epoch.current;
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
     setRevealedToken(null);setDraft(freshDraft());
-    setTaskFilter("all");setDiscussionTaskId(null);
+    setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
     if(!selectedId)return;
     setLoading(true);
     void (async()=>{
@@ -277,7 +279,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     <p className="text-sm text-muted-foreground">
       Team spaces are separate from your personal Workspace. Only invited members
       can see team tasks. Existing private projects, notes, files and backups stay owner-only.
-      Updates appear on refresh; real-time sync is not yet enabled.
+      Team activity can update through a scoped Realtime subscription after deployment;
+      manual refresh stays available when a connection is offline.
     </p>
     <div className="grid gap-4 lg:grid-cols-2">
       <form className="space-y-2 rounded-xl border border-border p-3" onSubmit={createTeam}>
@@ -505,22 +508,18 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
           key={owner+":"+selected.id+":"+discussionTask.id}
           owner={owner} spaceId={selected.id} taskId={discussionTask.id}
           role={currentRole} active={selected.status==="active"}
-          disabled={busy||disabled||loading}
+          disabled={busy||disabled||loading} refreshKey={liveRevision}
           onChanged={()=>{void refresh().catch(failure=>setError(errorMessage(failure)));}} />}
       </div>
 
-      <div className="space-y-2 rounded-lg border border-border p-3">
-        <h4 className="flex items-center gap-2 text-sm font-semibold">
-          <History className="h-4 w-4"/> Server-recorded team activity
-        </h4>
-        {events.map(event=><p key={event.id} className="text-xs text-muted-foreground">
-          {new Date(event.created_at).toLocaleString()} ·
-          {" "+(WORKSPACE_TEAM_EVENT_LABELS[event.event_type as keyof typeof WORKSPACE_TEAM_EVENT_LABELS]??event.event_type)} ·
-          {" "+teamMemberLabel(event.actor_id,owner)}
-        </p>)}
-        {!events.length&&<p className="text-xs text-muted-foreground">No recent activity records.</p>}
-        <p className="text-xs text-muted-foreground">Latest 30 events; activity writes are restricted to server functions.</p>
-      </div>
+      <WorkspaceTeamLiveFeed key={owner+":"+selected.id}
+        owner={owner} spaceId={selected.id}
+        joinedAt={members.find(m=>m.user_id===owner)?.joined_at??selected.created_at}
+        events={events} tasks={tasks}
+        onRemoteChange={()=>{
+          setLiveRevision(value=>value+1);
+          void refresh().catch(failure=>setError(errorMessage(failure)));
+        }} />
     </div>}
   </section>;
 }
