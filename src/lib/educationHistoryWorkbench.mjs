@@ -75,8 +75,12 @@ export function organizeEducationHistoryPage(rows,titles,{
       return (!ta&&tb)?1:(!tb&&ta)?-1:
         ta.localeCompare(tb)||compareNewest(a,b)||a.id.localeCompare(b.id);
     }
-    const byDate=compareNewest(a,b);
-    return (sort==="oldest"?-byDate:byDate)||a.id.localeCompare(b.id);
+    const aa=when(a),bb=when(b);
+    const byDate=sort==="oldest"?
+      aa===null&&bb!==null?1:bb===null&&aa!==null?-1:
+        aa!==null&&bb!==null?aa-bb:0
+      :compareNewest(a,b);
+    return byDate||a.id.localeCompare(b.id);
   });
   return sortable;
 }
@@ -87,7 +91,8 @@ export function educationHistorySafeAction(row,rows,ownerId) {
   const current=normalizeOwnedEducationAttempt(row,ownerId);
   if(!current)return {label:"Attempt unavailable",path:null,status:"unavailable"};
   if(current.status==="in_progress"&&valid.some(item=>
-    item.test_id===current.test_id&&item.id!==current.id))
+    item.test_id===current.test_id&&
+    (item.id!==current.id||item.status!==current.status)))
     return {label:"Conflicting attempts",path:null,status:"unavailable"};
   return educationHistoryAction(current,ownerId);
 }
