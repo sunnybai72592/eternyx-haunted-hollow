@@ -17,6 +17,8 @@ import {validSessionId} from
   "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 import {verifySignedOperatorEvidence} from
   "./firecracker-operator-evidence.mjs";
+import {assertNoUnfinishedHandoff} from
+  "./firecracker-handoff-import-journal.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -260,6 +262,10 @@ async function loadCase(sessionId,{caseBase=REVIEW_CASE_BASE,owner=0}={}){
   const folder=sessionCasePath(sessionId,caseBase);
   await trustedDir(caseBase,owner);
   await trustedDir(folder,owner);
+  // An interrupted transfer cannot be endorsed by a second reviewer.
+  // Legacy manually staged cases without an import journal remain eligible
+  // for explicit human review; they cannot claim handoff verification.
+  await assertNoUnfinishedHandoff(folder,owner);
   const [operatorReport,operatorPublicPem]=await Promise.all([
     safeRead(join(folder,"operator-report.json"),owner,MAX_RECEIPT),
     safeRead(join(folder,"operator-public.pem"),owner,MAX_KEY,"operator public key"),
