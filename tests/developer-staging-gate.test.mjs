@@ -9,12 +9,20 @@ const workflow=readFileSync(new URL("../.github/workflows/developer-staging-brow
 const chrome=readFileSync(new URL("../tests/browser/developer_project_lab_smoke.py",import.meta.url),"utf8");
 const ci=readFileSync(new URL("../.github/workflows/ci.yml",import.meta.url),"utf8");
 const sha="a".repeat(40);
+const releaseId="b".repeat(32);
+const releaseObservations=()=>DEVELOPER_BROWSER_VIEWPORTS.flatMap(viewport=>["before","after"].map(phase=>({
+  viewport,phase,status:"source-matched",build_id:releaseId,source_sha:sha,
+  html_matches:true,client_matches:true,matches_checkout:true,
+})));
 const config={origin:"https://developer.staging.example.org",expectedHost:"developer.staging.example.org",confirmation:DEVELOPER_STAGING_CONFIRMATION};
 const report=(overrides={})=>({
   schema:"eternyx-developer-browser-acceptance-v1", environment:"operator-specified staging",
   production_verified:false, staging_executed:true, browser:"Chrome",
   target_host:config.expectedHost, network_scope:"same-origin only",api_requests_executed:false,
   commit:sha, finished_at:"2026-11-23T19:00:00Z",
+  release_observations:releaseObservations(),
+  runtime_errors:[],asset_failures:[],
+  network_audit:{blocked_external_requests:0,blocked_write_attempts:0},
   cases:DEVELOPER_BROWSER_VIEWPORTS.flatMap(viewport=>DEVELOPER_BROWSER_CASES.map(name=>({case:name,viewport,result:"passed"}))),
   ...overrides,
 });
@@ -36,7 +44,8 @@ test("all 14 actual Chrome results at exact viewports are required for staging e
   const summary=verifyDeveloperStagingEvidence(report(),config,sha,now);
   assert.equal(summary.developer_case_count,14);
   assert.equal(summary.production_verified,false);
-  assert.match(summary.notes,/deployed artifact identity/);
+  assert.match(summary.notes,/unsigned release provenance/);
+  assert.equal(summary.observed_release.observations,4);
   for(const field of [
     {production_verified:true}, {staging_executed:false}, {environment:"local Vite preview"},
     {browser:"Firefox"}, {target_host:"other.staging.example.org"}, {commit:"b".repeat(40)},
