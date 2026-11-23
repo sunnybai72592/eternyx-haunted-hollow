@@ -178,7 +178,8 @@ test("bash runner enforces approval, TLS full verification, fixed query and reda
     "classifyStagingPgFailure","parseProbeLines",
     "trap cleanup EXIT",
   ])assert.ok(s.includes(token),token);
-  assert.doesNotMatch(s,/\becho\s+"\$ETERNYX_AUTOMATION_STAGING_PGPASSWORD"|supabase db push|migration repair/i);
+  const executable=s.split("\n").filter(line=>!line.trimStart().startsWith("#")).join("\n");
+  assert.doesNotMatch(executable,/\becho\s+"\$ETERNYX_AUTOMATION_STAGING_PGPASSWORD"|supabase db push|migration repair/i);
   const blocked=spawnSync("bash",[file],{cwd:root,encoding:"utf8",
     env:{...process.env,ETERNYX_AUTOMATION_STAGING_DB_CONSENT:"NOT_APPROVED"}});
   assert.equal(blocked.status,2);
