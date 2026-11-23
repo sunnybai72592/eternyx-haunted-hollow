@@ -14,6 +14,7 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
+import { readQueuePreset, buildQueuePresetLink, downloadServiceQueueCsv, type OwnerQueuePreset } from '@/lib/serviceQueueViews';
 
 type RequestRow = {
   id: string; service_key: string; title: string; description: string;
@@ -181,6 +182,21 @@ export default function MyServiceRequests() {
     }
     return () => { pulseGeneration.current++; };
   }, [userId, loadPulse]);
+  // Focus links encode only an allowlisted task category, never search,
+  // customer identity or a request UUID. Private request deep links win.
+  useEffect(() => {
+    const preset = readQueuePreset(location.search, 'customer');
+    if (!userId || !preset) return;
+    setFilter('all');
+    setSearch('');
+    setActiveSearch('');
+    setUpdatesOnly(preset === 'activity');
+    setAnswersOnly(preset === 'answers');
+    setPendingReviewsOnly(preset === 'brief-reviews');
+    setSortOrder('newest');
+    setPage(0);
+  }, [userId, location.search]);
+
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
     setLinkedRequest(null);
@@ -286,6 +302,62 @@ export default function MyServiceRequests() {
     setPage(0);
   };
 
+  const currentFocusPreset = (): OwnerQueuePreset | null => {
+    if (!userId || new URLSearchParams(location.search).has('request')
+      || activeSearch || filter !== 'all' || sortOrder !== 'newest'
+      || Number(updatesOnly) + Number(answersOnly) + Number(pendingReviewsOnly) > 1) return null;
+    if (updatesOnly) return 'activity';
+    if (answersOnly) return 'answers';
+    if (pendingReviewsOnly) return 'brief-reviews';
+    return 'all';
+  };
+
+  const copyFocusedView = async () => {
+    const preset = currentFocusPreset();
+    if (!userId || !preset) return;
+    try {
+      const { data: { user: verified }, error } = await supabase.auth.getUser();
+      if (error || verified?.id !== userId || useAuthStore.getState().user?.id !== userId) {
+        throw new Error('Account changed');
+      }
+      await navigator.clipboard.writeText(buildQueuePresetLink(window.location.origin, 'customer', preset));
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Focused queue link copied. It contains no private request IDs or search terms; sign-in is still required.');
+      }
+    } catch {
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Could not copy the view link. Check clipboard access and your account.');
+      }
+    }
+  };
+
+  const exportLoadedQueue = async () => {
+    if (!userId || rowsOwner !== userId || loading || loadError || visibleRows.length === 0) return;
+    try {
+      const { data: { user: verified }, error } = await supabase.auth.getUser();
+      if (error || verified?.id !== userId || useAuthStore.getState().user?.id !== userId) {
+        throw new Error('Account changed');
+      }
+      downloadServiceQueueCsv(
+        'eternyx-my-requests-loaded.csv',
+        ['Request reference', 'Service', 'Title', 'Status', 'Submitted (UTC)', 'Request updated (UTC)', 'Questions awaiting customer', 'Brief amendments awaiting review'],
+        visibleRows.map((row) => [
+          row.id, getServiceOffering(row.service_key)?.title ?? row.service_key,
+          row.title, serviceRequestStatuses[row.status]?.label ?? row.status,
+          row.created_at, row.updated_at, row.awaiting_customer_count,
+          row.pending_amendment_count,
+        ]),
+      );
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Exported the ' + visibleRows.length + ' loaded request(s) only. Keep this private CSV secure.');
+      }
+    } catch {
+      if (useAuthStore.getState().user?.id === userId) {
+        setNotice('Request list export was not completed. Verify your session and try again.');
+      }
+    }
+  };
+
   const visiblePulse = pulseOwner === userId ? pulseCounts :
     { all: null, newActivity: null, answers: null, pendingReviews: null };
   const visibleRows = rowsOwner === userId && userId ? rows : [];
@@ -298,6 +370,18 @@ export default function MyServiceRequests() {
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Private service desk</p><h1 className="mt-2 text-3xl font-bold sm:text-4xl">My service requests</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Only your account and authorized administrators can read your briefs. Statuses reflect actual administrator updates.</p></div>
         <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); void loadPulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
       </header>
+      {userId && <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Private queue sharing and export">
+        <Button type="button" variant="outline" size="sm" disabled={!currentFocusPreset()}
+          onClick={() => void copyFocusedView()}>
+          <Link2 className="mr-2 h-4 w-4" />Copy focus link
+        </Button>
+        <Button type="button" variant="outline" size="sm"
+          disabled={loadError || loading || visibleRows.length === 0}
+          onClick={() => void exportLoadedQueue()}>
+          <Download className="mr-2 h-4 w-4" />Export loaded rows
+        </Button>
+        <p className="text-xs text-muted-foreground">Links save only a standard queue focus; custom searches are not shared. CSV contains only this account's loaded requests.</p>
+      </div>}
       {userId && <ServiceDeskReadiness mode="customer" />}
       {userId && <ServiceActionPulse
         heading="My service action center"
