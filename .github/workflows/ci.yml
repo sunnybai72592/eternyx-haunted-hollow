@@ -35,6 +35,10 @@ jobs:
         run: node scripts/workspace-release-readiness.mjs --source-check
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
+      - name: Verify historical cross-pillar migration collision baseline (no DB access)
+        run: |
+          node scripts/automation-migration-collision-forensics.mjs > "$RUNNER_TEMP/eternyx-migration-collisions.json"
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/eternyx-migration-collisions.json","utf8"));console.log("Historical migration collisions: "+r.collisionVersionCount+" versions, "+r.collisionFileCount+" source files; baseline="+r.sourceBaselineValid+"; staging deploy BLOCKED pending remote history.");'
       - name: Check utility JavaScript syntax
         run: |
           node --check src/lib/developerStudioUtils.mjs
