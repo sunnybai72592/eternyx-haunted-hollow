@@ -4,6 +4,7 @@ import {Button} from "@/components/ui/button";
 import {Textarea} from "@/components/ui/textarea";
 import {Checkbox} from "@/components/ui/checkbox";
 import {supabase} from "@/integrations/supabase/client";
+import AutomationAuditHandoffPanel from "@/components/AutomationAuditHandoffPanel";
 import {verifiedAuditPackageInbox,auditPackageSafeExport,auditPackageCsv}
   from "@/lib/automationAuditPackages.mjs";
 type Inbox=ReturnType<typeof verifiedAuditPackageInbox>;
@@ -325,6 +326,9 @@ export default function AutomationAuditPackagePanel({disabled}:{disabled:boolean
         </Button>
       </div>}
     </div>}
+    {inbox&&<AutomationAuditHandoffPanel
+      incidentId={selected} disabled={disabled||busy}
+      refreshKey={inbox.capturedAt}/>}
     <div className="space-y-3 rounded-lg border border-border/70 p-3">
       <p className="text-sm font-semibold">Manual release-readiness checklist (local only)</p>
       <p className="text-xs text-muted-foreground">
