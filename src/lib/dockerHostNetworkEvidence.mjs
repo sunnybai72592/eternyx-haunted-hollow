@@ -13,10 +13,10 @@ function routes(raw,family){
  if(!Array.isArray(r)||r.length>256||r.some(x=>!x||typeof x!=="object"||Array.isArray(x)))
   throw Error("Incomplete or invalid host routing table.");
  for(const entry of r){
-  if(typeof entry.dst==="string"&&forbiddenDestination(entry.dst))
-   throw Error("Default gateway exists on the isolated host.");
-  if(entry.dst!==undefined&&typeof entry.dst!=="string")
+  if(typeof entry.dst!=="string"||entry.dst.length===0)
    throw Error("Uninterpretable host route.");
+  if(forbiddenDestination(entry.dst))
+   throw Error("Default gateway exists on the isolated host.");
   if(entry.type==="blackhole"||entry.type==="unreachable"||entry.type==="prohibit")continue;
   if(entry.gateway!==undefined && typeof entry.gateway!=="string")
    throw Error("Uninterpretable route gateway.");
