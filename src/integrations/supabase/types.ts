@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      workspace_reconciliation_receipts: {
+        Row: {
+          id: string; owner_id: string; source_session_id: string;
+          source_project_id: string; source_sha256: string;
+          snapshot_sha256: string; archive_sha256: string; payload_sha256: string;
+          source_tasks: number; current_tasks: number;
+          source_items: number; current_items: number;
+          checklist_steps: number; excluded_files: number;
+          event_type: string; created_at: string;
+        }
+        Insert: {
+          id?: string; owner_id: string; source_session_id: string;
+          source_project_id: string; source_sha256: string;
+          snapshot_sha256: string; archive_sha256: string; payload_sha256: string;
+          source_tasks: number; current_tasks: number;
+          source_items: number; current_items: number;
+          checklist_steps: number; excluded_files: number;
+          event_type?: string; created_at?: string;
+        }
+        Update: {
+          id?: string; owner_id?: string; source_session_id?: string;
+          source_project_id?: string; source_sha256?: string;
+          snapshot_sha256?: string; archive_sha256?: string; payload_sha256?: string;
+          source_tasks?: number; current_tasks?: number;
+          source_items?: number; current_items?: number;
+          checklist_steps?: number; excluded_files?: number;
+          event_type?: string; created_at?: string;
+        }
+        Relationships: []
+      }
       workspace_import_sessions: {
         Row: { id: string; owner_id: string; project_id: string; source_sha256: string;
           source_version: number; expected_tasks: number; expected_steps: number;
@@ -2997,6 +3027,17 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_reconciliation_record: {
+        Args: {
+          p_source_session_id: string; p_source_sha256: string;
+          p_snapshot_sha256: string; p_archive_sha256: string;
+          p_payload_sha256: string; p_source_tasks: number;
+          p_current_tasks: number; p_source_items: number;
+          p_current_items: number; p_checklist_steps: number;
+          p_excluded_files: number;
+        };
+        Returns: Json;
+      }
       workspace_import_set_hold: { Args: { p_session_id: string; p_hold: boolean; p_reason?: string }; Returns: boolean }
       workspace_import_integrity: { Args: { p_session_id: string }; Returns: Json }
       workspace_import_inspect: { Args: { p_session_id: string }; Returns: Json }
