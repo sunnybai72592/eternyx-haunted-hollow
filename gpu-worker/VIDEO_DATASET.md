@@ -719,3 +719,60 @@ The new directory `eternyx-neural-schedule` contains:
 The Studio imports the local `schedule-report.json` to display both the inner validation candidate table and the **independent** final unseen-frame 1/4/8-step audit table. For integrity inspection, import the selected `model.json` and actual video files; the browser computes SHA-256 from their bytes, matches each candidate against the report and plays the videos locally. No source or generated media is uploaded.
 
 This remains a *tiny 48×28 neural video texture experiment*, not finished commercial text-to-video AI, pretrained diffusion inference or photorealistic scene generation. Trained model weights and aggregate appearance statistics can leak traits of training footage; keep checkpoints private. Self-reported hashes prove only local internal consistency, not digitally signed identities or licensing rights. No GPU, paid inference API or subscription changes.
+
+
+
+## Neural v2: genuine trained human-labeled style conditioning on CPU (not text-to-video)
+
+This step introduces a **real trained conditioning signal** to the existing tiny two-frame neural v2 video research model. Until now, local neural sampling could vary random seeds, but did not let people choose a learned label. The **Neural v2 · Learn real footage style labels on CPU** Studio section provides:
+
+- **Source-verified, human-labelled training:** A frozen, already-trained 48×28 v2 model and its exact original owner-approved 16 FPS MP4s are checked by SHA-256, frame counts and rights reference. Provide **2–3** files with at least two distinct training tags (2–24 characters, lowercase e.g. `warm`, `cool`). Each clip is mapped to a tag explicitly; the system does not scrape descriptions or infer semantics.
+- **Genuine tiny learned neural adapter:** A separate **3×17 per-tag RGB logit-residual weight matrix** is trained via real SGD and gradients on the frozen neural v2 hidden representations and next-frame target pixels. The base neural weights are NOT changed. Tag-specific aggregate initial color grids and coarse motion-frequency priors are measured on training-prefix frames. No full source video is copied into the model file.
+- **Held-out metrics per label:** The later 25% of each verified source is never used for adapter gradients. Measured training MSE before/after and held-out adapter-vs-frozen-base pixel MSE for each tag are saved in a hashed `training-report.json`. A tag can regress; no invented score or automatic proof of improvement.
+- **Different neural videos under the same seed:** Sampling with tag `warm` versus `cool` uses the same base neural video model but different *trained* output logit weights, color initializations and learned motion frequencies. New RGB frames are generated autoregressively and locally encoded into real FFmpeg H.264 MP4s, with distinct model-origin and renderer receipts.
+- **Actual two-tag side-by-side review:** Run an offline command to generate two finished v2 MP4s with identical seed/duration and a real 512×144 side-by-side video. The report carries training-model SHA-256, individual MP4 SHA-256, exact byte lengths, raw generated RGB hashes and decoded frame counts. The Studio verifies actual local bytes using WebCrypto and previews up to three video files.
+- **Fail-closed provenance & atomicity:** Unknown tags, unsafe CLI labels, missing source matches, tampered/nonfinite weights, base-model hash mismatches, unsupported output settings and repeat output directories are rejected. A failure removes incomplete temporary directories instead of publishing partial results.
+- **Offline CPU integration:** The Python program uses only standard-library neural math and local FFmpeg/FFprobe/libx264. Dedicated CI trains two different labels on real encoded/decoded videos, verifies changed neural parameters, same-seed different-tag output, actual MP4 frames/codecs and invalid data refusal. Frontend tests protect safe commands, honest reports, verified files and Studio wiring.
+
+### Train on local approved recordings
+
+First, train the regular neural v2 model on at least two different clips (using the previous `train_spatiotemporal_neural_video.py train` workflow). Its checkpoint must record the same source filenames/bytes you will pass here. For two sources:
+
+```sh
+python gpu-worker/train_tagged_neural_video.py train \
+  --base ./eternyx-neural-v2-model/model.json \
+  --input ./local-video-media \
+  --output ./eternyx-neural-style-tags \
+  --file-tag sunrise.mp4:warm \
+  --file-tag ocean.mp4:cool \
+  --epochs 2 --seed 42
+```
+
+This produces create-only `eternyx-neural-style-tags/tag-model.json` and `training-report.json`. Each style label is an actual learned adapter, not a magic prompt interpreter.
+
+### Generate with a trained style or review two labels
+
+```sh
+python gpu-worker/train_tagged_neural_video.py generate \
+  --base ./eternyx-neural-v2-model/model.json \
+  --adapter ./eternyx-neural-style-tags/tag-model.json \
+  --output ./eternyx-neural-tag-video \
+  --tag warm --seconds 2 --seed 42 \
+  --profile landscape --quality standard \
+  --stability 45 --variation 6
+```
+
+Generates `eternyx-neural-tag-video/clip-01.mp4`, `render/video.mp4`, v2 storyboard/SRT/manifest/preview and `generation-report.json` with the actual encoded video and raw RGB hashes. Use a new output directory for subsequent runs.
+
+```sh
+python gpu-worker/train_tagged_neural_video.py compare \
+  --base ./eternyx-neural-v2-model/model.json \
+  --adapter ./eternyx-neural-style-tags/tag-model.json \
+  --output ./eternyx-neural-tag-comparison \
+  --first-tag warm --second-tag cool \
+  --seconds 1 --seed 42
+```
+
+Creates a real MP4 for each style at `candidate-01/render/video.mp4` and `candidate-02/render/video.mp4`, plus a 512×144 `comparison.mp4` and `comparison-report.json`. Matching SHA-256 only confirms locally self-attested file identity, not digital signature or license ownership.
+
+**Critical limitation:** A tiny per-tag output adapter can learn source-specific colors and texture priors, **not language semantics, novel objects, prompt adherence, photorealism, or scene structure**. Calling a training clip `sunrise` does not give the network a human understanding of sunrise. Do not describe this as a full text-to-video AI model. It remains low-resolution abstract experimentation despite finished MP4 exports. Trained adapters might encode statistics from original footage: keep them private. No paid GPU, external AI inference API, cloud media upload, model download or new subscription integration is required.
