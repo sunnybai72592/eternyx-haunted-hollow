@@ -14,6 +14,7 @@ import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
+import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import { Input } from '@/components/ui/input';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
@@ -41,6 +42,8 @@ export default function AdminServiceRequests() {
   const location = useLocation();
   const navigate = useNavigate();
   const [authorizedFor, setAuthorizedFor] = useState<string | null>(null);
+  const [adminAccessError, setAdminAccessError] = useState(false);
+  const [adminAccessRetry, setAdminAccessRetry] = useState(0);
   const authorized = !!user && authorizedFor === user.id;
   const fetchGeneration = useRef(0);
   const [checking, setChecking] = useState(true);
@@ -148,6 +151,7 @@ export default function AdminServiceRequests() {
     let active = true;
     fetchGeneration.current += 1;
     setAuthorizedFor(null);
+    setAdminAccessError(false);
     setRows([]);
     setTotal(0);
     setDrafts({});
@@ -167,14 +171,31 @@ export default function AdminServiceRequests() {
       return () => { active = false; };
     }
     setChecking(true);
+    const controller = new AbortController();
+    const authTimeout = window.setTimeout(() => controller.abort(), 15000);
     void (async () => {
-      const { data, error } = await supabase.rpc('is_admin');
-      if (!active) return;
-      setAuthorizedFor(!error && data === true ? user.id : null);
-      setChecking(false);
+      try {
+        const { data, error } = await supabase.rpc('is_admin').abortSignal(controller.signal);
+        if (!active) return;
+        setAdminAccessError(!!error);
+        setAuthorizedFor(!error && data === true ? user.id : null);
+      } catch (error) {
+        if (!active) return;
+        console.error('Admin role verification failed', error);
+        setAdminAccessError(true);
+        setAuthorizedFor(null);
+      } finally {
+        window.clearTimeout(authTimeout);
+        if (active) setChecking(false);
+      }
     })();
-    return () => { active = false; fetchGeneration.current += 1; };
-  }, [user?.id, authLoading]);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(authTimeout);
+      fetchGeneration.current += 1;
+    };
+  }, [user?.id, authLoading, adminAccessRetry]);
 
   const loadQueueCounts = useCallback(async () => {
     if (!authorized || !user?.id) return;
@@ -371,7 +392,20 @@ export default function AdminServiceRequests() {
   };
 
   if (checking || authLoading) return <main className="mx-auto max-w-5xl px-4 py-20 text-center text-muted-foreground">Verifying administrator access…</main>;
-  if (!authorized || !user) return <main className="mx-auto max-w-3xl px-4 py-20"><Card className="p-8 text-center"><ShieldCheck className="mx-auto mb-4 h-8 w-8 text-primary" /><h1 className="text-xl font-bold">Administrator access required</h1><p className="mt-2 text-muted-foreground">Only verified ETERNYX administrators can manage service enquiries.</p></Card></main>;
+  if (!authorized || !user) return <main className="mx-auto max-w-3xl px-4 py-20">
+    <Card className="p-8 text-center">
+      <ShieldCheck className="mx-auto mb-4 h-8 w-8 text-primary" />
+      <h1 className="text-xl font-bold">{adminAccessError ? 'Administrator verification unavailable' : 'Administrator access required'}</h1>
+      <p className="mt-2 text-muted-foreground">
+        {adminAccessError
+          ? 'Could not verify administrator access with the database. This does not mean your account lost its role. Retry when the connection returns.'
+          : 'Only verified ETERNYX administrators can manage service enquiries.'}
+      </p>
+      {adminAccessError && user && <Button type="button" className="mt-4" onClick={() => setAdminAccessRetry((value) => value + 1)}>
+        <RefreshCw className="mr-2 h-4 w-4" />Retry administrator verification
+      </Button>}
+    </Card>
+  </main>;
 
   return (
     <main className="mx-auto min-h-[70vh] max-w-7xl px-4 pb-24 pt-8 sm:px-6">
@@ -380,6 +414,7 @@ export default function AdminServiceRequests() {
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Business operations</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Service request desk</h1><p className="mt-2 text-sm text-muted-foreground">Review submitted briefs and publish factual, customer-visible status updates. No payment or fulfillment is triggered here.</p></div>
         <Button variant="outline" onClick={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
       </header>
+      {authorized && <ServiceDeskReadiness mode="admin" />}
       {authorized && <ServiceActionPulse
         heading="Service operations action center"
         description="Exact request counts across the administrator's permitted queue. Choose a card to clear other filters and focus the desk."
@@ -481,7 +516,7 @@ export default function AdminServiceRequests() {
       </div>
       {feedback && <p role="status" className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">{feedback}</p>}
       <p className="mb-4 text-xs text-muted-foreground">All queue filters, review targets and page totals come from the database. Internal UTC review dates are not customer commitments.</p>
-      {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The migration may not yet be deployed, or access was denied.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
+      {loadError ? <Card className="p-8 text-center"><p className="font-semibold">Could not load service requests.</p><p className="mt-2 text-sm text-muted-foreground">The database query failed. Connectivity, API exposure or a migration may be unavailable. This is not proof the queue is empty. Use the read-only feature checks above.</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>
         : loading && rows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading service requests…</Card>
         : filtered.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-3 h-8 w-8 text-primary" /><p>No requests in this view.</p></Card>
         : <div className="space-y-5">{filtered.map((item) => {

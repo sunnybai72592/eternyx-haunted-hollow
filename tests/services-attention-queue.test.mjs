@@ -55,7 +55,7 @@ test('admin auth cache is tied to authenticated user ID and stale fetch results 
   assert.match(admin, /supabase\.rpc\('is_admin'\)/);
   assert.match(admin, /const generation = \+\+fetchGeneration\.current/);
   assert.match(admin, /if \(generation !== fetchGeneration\.current\) return/);
-  assert.match(admin, /return \(\) => \{ active = false; fetchGeneration\.current \+= 1; \}/);
+  assert.match(admin, /active = false;\s*controller\.abort\(\);\s*window\.clearTimeout\(authTimeout\);\s*fetchGeneration\.current \+= 1/);
 });
 
 test('privileged updates still hit original request table, and triage saves refresh queue', async () => {
