@@ -121,7 +121,7 @@ test("UI integrates real local diff and explicit paid AI analysis with no automa
   assert.match(page, /comparison\.changes\.slice\(0, 60\)/);
   assert.match(page, /formatDocumentComparison\(comparison\)/);
   assert.match(page, /JSON\.stringify\(comparison, null, 2\)/);
-  assert.match(page, /prepareDocumentComparisonAIRequest\(comparison, comparisonQuestion\)/);
+  assert.match(page, /prepareDocumentComparisonAIRequest\(comparison!?, comparisonQuestion\)/);
   assert.match(page, /comparisonAI\.run\("ai\.documents\.analyze", prompt\)/);
   assert.match(page, /Only clicking Analyze changes with AI Chat/);
   assert.match(page, /existing ai\.chat credits/);
