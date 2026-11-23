@@ -14,7 +14,9 @@ export const DEVELOPER_INTEGRATION_KINDS = Object.freeze([
 const KIND_FOR_EXTENSION = Object.freeze({ css: DEVELOPER_INTEGRATION_KINDS[1], js: DEVELOPER_INTEGRATION_KINDS[2] });
 const FILE_EXTENSION = /\.(?:html|css|js|json|md|txt)$/i;
 const SCHEMES = /^[a-z][a-z0-9+.-]*:/i;
-const MAX_REFERENCES = 200;
+// Each source file is capped at 20,000 characters; 2,048 exceeds the maximum
+// number of non-overlapping supported literal references that can fit.
+const MAX_REFERENCES = 2048;
 
 function lineAt(source, index) {
   return source.slice(0, Math.max(index, 0)).split("\n").length;
