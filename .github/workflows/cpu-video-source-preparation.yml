@@ -21,8 +21,10 @@ permissions:
 jobs:
   normalize:
     name: Normalize real 24/30 FPS phone videos for CPU editor
-    runs-on: ubuntu-latest
-    timeout-minutes: 7
+    # Pin the runner image: ubuntu-latest moved to 26.04, where downloading
+    # FFmpeg's 89 apt packages exhausted the former seven-minute job limit.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,6 +35,8 @@ jobs:
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
             sudo apt-get update && sudo apt-get install -y ffmpeg
           fi
+          ffmpeg -hide_banner -version
+          ffprobe -hide_banner -version
           ffmpeg -hide_banner -encoders | grep -q libx264
       - name: Test actual MOV and MP4 normalization and end-to-end rendering
         env:

@@ -199,9 +199,9 @@ def check_soundtrack(board, root):
     return {**raw, "path": path}
 
 
-def build_command(shots, total, destination, size, soundtrack, quality="standard"):
-    if quality not in ("standard", "high"):
-        raise ValueError("Unsupported offline encoder quality")
+def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain"):
+    if quality not in ("standard", "high") or framing not in ("contain", "cover"):
+        raise ValueError("Unsupported offline encoder quality or framing")
     width, height = size
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y",
            "-filter_complex_threads", "1", "-threads", "1"]
@@ -213,10 +213,14 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
     graph = []
     for i, shot in enumerate(shots):
         start, end = shot["start_frame"], shot["start_frame"] + shot["frames"]
+        if framing == "cover":
+            composition = [f"scale={width}:{height}:flags=lanczos:force_original_aspect_ratio=increase",
+                           f"crop={width}:{height}:(iw-ow)/2:(ih-oh)/2"]
+        else:
+            composition = [f"scale={width}:{height}:flags=lanczos:force_original_aspect_ratio=decrease",
+                           f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"]
         filters = [f"[{i}:v:0]trim=start_frame={start}:end_frame={end}",
-                   "setpts=PTS-STARTPTS",
-                   f"scale={width}:{height}:flags=lanczos:force_original_aspect_ratio=decrease",
-                   f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+                   "setpts=PTS-STARTPTS", *composition,
                    "setsar=1", "format=yuv420p"]
         if shot["fade_in_frames"]:
             filters += [f"fade=t=in:st=0:d={shot['fade_in_frames']/FPS:.4f}"]
@@ -306,8 +310,8 @@ Hard cuts with optional fade-to/from-black. The preview requires no web services
           '<a href="captions.srt">editable subtitles</a>.</p></main></html>\n')
 
 
-def render(storyboard, root, output, profile="landscape", quality="standard"):
-    if profile not in PROFILES or quality not in ("standard", "high"):
+def render(storyboard, root, output, profile="landscape", quality="standard", framing="contain"):
+    if profile not in PROFILES or quality not in ("standard", "high") or framing not in ("contain", "cover"):
         raise ValueError("Output profile and quality must be supported presets")
     factor = 2 if quality == "high" else 1
     size = tuple(value * factor for value in PROFILES[profile])
@@ -321,13 +325,13 @@ def render(storyboard, root, output, profile="landscape", quality="standard"):
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack, quality), timeout=180)
+        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing), timeout=180)
         video = verify_output(video_path, total, size, soundtrack is not None)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}
         receipt = {"version": 2, "type": "local CPU video editing",
                    "storyboard_sha256": board_hash, "video": video,
-                   "profile": profile, "quality": quality,
+                   "profile": profile, "quality": quality, "framing": framing,
                    "total_frames": total, "shots": public_shots,
                    "soundtrack": audio, "captions": "captions.srt", "model_generation": False}
         (stage / "captions.srt").write_text(srt(shots), encoding="utf-8")
@@ -351,9 +355,10 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--profile", choices=list(PROFILES), default="landscape")
     parser.add_argument("--quality", choices=["standard", "high"], default="standard")
+    parser.add_argument("--framing", choices=["contain", "cover"], default="contain")
     args = parser.parse_args()
     try:
-        result = render(args.storyboard, args.media, args.output, args.profile, args.quality)
+        result = render(args.storyboard, args.media, args.output, args.profile, args.quality, args.framing)
         print(json.dumps({"output": str(args.output), "frames": result["total_frames"],
                           "video_sha256": result["video"]["sha256"],
                           "audio": result["video"]["audio"]}))

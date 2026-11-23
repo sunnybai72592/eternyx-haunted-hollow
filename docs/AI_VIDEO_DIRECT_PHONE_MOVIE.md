@@ -112,3 +112,26 @@ the original verified conversion suite and
 Acceptance includes actual 24/30 FPS source transcodes, high preset inspection,
 real WebM/MP4 subtitle codec and frame verification, option validation, and
 backward-compatible MP4-only plans.
+
+## One-launch framing and shareable offline preview
+
+The existing private phone-to-MP4 UI now lets you keep the entire frame
+(default letterboxing) or fill the chosen landscape, portrait or square frame.
+Fill uses a centered FFmpeg crop after aspect-preserving Lanczos scaling:
+genuine source edges may be lost, and it creates no missing scene information.
+
+The same finished project now automatically includes:
+
+- \`poster.png\`: real 0.5-second video frame, encoded as PNG with verified
+  dimensions and a SHA-256 manifest receipt.
+- \`captions.vtt\`: frame-timed WebVTT from the original human-authored captions,
+  along with the existing editable SRT. It does not fabricate speech.
+- \`watch.html\`: offline HTML5 video playback with poster and VTT subtitle
+  reference, without hosted media, scripts or remote requests. Some browsers
+  restrict \`file://\` subtitles; use the selectable-caption MP4 if needed.
+
+All assets are generated within the unpublished delivery staging directory and
+are included in \`manifest.json\` with byte size and SHA-256. Any failure prevents
+the publication of a partial finished movie while keeping genuine prepared
+source clips for recovery. Old direct movie plans default to "contain";
+conversion-only packages remain unchanged.

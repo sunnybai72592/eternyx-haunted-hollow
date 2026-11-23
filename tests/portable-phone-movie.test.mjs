@@ -191,6 +191,10 @@ test("REAL full private phone movie: 30FPS MOV + 24FPS MP4 -> 16FPS prepared cli
     assert.match(captions,/Original recorded shot 1/);
     assert.match(captions,/Original recorded shot 2/);
     assert.ok(readFileSync(join(out,"preview.html"),"utf8").length>100);
+    assert.ok(readFileSync(join(out,"poster.png")).subarray(0,8)
+      .equals(Buffer.from([137,80,78,71,13,10,26,10])));
+    assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/^WEBVTT\n/);
+    assert.match(readFileSync(join(out,"watch.html"),"utf8"),/<video controls/);
     const inspect=JSON.parse(run("ffprobe",[
       "-v","error","-count_frames","-show_entries",
       "stream=codec_type,codec_name,width,height,avg_frame_rate,nb_read_frames",
@@ -320,12 +324,13 @@ test("real CPU high-quality MP4, embedded mov_text subtitle MP4 and VP9 WebM are
     const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
     assert.equal(receipt.delivery,"all");
     assert.deepEqual(Object.keys(receipt.deliverables).sort(),[
-      "captions.srt","video-subtitled.mp4","video.mp4","video.webm",
+      "captions.srt","captions.vtt","poster.png","video-subtitled.mp4",
+      "video.mp4","video.webm","watch.html",
     ]);
     for(const [name,record] of Object.entries(receipt.deliverables)){
       assert.equal(record.sha256,hash(readFileSync(join(out,name))));
       assert.ok(record.file_bytes>0);
-      if(name!=="captions.srt"){
+      if(name.endsWith(".mp4")||name.endsWith(".webm")){
         assert.equal(record.frame_count,16);
         assert.equal(record.width,512);
         assert.equal(record.height,288);
@@ -353,4 +358,61 @@ test("high preset uses actual quality settings; delivery UI exposes all real off
   assert.match(ui,/value="mp4_with_subtitles"/);
   assert.match(ui,/value="mp4_webm"/);
   assert.match(ui,/value="all"/);
+});
+
+test("real full-frame crop and automatic local video preview are verified on CPU",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-final-preview-"));
+  try{
+    const source=getFixture(dir,"framed.mov",30,2);
+    const bundle=await buildPortablePhoneMovie({
+      files:[source],moviePlan:plan([source],{profile:"portrait",framing:"cover"}),
+      start:0,seconds:2,pythonSources,
+    });
+    const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
+    assert.equal(JSON.parse(run("python3",["finish_phone_movie.py","--check"],{cwd:folder})).framing,"cover");
+    run("python3",["finish_phone_movie.py","--run"],{cwd:folder,timeout:180000});
+    const out=join(folder,"phone-movie-output");
+    const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+    assert.equal(receipt.framing,"cover");
+    assert.equal(receipt.video.width,144);
+    assert.equal(receipt.video.height,256);
+    assert.equal(receipt.video.frame_count,16);
+    const poster=readFileSync(join(out,"poster.png"));
+    assert.equal(poster.readUInt32BE(16),144);
+    assert.equal(poster.readUInt32BE(20),256);
+    const vtt=readFileSync(join(out,"captions.vtt"),"utf8");
+    assert.match(vtt,/^WEBVTT\n/);
+    assert.match(vtt,/00:00:00\.000 --> 00:00:01\.000/);
+    assert.match(vtt,/Original recorded shot 1/);
+    const watch=readFileSync(join(out,"watch.html"),"utf8");
+    assert.match(watch,/src="video.mp4"/);
+    assert.match(watch,/src="captions.vtt"/);
+    assert.match(watch,/poster="poster.png"/);
+    for(const name of ["poster.png","captions.vtt","watch.html"]){
+      assert.equal(receipt.deliverables[name].sha256,hash(readFileSync(join(out,name))));
+    }
+    const renderer=readFileSync(join(root,"gpu-worker/render_video_timeline.py"),"utf8");
+    assert.match(renderer,/force_original_aspect_ratio=increase/);
+    assert.match(renderer,/crop=\{width\}:\{height\}/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("old plans retain uncropped defaults and arbitrary framing is refused",()=>{
+  const f=[local("old.mov",Buffer.from("bytes"))];
+  assert.equal(Object.hasOwn(validatePhoneMoviePlan({
+    files:f,moviePlan:plan(f),seconds:1,
+  }),"framing"),false);
+  const cover=validatePhoneMoviePlan({
+    files:f,moviePlan:plan(f,{framing:"cover",delivery:"all"}),seconds:1,
+  });
+  assert.equal(cover.framing,"cover");
+  assert.throws(()=>validatePhoneMoviePlan({
+    files:f,moviePlan:plan(f,{framing:"stretch"}),seconds:1,
+  }),/supported output presets/);
+  const ui=readFileSync(new URL("../src/components/LocalVideoImportPrep.tsx",import.meta.url),"utf8");
+  assert.match(ui,/setMovieFraming/);
+  assert.match(ui,/value="contain"/);
+  assert.match(ui,/value="cover"/);
 });
