@@ -1,0 +1,28 @@
+name: Docker staging Management API inventory safety
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-staging-management-inventory.yml'
+      - 'src/lib/dockerStagingDeploymentInventory.mjs'
+      - 'scripts/docker-staging-management-inventory.mjs'
+      - 'tests/docker-staging-management-inventory.test.mjs'
+      - 'docs/DOCKER_STAGING_MANAGEMENT_INVENTORY.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-management-inventory:
+    name: Read-only staging deployment version/JWT parity and negative security cases
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify immutable Management API inventory logic using synthetic responses
+        run: node --test tests/docker-staging-management-inventory.test.mjs
