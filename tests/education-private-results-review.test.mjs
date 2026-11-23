@@ -10,6 +10,7 @@ import {
 } from "../src/lib/educationPrivateAnswerReview.mjs";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const page=read("src/pages/TestResults.tsx");
+const resultEvidence=read("src/lib/educationResultEvidence.mjs");
 const guide=read("docs/EDUCATION_PRIVATE_RESULTS_REVIEW.md");
 const id="10000000-0000-4000-8000-000000000001",other="10000000-0000-4000-8000-000000000002";
 const attempt={id,status:"submitted",score:9,max_score:10,
@@ -226,7 +227,8 @@ test("41 no server answer key query or option correctness leak added",()=>{
  assert.doesNotMatch(page,/\.from\("options"\)/);
  // Marked correctness is requested from own user_answers only after release.
  assert.match(page,/const request = gradeRevealed/);
- assert.match(page,/Selected option recorded/);
+ assert.match(resultEvidence,/Selected option recorded/);
+ assert.match(page,/normalizeEducationResultEvidence\(/);
 });
 test("42 search and review status filters are wired to actual returned answers",()=>{
  assert.match(page,/id="education-answer-search"/);
