@@ -10,6 +10,7 @@ import storyboardPython from "../../gpu-worker/assemble_video_storyboard.py?raw"
 import auditPython from "../../gpu-worker/audit_video_render.py?raw";
 import localLauncherPython from "../../gpu-worker/launch_portable_video.py?raw";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
+import LocalVideoTimeline from "@/components/LocalVideoTimeline";
 import LocalMotionComposer from "@/components/LocalMotionComposer";
 import LocalLearnedVideoStudio from "@/components/LocalLearnedVideoStudio";
 import TinyNeuralVideoStudio from "@/components/TinyNeuralVideoStudio";
@@ -463,6 +464,16 @@ export default function LocalVideoEditor() {
             </div>
           )}
         </div>
+
+        {sources.length > 0 && (
+          <LocalVideoTimeline shots={shots} sources={sources}
+            disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
+            onChange={next=>{
+              setShots(next);
+              setMessage("");
+              setNotice("");
+            }}/>
+        )}
 
         {sources.length > 0 && (
           <section className="space-y-4" aria-labelledby="local-shot-title">
