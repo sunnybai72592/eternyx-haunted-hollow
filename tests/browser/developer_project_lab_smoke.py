@@ -254,11 +254,11 @@ def preview_isolation(page):
     frame=page.locator('iframe[title="Isolated project preview"]')
     expect(frame).to_be_visible()
     page.get_by_role("button", name="Phone 375").click()
-    assert frame.evaluate("(el) => Math.round(el.getBoundingClientRect().width)") == 375
+    expect(frame).to_have_css("width", "375px", timeout=5000)
     page.get_by_role("button", name="Tablet 768").click()
-    assert frame.evaluate("(el) => Math.round(el.getBoundingClientRect().width)") == 768
+    expect(frame).to_have_css("width", "768px", timeout=5000)
     page.get_by_role("button", name="Desktop 1200").click()
-    assert frame.evaluate("(el) => Math.round(el.getBoundingClientRect().width)") == 1200
+    expect(frame).to_have_css("width", "1200px", timeout=5000)
     page.get_by_role("button", name="Fluid", exact=True).click()
     assert frame.get_attribute("sandbox") == "allow-scripts"
     assert frame.get_attribute("referrerpolicy") == "no-referrer"
