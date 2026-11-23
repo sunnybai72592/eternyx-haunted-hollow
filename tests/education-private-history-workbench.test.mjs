@@ -198,7 +198,8 @@ test("41 incomplete or RLS-hidden titles stay unavailable rather than guessed",(
 test("42 CSV duration uses genuine UTC start/end while missing times stay blank",()=>{
  const csv=buildEducationHistoryPageCsv([rows[0],rows[3]],titles,owner);
  assert(csv.includes('"4321"'));
- assert(csv.includes('"Submitted'));
+ assert(csv.includes('"submitted"'));
+ assert(csv.includes('"cheated"'));
  assert(csv.includes("Not recorded")===false);
 });
 test("43 invalid or reversed timestamps never invent elapsed duration",()=>{
