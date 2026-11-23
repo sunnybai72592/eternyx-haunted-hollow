@@ -8,6 +8,10 @@ import {
   calculateIpv4Subnet,simulateUnixUmask,lintCspPolicy,
   evaluateCorsHeaderExample,reviewSetCookieExample,
 } from "./eternyxLabsFoundations.mjs";
+import {
+  inspectDnsZoneLocally,inspectHttpRequestLocally,inspectSecurityTxtLocally,
+  correlateSecurityEventsLocally,generateLocalRandomToken,
+} from "./eternyxLabsOperations.mjs";
 
 export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"subnet",title:"IPv4 subnetting",description:"Calculate address ranges and hosts."}),
@@ -15,6 +19,11 @@ export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"csp",title:"CSP hardening",description:"Count static policy findings."}),
   Object.freeze({id:"cors",title:"CORS decisions",description:"Predict simplified browser response sharing."}),
   Object.freeze({id:"cookie",title:"Cookie settings",description:"Inspect session-cookie attribute warnings."}),
+  Object.freeze({id:"dns",title:"DNS record analysis",description:"Count records, owners and conflicting CNAME sources."}),
+  Object.freeze({id:"http",title:"HTTP request framing",description:"Inspect real request-framing calculations without traffic."}),
+  Object.freeze({id:"securitytxt",title:"Security disclosure files",description:"Check Contact and Expires metadata."}),
+  Object.freeze({id:"events",title:"Incident event correlation",description:"Count defensive events and spot ten-minute patterns."}),
+  Object.freeze({id:"tokens",title:"Token generation math",description:"Understand secure random byte and encoding lengths."}),
 ]);
 const definitions=[
   ["subnet-network","subnet","Network address · /24",
@@ -104,6 +113,97 @@ const definitions=[
     "integer",{header:"Set-Cookie: training=synthetic; Secure; SameSite=Lax"},
     "HttpOnly may be needed for a sensitive session cookie.",
     "Not every cookie must be HttpOnly; decide based on its actual purpose."],
+
+  ["dns-count","dns","Multiple IPv4 host records",
+    "How many A records does the offline DNS clinic count?",
+    "example.test. 300 IN A 192.0.2.3\napi.example.test. 300 IN A 192.0.2.4\nexample.test. 300 IN MX 10 mail.example.test.",
+    "integer",{zone:"example.test. 300 IN A 192.0.2.3\napi.example.test. 300 IN A 192.0.2.4\nexample.test. 300 IN MX 10 mail.example.test.",field:"A"},
+    "Count only records with type A; MX is a separate type.",
+    "The offline parser counts supported record types without doing a DNS lookup."],
+  ["dns-cname","dns","Conflicting CNAME owner",
+    "How many warnings does the training DNS record clinic return?",
+    "shop.example.test. 300 IN CNAME target.example.test.\nshop.example.test. 300 IN A 192.0.2.7",
+    "integer",{zone:"shop.example.test. 300 IN CNAME target.example.test.\nshop.example.test. 300 IN A 192.0.2.7",field:"warnings"},
+    "A CNAME owner must not simultaneously have a different DNS record type.",
+    "This local heuristic flags the contradictory CNAME owner; it does not query authoritative DNS."],
+  ["dns-owners","dns","Distinct DNS owner names",
+    "How many different owner names appear in this training zone?",
+    "example.test. 300 IN A 192.0.2.3\nexample.test. 300 IN MX 10 mail.example.test.\napi.example.test. 300 IN A 192.0.2.4\n_dmarc.example.test. 300 IN TXT \"v=DMARC1; p=none\"",
+    "integer",{zone:"example.test. 300 IN A 192.0.2.3\nexample.test. 300 IN MX 10 mail.example.test.\napi.example.test. 300 IN A 192.0.2.4\n_dmarc.example.test. 300 IN TXT \"v=DMARC1; p=none\"",field:"distinctOwners"},
+    "Two records can belong to one owner: count unique left-hand-side names.",
+    "The zone parser normalizes owner names and groups records under their owners."],
+  ["http-body","http","HTTP body byte length",
+    "How many UTF-8 bytes are in the synthetic request body?",
+    "POST /training HTTP/1.1\nHost: example.test\nContent-Length: 5\n\nhello",
+    "integer",{request:"POST /training HTTP/1.1\nHost: example.test\nContent-Length: 5\n\nhello",field:"bodyBytes"},
+    "Bytes in the body are counted after the empty line separating headers and body.",
+    "Content-Length describes byte length, not Unicode character count."],
+  ["http-conflict","http","Ambiguous request length",
+    "How many training warnings does this raw HTTP request produce?",
+    "POST /items HTTP/1.1\nHost: example.test\nContent-Length: 5\nTransfer-Encoding: chunked\n\nabcde",
+    "integer",{request:"POST /items HTTP/1.1\nHost: example.test\nContent-Length: 5\nTransfer-Encoding: chunked\n\nabcde",field:"warnings"},
+    "Check both the conflicting framing headers and the unsupported transfer-encoding analysis.",
+    "The tool warns about TE/CL conflict and incomplete chunked-body interpretation; it never sends this request."],
+  ["http-headers","http","Count request header lines",
+    "How many header lines (not including the request line) are present?",
+    "GET /training HTTP/1.1\nHost: example.test\nAccept: text/plain\nX-Training: yes\n\n",
+    "integer",{request:"GET /training HTTP/1.1\nHost: example.test\nAccept: text/plain\nX-Training: yes\n\n",field:"headerCount"},
+    "Host, Accept, and X-Training are three separate header lines.",
+    "The inspector parses HTTP/1.x header lines, not a live connection."],
+  ["security-contacts","securitytxt","Multiple disclosure contacts",
+    "How many Contact fields does the offline security.txt checker identify?",
+    "Contact: mailto:security@example.test\nContact: https://example.test/security\nExpires: 2030-01-01T00:00:00Z",
+    "integer",{document:"Contact: mailto:security@example.test\nContact: https://example.test/security\nExpires: 2030-01-01T00:00:00Z",field:"contactCount"},
+    "Both mailto and HTTPS Contact entries are counted; their values remain hidden.",
+    "A valid contact URI is not proof that the organization owns it."],
+  ["security-expired","securitytxt","Expired security disclosure",
+    "How many warnings does the offline security.txt checker produce?",
+    "Contact: mailto:security@example.test\nExpires: 2020-01-01T00:00:00Z",
+    "integer",{document:"Contact: mailto:security@example.test\nExpires: 2020-01-01T00:00:00Z",field:"warningCount"},
+    "The expiry is in the past relative to the fixed training clock.",
+    "An expired disclosure record needs review; the local parser does not fetch the deployed file."],
+  ["security-missing","securitytxt","Missing required fields",
+    "How many warnings does the security.txt checker give for this sample?",
+    "Policy: https://example.test/security-policy",
+    "integer",{document:"Policy: https://example.test/security-policy",field:"warningCount"},
+    "The required Contact and Expires fields are both absent.",
+    "This is static metadata review, not live security-contact validation."],
+  ["events-window","events","Repeated failed logins",
+    "How many three-failure-in-ten-minute windows does the offline event tool count?",
+    "2026-11-23T10:00:00Z|WARN|login-failed\n2026-11-23T10:04:00Z|WARN|login-failed\n2026-11-23T10:09:00Z|ERROR|login-failed",
+    "integer",{events:"2026-11-23T10:00:00Z|WARN|login-failed\n2026-11-23T10:04:00Z|WARN|login-failed\n2026-11-23T10:09:00Z|ERROR|login-failed",field:"threeFailureWindows"},
+    "Three distinct login-failed events occur within a ten-minute window.",
+    "A matching heuristic is not proof of an intrusion or attacker identity."],
+  ["events-errors","events","Count error severity",
+    "How many ERROR-severity events does the offline timeline parser count?",
+    "2026-11-23T10:00:00Z|ERROR|policy-denied\n2026-11-23T10:01:00Z|WARN|rate-limit\n2026-11-23T10:02:00Z|ERROR|login-failed",
+    "integer",{events:"2026-11-23T10:00:00Z|ERROR|policy-denied\n2026-11-23T10:01:00Z|WARN|rate-limit\n2026-11-23T10:02:00Z|ERROR|login-failed",field:"errors"},
+    "Count ERROR labels, not event types such as policy-denied.",
+    "The example contains two ERROR events and one WARN event."],
+  ["events-total","events","Count synthetic log records",
+    "How many events are accepted by the local event-correlation utility?",
+    "2026-11-23T10:00:00Z|WARN|login-failed\n2026-11-23T10:02:00Z|WARN|rate-limit\n2026-11-23T10:05:00Z|INFO|login-success\n2026-11-23T10:10:00Z|INFO|service-recovered",
+    "integer",{events:"2026-11-23T10:00:00Z|WARN|login-failed\n2026-11-23T10:02:00Z|WARN|rate-limit\n2026-11-23T10:05:00Z|INFO|login-success\n2026-11-23T10:10:00Z|INFO|service-recovered",field:"eventCount"},
+    "Each supported line contains UTC time, a severity level, and an allowed event name.",
+    "Only synthetic event types are accepted; real identity data and logs are not required."],
+  ["tokens-entropy","tokens","Random byte entropy budget",
+    "How many raw random bits does a 32-byte Web Crypto token contain?",
+    "Token generator: 32 bytes, hexadecimal display; secure random source.",
+    "integer",{bytes:32,format:"hex",field:"randomBits"},
+    "Multiply bytes by eight. Encodings do not add randomness.",
+    "This counts source bits, not guaranteed unpredictability after a system or implementation compromise."],
+  ["tokens-hex","tokens","Hexadecimal encoded length",
+    "How many characters appear in the hex form of 24 random bytes?",
+    "Token generator: 24 random bytes, output format hex.",
+    "integer",{bytes:24,format:"hex",field:"length"},
+    "A byte is represented by two hexadecimal digits.",
+    "The training key comes from a synthetic injected random-byte provider. No real secret is retained."],
+  ["tokens-b64","tokens","Base64url encoded length",
+    "How many characters appear in unpadded base64url for 32 random bytes?",
+    "Token generator: 32 random bytes, output format base64url (without padding).",
+    "integer",{bytes:32,format:"base64url",field:"length"},
+    "Base64 packs six bits into each character; omit trailing '=' padding.",
+    "This is output-length math on synthetic bytes, not a real token or a credential audit."],
 ];
 export const PRACTICE_CASES=Object.freeze(definitions.map((
   [id,track,title,prompt,scenario,kind,config,hint,explanation]
@@ -127,6 +227,33 @@ function answerFor(challenge){
     case "csp":return String(lintCspPolicy(c.policy).warningCount);
     case "cors":return evaluateCorsHeaderExample(c).readAllowed?"yes":"no";
     case "cookie":return String(reviewSetCookieExample(c.header).warningCount);
+    case "dns":{
+      const result=inspectDnsZoneLocally(c.zone);
+      return String(c.field==="warnings"?result.warnings.length:
+        c.field==="A"?result.counts.A:result.distinctOwners);
+    }
+    case "http":{
+      const result=inspectHttpRequestLocally(c.request);
+      return String(c.field==="warnings"?result.warnings.length:result[c.field]);
+    }
+    case "securitytxt":{
+      const result=inspectSecurityTxtLocally(c.document,new Date("2026-11-23T00:00:00Z"));
+      return String(result[c.field]);
+    }
+    case "events":{
+      const result=correlateSecurityEventsLocally(c.events);
+      return String(c.field==="errors"?result.levels.ERROR:result[c.field]);
+    }
+    case "tokens":{
+      // Only the output LENGTH and number of source bits are used for
+      // practice. The deterministic injected bytes are an explicit fixture,
+      // NEVER a generated production credential or secure randomness claim.
+      const result=generateLocalRandomToken({
+        bytes:c.bytes,format:c.format,
+        cryptoApi:{getRandomValues(bytes){bytes.fill(0xa5);return bytes;}},
+      });
+      return String(c.field==="length"?result.token.length:result.randomBits);
+    }
     default:throw Error("Unsupported practice grading track.");
   }
 }
@@ -175,7 +302,7 @@ export function summarizePracticeProgress(passedIds=[]){
   if(!Array.isArray(passedIds)&&!(passedIds instanceof Set))
     throw Error("Local practice progress must be a list or set.");
   const unique=new Set(passedIds);
-  if(unique.size>15||[...unique].some(id=>!byId.has(id)))
+  if(unique.size>PRACTICE_CASES.length||[...unique].some(id=>!byId.has(id)))
     throw Error("Unexpected local practice progress entry.");
   return Object.freeze({
     passed:unique.size,total:PRACTICE_CASES.length,
