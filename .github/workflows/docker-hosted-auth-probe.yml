@@ -1,0 +1,27 @@
+name: Docker hosted staging authentication probe safeguards
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-hosted-auth-probe.yml'
+      - 'src/lib/dockerHostedAuthProbe.mjs'
+      - 'scripts/docker-hosted-auth-probe.mjs'
+      - 'tests/docker-hosted-auth-probe.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-auth-safety:
+    name: Offline HTTP simulation of real staging JWT and two-owner isolation probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate read-only staging probe and negative security cases
+        run: node --test tests/docker-hosted-auth-probe.test.mjs
