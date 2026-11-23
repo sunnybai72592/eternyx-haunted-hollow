@@ -18,6 +18,7 @@ export const EXPOSED_ROUTINE_SQL=[
 '    JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace',
 "    WHERE n.nspname IN ('public','eternyx_private')",
 "      AND p.prosecdef AND p.provolatile='v'",
+"      AND p.prorettype NOT IN ('pg_catalog.trigger'::regtype, 'pg_catalog.event_trigger'::regtype)",
 "      AND pg_catalog.has_schema_privilege(current_user,n.oid,'USAGE')",
 "      AND pg_catalog.has_function_privilege(current_user,p.oid,'EXECUTE')",
 '  ) AS volatile_security_definer_execute_denied,',
