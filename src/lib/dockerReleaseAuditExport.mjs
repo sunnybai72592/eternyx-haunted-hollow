@@ -50,6 +50,10 @@ export async function verifyDockerReleaseAuditExport(bundle,opts,crypt=globalThi
  const events=bundle.events;
  if(events.some(e=>e?.review_id!==review.id||e?.owner_id!==review.owner_id))
   return fail("cross_owner_or_cross_review_events");
+ if(events.some((e,i)=>i>0&&(!Number.isSafeInteger(e?.id)||e.id<=events[i-1].id)))
+  return fail("noncanonical_event_order");
+ if(review.state!=="reviewed"&&events.some(e=>e.event_kind==="reviewed"))
+  return fail("review_state_event_conflict");
  const assign=bundle.assignment;
  if(assign!==null&&(typeof assign!=="object"||Array.isArray(assign)||
    assign.review_id!==review.id||assign.owner_id!==review.owner_id||
