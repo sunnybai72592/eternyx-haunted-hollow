@@ -15,6 +15,7 @@
     "workspace:staging:realtime:config": "node scripts/workspace-team-staging-realtime.mjs --config-check",
     "workspace:staging:realtime": "node scripts/workspace-team-staging-realtime.mjs --run",
     "automation:staging:plan": "node scripts/automation-staging-deployment-plan.mjs",
+    "automation:staging:db:check": "node --test tests/automation-staging-db-readonly.test.mjs",
     "automation:migrations:audit": "node scripts/automation-migration-collision-forensics.mjs",
     "automation:migrations:rehearsal": "node scripts/automation-fresh-staging-mirror.mjs --check",
     "audit:tools": "node scripts/audit-tool-registry.mjs",
