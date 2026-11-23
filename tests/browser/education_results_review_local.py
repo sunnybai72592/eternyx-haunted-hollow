@@ -253,7 +253,13 @@ def instructor_case(browser, viewport, label, checks, approved=True, malformed=F
                             assert_equal(fixture.review_writes, [])))
             mark.fill("3")
             page.get_by_role("button", name="Record review").click()
-            expect(page.get_by_text("Saved provisional review: 3 / 5", exact=False)).to_be_visible(timeout=15000)
+            # The default Pending filter removes an item when its provisional
+            # review succeeds. Switch to Reviewed to inspect the saved record.
+            expect(page.get_by_text("0 pending · 1 reviewed in this queue",
+                                    exact=False)).to_be_visible(timeout=15000)
+            page.get_by_role("button", name="Reviewed", exact=True).click()
+            expect(page.get_by_text("Saved provisional review: 3 / 5",
+                                    exact=False)).to_be_visible(timeout=15000)
             record("explicit_provisional_review_does_not_finalize_grade", label, checks,
                    lambda: (assert_equal(fixture.review_writes,
                             [{"p_answer_id": WRITTEN_ID, "p_points": 3}]),
