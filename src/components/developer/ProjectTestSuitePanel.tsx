@@ -13,6 +13,7 @@ import {
   runDeveloperLocalTests, upsertSavedDeveloperTestSuite,
 } from "@/lib/developerProjectTests.mjs";
 import { developerLinePosition } from "@/lib/developerLocalWorkflows.mjs";
+import { DEVELOPER_HTML_QUALITY_KINDS, recommendedDeveloperQualityTests } from "@/lib/developerProjectQuality.mjs";
 
 type Project = ReturnType<typeof normalizeDeveloperProject>;
 type TestCase = ReturnType<typeof normalizeDeveloperTestSuite>[number];
@@ -34,7 +35,8 @@ function initialTests(projectId: string): TestCase[] {
   } catch { return defaultDeveloperTests(); }
 }
 
-const NEEDS_EXPECTED = new Set(["text-contains", "text-absent", "json-path-equals", "html-anchor-exists"]);
+const NEEDS_EXPECTED = new Set(["text-contains", "text-absent", "json-path-equals",
+  "json-array-length", "html-anchor-exists", "css-selector-exists"]);
 
 export default function ProjectTestSuitePanel({ project, onJump }: {
   project: Project;
@@ -47,6 +49,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
   const [path, setPath] = useState("");
   const [importText, setImportText] = useState("");
   const [running, setRunning] = useState(false);
+  const [showFailuresOnly, setShowFailuresOnly] = useState(false);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
   const [lastRun, setLastRun] = useState<{ signature: string; report: TestRun } | null>(null);
 
@@ -66,6 +69,19 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
       setPath("");
       tell("Added a local assertion. Run tests explicitly; save the plan separately if needed.");
     } catch (cause) { tell(cause instanceof Error ? cause.message : "Invalid local assertion.", true); }
+  };
+
+  const addRecommended = () => {
+    try {
+      const suggested = recommendedDeveloperQualityTests(project, cases);
+      if (!suggested.length) { tell("All recommended HTML quality checks are already configured."); return; }
+      if (cases.length + suggested.length > MAX_DEVELOPER_TESTS) {
+        throw new Error("Not enough room for the six recommended checks. Remove unused checks first.");
+      }
+      const next = normalizeDeveloperTestSuite([...cases, ...suggested]);
+      setCases(next);
+      tell("Added " + suggested.length + " real HTML quality checks. Run tests explicitly; the plan is not automatically saved.");
+    } catch (cause) { tell(cause instanceof Error ? cause.message : "Could not add quality checks.", true); }
   };
 
   const removeTest = (id: string) => {
@@ -143,7 +159,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
   return <Card className="min-w-0 border-slate-800 bg-slate-900/70 text-white">
     <CardHeader>
       <CardTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-cyan-300"/>Local project test suite</CardTitle>
-      <CardDescription className="text-slate-400">Real, explicit checks against current project files: presence, nonempty content, literal text, JSON values and HTML IDs. Every run also checks real parser-backed JS preflight. Nothing executes project JavaScript or calls a backend.</CardDescription>
+      <CardDescription className="text-slate-400">Real, explicit checks against current project files: presence, literal text, JSON values/array lengths, HTML IDs/quality rules, and CSS selectors. Every run also checks real parser-backed JS preflight. Nothing executes project JavaScript or calls a backend.</CardDescription>
     </CardHeader>
     <CardContent className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -165,8 +181,15 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
         <p className="mt-1 text-slate-300">{report.passed} assertion(s) passed · {report.failed} failed ·
           preflight {report.preflightPassed ? "passed" : "failed"} ({report.preflightErrors} error(s), {report.preflightWarnings} warning(s))
         </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-slate-400">Rule results are source-free; click a location to review in the local editor.</p>
+          <Button size="sm" variant="outline" aria-pressed={showFailuresOnly}
+            onClick={() => setShowFailuresOnly(current => !current)}>
+            {showFailuresOnly ? "Show all results" : "Show failed only"}
+          </Button>
+        </div>
         <div className="mt-2 max-h-48 space-y-1 overflow-auto" aria-label="Local test results">
-          {report.results.map(result => <div key={result.index}
+          {report.results.filter(result => !showFailuresOnly || result.status === "failed").map(result => <div key={result.index}
             className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 p-2 text-xs">
             <span className={result.status === "passed" ? "text-emerald-200" : "text-rose-200"}>
               #{result.index} {result.kind} · {result.status} · {result.reason}
@@ -180,7 +203,13 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
       </div>}
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold">{cases.length} / {MAX_DEVELOPER_TESTS} assertions</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold">{cases.length} / {MAX_DEVELOPER_TESTS} assertions</p>
+          <Button size="sm" variant="outline" disabled={!project.files.some(f => f.name.toLowerCase() === "index.html") ||
+            cases.length >= MAX_DEVELOPER_TESTS} onClick={addRecommended}>
+            Add HTML quality checks
+          </Button>
+        </div>
         <div role="group" aria-label="Configured local tests" className="max-h-48 space-y-2 overflow-auto">
           {cases.map((testCase, i) => <div key={testCase.id} className="flex items-center justify-between gap-2 rounded-md border border-slate-700 p-2 text-xs">
             <span className="min-w-0 break-all">{i + 1}. {testCase.kind} · {testCase.file}</span>
@@ -203,13 +232,13 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
           <Input id="developer-test-file" value={filename} maxLength={64} onChange={e => setFilename(e.target.value)}
             className="border-slate-700 bg-slate-950 text-white"/>
         </div>
-        {kind === "json-path-equals" && <div className="space-y-1">
+        {(kind === "json-path-equals" || kind === "json-array-length") && <div className="space-y-1">
           <Label htmlFor="developer-test-path">Object key path (a.b.c)</Label>
           <Input id="developer-test-path" value={path} maxLength={100} onChange={e => setPath(e.target.value)}
             className="border-slate-700 bg-slate-950 text-white"/>
         </div>}
         {NEEDS_EXPECTED.has(kind) && <div className="space-y-1">
-          <Label htmlFor="developer-test-expected">{kind === "json-path-equals" ? "Expected JSON scalar" : "Expected literal text / HTML id"}</Label>
+          <Label htmlFor="developer-test-expected">{kind === "json-path-equals" ? "Expected JSON scalar" : kind === "json-array-length" ? "Expected array length" : kind === "css-selector-exists" ? "Literal CSS selector" : "Expected literal text / HTML id"}</Label>
           <Input id="developer-test-expected" value={expected} maxLength={120} onChange={e => setExpected(e.target.value)}
             className="border-slate-700 bg-slate-950 text-white"/>
         </div>}
@@ -230,7 +259,7 @@ export default function ProjectTestSuitePanel({ project, onJump }: {
           placeholder='{"schema":"eternyx-developer-local-tests-v1","tests":[...]}' />
         <Button size="sm" variant="outline" disabled={!importText.trim()} onClick={importPlan}>Verify and import test plan</Button>
       </div>
-      <p className="text-xs leading-5 text-slate-500">Test plans can contain literals from your code. Saving stores the full plan in this browser; portable plan exports can expose expected strings. Result exports omit expected values, source and test IDs. This does not verify runtime behavior, external services, authentication or release readiness.</p>
+      <p className="text-xs leading-5 text-slate-500">Test plans can contain literals from your code. Saving stores the full plan in this browser; portable plan exports can expose expected strings. Result exports omit expected values, source and test IDs. HTML and CSS quality checks use bounded source heuristics, not a DOM/CSS parser or accessibility certification. This does not verify runtime behavior, external services, authentication or release readiness.</p>
     </CardContent>
   </Card>;
 }
