@@ -128,6 +128,8 @@ test("real HTTP contract baseline and revoked phases prove fresh two-user and se
  assert.equal(baseline.report.schema,HTTP_REVOCATION_SCHEMA);
  assert.equal(baseline.report.phase,"baseline");
  assert.equal(baseline.report.checks.length,HTTP_REVOCATION_CHECKS.length);
+ assert.equal(baseline.report.checks.find(x=>x.id==="revocation-audit")?.status,"deferred");
+ assert.equal(baseline.report.checks.find(x=>x.id==="phase-linked-identities")?.status,"deferred");
  assert.equal(baseline.report.summary.remoteWrites,0);
  assert.equal(baseline.report.summary.independentApproval,false);
  assert.equal(validateHttpRevocationReport(baseline.report),baseline.report);
@@ -136,6 +138,8 @@ test("real HTTP contract baseline and revoked phases prove fresh two-user and se
  const {next}=await runPair();
  assert.equal(next.report.phase,"revoked");
  assert.equal(next.report.summary.engagementState,"revoked");
+ assert.equal(next.report.checks.find(x=>x.id==="revocation-audit")?.status,"pass");
+ assert.equal(next.report.checks.find(x=>x.id==="phase-linked-identities")?.status,"pass");
  assert.deepEqual(next.report.subjects,baseline.report.subjects);
  const exported=JSON.stringify(next.report);
  assert.doesNotMatch(exported,/11111111|22222222|aaaa-4aaa|bbbb-4bbb|private\.txt|Bearer |synthetic-ephemeral|authorization_attested_at/);
