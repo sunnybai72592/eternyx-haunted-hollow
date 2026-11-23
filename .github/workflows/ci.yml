@@ -93,9 +93,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: eternyx-preview-browser-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            test-results/browser-preview-acceptance.json
-            test-results/developer-project-browser-acceptance.json
+          path: test-results/browser-preview-acceptance.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload Developer Project Lab Chrome acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-developer-project-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/developer-project-browser-acceptance.json
           if-no-files-found: warn
           retention-days: 14
 
