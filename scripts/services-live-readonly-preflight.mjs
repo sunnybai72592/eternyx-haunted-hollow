@@ -131,6 +131,23 @@ export function assertAnonymousIsolation(result, resource) {
   resource + ': anonymous privacy evidence was missing or leaked data');
 }
 
+// For authenticated customers, the admin-only view may return no rows
+// through its is_admin() predicate OR an explicit table permission denial.
+// Any missing relation, network failure or ambiguous payload is not evidence.
+export function assertAdminQueueIsolated(result) {
+  enforce(result && typeof result === 'object', 'Admin queue: no verified privacy response');
+  if (result.error) {
+    enforce(result.error.code === '42501'
+      && (result.status === 401 || result.status === 403)
+      && result.data == null,
+    'Admin queue: access was not conclusively denied');
+  } else {
+    enforce((result.status === 200 || result.status === 206)
+      && Array.isArray(result.data) && result.data.length === 0,
+    'Admin queue: customer data boundary is not proven');
+  }
+}
+
 async function rows(client, table, field, value, columns = 'id', limit = 4) {
   const { data, error } = await client.from(table)
     .select(columns).eq(field, value).limit(limit);
@@ -156,6 +173,20 @@ async function atLeastOne(client, table, field, value, columns = 'id') {
   const items = await rows(client, table, field, value, columns);
   enforce(items.length > 0, table + ': required staged workflow fixture is missing');
   return items[0];
+}
+
+// Verify a precise persisted journal event from an existing source row,
+// not just a nonempty request journal that could hold unrelated events.
+// Select bounded metadata only: no narrative, PII or bulk record export.
+async function requireJournalSource(client, requestId, key, expectedKind) {
+  const { data, error } = await client.from('service_request_journal')
+    .select('request_id,event_key,event_kind')
+    .eq('request_id', requestId).eq('event_key', key).limit(2);
+  enforce(!error && Array.isArray(data) && data.length === 1
+    && data[0]?.request_id === requestId
+    && data[0]?.event_key === key
+    && (expectedKind === null || data[0]?.event_kind === expectedKind),
+  'Phase 14 journal is missing a verified persisted workflow event');
 }
 
 async function signIn(client, person) {
@@ -207,6 +238,11 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
   await none(b, 'service_customer_amendment_queue', 'id', aRequest);
   await exactlyOne(admin, 'service_admin_amendment_queue', 'id', aRequest);
   await exactlyOne(admin, 'service_admin_amendment_queue', 'id', bRequest);
+  for (const [customer, otherRequest] of [[a, aRequest], [b, bRequest]]) {
+    const denied = await customer.from('service_admin_amendment_queue')
+      .select('id').eq('id', otherRequest).limit(1);
+    assertAdminQueueIsolated(denied);
+  }
   success('Phase 13 queue views and authenticated participant boundaries');
 
   const activityA = await atLeastOne(a, 'service_request_activity', 'request_id', aRequest);
@@ -222,6 +258,8 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
     .select('id,review_id').in('review_id', reviews.map((r) => r.id)).limit(2);
   enforce(!responseError && Array.isArray(responses) && responses.length > 0 && responses.every((r) => r && typeof r.review_id === 'string'), 'A saved owner scope response is required');
   const reviewId = responses[0].review_id;
+  enforce(typeof responses[0].id === 'string' && responses[0].id.length > 0,
+    'Saved scope response must have a source record ID');
   await none(b, 'service_scope_reviews', 'request_id', aRequest);
   await none(b, 'service_scope_responses', 'review_id', reviewId);
   await atLeastOne(admin, 'service_scope_responses', 'review_id', reviewId);
@@ -233,12 +271,16 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
     .select('id,question_id').in('question_id', questions.map((q) => q.id)).limit(2);
   enforce(!answerError && Array.isArray(answers) && answers.length > 0 && answers.every((r) => r && typeof r.question_id === 'string'), 'A saved owner clarification answer is required');
   const questionId = answers[0].question_id;
+  enforce(typeof answers[0].id === 'string' && answers[0].id.length > 0,
+    'Saved clarification answer must have a source record ID');
   await none(b, 'service_clarification_questions', 'request_id', aRequest);
   await none(b, 'service_clarification_answers', 'question_id', questionId);
   await atLeastOne(admin, 'service_clarification_answers', 'question_id', questionId);
   success('persisted clarification question/answer and participant RLS');
 
-  await atLeastOne(a, 'service_brief_amendments', 'request_id', aRequest);
+  const amendment = await atLeastOne(a, 'service_brief_amendments', 'request_id', aRequest);
+  enforce(typeof amendment.id === 'string' && amendment.id.length > 0,
+    'Saved brief amendment must have a source record ID');
   await none(b, 'service_brief_amendments', 'request_id', aRequest);
   await atLeastOne(admin, 'service_brief_amendments', 'request_id', aRequest);
   success('Phase 13 immutable amendment read boundaries');
@@ -249,6 +291,30 @@ export async function runStagingReadiness(config, clientFactory = createSafeClie
   await none(b, 'service_request_journal', 'request_id', aRequest);
   await atLeastOne(admin, 'service_request_journal', 'request_id', aRequest, 'event_key');
   await atLeastOne(admin, 'service_request_journal', 'request_id', bRequest, 'event_key');
+  // Confirm journal event keys are derived from actual source rows already
+  // checked in THIS signed-in session, not an unrelated journal fixture.
+  const sourceEvents = [
+    ['activity:' + activityA.id, null],
+    ['scope-review:' + reviews[0].id, 'scope_published'],
+    ['scope-response:' + responses[0].id, 'scope_response'],
+    ['question:' + questions[0].id, 'question_published'],
+    ['answer:' + answers[0].id, 'answer_submitted'],
+    ['amendment:' + amendment.id, 'amendment_submitted'],
+  ];
+  for (const [eventKey, kind] of sourceEvents) {
+    await requireJournalSource(a, aRequest, eventKey, kind);
+  }
+  success('Phase 14 journal source provenance for six persisted workflow events');
+
+  // The same owner must never read an internal/admin-only stream from
+  // a real request with an existing admin triage fixture.
+  for (const stream of ['internal', 'triage']) {
+    const { data, error } = await a.from('service_request_journal')
+      .select('event_key').eq('request_id', aRequest).eq('stream', stream).limit(1);
+    enforce(!error && Array.isArray(data) && data.length === 0,
+      'Phase 14 journal exposed or failed to exclude an internal stream');
+  }
+  success('Phase 14 internal stream exclusions');
   success('Phase 14 unified journal with cross-customer RLS');
 
   // A staged admin triage row on request A is required: without a real
