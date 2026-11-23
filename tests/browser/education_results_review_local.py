@@ -188,8 +188,11 @@ def result_case(browser, viewport, label, checks, grade, unauthorized=False):
         elif grade == "finalized":
             expect(page.get_by_text("Verified final grade", exact=False)).to_be_visible(timeout=15000)
             expect(page.get_by_text("7 / 10", exact=True)).to_be_visible()
+            # Grade receipt and owner answer evidence are independent queries;
+            # wait for the *graded* answer projection before inspecting select.
+            expect(page.get_by_text("Marked correct", exact=False)).to_be_visible(timeout=15000)
             record("finalized_grade_requires_matching_ledger_receipt", label, checks,
-                   lambda: (assert_equal(fixture.result_selects[-1], True),
+                   lambda: (assert_equal(any(fixture.result_selects), True),
                             assert_equal(page.get_by_text("999 / 1000", exact=False).count(), 0)))
             with page.expect_download() as pending:
                 page.get_by_role("button", name="Download my answers (.csv)").click()
@@ -201,6 +204,7 @@ def result_case(browser, viewport, label, checks, grade, unauthorized=False):
         elif grade == "malformed":
             expect(page.get_by_text("Official grade verification is unavailable.",
                                     exact=False)).to_be_visible(timeout=15000)
+            expect(page.get_by_text("Returned response evidence:", exact=False)).to_be_visible(timeout=15000)
             record("malformed_receipt_fails_closed", label, checks,
                    lambda: (assert_equal(page.get_by_text("999 / 1000", exact=False).count(), 0),
                             assert_equal(page.get_by_role("button", name="Download my answers (.csv)").is_disabled(), True),
@@ -208,6 +212,7 @@ def result_case(browser, viewport, label, checks, grade, unauthorized=False):
         else:
             expect(page.get_by_text("The attempt has been submitted, but an official score has not been recorded yet.",
                                     exact=False)).to_be_visible(timeout=15000)
+            expect(page.get_by_text("Returned response evidence:", exact=False)).to_be_visible(timeout=15000)
             record("pending_grade_hides_forged_legacy_score", label, checks,
                    lambda: (assert_equal(page.get_by_text("999 / 1000", exact=False).count(), 0),
                             assert_equal(page.get_by_text("Verified final grade", exact=False).count(), 0)))
