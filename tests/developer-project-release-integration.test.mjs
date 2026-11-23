@@ -122,7 +122,7 @@ test("deleted project files require explicit review and never invent a passing t
   assert.equal(result.coverage.deletedFileCount, 1);
   assert.deepEqual(result.coverage.deleted, ["old.js"]);
   assert.equal(result.status, "review-required");
-  assert.rejects(runDeveloperSavedPlanReleaseReview(edited, raw(p, initial(p)), starter()),
+  assert.rejects(runDeveloperSavedPlanReleaseReview(edited, raw(p, initial(p)), createDeveloperProject("starter", "other-project-38")),
     /different project/);
 });
 
