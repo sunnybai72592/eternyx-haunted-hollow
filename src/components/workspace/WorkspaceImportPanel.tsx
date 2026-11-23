@@ -22,11 +22,15 @@ type Parsed = ReturnType<typeof parseWorkspaceRestore> & {
 type Props = {
   owner: string;
   disabled: boolean;
+  resumeFingerprint?: string | null;
+  onResumeConsumed?: () => void;
   onImported: (id: string, result: string, failed: boolean) => void;
 };
 const textError = (value: unknown) => value instanceof Error ? value.message : "Import failed";
 
-export default function WorkspaceImportPanel({ owner, disabled, onImported }: Props) {
+export default function WorkspaceImportPanel({
+  owner, disabled, resumeFingerprint, onResumeConsumed, onImported,
+}: Props) {
   const [preview, setPreview] = useState<Parsed | null>(null);
   const [source, setSource] = useState("");
   const [sourceHash, setSourceHash] = useState("");
@@ -63,10 +67,15 @@ export default function WorkspaceImportPanel({ owner, disabled, onImported }: Pr
           ? await parseWorkspaceFullBackup(content)
           : parseWorkspaceRestore(content);
       const fingerprint = await sha256Hex(sourceBytes);
+      if (resumeFingerprint && fingerprint !== resumeFingerprint) {
+        throw new Error("This file is not the exact archive selected for recovery. " +
+          "Choose the original byte-for-byte file or cancel the recovery target.");
+      }
       setPreview(validated);
       setSourceHash(fingerprint);
       setSourceVersion(header.format_version);
       setSource(file.name);
+      if (resumeFingerprint) onResumeConsumed?.();
     } catch (failure) {
       setError(textError(failure));
     }
@@ -105,6 +114,10 @@ export default function WorkspaceImportPanel({ owner, disabled, onImported }: Pr
       projectId = begin.project_id;
       sessionId = begin.session_id;
 
+      if (begin.status === "discarding") {
+        throw new Error("This import was sealed for disposal. It cannot be resumed. " +
+          "Inspect its empty project in Recovery Center before final removal.");
+      }
       if (begin.status === "complete") {
         setProgress("");
         setImportNotice("This exact archive was already restored to a private project. No new records were created.");
@@ -251,7 +264,13 @@ export default function WorkspaceImportPanel({ owner, disabled, onImported }: Pr
       not duplicated. Private file retries verify SHA-256 without overwriting existing
       uploads. Different archives create separate projects; historical revisions are excluded.
     </p>
-    <input ref={input} type="file" accept=".json,application/json" aria-label="Choose ETERNYX Workspace project export"
+    {resumeFingerprint && <div className="space-y-2 rounded-lg border border-border p-2 text-xs">
+      <p>Resume selected archive SHA-256: {resumeFingerprint.slice(0, 16)}…
+        Choose the exact original file. A different file is rejected before import.</p>
+      <Button size="sm" type="button" variant="outline" onClick={onResumeConsumed}
+        disabled={busy || disabled}>Cancel recovery target</Button>
+    </div>}
+    <input id="workspace-import-file" ref={input} type="file" accept=".json,application/json" aria-label="Choose ETERNYX Workspace project export"
       onChange={(event) => void choose(event)}
       disabled={busy || disabled}
       className="block w-full min-w-0 text-xs file:mr-2 file:rounded-md file:border file:border-border file:bg-background file:px-2 file:py-2" />

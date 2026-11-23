@@ -2992,6 +2992,10 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_import_inspect: { Args: { p_session_id: string }; Returns: Json }
+      workspace_import_prepare_discard: { Args: { p_session_id: string }; Returns: boolean }
+      workspace_import_finalize_discard: { Args: { p_session_id: string }; Returns: boolean }
+      workspace_import_cancel_discard: { Args: { p_session_id: string }; Returns: boolean }
       workspace_import_begin: { Args: {
         p_source_sha256: string; p_source_version: number; p_project_name: string;
         p_description: string; p_expected_tasks: number; p_expected_steps: number;
