@@ -26,6 +26,7 @@
     "automation:staging:db:check": "node --test tests/automation-staging-db-readonly.test.mjs",
     "automation:staging:db:contract": "node --test tests/automation-staging-db-readonly.test.mjs tests/automation-staging-db-runtime-contract.test.mjs",
     "automation:staging:core:check": "node scripts/automation-staging-core-release.mjs --check-source",
+    "backend:missing:four:check": "node --test tests/eternyx-missing-backend-release.test.mjs",
     "automation:staging:http:check": "node --test tests/automation-staging-negative-http.test.mjs",
     "automation:staging:two-owner:check": "node --test tests/automation-staging-acceptance.test.mjs tests/automation-staging-two-owner-gate.test.mjs",
     "automation:staging:fresh-auth:check": "node --test tests/automation-staging-fresh-auth.test.mjs tests/automation-staging-two-owner-gate.test.mjs",

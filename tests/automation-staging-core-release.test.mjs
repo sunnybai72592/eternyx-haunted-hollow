@@ -153,7 +153,7 @@ test("approved staging workflow is manual-only, main-only, protected, source/JWT
   assert.match(w,/validateStageProbe/);
   assert.match(w,/validateCatalogReport/);
   assert.match(w,/inspectStageProject/);
-  assert.match(w,/verifyDeployedCore/);
+  assert.match(w,/verifyFourInventory/);
   for(const name of CORE)assert.match(w,new RegExp("supabase functions deploy "+name+" --remote="));
   assert.match(w,/automation-webhook --remote="\$target" --yes --no-verify-jwt/);
   assert.match(w,/automation-scheduler-worker --remote="\$target" --yes --no-verify-jwt/);
