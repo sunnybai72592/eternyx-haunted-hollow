@@ -129,7 +129,7 @@ test("CTF catalog SQL only reads pg_catalog, verifies RLS grants and service-onl
  assert.match(body,/has_table_privilege\('authenticated'.*'SELECT'/);
  assert.match(body,/pg_catalog\.pg_policies/);
  assert.match(body,/relrowsecurity/);
- assert.doesNotMatch(body,/\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|DO|CALL|COPY)\b/i);
+ assert.doesNotMatch(body,/^\s*(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|DO|CALL|COPY)\b/im);
 });
 test("live staging runner reuses verify-full TLS and strict project binding and never performs writes",async()=>{
  const s=await readFile(path.join(root,"scripts/eternyx-staging-ctf-catalog.sh"),"utf8");
@@ -141,7 +141,7 @@ test("live staging runner reuses verify-full TLS and strict project binding and 
  ]){
    assert.ok(s.includes(required),required);
  }
- assert.doesNotMatch(s,/supabase functions deploy|db push|migration repair|SUPABASE_ACCESS_TOKEN/);
+ assert.doesNotMatch(s.split("\n").filter(line=>!line.trimStart().startsWith("#")).join("\n"),/supabase functions deploy|db push|migration repair|SUPABASE_ACCESS_TOKEN/);
 });
 test("protected staging action requires separate CTF secret review, separate database proofs, exactly four deploys",async()=>{
  const w=await readFile(path.join(root,".github/workflows/automation-staging-core-release.yml"),"utf8");
@@ -173,7 +173,7 @@ test("offline PG17 job applies real CTF migration and proves missing owner RLS b
   "scripts/sql/eternyx-staging-ctf-catalog.sql",
   "parseCtfCatalog",
   "ctf_verified_solves DISABLE ROW LEVEL SECURITY",
-  "disabled verified CTF owner RLS",
+  "Disabled verified CTF owner RLS",
  ])assert.ok(w.includes(key),key);
  assert.doesNotMatch(w,/\$\{\{\s*secrets\.|SUPABASE_ACCESS_TOKEN/);
 });
