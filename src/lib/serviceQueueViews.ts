@@ -24,7 +24,7 @@ export function buildQueuePresetLink(
 ): string {
   const allowed = mode === 'admin' ? adminPresets : ownerPresets;
   if (!allowed.some((value) => value === preset)) throw new Error('Unsupported Services queue preset');
-  const path = mode === 'admin' ? '/admin/service-requests' : '/my-service-requests';
+  const path = mode === 'admin' ? '/admin/service-requests' : '/services/requests';
   const url = new URL(path, origin);
   url.search = '';
   url.hash = '';
