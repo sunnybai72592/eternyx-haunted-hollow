@@ -26,6 +26,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const [movieProfile,setMovieProfile]=useState<"landscape"|"portrait"|"square">("landscape");
   const [movieQuality,setMovieQuality]=useState<"standard"|"high">("standard");
   const [movieDelivery,setMovieDelivery]=useState<"mp4"|"mp4_with_subtitles"|"mp4_webm"|"all">("mp4");
+  const [movieFraming,setMovieFraming]=useState<"contain"|"cover">("contain");
   const [bundling,setBundling]=useState(false);
   const [bundleStatus,setBundleStatus]=useState("");
   const bundleRequest=useRef(0);
@@ -73,6 +74,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
     try{
       const moviePlan=directMovie?{
         profile:movieProfile,quality:movieQuality,delivery:movieDelivery,
+        framing:movieFraming,
         shots:originals.map((file,index)=>({
           source_filename:file.name,frames:movieCutSeconds*16,
           caption:movieCaptions[index]??"",
@@ -104,7 +106,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
       setMessage((directMovie?"Downloaded a complete offline phone MOVIE project (":"Downloaded a complete private phone conversion project (")+
         (result.bytes/1048576).toFixed(2)+" MiB). Extract and launch it locally; "+
         (directMovie?
-          "the runner creates an actual finished H264 video.mp4, SRT captions, preview, receipts, and editable source clips.":
+          "the runner creates H264 video.mp4, SRT/VTT captions, a real poster, playable local preview, receipts and editable source clips.":
           "the output includes verified 16 FPS MP4s AND a reusable editable project draft."));
     }catch(cause){
       if(token===bundleRequest.current)
@@ -227,6 +229,16 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
                 </select>
               </label>
             </div>
+            <label className="block space-y-1 text-xs">
+              How each shot fills the frame
+              <select value={movieFraming} disabled={bundling}
+                onChange={event=>setMovieFraming(event.target.value as "contain"|"cover")}
+                className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                <option value="contain">Keep whole shot (letterbox)</option>
+                <option value="cover">Fill frame (center crop edges)</option>
+              </select>
+              <span className="text-slate-400">Fill crops real footage; it cannot create lost detail.</span>
+            </label>
             <label className="block space-y-1 text-xs">
               Finished video files (created automatically by the same local launch)
               <select value={movieDelivery} disabled={bundling}

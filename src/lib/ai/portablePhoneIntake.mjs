@@ -71,10 +71,14 @@ const readme=[
 export const PHONE_MOVIE_PROFILES=Object.freeze(["landscape","portrait","square"]);
 export const PHONE_MOVIE_QUALITIES=Object.freeze(["standard","high"]);
 export const PHONE_MOVIE_DELIVERIES=Object.freeze(["mp4","mp4_with_subtitles","mp4_webm","all"]);
+export const PHONE_MOVIE_FRAMINGS=Object.freeze(["contain","cover"]);
 export function validatePhoneMoviePlan({files,moviePlan,seconds}){
   if(!Array.isArray(files)||!files.length||files.length>8||
      !moviePlan||typeof moviePlan!=="object"||Array.isArray(moviePlan)||
-     !["profile,quality,shots","delivery,profile,quality,shots"].includes(Object.keys(moviePlan).sort().join(","))||
+     !["profile,quality,shots","delivery,profile,quality,shots",
+       "framing,profile,quality,shots","delivery,framing,profile,quality,shots"]
+       .includes(Object.keys(moviePlan).sort().join(","))||
+     (moviePlan.framing!==undefined&&!PHONE_MOVIE_FRAMINGS.includes(moviePlan.framing))||
      (moviePlan.delivery!==undefined&&!PHONE_MOVIE_DELIVERIES.includes(moviePlan.delivery))||
      !PHONE_MOVIE_PROFILES.includes(moviePlan.profile)||
      !PHONE_MOVIE_QUALITIES.includes(moviePlan.quality)||
@@ -103,7 +107,8 @@ export function validatePhoneMoviePlan({files,moviePlan,seconds}){
   if(total>480)throw new Error("Direct movie exceeds 30 seconds / 480 frames.");
   return {kind:"eternyx_offline_phone_movie",version:1,
           profile:moviePlan.profile,quality:moviePlan.quality,
-          ...(moviePlan.delivery===undefined?{}:{delivery:moviePlan.delivery}),shots};
+          ...(moviePlan.delivery===undefined?{}:{delivery:moviePlan.delivery}),
+          ...(moviePlan.framing===undefined?{}:{framing:moviePlan.framing}),shots};
 }
 const movieWindows=[
   "@echo off","setlocal",'pushd "%~dp0" || exit /b 1',
@@ -138,6 +143,8 @@ const movieGuide=[
   "Optional embedded subtitles are a selectable MP4 track, not burned-in text.",
   "If WebM is selected, FFmpeg also needs its local libvpx-vp9 encoder.",
   "Every requested extra is verified before any final output is published.",
+  "Includes verified poster.png, editable captions.vtt and offline watch.html.",
+  "Some local file:// browsers restrict caption tracks; embedded MP4 is optional.",
   "This is real offline CPU editing, NOT AI-generated text-to-video.","",
 ].join("\n");
 export async function buildPortablePhoneMovie(input){

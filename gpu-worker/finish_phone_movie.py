@@ -10,12 +10,14 @@ python3 finish_phone_movie.py --run
 import argparse
 import json
 from pathlib import Path
+import struct
+from html import escape
 import shutil
 import tempfile
 
 import launch_phone_intake as intake
 import render_video_timeline as renderer
-from assemble_video_storyboard import unique_keys
+from assemble_video_storyboard import unique_keys, subtitle_time
 
 ROOT = Path(__file__).resolve().parent
 PLAN_NAME = "phone-movie-plan.json"
@@ -24,6 +26,7 @@ MAX_PLAN_BYTES = 32768
 PROFILES = {"landscape", "portrait", "square"}
 QUALITIES = {"standard", "high"}
 DELIVERIES = {"mp4", "mp4_with_subtitles", "mp4_webm", "all"}
+FRAMINGS = {"contain", "cover"}
 
 
 def extra_outputs(mode):
@@ -45,6 +48,57 @@ def verified_variant(path, expected_codec, frames, size, subtitles=False):
         raise ValueError("Rendered delivery codec or subtitle track failed verification")
     return {**result, "codec": expected_codec, "selectable_subtitles": subtitles}
 
+
+
+def make_preview_assets(folder, receipt):
+    """Generate real image and human captions, no server or remote scripts."""
+    video = folder / "video.mp4"
+    width, height = receipt["video"]["width"], receipt["video"]["height"]
+    frame = renderer.execute([
+        "ffmpeg", "-nostdin", "-hide_banner", "-v", "error",
+        "-ss", "0.5", "-i", str(video), "-map", "0:v:0", "-an",
+        "-frames:v", "1", "-c:v", "png", "-f", "image2pipe", "pipe:1",
+    ], timeout=60)
+    if (not frame.startswith(b"\x89PNG\r\n\x1a\n") or
+            len(frame) > 2 * 1024 * 1024 or len(frame) < 24 or
+            struct.unpack(">II", frame[16:24]) != (width, height)):
+        raise ValueError("Real final video poster failed PNG/dimension verification")
+    poster = folder / "poster.png"
+    poster.write_bytes(frame)
+    captions = ["WEBVTT", ""]
+    for shot in receipt["shots"]:
+        start = subtitle_time(shot["timeline_start_frame"]).replace(",", ".")
+        end = subtitle_time(shot["timeline_start_frame"] + shot["frames"]).replace(",", ".")
+        captions.extend([start + " --> " + end, escape(shot["caption"]), ""])
+    vtt = folder / "captions.vtt"
+    vtt.write_text("\n".join(captions) + "\n", encoding="utf8")
+    watch = folder / "watch.html"
+    watch.write_text("""<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ETERNYX offline video playback</title>
+<style>body{font:1rem/1.5 system-ui;max-width:50rem;margin:2rem auto;padding:1rem}
+video{width:100%;height:auto;max-height:75vh;background:#000}</style>
+<main><h1>Verified finished movie</h1>
+<p>Locally rendered original footage. No cloud playback or generated scenes.</p>
+<video controls playsinline preload="metadata" poster="poster.png">
+<source src="video.mp4" type="video/mp4">
+<track kind="captions" src="captions.vtt" srclang="en"
+label="Human-authored captions" default>
+Browser MP4 playback not supported.</video>
+<p><a href="captions.srt">Editable SRT</a> ·
+<a href="manifest.json">Local SHA-256 receipt</a></p>
+<p>Some browsers limit file:// caption tracks; choose the selectable-caption
+MP4 in Studio for broader subtitle compatibility.</p></main></html>
+""", encoding="utf8")
+    result = {}
+    for asset in (poster, vtt, watch):
+        if asset.is_symlink() or not asset.is_file() or not 0 < asset.stat().st_size <= 2 * 1024 * 1024:
+            raise ValueError("Offline movie preview asset missing or oversized")
+        result[asset.name] = {
+            "sha256": renderer.sha256(asset),
+            "file_bytes": asset.stat().st_size,
+        }
+    return result
 
 def produce_deliverables(folder, receipt, mode):
     """Create optional genuine local formats in the unpublished staging folder."""
@@ -84,6 +138,7 @@ def produce_deliverables(folder, receipt, mode):
         ], timeout=90)
         outputs["video-subtitled.mp4"] = verified_variant(
             target, "h264", frames, size, subtitles=True)
+    outputs.update(make_preview_assets(folder, receipt))
     return outputs
 
 
@@ -97,12 +152,13 @@ def load_plan(root):
             plan = json.loads(stream.read().decode("utf8"),object_pairs_hook=unique_keys)
     except (UnicodeError,ValueError,TypeError) as error:
         raise ValueError("Invalid private phone movie plan JSON") from error
-    if (not isinstance(plan,dict) or set(plan) not in ({"kind","version","profile","quality","shots"},
-                          {"kind","version","profile","quality","shots","delivery"}) or
+    if (not isinstance(plan,dict) or not {"kind","version","profile","quality","shots"} <= set(plan) or
+        set(plan) - {"kind","version","profile","quality","shots","delivery","framing"} or
         plan["kind"]!="eternyx_offline_phone_movie" or
         type(plan["version"]) is not int or plan["version"]!=1 or
         plan["profile"] not in PROFILES or plan["quality"] not in QUALITIES or
         plan.get("delivery", "mp4") not in DELIVERIES or
+        plan.get("framing", "contain") not in FRAMINGS or
         not isinstance(plan["shots"],list) or not 1<=len(plan["shots"])<=8):
         raise ValueError("Unsupported or incomplete private phone movie plan")
     total=0
@@ -142,6 +198,7 @@ def preflight(root=ROOT):
         "frames":sum(s["frames"] for s in plan["shots"]),
         "profile":plan["profile"],"quality":plan["quality"],
         "delivery":plan.get("delivery", "mp4"),
+        "framing":plan.get("framing", "contain"),
         "originals_verified":checked["source_count"],
         "private_media_uploaded":False,
         "output":OUTPUT,
@@ -194,12 +251,14 @@ def run(root=ROOT,on_stage=None):
     try:
         unpublished = stage / "rendered"
         receipt=renderer.render(storyboard,media,unpublished,
-                                profile=plan["profile"],quality=plan["quality"])
+                                profile=plan["profile"],quality=plan["quality"],
+                                framing=plan.get("framing", "contain"))
         if (receipt.get("model_generation") is not False or
             receipt.get("version")!=2 or
             receipt.get("total_frames")!=checked["frames"] or
             receipt.get("profile")!=plan["profile"] or
             receipt.get("quality")!=plan["quality"] or
+            receipt.get("framing")!=plan.get("framing", "contain") or
             receipt.get("video",{}).get("frame_count")!=checked["frames"]):
             raise ValueError("Final local FFmpeg receipt does not match the original plan")
         on_stage("Encoding and verifying selected final deliverables on CPU...")
@@ -220,6 +279,7 @@ def run(root=ROOT,on_stage=None):
         "result":"completed","frames":checked["frames"],
         "shots":checked["shots"],"profile":plan["profile"],
         "quality":plan["quality"],"delivery":plan.get("delivery", "mp4"),
+        "framing":plan.get("framing", "contain"),
         "deliverables":list(receipt["deliverables"]),
         "video_sha256":receipt["video"]["sha256"],
         "output":OUTPUT,"media":intake.OUTPUT,
