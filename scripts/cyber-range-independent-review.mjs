@@ -5,7 +5,7 @@
  */
 import {
   inspectIndependentReviewCase,signIndependentReviewCase,
-  verifyIndependentReviewCase,
+  verifyIndependentReviewCase,auditIndependentReviewConsistency,
 } from "../infrastructure/cyber-range/provider/firecracker-independent-review.mjs";
 import {validSessionId} from "../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
@@ -13,6 +13,7 @@ const SHA=/^[a-f0-9]{64}$/;
 const ACK="I_REVIEWED_INDEPENDENT_SOURCE_FILES";
 const usage=[
   "ETERNYX offline second-person Firecracker evidence review",
+  "node scripts/cyber-range-independent-review.mjs --audit-consistency --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
   "node scripts/cyber-range-independent-review.mjs --inspect --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
   "node scripts/cyber-range-independent-review.mjs --endorse --confirm-independent-review --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
   "node scripts/cyber-range-independent-review.mjs --verify --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
@@ -26,7 +27,7 @@ try{
     console.log(usage);
   }else{
     const mode=args[0];
-    if(!["--inspect","--endorse","--verify"].includes(mode))
+    if(!["--audit-consistency","--inspect","--endorse","--verify"].includes(mode))
       throw Error("Unknown review action");
     const endorsed=mode==="--endorse";
     const values=endorsed?args.slice(2):args.slice(1);
@@ -55,6 +56,8 @@ try{
       console.log(JSON.stringify(await signIndependentReviewCase({
         ...shared,reviewerAck:ACK,
       })));
+    }else if(mode==="--audit-consistency"){
+      console.log(JSON.stringify(await auditIndependentReviewConsistency(shared)));
     }else if(mode==="--inspect"){
       console.log(JSON.stringify(await inspectIndependentReviewCase(shared)));
     }else{

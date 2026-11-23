@@ -19,6 +19,8 @@ import {verifySignedOperatorEvidence} from
   "./firecracker-operator-evidence.mjs";
 import {assertNoUnfinishedHandoff} from
   "./firecracker-handoff-import-journal.mjs";
+import {auditOperatorEvidenceConsistency} from
+  "./firecracker-evidence-consistency.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -294,6 +296,9 @@ export async function inspectIndependentReviewCase({
   caseBase=REVIEW_CASE_BASE,owner=0,
 }={}){
   const source=await loadCase(sessionId,{caseBase,owner});
+  const consistency=auditOperatorEvidenceConsistency({
+    ...source,operatorFingerprint,
+  });
   const keys=await reviewerKeys({owner});
   const status=validateOperator(source.operatorReport,
     source.operatorPublicPem,operatorFingerprint);
@@ -305,6 +310,7 @@ export async function inspectIndependentReviewCase({
   return Object.freeze({sessionId,mode:status.mode,
     operatorSignatureVerified:true,requiredSources:files.length,
     sourceHashes:files,reviewerKeyPinned:true,
+    metadataConsistencyVerified:consistency.metadataConsistencyVerified,
     readyForHumanReview:true,productionReady:false});
 }
 export async function signIndependentReviewCase({
@@ -312,6 +318,7 @@ export async function signIndependentReviewCase({
   caseBase=REVIEW_CASE_BASE,owner=0,
 }={}){
   const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
   const keys=await reviewerKeys({owner,privateRequired:true});
   const report=createIndependentReview({
     ...source,...keys,operatorFingerprint,reviewerFingerprint,reviewerAck,
@@ -343,10 +350,27 @@ export async function verifyIndependentReviewCase({
   caseBase=REVIEW_CASE_BASE,owner=0,
 }={}){
   const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
   const keys=await reviewerKeys({owner});
   const verdict=JSON.parse((await safeRead(join(source.folder,
     "review-verdict.json"),owner,MAX_RECEIPT)).toString("utf8"));
   return verifyIndependentReview({
     ...source,...keys,report:verdict,operatorFingerprint,reviewerFingerprint,
   });
+}
+
+/**
+ * A read-only, no-key and no-VM consistency check, before human signature.
+ * The supplied JSON is explicitly operator-collected, not attested proof.
+ */
+export async function auditIndependentReviewConsistency({
+  sessionId,operatorFingerprint,caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  const source=await loadCase(sessionId,{caseBase,owner});
+  const result=auditOperatorEvidenceConsistency({
+    ...source,operatorFingerprint,
+  });
+  if(result.sessionId!==sessionId)
+    throw Error("Offline consistency audit session does not match case");
+  return result;
 }
