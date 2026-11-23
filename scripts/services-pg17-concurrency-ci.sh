@@ -8,7 +8,8 @@ case "$container" in
 esac
 if [[ "$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container")" != "none" ]] ||
    [[ "$(docker inspect --format '{{.Config.Image}}' "$container")" != "postgres:17-alpine" ]] ||
-   [[ "$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$container")" != "null" ]]; then
+   { [[ "$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$container")" != "null" ]] &&
+     [[ "$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$container")" != "{}" ]]; }; then
   echo "BLOCKED: requires networkless, unexposed disposable PG17" >&2
   exit 2
 fi
