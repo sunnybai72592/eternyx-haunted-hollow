@@ -101,7 +101,7 @@ test("long lines show exact source-derived partial excerpts without claiming to 
 
 test("query grammar, unknown filters and more than 2,000 matched lines refuse partial reports", () => {
   const doc=makeDoc("a","a.txt","cp");
-  for(const query of ["", "+++", "w ".repeat(9), "x".repeat(121)]){
+  for(const query of ["", "+++", "one two three four five six seven eight nine", "x".repeat(121)]){
     assert.throws(()=>corpus.searchCorpus([doc],query),{code:"invalid_query"});
   }
   assert.throws(()=>corpus.searchCorpus([doc],"cp","foo"),{code:"invalid_query"});
