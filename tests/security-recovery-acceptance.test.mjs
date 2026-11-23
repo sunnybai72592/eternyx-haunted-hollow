@@ -115,7 +115,7 @@ test("recovery packet always blocks production and explains limits of unsigned e
  assert.equal(packet.catalog.status,"missing");
  assert.equal(packet.migration.status,"missing");
  assert.equal(packet.requirements.at(-1).status,"missing");
- assert.equal(parseRecoveryPacketJson(JSON.stringify(packet)),packet.constructor===Object?packet:packet);
+ assert.deepEqual(parseRecoveryPacketJson(JSON.stringify(packet)),packet);
  assert.doesNotMatch(JSON.stringify(packet),/password|Bearer |storage_path|private\.txt/i);
 });
 test("tampering with labels, RTO, cross-project identities or release state is rejected",()=>{
