@@ -166,7 +166,7 @@ test("manual workflow must verify exact healthy stage project and core functions
     "I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN",
     "validateTwoOwnerGate","inspectStageProject","verifyDeployedCore",
     "automation-staging-fresh-auth.mjs", "mode=\"--inspect\"", "mode=\"--execute\"",
-    "checkTwoOwnerEvidence","automation-two-owner-verified.json",
+    "automation-staging-fresh-auth.mjs","automation-two-owner-verified.json",
     "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_EMAIL",
     "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD",
     "secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_EMAIL",
@@ -181,6 +181,9 @@ test("manual workflow must verify exact healthy stage project and core functions
   assert.ok(firstSecretIndex>guardIndex,"staging identity proof must run before owner JWTs enter a step");
   assert.match(w,/inputs\.run_mode == 'ONE_TEMPORARY_WORKFLOW' && inputs\.write_approval == 'I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN'/);
   assert.doesNotMatch(w,/secrets\.ETERNYX_AUTOMATION_STAGING_OWNER_[AB]_JWT/);
+  const runtime=await readFile(new URL("../scripts/automation-staging-fresh-auth.mjs",import.meta.url),"utf8");
+  assert.match(runtime,/checkTwoOwnerEvidence/);
+  assert.match(runtime,/runAcceptance/);
   assert.match(w,/authMethod,"fresh_staging_password_signin"/);
   assert.match(w,/freshSessions,2/);
   assert.doesNotMatch(w,/SUPABASE_SERVICE_ROLE_KEY|SUPABASE_DB_PASSWORD/);
