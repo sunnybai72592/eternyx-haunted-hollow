@@ -37,7 +37,9 @@ test('private deep links do not display data from a different authenticated user
   assert.match(source, /\.eq\('user_id', userId\)/);
   assert.match(source, /\.eq\('id', selected\)/);
   assert.match(source, /visibleLinkedRequest && \(selectedPanel !== null \|\| !visibleRows\.some/);
-  assert.match(source, /The request was not found or your account cannot access it/);
+  assert.match(source, /describePrivateRequestRead\(error, !!data\)/);
+  const classifier = await read('src/lib/servicePrivateRequestReliability.ts');
+  assert.match(classifier, /This request was not found or the signed-in account cannot access it/);
 });
 
 test('cursor history uses timestamp plus id and ignores superseded responses', async () => {
