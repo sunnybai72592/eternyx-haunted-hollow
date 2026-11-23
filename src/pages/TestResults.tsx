@@ -397,7 +397,7 @@ export default function TestResults() {
                   {answersQuery.data?.length === 0 && <p className="text-sm text-muted-foreground">No submitted answers were returned.</p>}
                   {answersQuery.isSuccess && reviewCounts.returned > 0 && visibleAnswers.length === 0 &&
                     <p className="text-sm text-muted-foreground">No returned answers match these filters.</p>}
-                  {visibleAnswers.map((answer, index) => (
+                  {visibleAnswers.map(answer => (
                     <div key={answer.id} className="rounded-lg border border-border bg-background p-4 text-sm">
                       <p className="font-semibold">Response {answer.response_number}. {answer.question_text}</p>
                       {!answer.metadata_available && <p role="note" className="mt-1 text-xs text-destructive">
