@@ -12,6 +12,8 @@ import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
 import { verifyPinnedDockerLabPermit } from "../src/lib/dockerLabPermitGuard.mjs";
 import { validateDockerReceiptAcknowledgement } from "../src/lib/dockerLabReceiptGuard.mjs";
+import {classifyDockerAgentAttempt,requireDurableTerminalBeforeReceipt}
+  from "../src/lib/dockerAgentAttemptDisposition.mjs";
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HELP="Usage: ETERNYX_REMOTE_LAB_ENABLED=true ETERNYX_SUPABASE_URL=https://PROJECT.supabase.co node scripts/docker-lab-agent.mjs AGENT_UUID /ABSOLUTE/AGENT-PRIVATE.pem /ABSOLUTE/PINNED-SERVER-PUBLIC.key --execute-lab";
@@ -81,6 +83,9 @@ async function main(){
   if(key.asymmetricKeyType!=="ed25519")throw new Error("Ed25519 agent key required.");
   const pinned=pubFile(process.argv[4]);
   const unlock=lockLabAgent(agentId);
+  // Once a claim is reserved, a missing durable terminal is a manual-recovery
+  // hold. Never release the agent lock on an uncertain Docker operation.
+  let retainRecoveryLock=false;
   try {
     const context=executeLab?localContext():null; // Receipt-only recovery never touches Docker
   const endpoint=host.origin+"/functions/v1/docker-command-dispatch";
@@ -125,26 +130,44 @@ async function main(){
   // Permanent per-claim exclusive reservation is made BEFORE the first Docker operation.
   // A crash or duplicate claim MUST NOT execute a previously reserved claim again.
   reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
-  let outcome="guard_denied",attempted=false;
+  retainRecoveryLock=true; // Never auto-unlock a newly reserved, unresolved claim.
+  let attempted=false,postconditionConfirmed=false;
   try{
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
     const raw=docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]);
     const before=JSON.parse(raw);
     verifyManagedTarget(before,permit.containerId);
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
-    audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:"attempted"});
-    appendLabEvent(permit.claimId,"attempted");
+    // Set uncertainty BEFORE fsync. Even an interrupted/partially written
+    // attempted event must never be downgraded into a guard_denied receipt.
     attempted=true;
-    outcome="failed";
+    appendLabEvent(permit.claimId,"attempted");
+    audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:"attempted"});
+    if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired after attempt reservation.");
     docker(["--context",context,"container",permit.operation,permit.containerId],20000);
     const after=JSON.parse(docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]));
     if(!labPostcondition(permit.operation,before,after))throw Error("Docker postcondition unconfirmed.");
-    outcome="completed";
+    postconditionConfirmed=true;
   }catch{
-    process.stderr.write("Lab mutation refused, failed or uncertain. Review local journal; never auto-retry.\n");
+    process.stderr.write("Lab guard, mutation or postcondition not confirmed. Inspect journal; never auto-retry.\n");
   }
-  if(attempted&&outcome==="guard_denied")outcome="failed";
+  const disposition=classifyDockerAgentAttempt({attempted,postconditionConfirmed});
+  if(!disposition.outcome){
+    // NO synthetic failed receipt after a Docker timeout or disputed state.
+    // Keep the owner-private exclusive lock and attempted-only journal intact.
+    try{audit({claimId:permit.claimId,containerId:permit.containerId,
+      operation:permit.operation,result:"unknown_attempt_manual_review_required"});}
+    catch{process.stderr.write("Could not append local uncertainty audit; original recovery hold remains.\n");}
+    process.stderr.write("Docker outcome UNKNOWN. No terminal event or signed receipt; agent locked pending independent human review.\n");
+    process.exitCode=1;
+    return;
+  }
+  const outcome=disposition.outcome;
   appendLabEvent(permit.claimId,outcome);
+  requireDurableTerminalBeforeReceipt(readLabClaim(permit.claimId),outcome);
+  // Release only AFTER the journal's definitive outcome has been fsynced and
+  // read back. Receipt-only recovery remains possible after network errors.
+  retainRecoveryLock=false;
   audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:outcome});
   try{
     const receipt=await send("receipt",permit.claimId,outcome);
@@ -156,7 +179,7 @@ async function main(){
     process.stderr.write("Receipt delivery uncertain. Use --resend-receipt with exact claim ID, never rerun Docker.\n");
     process.exitCode=1;
   }
-  } finally {unlock();}
+  } finally {if(!retainRecoveryLock)unlock();}
 }
 main().catch(error=>{
   process.stderr.write((error instanceof Error?error.message:"Local Docker lab dispatch failed.")+"\n");
