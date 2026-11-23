@@ -74,7 +74,7 @@ test("wrong but well-formed answers do not count as successes",async()=>{
  assert.equal((await gradePracticeAnswerAsync("pbkdf2-vector",digest.toUpperCase(),webcrypto)).correct,true);
  assert.equal((await gradePracticeAnswerAsync("pbkdf2-vector","0".repeat(64),webcrypto)).correct,false);
  assert.equal((await gradePracticeAnswerAsync("totp-leading-zero","07081804",webcrypto)).correct,true);
- assert.equal((await gradePracticeAnswerAsync("totp-leading-zero","7081804",webcrypto)).correct===true,false);
+ await assert.rejects(gradePracticeAnswerAsync("totp-leading-zero","7081804",webcrypto),/eight|8/);
 });
 test("Web Crypto is required, malformed answers fail closed, and no synchronous pretend crypto",async()=>{
  for(const [id,valid] of [
