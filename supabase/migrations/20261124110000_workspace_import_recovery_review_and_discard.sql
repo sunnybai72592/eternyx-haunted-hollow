@@ -251,3 +251,26 @@ $workspace_import_cancel_discard$;
 REVOKE ALL ON FUNCTION public.workspace_import_cancel_discard(uuid)
   FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.workspace_import_cancel_discard(uuid) TO authenticated;
+
+
+-- Preserve the sealed state against older Phase 9 RPCs such as
+-- workspace_import_finish, which might otherwise complete an all-zero
+-- session without checking status. No browser role has UPDATE grants;
+-- this trigger also protects calls made by privileged owned RPCs.
+CREATE OR REPLACE FUNCTION public.workspace_import_status_transition_guard()
+RETURNS trigger LANGUAGE plpgsql SET search_path=''
+AS $workspace_transition_guard$
+BEGIN
+  IF (OLD.status='discarding' AND NEW.status NOT IN ('discarding','active'))
+    OR (OLD.status='complete' AND NEW.status<>'complete') THEN
+    RAISE EXCEPTION 'Invalid Workspace import recovery status transition'
+      USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$workspace_transition_guard$;
+REVOKE ALL ON FUNCTION public.workspace_import_status_transition_guard()
+  FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER workspace_import_status_transition_guard
+  BEFORE UPDATE OF status ON public.workspace_import_sessions
+  FOR EACH ROW EXECUTE FUNCTION public.workspace_import_status_transition_guard();
