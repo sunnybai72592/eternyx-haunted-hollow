@@ -57,6 +57,8 @@ jobs:
       ETERNYX_EDU_RELEASE_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_full_rehearsal && 'I_ACKNOWLEDGE_STAGING_EXAM_REVIEW_AND_GRADE_ARE_IRREVERSIBLE' || '' }}
       ETERNYX_EDU_STAGING_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_READ_ONLY' || '' }}
       ETERNYX_EDU_RESULTS_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_RESULTS_READ_ONLY' || '' }}
+      ETERNYX_EDU_DB_META_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_DB_METADATA_READ_ONLY' || '' }}
+      ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
       ETERNYX_EDU_WRITE_MODE: ${{ inputs.run_mode == 'rehearsal' && 'write' || 'preflight' }}
       ETERNYX_EDU_CBT_WRITE_APPROVAL: ${{ inputs.run_mode == 'rehearsal' && inputs.approve_cbt_write && 'I_APPROVE_FRESH_EDUCATION_STAGING_CBT_ATTEMPT' || '' }}
       ETERNYX_EDU_IRREVERSIBLE_ACK: ${{ inputs.run_mode == 'rehearsal' && inputs.acknowledge_no_retake && 'I_ACKNOWLEDGE_STAGING_ATTEMPT_CANNOT_BE_RETAKEN' || '' }}
@@ -121,6 +123,9 @@ jobs:
           '
       - name: Install locked dependencies
         run: npm ci
+      - name: Verify real staging database RLS, grants and protected grading before any CBT writes
+        timeout-minutes: 2
+        run: node scripts/staging/educationHostedDbMetadata.mjs
       - name: Run ordered real-JWT protected backend acceptance and issue staging-only verdict
         timeout-minutes: 35
         run: node scripts/staging/runEducationHostedRelease.mjs
@@ -130,6 +135,7 @@ jobs:
         with:
           name: education-hosted-release-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            test-results/education-hosted-db-metadata.json
             test-results/education-hosted-readonly.json
             test-results/education-hosted-cbt-write.json
             test-results/education-hosted-instructor-final-grade.json
