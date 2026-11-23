@@ -18,7 +18,7 @@ const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status
 const reasonStatus:Record<string,number>={
   invalid_request:400,not_found:404,expired:410,idempotency_conflict:409,
   already_decided:409,policy_disabled:403,agent_unavailable:409,
-  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,incident_hold:423,release_required:409,not_escalated:409,invalid_transition:409,
+  open_limit:429,daily_limit:429,case_limit:429,event_limit:429,not_actionable:409,incident_hold:423,release_required:409,not_escalated:409,invalid_transition:409,independent_reviewer_required:409,reviewer_already_assigned:409,reviewer_finalized:409,candidate_mismatch:409,
 };
 const reasonMessage:Record<string,string>={
   invalid_request:"Invalid Docker control request",
@@ -37,6 +37,10 @@ const reasonMessage:Record<string,string>={
   release_required:"Release the escalated containment explicitly before ordinary case triage",
   not_escalated:"Only an escalated case can release containment",
   invalid_transition:"Release review transition is not permitted; reviewed or blocked records are terminal",
+  independent_reviewer_required:"A different authenticated account must accept the exact release candidate before owner review can finish",
+  reviewer_already_assigned:"This release already has a different assigned reviewer; create a new review for reassignment",
+  reviewer_finalized:"Reviewer response is final and cannot be changed",
+  candidate_mismatch:"Reviewer candidate SHA-256 does not match the invited release",
 };
 serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
@@ -55,7 +59,7 @@ serve(async(req:Request)=>{
   const owner=verifiedOwner;
   try{
     if(parsed.action==="list"){
-      const [policy,requests,events,agents,dispatch,incidents,incidentEvents,reports,releaseReviews,releaseEvents]=await Promise.all([
+      const [policy,requests,events,agents,dispatch,incidents,incidentEvents,reports,releaseReviews,releaseEvents,ownedReleaseAssignments,invitedReleaseAssignments]=await Promise.all([
         supabase.from("docker_control_policies").select("enabled,daily_limit,incident_hold,incident_hold_at,updated_at").eq("owner_id",owner).maybeSingle(),
         supabase.from("docker_control_requests").select("id,agent_id,operation,container_id,state,requested_at,expires_at,approved_at,resolved_at").eq("owner_id",owner).order("requested_at",{ascending:false}).limit(30),
         supabase.from("docker_control_events").select("request_id,event_kind,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
@@ -65,9 +69,11 @@ serve(async(req:Request)=>{
         supabase.from("docker_lab_incident_events").select("id,incident_id,action,note,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(40),
         supabase.from("docker_agent_reports").select("agent_id,engine_available,last_received_at").eq("owner_id",owner).order("last_received_at",{ascending:false}).limit(25),
         supabase.from("docker_release_reviews").select("id,request_key,commit_sha,candidate_sha256,source_snapshot_sha256,manifest_sha256,staging_ref,state,created_at,updated_at,reviewed_at").eq("owner_id",owner).order("created_at",{ascending:false}).limit(30),
-        supabase.from("docker_release_review_events").select("id,review_id,event_kind,note,occurred_at").eq("owner_id",owner).order("id",{ascending:false}).limit(80),
+        supabase.from("docker_release_review_events").select("id,review_id,owner_id,actor_id,event_kind,note,occurred_at,previous_sha256,entry_sha256").eq("owner_id",owner).order("id",{ascending:false}).limit(100),
+        supabase.from("docker_release_reviewer_assignments").select("review_id,owner_id,reviewer_id,commit_sha,candidate_sha256,state,invited_at,responded_at,reviewer_note").eq("owner_id",owner).order("invited_at",{ascending:false}).limit(30),
+        supabase.from("docker_release_reviewer_assignments").select("review_id,owner_id,reviewer_id,commit_sha,candidate_sha256,state,invited_at,responded_at,reviewer_note").eq("reviewer_id",owner).order("invited_at",{ascending:false}).limit(30),
       ]);
-      if(policy.error||requests.error||events.error||agents.error||dispatch.error||incidents.error||incidentEvents.error||reports.error||releaseReviews.error||releaseEvents.error)throw new Error("Database read unavailable");
+      if(policy.error||requests.error||events.error||agents.error||dispatch.error||incidents.error||incidentEvents.error||reports.error||releaseReviews.error||releaseEvents.error||ownedReleaseAssignments.error||invitedReleaseAssignments.error)throw new Error("Database read unavailable");
       const observedAt=new Date().toISOString();
       const claimsByRequest=new Map<string,Record<string,unknown>>(
         (dispatch.data??[]).map((x:Record<string,unknown>)=>[String(x.request_id),x] as const)
@@ -96,6 +102,12 @@ serve(async(req:Request)=>{
         events:events.data??[],agents:agents.data??[],
         incidents:incidents.data??[],incidentEvents:incidentEvents.data??[],
         releaseReviews:releaseReviews.data??[],releaseReviewEvents:releaseEvents.data??[],
+        releaseReviewerAssignments:[
+          ...(ownedReleaseAssignments.data??[]),
+          ...(invitedReleaseAssignments.data??[]).filter((x:{owner_id:string})=>x.owner_id!==owner),
+        ],
+        releaseHistoryCryptographicallyAuthentic:false,
+        releaseReviewerIdentityIndependentlyVerified:false,
         releaseExecutionAuthorized:false,releaseIndependentApprovalVerified:false,
         remoteExecutionEnabled:false,labDispatchConfigurable:true,source:"authenticated_server",
       });
@@ -135,6 +147,17 @@ serve(async(req:Request)=>{
         p_manifest_sha256:parsed.manifestSha256,
         p_staging_ref:parsed.stagingRef,p_note:parsed.note,
       }));
+    }else if(parsed.action==="release_invite_reviewer"){
+      ({data,error}=await supabase.rpc("docker_release_invite_reviewer",{
+        p_owner_id:owner,p_review_id:parsed.reviewId,
+        p_reviewer_id:parsed.reviewerId,p_note:parsed.note,
+      }));
+    }else if(parsed.action==="release_reviewer_respond"){
+      ({data,error}=await supabase.rpc("docker_release_respond_reviewer",{
+        p_reviewer_id:owner,p_review_id:parsed.reviewId,
+        p_candidate_sha256:parsed.candidateSha256,
+        p_decision:parsed.decision,p_note:parsed.note,
+      }));
     }else if(parsed.action==="release_decide"){
       ({data,error}=await supabase.rpc("docker_release_decide_review",{
         p_owner_id:owner,p_review_id:parsed.reviewId,p_next_state:parsed.state,
@@ -150,7 +173,7 @@ serve(async(req:Request)=>{
       const reason=typeof data?.reason==="string"?data.reason:"unavailable";
       return reply({error:reasonMessage[reason]??"Docker control action unavailable",code:reason},reasonStatus[reason]??503);
     }
-    return reply({...data,remoteExecutionEnabled:false,executionStatus:"not_executed",releaseExecutionAuthorized:false,releaseIndependentApprovalVerified:false},parsed.action==="request"||parsed.action==="release_submit"&&!data?.reused?201:200);
+    return reply({...data,remoteExecutionEnabled:false,executionStatus:"not_executed",releaseExecutionAuthorized:false,releaseIndependentApprovalVerified:false,releaseReviewerIdentityIndependentlyVerified:false},parsed.action==="request"||parsed.action==="release_submit"&&!data?.reused?201:200);
   }catch{
     return reply({error:"Docker control service unavailable"},503);
   }
