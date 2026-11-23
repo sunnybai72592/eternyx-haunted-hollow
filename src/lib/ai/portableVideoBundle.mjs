@@ -157,7 +157,11 @@ export async function buildPortableVideoBundle({
   if(!rendererSources||typeof rendererSources!=="object"||
      required.some(name=>typeof rendererSources[name]!=="string"))
     throw new Error("The three reviewed offline Python renderer modules must be bundled.");
-  const media=[...sources,...(soundtrack?[soundtrack]:[])];
+  // Include only shots actually present on the edited timeline; removed shots
+  // must not leak unused private clips into the exported archive.
+  const used=new Set(project.board.shots.map(shot=>shot.file));
+  const media=[...sources.filter(item=>used.has(item.name)),
+               ...(soundtrack?[soundtrack]:[])];
   const expected=new Map([
     ...project.board.shots.map(shot=>[shot.file,shot.source_sha256]),
     ...(soundtrack?[[project.board.soundtrack.file,project.board.soundtrack.source_sha256]]:[]),
