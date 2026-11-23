@@ -142,7 +142,7 @@ export function listDeveloperProjectReferences(project) {
       for (const reference of scanFile(file, kind)) {
         const reason = checkReference(reference, lookup);
         const target = reason ? null :
-          lookup.get(reference.value.split(/[?#]/, 1)[0].replace(/^\\.\\//, "").toLowerCase()) || null;
+          lookup.get(reference.value.split(/[?#]/, 1)[0].replace(/^\.\//, "").toLowerCase()) || null;
         results.push({ from: file.name, to: target, kind, line: reference.line,
           reason: reason || "resolved" });
       }
