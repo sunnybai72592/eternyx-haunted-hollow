@@ -14,6 +14,8 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
+import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
+import { readRequestPanel } from '@/lib/serviceRequestPanels';
 import { readQueuePreset, buildQueuePresetLink, downloadServiceQueueCsv, type OwnerQueuePreset } from '@/lib/serviceQueueViews';
 
 type RequestRow = {
@@ -36,6 +38,7 @@ export default function MyServiceRequests() {
   const userId = user?.id ?? null;
   const requestGeneration = useRef(0);
   const location = useLocation();
+  const selectedPanel = readRequestPanel(location.search, 'customer');
   const createdId = (location.state as { createdId?: string } | null)?.createdId;
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [rowsOwner, setRowsOwner] = useState<string | null>(null);
@@ -195,7 +198,7 @@ export default function MyServiceRequests() {
     setPendingReviewsOnly(preset === 'brief-reviews');
     setSortOrder('newest');
     setPage(0);
-  }, [userId, location.search]);
+  }, [userId, location.search, selectedPanel]);
 
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
@@ -208,7 +211,11 @@ export default function MyServiceRequests() {
       setLinkedError('Invalid request reference.');
       return;
     }
-    setOpenConversation(selected);
+    setOpenConversation(!selectedPanel || selectedPanel === 'conversation' ? selected : null);
+    setOpenScope(null);
+    setOpenClarifications(null);
+    setOpenAmendments(null);
+    setOpenJournal(null);
     let active = true;
     setLinkedLoading(true);
     void (async () => {
@@ -430,7 +437,7 @@ export default function MyServiceRequests() {
       {notice && <p role="status" className="mb-4 rounded-lg border border-primary/20 p-3 text-sm text-muted-foreground">{notice}</p>}
       {linkedLoading && <p className="mb-4 text-sm text-muted-foreground">Opening your private request…</p>}
       {linkedError && <p role="alert" className="mb-4 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{linkedError}</p>}
-      {visibleLinkedRequest && !visibleRows.some((item) => item.id === visibleLinkedRequest.id) && user && (
+      {visibleLinkedRequest && (selectedPanel !== null || !visibleRows.some((item) => item.id === visibleLinkedRequest.id)) && user && (
         <Card className="mb-6 border-primary/20 p-5 sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Opened by private link</p>
           <h2 className="mt-2 break-words text-xl font-bold">{visibleLinkedRequest.title}</h2>
@@ -446,17 +453,19 @@ export default function MyServiceRequests() {
             </Button>
             <span className="text-xs text-muted-foreground">{visibleLinkedRequest.last_checked_at ? 'Last checked: ' + new Date(visibleLinkedRequest.last_checked_at).toLocaleString() : 'Not checked yet'}</span>
           </div>
-          <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />
-          <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />
-          <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); void loadPulse(); }} />
-          <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />
-          <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />
+          <ServiceRequestSectionLinks requestId={visibleLinkedRequest.id} ownerId={user.id} mode="customer" />
+          {(!selectedPanel || selectedPanel === 'conversation') && <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />}
+          {(!selectedPanel || selectedPanel === 'scope') && <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />}
+          {(!selectedPanel || selectedPanel === 'clarifications') && <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); void loadPulse(); }} />}
+          {(!selectedPanel || selectedPanel === 'brief-changes') && <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />}
+          {(!selectedPanel || selectedPanel === 'journal') && <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />}
         </Card>
       )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The database request failed. The connection, API exposure, or migration might be unavailable; this is not an empty inbox. Use the read-only feature checks above and retry. No results are simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
         : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
         : <div className="space-y-4">{visibleRows.map((item) => {
+          if (selectedPanel && visibleLinkedRequest?.id === item.id) return null;
           const status = serviceRequestStatuses[item.status] ?? serviceRequestStatuses.submitted;
           return <Card key={item.id} className="border-border/70 p-5 sm:p-7">
             <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-primary">{getServiceOffering(item.service_key)?.title ?? 'Service enquiry'}</p><h2 className="mt-1 break-words text-xl font-semibold">{item.title}</h2><p className="mt-2 text-xs text-muted-foreground">Submitted {new Date(item.created_at).toLocaleString()}</p></div><span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{status.label}</span></div>
@@ -475,6 +484,7 @@ export default function MyServiceRequests() {
               {item.constraints && <p className="whitespace-pre-wrap break-words"><span className="font-semibold text-foreground">Constraints:</span> {item.constraints}</p>}
             </div>
             <p className="mt-5 break-all text-xs text-muted-foreground">Reference: {item.id}</p>
+            {user && <ServiceRequestSectionLinks requestId={item.id} ownerId={user.id} mode="customer" />}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => void copyLink(item.id)}>
                 <Link2 className="mr-2 h-4 w-4" />Copy private link
