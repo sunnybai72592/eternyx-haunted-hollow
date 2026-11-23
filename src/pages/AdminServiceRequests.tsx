@@ -13,6 +13,7 @@ import ServiceTriagePanel from '@/components/services/ServiceTriagePanel';
 import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
+import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import { Input } from '@/components/ui/input';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
@@ -58,13 +59,20 @@ export default function AdminServiceRequests() {
   const [clarificationFilter, setClarificationFilter] = useState<'all' | 'awaiting_customer' | 'needs_review' | 'open'>('all');
   const [pendingAmendmentsOnly, setPendingAmendmentsOnly] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review'>('newest');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'priority' | 'customer_activity' | 'next_review' | 'amendments' | 'clarifications'>('newest');
   const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
   const [actionFilter, setActionFilter] = useState<'all' | ServiceNextAction>('all');
   const countGeneration = useRef(0);
   const [queueCounts, setQueueCounts] = useState<Record<ServiceReviewBucket, number | null>>({
     unscheduled: null, overdue: null, due_today: null, upcoming: null,
   });
+  const actionCountGeneration = useRef(0);
+  const [actionCountOwner, setActionCountOwner] = useState<string | null>(null);
+  const [actionCountLoading, setActionCountLoading] = useState(false);
+  const [actionCounts, setActionCounts] = useState<{
+    all: number | null; followUp: number | null; amendments: number | null;
+    clarifications: number | null; unassigned: number | null;
+  }>({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
@@ -108,6 +116,8 @@ export default function AdminServiceRequests() {
     if (sortOrder === 'priority') query = query.order('priority_rank', { ascending: false });
     if (sortOrder === 'customer_activity') query = query.order('last_customer_activity_at', { ascending: false, nullsFirst: false });
     if (sortOrder === 'next_review') query = query.order('next_review_on', { ascending: true, nullsFirst: false });
+    if (sortOrder === 'amendments') query = query.order('pending_amendment_count', { ascending: false });
+    if (sortOrder === 'clarifications') query = query.order('awaiting_admin_review_count', { ascending: false });
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -183,6 +193,39 @@ export default function AdminServiceRequests() {
     });
   }, [authorized, user?.id]);
 
+  const loadActionCounts = useCallback(async () => {
+    const seq = ++actionCountGeneration.current;
+    if (!authorized || !user?.id) {
+      setActionCountOwner(null);
+      setActionCountLoading(false);
+      setActionCounts({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
+      return;
+    }
+    setActionCountLoading(true);
+    const queries = [
+      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' }),
+      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
+        .eq('needs_follow_up_complete', true),
+      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
+        .gt('pending_amendment_count', 0),
+      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
+        .gt('awaiting_admin_review_count', 0),
+      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
+        .is('assigned_admin_id', null),
+    ];
+    const results = await Promise.all(queries);
+    if (seq !== actionCountGeneration.current || useAuthStore.getState().user?.id !== user.id) return;
+    setActionCounts({
+      all: results[0].error ? null : results[0].count,
+      followUp: results[1].error ? null : results[1].count,
+      amendments: results[2].error ? null : results[2].count,
+      clarifications: results[3].error ? null : results[3].count,
+      unassigned: results[4].error ? null : results[4].count,
+    });
+    setActionCountOwner(user.id);
+    setActionCountLoading(false);
+  }, [authorized, user?.id]);
+
   useEffect(() => { if (authorized) void load(); }, [authorized, load]);
   useEffect(() => {
     if (authorized) void loadQueueCounts();
@@ -192,6 +235,17 @@ export default function AdminServiceRequests() {
     }
     return () => { countGeneration.current += 1; };
   }, [authorized, loadQueueCounts]);
+
+  useEffect(() => {
+    if (authorized) void loadActionCounts();
+    else {
+      actionCountGeneration.current++;
+      setActionCountOwner(null);
+      setActionCountLoading(false);
+      setActionCounts({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
+    }
+    return () => { actionCountGeneration.current++; };
+  }, [authorized, loadActionCounts]);
 
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
@@ -234,6 +288,15 @@ export default function AdminServiceRequests() {
     setPage(0);
     setFeedback(null);
     if (location.search) navigate('/admin/service-requests', { replace: true });
+  };
+
+  const chooseActionFocus = (kind: 'all' | 'followUp' | 'amendments' | 'clarifications' | 'unassigned') => {
+    clearFilters();
+    setAttentionOnly(kind === 'followUp');
+    setPendingAmendmentsOnly(kind === 'amendments');
+    setClarificationFilter(kind === 'clarifications' ? 'needs_review' : 'all');
+    setAssignmentFilter(kind === 'unassigned' ? 'unassigned' : 'all');
+    setPage(0);
   };
 
   const markChecked = async (id: string) => {
@@ -314,8 +377,21 @@ export default function AdminServiceRequests() {
       <AdminWorkspaceNav />
       <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Business operations</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Service request desk</h1><p className="mt-2 text-sm text-muted-foreground">Review submitted briefs and publish factual, customer-visible status updates. No payment or fulfillment is triggered here.</p></div>
-        <Button variant="outline" onClick={() => { void load(); void loadQueueCounts(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
+        <Button variant="outline" onClick={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
       </header>
+      {authorized && <ServiceActionPulse
+        heading="Service operations action center"
+        description="Exact request counts across the administrator's permitted queue. Choose a card to clear other filters and focus the desk."
+        refreshing={actionCountLoading}
+        onRefresh={() => void loadActionCounts()}
+        items={[
+          { id: 'all', label: 'All requests', count: actionCountOwner === user?.id ? actionCounts.all : null, description: 'Requests on the service desk', active: !attentionOnly && !pendingAmendmentsOnly && clarificationFilter === 'all' && assignmentFilter === 'all' && !activeSearch && filter === 'all', onSelect: () => chooseActionFocus('all') },
+          { id: 'follow-up', label: 'Needs follow-up', count: actionCountOwner === user?.id ? actionCounts.followUp : null, description: 'Recorded customer tasks', active: attentionOnly, onSelect: () => chooseActionFocus('followUp') },
+          { id: 'amendments', label: 'Brief changes to review', count: actionCountOwner === user?.id ? actionCounts.amendments : null, description: 'Requests with pending changes', active: pendingAmendmentsOnly, onSelect: () => chooseActionFocus('amendments') },
+          { id: 'clarifications', label: 'Clarifications to review', count: actionCountOwner === user?.id ? actionCounts.clarifications : null, description: 'Requests with saved answers', active: clarificationFilter === 'needs_review', onSelect: () => chooseActionFocus('clarifications') },
+          { id: 'unassigned', label: 'Unassigned requests', count: actionCountOwner === user?.id ? actionCounts.unassigned : null, description: 'Requests without an admin', active: assignmentFilter === 'unassigned', onSelect: () => chooseActionFocus('unassigned') },
+        ]}
+      />}
       <section aria-label="Verified internal review workload" className="mb-6 rounded-xl border border-border p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Internal review workload</h2>
@@ -369,6 +445,8 @@ export default function AdminServiceRequests() {
           <label htmlFor="service-sort-order" className="mb-1 block text-xs font-semibold">Sort</label>
           <select id="service-sort-order" value={sortOrder} onChange={(event) => { setPage(0); setSortOrder(event.target.value as typeof sortOrder); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="newest">Newest requests</option><option value="priority">Highest priority</option><option value="customer_activity">Recent customer activity</option><option value="next_review">Next scheduled review</option>
+            <option value="amendments">Most pending brief changes</option>
+            <option value="clarifications">Most answers awaiting review</option>
           </select>
         </div>
         <div>
@@ -463,9 +541,9 @@ export default function AdminServiceRequests() {
               </Button>
             </div>
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
-            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); }} />}
+            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
-            {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
+            {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => { void load(); void loadActionCounts(); }} />}
             {openAmendments === item.id && <ServiceBriefAmendments requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
             {openJournal === item.id && <ServiceRequestJournal requestId={item.id} ownerId={item.user_id} />}
           </Card>;
