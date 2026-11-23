@@ -72,12 +72,16 @@ export default function WorkspaceRecoveryCenter({
     }
   }, [owner]);
 
+  // Switching accounts clears private data immediately. A same-owner refresh
+  // keeps the chosen inspection and confirmation state visible.
   useEffect(() => {
     setSessions([]);
     setHasMore(false);
     setSelectedId(null);
     setInspection(null);
     setNotice("");
+  }, [owner]);
+  useEffect(() => {
     void refresh();
   }, [owner, refreshKey, refresh]);
 
@@ -159,6 +163,7 @@ export default function WorkspaceRecoveryCenter({
         : op === "finalize"
           ? "Empty import and its private session receipts permanently removed."
           : "Seal reversed. This unfinished project is active and can be resumed.");
+      setView(op === "prepare" ? "discarding" : "active");
       if (op === "finalize") {
         setSelectedId(null);
         setInspection(null);
