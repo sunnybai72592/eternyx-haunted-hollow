@@ -48,7 +48,7 @@ const plannedStudios = [
   },
   {
     name: "AI Research Studio",
-    description: "Manual source-linked evidence notebook with opt-in AI Chat synthesis; no live search or verified citations.",
+    description: "Private source-linked research notebook with portable validated backups, source-coverage review, full local exports and optional AI Chat synthesis; no live search or verified citations.",
     icon: Search,
   },
   {
