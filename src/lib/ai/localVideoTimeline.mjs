@@ -119,6 +119,18 @@ export function moveTimelineShot(shots,index,direction){
   [copy[index],copy[target]]=[copy[target],copy[index]];
   return copy;
 }
+/** Pointer/keyboard parity: move a selected cut to any valid timeline position. */
+export function repositionTimelineShot(shots,from,to){
+  validate(shots);
+  integer(from,0,shots.length-1,"Dragged shot");
+  integer(to,0,shots.length-1,"Destination shot");
+  if(from===to)return [...shots];
+  const reordered=[...shots];
+  const [moving]=reordered.splice(from,1);
+  reordered.splice(to,0,moving);
+  validate(reordered);
+  return reordered;
+}
 export function removeTimelineShot(shots,index){
   validate(shots);
   at(shots,index);
