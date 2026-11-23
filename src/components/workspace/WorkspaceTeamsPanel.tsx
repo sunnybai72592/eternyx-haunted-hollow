@@ -200,8 +200,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
-    setTaskLayout("list");setDragOverColumn(null);
-    setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
+    setDragOverColumn(null);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
     setLoading(true);
@@ -223,8 +223,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
-    setTaskLayout("list");setDragOverColumn(null);
-    setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
+    setDragOverColumn(null);
     if(!selectedId)return;
     setLoading(true);
     void (async()=>{
@@ -884,8 +884,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                 event.preventDefault();event.dataTransfer.dropEffect="move";
                 setDragOverColumn(previous=>previous===column.status?previous:column.status);
               }}
-              onDragLeave={()=>setDragOverColumn(previous=>
-                previous===column.status?null:previous)}
+              onDragLeave={event=>{
+                if(event.currentTarget.contains(event.relatedTarget as Node))return;
+                setDragOverColumn(previous=>previous===column.status?null:previous);
+              }}
               onDrop={event=>dropBoardTask(event,column.status)}
               className={"min-w-0 rounded-lg border p-3 "+
                 (dragOverColumn===column.status&&editor?
