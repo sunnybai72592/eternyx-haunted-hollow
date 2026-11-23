@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, BookOpen, CheckCircle2, CircleHelp, RotateCcw, ShieldCheck, XCircle } from "lucide-react";
 import {
   PRACTICE_CASES, PRACTICE_TRACKS,
-  gradePracticeAnswer, summarizePracticeProgress,
+  gradePracticeAnswerAsync, summarizePracticeProgress,
 } from "@/lib/eternyxLabsPractice.mjs";
 
 const fieldClass="min-h-11 w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary";
@@ -12,7 +12,10 @@ const primaryClass="inline-flex min-h-11 items-center justify-center gap-2 round
 export default function LabsPracticeChallenges(){
   const [activeId,setActiveId]=useState(PRACTICE_CASES[0].id);
   const [answer,setAnswer]=useState("");
-  const [result,setResult]=useState<ReturnType<typeof gradePracticeAnswer> | null>(null);
+  const [result,setResult]=useState<Awaited<ReturnType<typeof gradePracticeAnswerAsync>> | null>(null);
+  const [checking,setChecking]=useState(false);
+  const requestSeq=useRef(0);
+  useEffect(()=>()=>{++requestSeq.current;},[]);
   const [hintOpen,setHintOpen]=useState(false);
   const [passed,setPassed]=useState<Set<string>>(()=>new Set());
   const [feedbackError,setFeedbackError]=useState<string | null>(null);
@@ -24,27 +27,45 @@ export default function LabsPracticeChallenges(){
 
   const selectCase=(id:string)=>{
     if(!PRACTICE_CASES.some(c=>c.id===id))return;
+    ++requestSeq.current;
+    setChecking(false);
     setActiveId(id);
     setAnswer("");
     setResult(null);
     setHintOpen(false);
     setFeedbackError(null);
   };
-  const grade=()=>{
+  const grade=async()=>{
+    const ticket=++requestSeq.current;
+    const caseId=activeId;
+    const submittedAnswer=answer;
+    setChecking(true);
+    setResult(null);
+    setFeedbackError(null);
     try{
-      const checked=gradePracticeAnswer(activeId,answer);
+      const checked=await gradePracticeAnswerAsync(caseId,submittedAnswer);
+      if(ticket!==requestSeq.current)return;
       setResult(checked);
-      setFeedbackError(null);
       if(checked.correct)setPassed(old=>{
-        if(old.has(activeId))return old;
+        if(old.has(caseId))return old;
         const next=new Set(old);
-        next.add(activeId);
+        next.add(caseId);
         return next;
       });
     }catch(error){
+      if(ticket!==requestSeq.current)return;
       setResult(null);
       setFeedbackError(error instanceof Error?error.message:"Enter a valid answer to check locally.");
+    }finally{
+      if(ticket===requestSeq.current)setChecking(false);
     }
+  };
+  const editAnswer=(value:string)=>{
+    ++requestSeq.current;
+    setChecking(false);
+    setAnswer(value);
+    setResult(null);
+    setFeedbackError(null);
   };
   const next=()=>{
     const index=PRACTICE_CASES.findIndex(c=>c.id===activeId);
@@ -64,7 +85,7 @@ export default function LabsPracticeChallenges(){
         <h2 id="labs-practice-title" className="text-2xl font-bold sm:text-3xl">Security and defensive operations challenge lab</h2>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
           {PRACTICE_CASES.length} hands-on questions across {PRACTICE_TRACKS.length} tracks. Answers are checked against the
-          actual offline Labs calculators, with explanations and retries. This is open-book,
+          actual offline Labs calculators and Web Crypto, with explanations and retries. This is open-book,
           client-side practice—not a trusted exam, credential, or account-linked achievement.
         </p>
         <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-3 text-sm">
@@ -122,11 +143,13 @@ export default function LabsPracticeChallenges(){
             <label htmlFor="labs-practice-answer" className="block text-sm font-semibold">
               {active.kind==="ipv4"?"Your IPv4 address":active.kind==="ipv6"?"Your IPv6 address":
                 active.kind==="bigint"?"Your exact decimal integer":active.kind==="octal"?"Your octal mode":
-                active.kind==="boolean"?"Choose Yes or No":"Your whole-number answer"}
+                active.kind==="boolean"?"Choose Yes or No":
+                active.kind==="base64url"?"Your case-sensitive Base64url challenge":
+                active.kind==="hex64"?"Your 64-character HMAC digest":"Your whole-number answer"}
             </label>
             {active.kind==="boolean"
               ?<select id="labs-practice-answer" required value={answer}
-                  onChange={event=>{setAnswer(event.target.value);setResult(null);setFeedbackError(null);}}
+                  onChange={event=>editAnswer(event.target.value)}
                   className={fieldClass}>
                   <option value="">Choose Yes or No</option>
                   <option value="yes">Yes</option><option value="no">No</option>
@@ -136,12 +159,16 @@ export default function LabsPracticeChallenges(){
                   placeholder={active.kind==="ipv4"?"e.g. 192.168.10.0":
                     active.kind==="ipv6"?"e.g. 2001:db8::":
                     active.kind==="bigint"?"e.g. 340282366920938463463374607431768211456":
-                    active.kind==="octal"?"e.g. 750":"e.g. 4"}
+                    active.kind==="octal"?"e.g. 750":
+                    active.kind==="base64url"?"43 unpadded Base64url characters":
+                    active.kind==="hex64"?"64 hexadecimal characters":"e.g. 4"}
                   value={answer}
-                  onChange={event=>{setAnswer(event.target.value);setResult(null);setFeedbackError(null);}}
+                  onChange={event=>editAnswer(event.target.value)}
                   className={fieldClass}/>}
             <div className="flex flex-wrap gap-3">
-              <button type="submit" className={primaryClass}><ShieldCheck className="h-4 w-4"/> Check answer locally</button>
+              <button type="submit" disabled={checking} className={primaryClass+" disabled:opacity-60"}>
+                <ShieldCheck className="h-4 w-4"/> {checking?"Checking locally…":"Check answer locally"}
+              </button>
               <button type="button" className={buttonClass} aria-expanded={hintOpen}
                 onClick={()=>setHintOpen(v=>!v)}><CircleHelp className="h-4 w-4"/> {hintOpen?"Hide hint":"Show hint"}</button>
               <button type="button" className={buttonClass} onClick={next}>Next scenario <ArrowRight className="h-4 w-4"/></button>

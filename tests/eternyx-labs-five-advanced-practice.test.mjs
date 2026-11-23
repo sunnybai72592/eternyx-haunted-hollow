@@ -30,10 +30,10 @@ const expected=[
   ["sri-textbytes","10"],
 ];
 const tracks=["ipv6","cache","spf","ratelimit","sri"];
-test("fifteen new questions raise Labs to exactly 45 scenarios and 15 tracks",()=>{
-  assert.equal(PRACTICE_CASES.length,45);
-  assert.equal(PRACTICE_TRACKS.length,15);
-  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,45);
+test("fifteen new questions remain present as Labs grows to 60 scenarios and 20 tracks",()=>{
+  assert.equal(PRACTICE_CASES.length,60);
+  assert.equal(PRACTICE_TRACKS.length,20);
+  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,60);
   assert.deepEqual(PRACTICE_CASES.slice(30).map(c=>c.id),expected.map(x=>x[0]));
   assert.deepEqual(PRACTICE_TRACKS.slice(10).map(t=>t.id),tracks);
   for(const track of PRACTICE_TRACKS)
@@ -139,7 +139,7 @@ test("reject overflow, malformed IPv6 and fabricated answers without credit",()=
 });
 test("unique in-memory practice progress is accurate for 45 questions",()=>{
   const pristine=summarizePracticeProgress();
-  assert.deepEqual([pristine.passed,pristine.total,pristine.byTrack.length],[0,45,15]);
+  assert.deepEqual([pristine.passed,pristine.total,pristine.byTrack.length],[0,60,20]);
   const mixed=summarizePracticeProgress([
     "ipv6-net","ipv6-net","ipv6-count","sri-base64",
     "ratelimit-left","dns-count",
@@ -149,7 +149,7 @@ test("unique in-memory practice progress is accurate for 45 questions",()=>{
   assert.equal(mixed.byTrack.find(t=>t.id==="sri").passed,1);
   assert.equal(mixed.byTrack.find(t=>t.id==="dns").passed,1);
   assert.equal(mixed.byTrack.find(t=>t.id==="subnet").passed,0);
-  assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(x=>x.id))).passed,45);
+  assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(x=>x.id))).passed,60);
   assert.equal(mixed.saved,false);
   assert.equal(mixed.authenticated,false);
   assert.equal(mixed.certificateAwarded,false);
@@ -163,10 +163,10 @@ test("mobile/desktop learning interface renders 45 from live catalog and support
     readFile(new URL("../src/lib/eternyxLabsAdvanced.mjs",import.meta.url),"utf8"),
   ]);
   assert.match(ui,/\{PRACTICE_CASES.length\} hands-on questions across \{PRACTICE_TRACKS.length\} tracks/);
-  assert.match(page,/Practice 45 answer-checked challenges/);
+  assert.match(page,/Practice 60 answer-checked challenges/);
   assert.match(ui,/active.kind==="ipv6"/);
   assert.match(ui,/active.kind==="bigint"/);
-  assert.match(ui,/gradePracticeAnswer\(activeId,answer\)/);
+  assert.match(ui,/gradePracticeAnswerAsync\(caseId,submittedAnswer\)/);
   assert.match(ui,/summarizePracticeProgress\(passed\)/);
   assert.match(ui,/role="alert"/);
   assert.match(ui,/setPassed\(new Set\(\)\)/);

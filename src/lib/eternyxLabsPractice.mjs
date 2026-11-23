@@ -1,5 +1,5 @@
 /**
- * ETERNYX Labs practice: 45 real, deterministic, browser-only challenges.
+ * ETERNYX Labs practice: 60 real, browser-only challenges (six crypto-checked asynchronously).
  * Exercises derive answer keys from the same pure calculation utilities as
  * the learner's workstations. Nothing is saved, uploaded or server-graded.
  * Client-side grading is NOT exam security, accreditation or trusted progress.
@@ -16,6 +16,10 @@ import {
   calculateIpv6SubnetLocally,inspectCachePolicyLocally,inspectSpfRecordLocally,
   simulateTokenBucketLocally,inspectSriFormatLocally,
 } from "./eternyxLabsAdvanced.mjs";
+import {
+  derivePkceChallengeLocally,signHmacLocally,verifyHmacLocally,
+  checkCidrMembershipLocally,inspectHstsLocally,inspectDmarcLocally,
+} from "./eternyxLabsIdentity.mjs";
 
 export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"subnet",title:"IPv4 subnetting",description:"Calculate address ranges and hosts."}),
@@ -33,6 +37,11 @@ export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"spf",title:"SPF mail policy",description:"Count real mechanism and lookup warnings."}),
   Object.freeze({id:"ratelimit",title:"Rate limiting",description:"Compute token-bucket decisions and refill."}),
   Object.freeze({id:"sri",title:"Subresource Integrity",description:"Calculate digest and encoding sizes from real SRI rules."}),
+  Object.freeze({id:"pkce",title:"OAuth PKCE",description:"Check actual S256 verifier-to-challenge derivations."}),
+  Object.freeze({id:"hmac",title:"HMAC integrity",description:"Sign synthetic messages and verify changed-message integrity."}),
+  Object.freeze({id:"cidrcheck",title:"CIDR membership",description:"Check addresses against IPv4 and IPv6 ranges."}),
+  Object.freeze({id:"hsts",title:"HTTPS transport policy",description:"Reason about HSTS max-age and subdomain requirements."}),
+  Object.freeze({id:"dmarc",title:"DMARC mail defense",description:"Count policy fields and warning signals without contacting DNS."}),
 ]);
 const definitions=[
   ["subnet-network","subnet","Network address · /24",
@@ -302,6 +311,96 @@ const definitions=[
     {algorithm:"sha256",text:"hello 🌍",field:"inputBytes"},
     "The world emoji uses four UTF-8 bytes; the six ASCII characters use six.",
     "SRI hashes bytes, not visible character counts. The real hashing workstation uses Web Crypto."],
+  ["pkce-rfc","pkce","RFC 7636 S256 known vector",
+    "What Base64url SHA-256 code challenge does the synthetic verifier produce?",
+    "Verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\nMethod: S256",
+    "base64url",{verifier:"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",field:"challenge"},
+    "Hash the ASCII verifier with SHA-256, encode Base64url, remove padding.",
+    "This is the published RFC 7636 test vector. The actual digest is calculated in browser Web Crypto."],
+  ["pkce-synthetic","pkce","Another PKCE S256 challenge",
+    "What challenge does the offline S256 tool derive from this synthetic verifier?",
+    "Verifier: kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\nMethod: S256",
+    "base64url",{verifier:"k".repeat(43),field:"challenge"},
+    "The verifier is exactly 43 ASCII characters; hash its precise bytes.",
+    "The expected challenge comes from real SHA-256, not a hard-coded answer."],
+  ["pkce-length","pkce","Verifier length check",
+    "How many characters does this synthetic RFC-style verifier contain?",
+    "Verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\nMethod: S256",
+    "integer",{verifier:"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",field:"verifierLength"},
+    "Only unreserved ASCII characters are allowed, and verifiers must be 43–128 characters.",
+    "The same PKCE calculator validates the verifier before reporting its actual length."],
+  ["hmac-known","hmac","Known HMAC-SHA256 digest",
+    "What hexadecimal HMAC-SHA256 signature does this synthetic message produce?",
+    "Key: key\nMessage: The quick brown fox jumps over the lazy dog\nAlgorithm: HMAC-SHA256",
+    "hex64",{mode:"signature",key:"key",message:"The quick brown fox jumps over the lazy dog"},
+    "Compute a MAC with the key and the exact message bytes; output 64 hex digits.",
+    "A real symmetric Web Crypto key signs the message. HMAC does not identify an individual sender."],
+  ["hmac-tamper","hmac","Modified-message verification",
+    "Does a signature for the original message verify against the modified message?",
+    "Synthetic key: training-only-key\nSigned: training event\nVerify as: training event changed",
+    "boolean",{mode:"verify",key:"training-only-key",message:"training event",candidate:"training event changed"},
+    "Changing message bytes invalidates a valid message-authentication code.",
+    "The grader signs the original synthetic message, then uses Web Crypto verify against the altered bytes."],
+  ["hmac-valid","hmac","Original-message verification",
+    "Does a valid signature verify when the original synthetic message is unchanged?",
+    "Synthetic key: training-only-key\nSigned: training event\nVerify as: training event",
+    "boolean",{mode:"verify",key:"training-only-key",message:"training event",candidate:"training event"},
+    "The key, signature and message bytes must match.",
+    "Web Crypto performs a genuine HMAC-SHA256 verification. This is not webhook provenance or replay defense."],
+  ["cidr-v4-in","cidrcheck","IPv4 upper range address",
+    "Is the candidate address mathematically inside this IPv4 CIDR block?",
+    "CIDR: 192.168.10.0/24\nCandidate: 192.168.10.255",
+    "boolean",{cidr:"192.168.10.0/24",ip:"192.168.10.255"},
+    "Subnet containment includes the numeric range endpoints, even if some cannot be assigned to hosts.",
+    "This is mathematical membership only; it neither authorizes a firewall rule nor tests reachability."],
+  ["cidr-v4-out","cidrcheck","Adjacent IPv4 subnet",
+    "Is this address part of the given IPv4 /24?",
+    "CIDR: 192.168.10.0/24\nCandidate: 192.168.11.1",
+    "boolean",{cidr:"192.168.10.0/24",ip:"192.168.11.1"},
+    "A /24 uses the first 24 bits for its network range.",
+    "The tested address is outside the specified range despite sharing two leading octets."],
+  ["cidr-v6-in","cidrcheck","128-bit IPv6 containment",
+    "Is this compressed IPv6 address inside the specified /48?",
+    "CIDR: 2001:db8:abcd::/48\nCandidate: 2001:db8:abcd:2::1234",
+    "boolean",{cidr:"2001:db8:abcd::/48",ip:"2001:db8:abcd:2::1234"},
+    "The /48 fixes the first three 16-bit hextets; remaining bits can vary.",
+    "The tool compares exact 128-bit integers without a DNS query or IPv6 network probe."],
+  ["hsts-long","hsts","HSTS max-age duration",
+    "What max-age in seconds does this synthetic transport policy specify?",
+    "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+    "integer",{header:"max-age=31536000; includeSubDomains",field:"maxAgeSeconds"},
+    "A year of 365 days contains 31,536,000 seconds.",
+    "The parser extracts a declared HSTS duration, not a live browser's security state."],
+  ["hsts-removal","hsts","Transport policy removal warning",
+    "How many static warnings does this HSTS example generate?",
+    "Strict-Transport-Security: max-age=0",
+    "integer",{header:"max-age=0",field:"warningCount"},
+    "A zero duration requests deletion, and includeSubDomains is absent.",
+    "The local checker reports policy-removal and missing-subdomain warnings; no HTTPS request is made."],
+  ["hsts-subdomains","hsts","Subdomain coverage flag",
+    "Does this HSTS header request coverage of subdomains?",
+    "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+    "boolean",{header:"max-age=31536000; includeSubDomains",field:"includeSubDomains"},
+    "Look for the case-insensitive includeSubDomains directive.",
+    "Static header syntax is not a substitute for checking real HTTPS delivery and browser enforcement."],
+  ["dmarc-monitor","dmarc","Monitoring-only DMARC warnings",
+    "How many warnings does the simplified DMARC clinic report for this record?",
+    "v=DMARC1; p=none; pct=25",
+    "integer",{record:"v=DMARC1; p=none; pct=25",field:"warningCount"},
+    "Monitoring-only policy, partial rollout and absent aggregate report endpoint all produce notes.",
+    "These are local policy heuristics, not authenticated mail outcomes."],
+  ["dmarc-percentage","dmarc","DMARC rollout percentage",
+    "Which integer percentage is configured by this DMARC policy?",
+    "v=DMARC1; p=reject; pct=75; rua=mailto:reports@example.test",
+    "integer",{record:"v=DMARC1; p=reject; pct=75; rua=mailto:reports@example.test",field:"percentage"},
+    "The pct tag controls the requested rollout fraction, between zero and one hundred.",
+    "The parsed percentage is part of an offline DNS-free example."],
+  ["dmarc-report-count","dmarc","Aggregate report destinations",
+    "How many aggregate-report URI entries are defined here?",
+    "v=DMARC1; p=reject; rua=mailto:first@example.test,mailto:second@example.test",
+    "integer",{record:"v=DMARC1; p=reject; rua=mailto:first@example.test,mailto:second@example.test",field:"aggregateReportCount"},
+    "Count the comma-separated mailto report endpoints without displaying them in results.",
+    "The analysis exposes only the number of report destinations and does not contact any address."],
 ];
 export const PRACTICE_CASES=Object.freeze(definitions.map((
   [id,track,title,prompt,scenario,kind,config,hint,explanation]
@@ -375,13 +474,36 @@ function answerFor(challenge){
       const result=inspectSriFormatLocally(c.text,{algorithm:c.algorithm});
       return String(result[c.field]);
     }
+    case "cidrcheck":
+      return checkCidrMembershipLocally(c.cidr,c.ip).contained?"yes":"no";
+    case "hsts":{
+      const result=inspectHstsLocally(c.header);
+      return c.field==="includeSubDomains"?(result.includeSubDomains?"yes":"no"):String(result[c.field]);
+    }
+    case "dmarc":{
+      const result=inspectDmarcLocally(c.record);
+      return String(result[c.field]);
+    }
+    case "pkce":
+    case "hmac":throw Error("Cryptographic challenges require asynchronous Web Crypto grading.");
     default:throw Error("Unsupported practice grading track.");
   }
 }
 function normalize(answer,kind){
   if(typeof answer!=="string"||answer.length>64)
     throw Error("Enter a short answer before grading.");
-  const raw=answer.trim().toLowerCase();
+  const trimmed=answer.trim();
+  const raw=trimmed.toLowerCase();
+  if(kind==="base64url"){
+    if(!/^[A-Za-z0-9_-]{43}$/.test(trimmed))
+      throw Error("Enter exactly 43 unpadded Base64url characters.");
+    return trimmed;
+  }
+  if(kind==="hex64"){
+    if(!/^[0-9a-f]{64}$/.test(raw))
+      throw Error("Enter exactly 64 hexadecimal HMAC-SHA256 characters.");
+    return raw;
+  }
   if(kind==="boolean"){
     if(!["yes","no"].includes(raw))
       throw Error("Choose Yes or No for this scenario.");
@@ -426,6 +548,31 @@ export function gradePracticeAnswer(id,answer){
     hint:challenge.hint,
     locallyChecked:true,
     serverVerified:false,certificateAwarded:false,
+    externalSystemsAccessed:false,
+  });
+}
+/** Async wrapper keeps all historic 45 synchronous answer contracts intact. */
+export async function gradePracticeAnswerAsync(id,answer,cryptoApi=globalThis.crypto){
+  const challenge=getPracticeCase(id);
+  if(!["pkce","hmac"].includes(challenge.track))
+    return gradePracticeAnswer(id,answer);
+  const normalized=normalize(answer,challenge.kind);
+  const c=challenge.config;
+  let expected;
+  if(challenge.track==="pkce"){
+    const result=await derivePkceChallengeLocally(c.verifier,cryptoApi);
+    expected=String(result[c.field]);
+  }else if(c.mode==="signature"){
+    expected=(await signHmacLocally(c.message,c.key,cryptoApi)).signatureHex;
+  }else if(c.mode==="verify"){
+    const result=await signHmacLocally(c.message,c.key,cryptoApi);
+    const verified=await verifyHmacLocally(c.candidate,c.key,result.signatureHex,cryptoApi);
+    expected=verified.verified?"yes":"no";
+  }else throw Error("Unsupported HMAC training scenario.");
+  return Object.freeze({
+    caseId:id,track:challenge.track,correct:normalized===expected,
+    expected,explanation:challenge.explanation,hint:challenge.hint,
+    locallyChecked:true,serverVerified:false,certificateAwarded:false,
     externalSystemsAccessed:false,
   });
 }

@@ -122,7 +122,7 @@ export default function EternyxLabs() {
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">Browser-only execution</span>
               <span className="rounded-lg border border-border bg-background/60 px-3 py-1.5">No outside targets</span>
               <a href="#labs-practice" className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-semibold text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                Practice 45 answer-checked challenges <ArrowRight className="h-3.5 w-3.5" />
+                Practice 60 answer-checked challenges <ArrowRight className="h-3.5 w-3.5" />
               </a>
             </div>
           </div>
