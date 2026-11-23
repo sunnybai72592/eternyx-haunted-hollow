@@ -85,10 +85,13 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $workspace_advance_checkpoint$
 DECLARE v_session uuid;
 BEGIN
-  IF TG_TABLE_NAME='workspace_import_files' AND
-    (TG_OP <> 'UPDATE' OR NEW.registered IS DISTINCT FROM true
-      OR OLD.registered IS DISTINCT FROM false) THEN
-    RETURN NULL;
+  -- Batch rows have no registered field; branch before evaluating fields.
+  IF TG_TABLE_NAME='workspace_import_files' THEN
+    IF TG_OP <> 'UPDATE' THEN RETURN NULL; END IF;
+    IF NEW.registered IS DISTINCT FROM true
+      OR OLD.registered IS DISTINCT FROM false THEN
+      RETURN NULL;
+    END IF;
   END IF;
   v_session := NEW.session_id;
   UPDATE public.workspace_import_sessions s
