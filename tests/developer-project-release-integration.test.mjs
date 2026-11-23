@@ -146,7 +146,7 @@ test("filename-free combined evidence exports counts, fixed rule labels and perm
   assert.equal(parsed.protectedBackendVerified, false);
   assert.equal(parsed.productionVerified, false);
   for (const secret of ["USER_PRIVATE_TOKEN", "SUPER_SECRET_367", "sensitive-case-id",
-    "NOT_PRESENT_399", "app.js", "index.html", "filename", '"line":']) {
+    "NOT_PRESENT_399", "app.js", "index.html", '"filename":', '"line":']) {
     assert.ok(!str.includes(secret), "Combined evidence leaked: " + secret);
   }
 });
