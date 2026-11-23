@@ -8,6 +8,10 @@ import { useAuthStore } from "@/store/authStore";
 import { examClock, examDeadline, examSecondsRemaining, validExamId } from "@/lib/educationExam.mjs";
 import { createEducationAnswerSaveQueue } from "@/lib/educationAnswerSaveQueue.mjs";
 import {
+ educationDeadlineSafety, educationSubmissionReadScope,
+ educationSubmissionRecoveryMessage, verifyEducationOwnedSubmission,
+} from "@/lib/educationSubmissionRecovery.mjs";
+import {
   createEducationExamAnswer, educationChoiceSelectionStatus,
   projectEducationExamReviewAnswers, restoreEducationExamAnswers,
   validateEducationExamDetails, validateEducationExamOptions,
@@ -57,6 +61,10 @@ export default function TestInterface() {
   const restoredAttemptRef = useRef<string | null>(null);
   const [answerSaveStatus, setAnswerSaveStatus] = useState<"idle" | "saving" | "saved" | "unsaved">("idle");
   const [answerSaveFailed, setAnswerSaveFailed] = useState(false);
+  const [submissionUncertain, setSubmissionUncertain] = useState(false);
+  const [statusCheckBusy, setStatusCheckBusy] = useState(false);
+  const statusCheckRef = useRef(false);
+  const submissionGenerationRef = useRef(0);
 
   const testQuery = useQuery<Exam>({
     queryKey: ["education-exam", user?.id, testId],
@@ -121,6 +129,9 @@ export default function TestInterface() {
     if (answerSaveTimerRef.current) clearTimeout(answerSaveTimerRef.current);
     answerSaveTimerRef.current = null;
     saveQueueRef.current?.dispose();
+    submissionGenerationRef.current += 1;
+    statusCheckRef.current = false;
+    submittingRef.current = false;
     saveQueueScopeRef.current = scope;
     saveQueueRef.current = atomicCbtEnabled && scope && attemptQuery.data?.id
       ? createEducationAnswerSaveQueue((answer: Answer) => saveCbtAnswer(attemptQuery.data!.id, answer))
@@ -132,6 +143,11 @@ export default function TestInterface() {
     setConfirmSubmit(false);
     setAnswerSaveStatus("idle");
     setAnswerSaveFailed(false);
+    setSubmissionUncertain(false);
+    setStatusCheckBusy(false);
+    setNotice("");
+    setRemaining(null);
+    expirySubmitRequested.current = false;
   }, [enabled, user?.id, attemptQuery.data?.id]);
 
   useEffect(() => {
@@ -215,16 +231,73 @@ export default function TestInterface() {
   }, []);
 
   const deadline = examDeadline(attemptQuery.data?.start_time, testQuery.data?.duration_minutes);
-  const expired = remaining === 0;
-  const canEdit = attemptQuery.data?.status === "in_progress" && !submitting && !expired &&
+  // Fail closed on a missing/invalid start time; never grant extra exam time.
+  const deadlineSafety = educationDeadlineSafety(attemptQuery.data?.status, deadline);
+  const expired = deadlineSafety.expired;
+  const canEdit = attemptQuery.data?.status === "in_progress" && !submitting &&
+    !statusCheckBusy && deadlineSafety.editAllowed &&
     (!atomicCbtEnabled || (restoredAnswersQuery.isSuccess &&
       !!saveQueueRef.current && saveQueueScopeRef.current === user?.id + ":" + attemptQuery.data.id));
+
+  const readOwnedSubmissionStatus = useCallback(async (
+    attemptId: string, ownerId: string, expectedTestId: string,
+  ) => {
+    const scope = educationSubmissionReadScope(attemptId, ownerId, expectedTestId);
+    // READ the existing attempt: never invoke start_cbt_attempt to verify.
+    const {data, error} = await supabase.from("user_attempts")
+      .select("id,user_id,test_id,status,start_time,end_time")
+      .eq("id",scope.attemptId).eq("user_id",scope.ownerId)
+      .eq("test_id",scope.testId).maybeSingle();
+    if(error || !data)throw new Error("The attempt could not be verified.");
+    return verifyEducationOwnedSubmission(data,attemptId,ownerId,expectedTestId);
+  }, []);
+
+  const checkSubmissionStatus = useCallback(async () => {
+    if(statusCheckRef.current || submittingRef.current || !user?.id ||
+       !attemptQuery.data?.id || !validExamId(testId))return;
+    const generation=submissionGenerationRef.current;
+    statusCheckRef.current=true;
+    setStatusCheckBusy(true);
+    setNotice("");
+    try{
+      const receipt=await readOwnedSubmissionStatus(attemptQuery.data.id,user.id,testId!);
+      if(generation!==submissionGenerationRef.current)return;
+      if(receipt.confirmed){
+        setSubmissionUncertain(false);
+        void queryClient.invalidateQueries({queryKey:["education-owned-attempt-list",user.id]});
+        toast.success(receipt.flagged
+          ?"Server confirms a flagged, submitted attempt."
+          :"Server confirms your assessment was submitted.");
+        navigate("/test-results/"+receipt.id,{replace:true});
+      }else{
+        setSubmissionUncertain(true);
+        setNotice(educationSubmissionRecoveryMessage(receipt,deadline));
+      }
+    }catch{
+      if(generation===submissionGenerationRef.current){
+        setSubmissionUncertain(true);
+        setNotice("The server could not verify submission status. Nothing has been confirmed. Check your connection and retry this status check; do not start another assessment.");
+      }
+    }finally{
+      if(generation===submissionGenerationRef.current){
+        statusCheckRef.current=false;
+        setStatusCheckBusy(false);
+      }
+    }
+  },[attemptQuery.data?.id,user?.id,testId,deadline,readOwnedSubmissionStatus,queryClient,navigate]);
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
-    if (submittingRef.current || !attemptQuery.data || !testQuery.data || !user) return;
+    if (submittingRef.current || statusCheckRef.current || !attemptQuery.data ||
+        !testQuery.data || !user || !validExamId(testId)) return;
+    const generation=submissionGenerationRef.current;
     if (attemptQuery.data.status !== "in_progress") {
       if (["submitted", "auto_submitted"].includes(attemptQuery.data.status))
         navigate("/test-results/" + attemptQuery.data.id, { replace: true });
       else setNotice("This attempt cannot be submitted from the exam editor. Check its server status.");
+      return;
+    }
+    if (!educationDeadlineSafety("in_progress",deadline).deadlineKnown) {
+      setSubmissionUncertain(true);
+      setNotice("This attempt's original deadline cannot be verified. No submission was sent. Check the server status before proceeding.");
       return;
     }
     if (atomicCbtEnabled && (!restoredAnswersQuery.isSuccess || !saveQueueRef.current)) {
@@ -235,6 +308,7 @@ export default function TestInterface() {
     setSubmitting(true);
     setConfirmSubmit(false);
     setNotice("");
+    setSubmissionUncertain(false);
     try {
       const attemptId = attemptQuery.data.id;
       if (atomicCbtEnabled) {
@@ -243,12 +317,13 @@ export default function TestInterface() {
         } catch (error) {
           // Past-deadline writes are denied by the server. Finalize the attempt
           // regardless; stale local text must never bypass the deadline.
-          if (!dueToExpiry) throw error;
+          if (!dueToExpiry && Date.now() < deadline!) throw error;
         }
         const result = await submitCbtAttempt(attemptId);
-        if (!["submitted", "auto_submitted"].includes(result.status)) {
-          throw new Error("The server did not confirm assessment submission.");
+        if (result.id !== attemptId || !["submitted", "auto_submitted"].includes(result.status)) {
+          throw new Error("The server did not confirm this exact assessment submission.");
         }
+        if(generation!==submissionGenerationRef.current)return;
         void queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
         toast.success("Assessment submission recorded.");
         navigate("/test-results/" + attemptId, { replace: true });
@@ -274,17 +349,40 @@ export default function TestInterface() {
       }).eq("id", attemptId).eq("user_id", user.id).eq("status", "in_progress")
         .select("id").maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error("The attempt was not updated. Please check its server status.");
+      if (!data || data.id!==attemptId)
+        throw new Error("The attempt was not confirmed. Please check its server status.");
+      if(generation!==submissionGenerationRef.current)return;
       void queryClient.invalidateQueries({ queryKey: ["education-owned-attempt-list", user.id] });
       toast.success("Assessment submission recorded.");
       navigate("/test-results/" + attemptId, { replace: true });
     } catch {
-      setNotice("The assessment could not be submitted. Your answers are still in this tab. Check your connection and retry; server deadline enforcement must be verified.");
+      // A lost HTTP response does NOT establish that submission failed.
+      // Verify the exact owner + test + attempt before offering a retry.
+      if(generation!==submissionGenerationRef.current)return;
+      setSubmissionUncertain(true);
+      try{
+        const receipt=await readOwnedSubmissionStatus(attemptQuery.data.id,user.id,testId!);
+        if(generation!==submissionGenerationRef.current)return;
+        if(receipt.confirmed){
+          setSubmissionUncertain(false);
+          void queryClient.invalidateQueries({queryKey:["education-owned-attempt-list",user.id]});
+          toast.success("Server confirms your assessment submission.");
+          navigate("/test-results/"+receipt.id,{replace:true});
+        }else{
+          setNotice(educationSubmissionRecoveryMessage(receipt,deadline));
+        }
+      }catch{
+        if(generation===submissionGenerationRef.current)
+          setNotice("Submission could not be confirmed. The server status check is unavailable; do not assume the attempt failed or start another exam. Retry the status check.");
+      }
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      if(generation===submissionGenerationRef.current){
+        submittingRef.current=false;
+        setSubmitting(false);
+      }
     }
-  }, [attemptQuery.data, testQuery.data, user, answers, navigate, flushPendingAnswers, queryClient, restoredAnswersQuery.isSuccess]);
+  }, [attemptQuery.data, testQuery.data, user, testId, deadline, answers, navigate,
+    flushPendingAnswers, readOwnedSubmissionStatus, queryClient, restoredAnswersQuery.isSuccess]);
   submitRef.current = submitExam;
 
   // A resumed attempt may already be submitted. Do not show editable
