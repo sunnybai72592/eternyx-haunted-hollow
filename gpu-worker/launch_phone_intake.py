@@ -146,12 +146,19 @@ def starter_draft(report):
     return draft
 
 
-def run(root=ROOT, on_stage=None):
+def run(root=ROOT, on_stage=None, *, cinematic=False, limit_seconds=None):
     if on_stage is None:
         on_stage = lambda _: None
     on_stage("Checking local originals, codec support and SHA-256...")
     checked = preflight(root)
     manifest = read_manifest(root)
+    if type(cinematic) is not bool:
+        raise ValueError("Cinematic export flag must be boolean")
+    if limit_seconds is None:
+        limit_seconds = manifest["seconds"]
+    if (type(limit_seconds) is not int or
+            not 1 <= limit_seconds <= manifest["seconds"]):
+        raise ValueError("Requested conversion cut exceeds verified source window")
     workspace = Path(tempfile.mkdtemp(prefix=".eternyx-phone-bundle-",dir=root))
     final = root/OUTPUT
     try:
@@ -160,7 +167,7 @@ def run(root=ROOT, on_stage=None):
         names = [x["filename"] for x in manifest["originals"]]
         report = prepare(root/"phone-clips",output,clips=names,
                          start_seconds=manifest["start_seconds"],
-                         seconds=manifest["seconds"])
+                         seconds=limit_seconds, cinematic=cinematic)
         on_stage("Checking actual converted H264 outputs and creating editable draft...")
         if report["source_count"] != checked["source_count"]:
             raise ValueError("Converted output differs from the verified source inventory")
@@ -173,9 +180,12 @@ def run(root=ROOT, on_stage=None):
                     file.stat().st_size != row["prepared_bytes"] or \
                     sha256(file) != row["prepared_sha256"]:
                 raise ValueError("Actual converted MP4 failed private SHA-256 validation")
-        draft=starter_draft(report)
-        (output/"eternyx-video-edit-draft.json").write_text(
-            json.dumps(draft,indent=2,ensure_ascii=False)+"\n",encoding="utf8")
+        # The legacy editable draft is explicitly 16 FPS only; never hand it
+        # 24 FPS sources that would fail its own verified 16 FPS contract.
+        if not cinematic:
+            draft=starter_draft(report)
+            (output/"eternyx-video-edit-draft.json").write_text(
+                json.dumps(draft,indent=2,ensure_ascii=False)+"\n",encoding="utf8")
         if final.exists() or final.is_symlink():
             raise ValueError("Output appeared while preparing; refusing to overwrite")
         output.rename(final)
@@ -184,7 +194,7 @@ def run(root=ROOT, on_stage=None):
             "result":"completed",
             "source_count":checked["source_count"],
             "prepared_clips":[row["prepared_filename"] for row in report["clips"]],
-            "editable_draft":"eternyx-video-edit-draft.json",
+            "editable_draft":None if cinematic else "eternyx-video-edit-draft.json",
             "output":OUTPUT,"private_media_uploaded":False,
         }
     finally:
