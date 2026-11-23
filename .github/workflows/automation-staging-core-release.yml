@@ -65,6 +65,7 @@ jobs:
           node scripts/automation-staging-core-release.mjs --check-target > /dev/null
           node scripts/automation-staging-core-release.mjs --check-source > "$RUNNER_TEMP/automation-core-source.json"
           node scripts/eternyx-missing-backend-release.mjs --check-source > "$RUNNER_TEMP/eternyx-four-function-source.json"
+          node scripts/eternyx-backend-rpc-surface.mjs --source > "$RUNNER_TEMP/eternyx-four-backend-dependencies.json"
       - name: Query the actual STAGING migration journal through authenticated TLS and READ ONLY transaction
         env:
           ETERNYX_AUTOMATION_STAGING_PGPASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_PGPASSWORD }}"
@@ -76,6 +77,7 @@ jobs:
           bash scripts/automation-staging-db-readonly.sh > "$RUNNER_TEMP/automation-staging-db-evidence.json"
           bash scripts/automation-staging-functions-catalog.sh > "$RUNNER_TEMP/automation-staging-catalog-evidence.json"
           bash scripts/eternyx-staging-ctf-catalog.sh > "$RUNNER_TEMP/eternyx-ctf-staging-catalog.json"
+          bash scripts/eternyx-staging-backend-rpc-surface.sh > "$RUNNER_TEMP/eternyx-backend-rpc-staging-catalog.json"
       - name: Refuse release unless true read-only staging database and seven RPC/four RLS prerequisites are present
         shell: bash
         run: |
@@ -99,6 +101,18 @@ jobs:
           import {verifyCtfCatalog} from "./scripts/eternyx-missing-backend-release.mjs";
           verifyCtfCatalog(JSON.parse(readFileSync(process.argv[2],"utf8")));
           console.log("Isolated staging CTF schema, RLS and server-only verification RPC verified; secret values never read by CI.");
+          NODE
+      - name: Require EVERY reviewed backend RPC and owner table exists with RLS in actual staging schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module - "$RUNNER_TEMP/eternyx-backend-rpc-staging-catalog.json" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import {inspectSourceCompleteness,verifyCatalogEvidence} from "./scripts/eternyx-backend-rpc-surface.mjs";
+          const source=await inspectSourceCompleteness();
+          const report=JSON.parse(readFileSync(process.argv[2],"utf8"));
+          verifyCatalogEvidence(report,source);
+          console.log("Every reviewed Automation/CTF RPC and tenant table exists in isolated staging, and all referenced tables have RLS enabled.");
           NODE
       - name: Install reviewed Supabase CLI v3.1.0
         uses: supabase/setup-cli@v1
