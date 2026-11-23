@@ -111,7 +111,7 @@ export async function inspectDockerHostReadOnly(pins,{
  if(!Array.isArray(info.SecurityOptions)||
     !info.SecurityOptions.some(x=>x==="name=rootless")||
     info.SecurityOptions.some(x=>typeof x!=="string")||
-    info.Swarm?.LocalNodeState&&info.Swarm.LocalNodeState!=="inactive")
+    info.Swarm?.LocalNodeState!=="inactive")
   throw Error("Docker host is not an isolated rootless non-Swarm lab.");
  const inspectArgs=["--context",context,"container","inspect","--format",
   "{{json .}}",cfg.containerId];
