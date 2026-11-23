@@ -337,6 +337,35 @@ def actual_preflight(page):
     assert "PRIVATE_MISSING_INTEGRATION" not in json.dumps(dependency_report)
     assert "index.html" not in json.dumps(dependency_report)
     page.get_by_role("button", name="Save browser copy").click()
+    # 3.7: explicit, current-source handoff snapshot and filename-free evidence.
+    # The established journey ID and viewport contract remain unchanged.
+    page.get_by_role("button", name="Run local release review").click()
+    expect(page.get_by_text("Local source checks passed · hosted release still on hold")).to_be_visible(timeout=20000)
+    expect(page.get_by_text("Hosted staging, protected backend and production are", exact=False)).to_be_visible()
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export redacted handoff").click()
+    clean_handoff=json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert clean_handoff["schema"] == "eternyx-developer-local-handoff-v1"
+    assert clean_handoff["localVerdict"] == "local-checks-passed"
+    assert clean_handoff["releaseDecision"] == "HOLD_HOSTED_RELEASE"
+    assert all(entry["status"] == "not-verified" for entry in clean_handoff["checks"][-3:])
+    assert "app.js" not in json.dumps(clean_handoff) and "index.html" not in json.dumps(clean_handoff)
+    # Changing the source invalidates the review and prevents stale export.
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="app.js", exact=True).click()
+    before_broken = editor.input_value()
+    editor.fill(before_broken + '\nfunction RELEASE_PRIVATE_MARKER_BROKEN( {')
+    expect(page.get_by_text("Project or baseline changed. Release review is stale; rerun required.")).to_be_visible()
+    expect(page.get_by_role("button", name="Export redacted handoff")).to_be_disabled()
+    page.get_by_role("button", name="Run local release review").click()
+    expect(page.get_by_text("Local review requires attention")).to_be_visible(timeout=20000)
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export redacted handoff").click()
+    failed_handoff=json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert failed_handoff["localVerdict"] == "local-review-required"
+    assert failed_handoff["checks"][1]["status"] == "review-required"
+    assert "RELEASE_PRIVATE_MARKER_BROKEN" not in json.dumps(failed_handoff)
+    editor.fill(before_broken)
+    page.get_by_role("button", name="Save browser copy").click()
 
 def preview_isolation(page):
     assert page.locator('iframe[title="Isolated project preview"]').count() == 0

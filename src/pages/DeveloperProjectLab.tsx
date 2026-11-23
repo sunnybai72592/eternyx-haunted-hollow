@@ -14,6 +14,7 @@ import {
 } from "@/lib/developerLocalWorkflows.mjs";
 import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
 import ProjectDependencyPanel from "@/components/developer/ProjectDependencyPanel";
+import ProjectReleaseHandoffPanel from "@/components/developer/ProjectReleaseHandoffPanel";
 import ProjectRecoveryPanel from "@/components/developer/ProjectRecoveryPanel";
 import ProjectRevisionReviewPanel from "@/components/developer/ProjectRevisionReviewPanel";
 import ProjectTestSuitePanel from "@/components/developer/ProjectTestSuitePanel";
@@ -512,6 +513,7 @@ export default function DeveloperProjectLab() {
       <ProjectInspectionPanel project={project} baseline={savedBaseline} activeFile={file.name}
         onJump={jumpToMatch} onReplace={replaceActiveText} />
       <ProjectDependencyPanel project={project} baseline={savedBaseline} onJump={jumpToMatch} />
+      <ProjectReleaseHandoffPanel project={project} baseline={savedBaseline} onJump={jumpToMatch} />
       <ProjectRevisionReviewPanel project={project} savedBaseline={savedBaseline} onJump={jumpToMatch} onRestore={restoreSavedFile} />
       <ProjectTestSuitePanel key={project.id} project={project} onJump={jumpToMatch} />
       <ProjectRecoveryPanel project={project} dirty={dirty} onRestore={handleRecovery} />
