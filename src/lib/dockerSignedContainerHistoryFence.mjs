@@ -67,7 +67,7 @@ export function requireSignedContainerHistoryClear(
   if(entry.containerId!==containerId||entry.claimId===claimId)continue;
   if(!UUID.test(entry.agentId||"")||!UUID.test(entry.claimId||"")||
      !HASH.test(entry.fileSha256||"")||
-     entry.outcome===null||entry.acknowledged!==true||
+     entry.outcome===null||entry.outcome==="failed"||entry.acknowledged!==true||
      entry.attentionRequired!==false)
    throw Error("Older unresolved or unacknowledged Docker claim blocks the signed container.");
  }
