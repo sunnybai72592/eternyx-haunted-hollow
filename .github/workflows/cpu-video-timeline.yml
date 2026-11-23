@@ -19,8 +19,11 @@ permissions:
 jobs:
   offline-timeline:
     name: Render real CPU timelines, soundtracks and previews
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # ubuntu-latest may use 26.04 without FFmpeg; apt downloads can exhaust
+    # the former 8-minute job window even after all actual timeline tests pass.
+    # Pin a consistent runner and allow enough budget for package setup.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

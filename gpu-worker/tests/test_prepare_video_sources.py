@@ -38,6 +38,25 @@ class PhoneFootagePreparationTests(unittest.TestCase):
         subprocess.run(cmd, check=True, capture_output=True, timeout=25)
         return target
 
+
+    def test_opt_in_cinematic_keeps_24_original_frames_and_720p_native_detail(self):
+        source = self.make("cinematic.mov", rate=24, width=1280, height=720, seconds=1)
+        dest = self.root / "native-cinematic"
+        report = prepare(self.inputs, dest, clips=["cinematic.mov"],
+                         seconds=1, cinematic=True)
+        info = report["clips"][0]
+        self.assertEqual(info["reported_fps"], "24/1")
+        self.assertEqual(info["prepared_fps"], "24/1")
+        self.assertEqual(info["prepared_frames"], 24)
+        self.assertEqual((info["prepared_width"], info["prepared_height"]), (1280, 720))
+        self.assertEqual(sha256(dest / "clip-01.mp4"), info["prepared_sha256"])
+        self.assertEqual(
+            video_info(probe(dest / "clip-01.mp4", count_frames=True), expected_fps=24),
+            (1280, 720, 24),
+        )
+        with self.assertRaises(ValueError):
+            video_info(probe(dest / "clip-01.mp4", count_frames=True))
+
     def test_30fps_phone_mov_is_converted_into_actual_16fps_h264(self):
         dest = self.root / "normalized"
         receipt = prepare(self.inputs, dest, clips=["camera.mov"], seconds=2)

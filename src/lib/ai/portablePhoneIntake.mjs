@@ -69,7 +69,7 @@ const readme=[
   "If FFmpeg fails, no completed or partial output is published.","",
 ].join("\n");
 export const PHONE_MOVIE_PROFILES=Object.freeze(["landscape","portrait","square"]);
-export const PHONE_MOVIE_QUALITIES=Object.freeze(["standard","high"]);
+export const PHONE_MOVIE_QUALITIES=Object.freeze(["standard","high","cinematic"]);
 export const PHONE_MOVIE_DELIVERIES=Object.freeze(["mp4","mp4_with_subtitles","mp4_webm","all"]);
 export const PHONE_MOVIE_FRAMINGS=Object.freeze(["contain","cover"]);
 export function validatePhoneMoviePlan({files,moviePlan,seconds}){
@@ -132,7 +132,12 @@ const movieGuide=[
   "Or run python3 finish_phone_movie.py --check, then --run.","",
   "The launcher verifies original SHA256, decoded media, all human-written",
   "captions and real permission/recording references before processing.",
-  "It normalizes the original footage into genuine 16FPS H264 in",
+  "Standard/High: genuine 16FPS H264; Cinematic: genuine 24FPS, up to",
+  "1280x720 landscape or 720x1280 portrait H264 from real source frames.",
+  "Only the requested shot seconds are normalized, not the entire source.",
+  "24FPS cinematic footage is not an editable 16FPS legacy draft.",
+  "All prepared clips remain available privately for further processing.",
+  "The prepared source clips live in",
   "local-video-media/, then renders verified final phone-movie-output/",
   "containing video.mp4, captions.srt, preview.html and manifest.json.",
   "local-video-media/ retains prepared clips and an editable project draft.",

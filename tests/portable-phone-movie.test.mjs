@@ -52,11 +52,11 @@ function extract(result,dir){
   ].join("\n"),zip,folder]);
   return {folder,names:JSON.parse(stdout)};
 }
-function getFixture(dir,name,fps,seconds=2){
+function getFixture(dir,name,fps,seconds=2,size="80x48"){
   const target=join(dir,name);
   run("ffmpeg",["-nostdin","-hide_banner","-v","error","-y",
     "-f","lavfi","-i",
-    "testsrc2=size=80x48:rate="+fps+":duration="+seconds,
+    "testsrc2=size="+size+":rate="+fps+":duration="+seconds,
     "-threads","1","-c:v","libx264","-pix_fmt","yuv420p",target],
     {timeout:45000});
   return local(name,readFileSync(target));
@@ -351,8 +351,9 @@ test("real CPU high-quality MP4, embedded mov_text subtitle MP4 and VP9 WebM are
 test("high preset uses actual quality settings; delivery UI exposes all real offline outputs",()=>{
   const renderSource=readFileSync(join(root,"gpu-worker/render_video_timeline.py"),"utf8");
   assert.match(renderSource,/flags=lanczos/);
-  assert.match(renderSource,/"medium" if quality == "high" else "veryfast"/);
+  assert.match(renderSource,/"medium" if quality in \("high", "cinematic"\) else "veryfast"/);
   assert.match(renderSource,/"19" if quality == "high" else "23"/);
+  assert.match(renderSource,/"18" if quality == "cinematic"/);
   const ui=readFileSync(new URL("../src/components/LocalVideoImportPrep.tsx",import.meta.url),"utf8");
   assert.match(ui,/setMovieDelivery/);
   assert.match(ui,/value="mp4_with_subtitles"/);
@@ -415,4 +416,94 @@ test("old plans retain uncropped defaults and arbitrary framing is refused",()=>
   assert.match(ui,/setMovieFraming/);
   assert.match(ui,/value="contain"/);
   assert.match(ui,/value="cover"/);
+});
+
+test("REAL cinematic 24FPS keeps 1280x720 native source detail with exact frames, captions and SHA receipts",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-native-cinematic-"));
+  try{
+    const source=getFixture(dir,"cinema.mov",24,1,"1280x720");
+    const bundle=await buildPortablePhoneMovie({
+      files:[source],start:0,seconds:1,
+      moviePlan:plan([source],{quality:"cinematic",delivery:"mp4_with_subtitles"}),
+      pythonSources,
+    });
+    const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
+    const ready=JSON.parse(run("python3",["finish_phone_movie.py","--check"],{cwd:folder}));
+    assert.equal(ready.fps,24);
+    assert.equal(ready.frames,24);
+    assert.equal(ready.quality,"cinematic");
+    run("python3",["finish_phone_movie.py","--run"],{cwd:folder,timeout:240000});
+    const out=join(folder,"phone-movie-output");
+    const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+    assert.equal(receipt.fps,24);
+    assert.equal(receipt.quality,"cinematic");
+    assert.equal(receipt.video.fps,"24/1");
+    assert.equal(receipt.video.frame_count,24);
+    assert.equal(receipt.video.width,1280);
+    assert.equal(receipt.video.height,720);
+    assert.equal(receipt.total_frames,24);
+    assert.equal(receipt.video.duration_seconds,1);
+    assert.equal(receipt.video.sha256,hash(readFileSync(join(out,"video.mp4"))));
+    const sourceReport=JSON.parse(readFileSync(join(folder,"local-video-media/preparation-report.json"),"utf8"));
+    assert.equal(sourceReport.clips[0].prepared_width,1280);
+    assert.equal(sourceReport.clips[0].prepared_height,720);
+    assert.equal(sourceReport.clips[0].prepared_fps,"24/1");
+    assert.equal(sourceReport.clips[0].prepared_frames,24);
+    assert.equal(sourceReport.clips[0].seconds_limit,1);
+    assert.ok(!existsSync(join(folder,"local-video-media/eternyx-video-edit-draft.json")),
+      "do not falsely label 24fps clips as a legacy 16fps editable draft");
+    assert.match(readFileSync(join(out,"captions.srt"),"utf8"),/00:00:01,000/);
+    assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/00:00:01\.000/);
+    assert.equal(receipt.deliverables["video-subtitled.mp4"].fps,"24/1");
+    const poster=readFileSync(join(out,"poster.png"));
+    assert.equal(poster.readUInt32BE(16),1280);
+    assert.equal(poster.readUInt32BE(20),720);
+    for(const name of ["poster.png","captions.vtt","watch.html","video-subtitled.mp4"]){
+      assert.equal(receipt.deliverables[name].sha256,hash(readFileSync(join(out,name))));
+    }
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("REAL portrait cinematic output preserves 720x1280 pixels and 24 FPS without creating fake frames",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-cinematic-portrait-"));
+  try{
+    const source=getFixture(dir,"portrait.mp4",24,1,"720x1280");
+    const bundle=await buildPortablePhoneMovie({
+      files:[source],start:0,seconds:1,
+      moviePlan:plan([source],{quality:"cinematic",profile:"portrait",framing:"cover"}),
+      pythonSources,
+    });
+    const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
+    run("python3",["finish_phone_movie.py","--run"],{cwd:folder,timeout:240000});
+    const out=join(folder,"phone-movie-output");
+    const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+    assert.equal(receipt.fps,24);
+    assert.equal(receipt.video.frame_count,24);
+    assert.equal(receipt.video.width,720);
+    assert.equal(receipt.video.height,1280);
+    assert.equal(receipt.framing,"cover");
+    assert.equal(receipt.video.audio,false);
+    assert.equal(receipt.video.sha256,hash(readFileSync(join(out,"video.mp4"))));
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("cinematic plan remains strictly bounded, while legacy options are unchanged",()=>{
+  const files=[local("source.mov",Buffer.from("original"))];
+  const legacy=validatePhoneMoviePlan({files,moviePlan:plan(files),seconds:1});
+  assert.equal(legacy.quality,"standard");
+  const cinematic=validatePhoneMoviePlan({
+    files,moviePlan:plan(files,{quality:"cinematic"}),seconds:1,
+  });
+  assert.equal(cinematic.quality,"cinematic");
+  assert.throws(()=>validatePhoneMoviePlan({
+    files,moviePlan:plan(files,{quality:"infinite"}),seconds:1,
+  }),/supported output presets/);
+  const ui=readFileSync(new URL("../src/components/LocalVideoImportPrep.tsx",import.meta.url),"utf8");
+  assert.match(ui,/value="cinematic"/);
+  assert.match(ui,/24 FPS/);
+  assert.match(ui,/720p/);
 });

@@ -24,7 +24,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const [movieRights,setMovieRights]=useState<string[]>([]);
   const [movieCutSeconds,setMovieCutSeconds]=useState(1);
   const [movieProfile,setMovieProfile]=useState<"landscape"|"portrait"|"square">("landscape");
-  const [movieQuality,setMovieQuality]=useState<"standard"|"high">("standard");
+  const [movieQuality,setMovieQuality]=useState<"standard"|"high"|"cinematic">("standard");
   const [movieDelivery,setMovieDelivery]=useState<"mp4"|"mp4_with_subtitles"|"mp4_webm"|"all">("mp4");
   const [movieFraming,setMovieFraming]=useState<"contain"|"cover">("contain");
   const [bundling,setBundling]=useState(false);
@@ -222,10 +222,11 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
               <label className="block space-y-1 text-xs">
                 Render quality
                 <select value={movieQuality} disabled={bundling}
-                  onChange={event=>setMovieQuality(event.target.value as "standard"|"high")}
+                  onChange={event=>setMovieQuality(event.target.value as "standard"|"high"|"cinematic")}
                   className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
-                  <option value="standard">Standard</option>
-                  <option value="high">High</option>
+                  <option value="standard">Standard · 16 FPS / fast</option>
+                  <option value="high">High · 16 FPS / 512p-class</option>
+                  <option value="cinematic">Cinematic · 24 FPS / up to 720p</option>
                 </select>
               </label>
             </div>
