@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { assertEducationDbEvidence } from "./educationHostedDbMetadata.mjs";
 import { validateEducationReleaseConfig, EDUCATION_RELEASE_STAGES,
   summarizeEducationReleaseEvidence } from "./educationReleaseGate.mjs";
 
@@ -28,6 +29,15 @@ function run(file, env) {
 try {
   const config=validateEducationReleaseConfig(process.env);
   const stages=EDUCATION_RELEASE_STAGES[config.mode];
+  const provenance={
+    sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,
+    attempt:process.env.GITHUB_RUN_ATTEMPT,
+  };
+  // Fail BEFORE any test creates an attempt, instructor review or final grade.
+  // The audit was produced by the preceding workflow step in this exact run.
+  const dbEvidence=JSON.parse(readFileSync(
+    join(reports,"education-hosted-db-metadata.json"),"utf8"));
+  assertEducationDbEvidence(dbEvidence,provenance);
   mkdirSync(reports,{recursive:true});
   rmSync(releaseFile,{force:true});
   // Remove ALL stale source reports before initiating any potentially
@@ -41,17 +51,19 @@ try {
     const [execute,verify]=plans[stage.id];
     // Do not expose the privileged key to read-only or student/instructor
     // processes, even when the whole rehearsal is authorized to finalize.
-    const env={...process.env,ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY:
-      stage.id==="trusted-finalize" ? process.env.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY : ""};
+    const env={...process.env,
+      // PostgreSQL connection credential belongs ONLY to the audit step,
+      // never to public-key student/instructor/finalizer child processes.
+      ETERNYX_EDU_STAGING_DB_PASSWORD:"",
+      ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY:
+        stage.id==="trusted-finalize" ? process.env.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY : ""};
     run(execute,env);
     if (!existsSync(evidenceFile)) throw new Error("Missing hosted evidence");
     run(verify,env);
     completed.push(JSON.parse(readFileSync(evidenceFile,"utf8")));
   }
-  const report=summarizeEducationReleaseEvidence(config.mode,completed,{
-    sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,
-    attempt:process.env.GITHUB_RUN_ATTEMPT,
-  });
+  const report=summarizeEducationReleaseEvidence(
+    config.mode,completed,provenance,dbEvidence);
   writeFileSync(releaseFile,JSON.stringify(report,null,2)+"\n");
   process.stdout.write("Education "+report.outcome+
     "; staging-only evidence recorded; production launch NOT approved.\n");

@@ -6,7 +6,7 @@ const sql=readFileSync(new URL("../scripts/sql/education-hosted-db-metadata.sql"
 const provenance={sha:"a".repeat(40),runId:"123",attempt:"1"};
 const snapshot=()=>({schema:1,checks:Object.fromEntries(DATABASE_CHECKS.map(name=>[name,true]))});
 test("metadata is real catalog SQL only; no DML, answer reads or role grants",()=>{
-  assert.ok(DATABASE_CHECKS.length>=20);
+  assert.ok(DATABASE_CHECKS.length>=30);
   assert.equal(DATABASE_CHECKS.length,new Set(DATABASE_CHECKS).size);
   assert.match(sql,/BEGIN TRANSACTION READ ONLY;/);
   assert.match(sql,/ROLLBACK;/);
@@ -18,6 +18,7 @@ test("only exact fully successful fixed boolean checks generate success evidence
   assert.equal(report.passed_checks,DATABASE_CHECKS.length);
   assert.equal(report.read_only,true);
   assert.equal(report.production_certified,false);
+  assert.equal(DATABASE_CHECKS.length,31);
   for(const key of DATABASE_CHECKS){
     const changed=snapshot();changed.checks[key]=false;
     assert.throws(()=>validateEducationDbSnapshot(changed,provenance),key);

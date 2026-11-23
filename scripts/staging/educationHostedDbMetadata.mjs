@@ -63,6 +63,40 @@ export function validateEducationDbSnapshot(raw,provenance){
     read_only:true,production_tested:false,production_certified:false,
   });
 }
+
+/**
+ * The combined readiness verdict must reject stale, missing and fabricated
+ * audit attachments even if an upstream workflow step was marked successful.
+ * This validates a fixed, sanitized shape; no raw catalog/private values.
+ */
+export function assertEducationDbEvidence(report, provenance){
+  const fields=[
+    "schema","suite","environment","source_sha","github_run_id",
+    "github_run_attempt","expected_checks","passed_checks","results",
+    "read_only","production_tested","production_certified",
+  ];
+  if(!report || typeof report!=="object" || Array.isArray(report) ||
+    JSON.stringify(Object.keys(report).sort())!==JSON.stringify(fields.sort()) ||
+    !provenance || !/^[0-9a-f]{40}$/.test(provenance.sha||"") ||
+    !/^[1-9][0-9]*$/.test(String(provenance.runId||"")) ||
+    !/^[1-9][0-9]*$/.test(String(provenance.attempt||"")) ||
+    report.schema!==1 || report.suite!=="education-hosted-db-metadata" ||
+    report.environment!=="isolated-supabase-staging" ||
+    report.source_sha!==provenance.sha ||
+    report.github_run_id!==String(provenance.runId) ||
+    report.github_run_attempt!==String(provenance.attempt) ||
+    report.expected_checks!==DATABASE_CHECKS.length ||
+    report.passed_checks!==DATABASE_CHECKS.length ||
+    report.read_only!==true || report.production_tested!==false ||
+    report.production_certified!==false || !Array.isArray(report.results) ||
+    report.results.length!==DATABASE_CHECKS.length ||
+    report.results.some((row,i)=>!row ||
+      JSON.stringify(Object.keys(row).sort())!=='["check","result"]' ||
+      row.check!==DATABASE_CHECKS[i] || row.result!=="passed"))
+    throw new Error("Missing, malformed or stale Education database audit evidence");
+  return true;
+}
+
 export async function runEducationDbMetadataAudit(env=process.env){
   rmSync(resultPath,{force:true});
   try{
