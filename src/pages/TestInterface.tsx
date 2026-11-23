@@ -523,7 +523,8 @@ export default function TestInterface() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-primary sm:text-3xl">{exam.title}</h1>
         <div role="timer" aria-label="Time remaining" className="flex items-center gap-2 rounded-lg border border-primary/30 bg-card px-4 py-2 font-mono">
-          <Clock3 aria-hidden="true" className="h-4 w-4" />{remaining === null ? "Loading…" : examClock(remaining)}
+          <Clock3 aria-hidden="true" className="h-4 w-4" />
+          {!deadlineSafety.deadlineKnown ? "Unverified" : remaining === null ? "Loading…" : examClock(remaining)}
         </div>
       </div>
       <p className="text-xs text-muted-foreground">The clock follows the stored attempt start time. Final deadlines and grading require server-side enforcement.</p>
@@ -540,6 +541,25 @@ export default function TestInterface() {
       {visibilityNotice && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" />
         <AlertDescription>Tab visibility changed during this attempt. This alone is not proof of a screen lock or misconduct.</AlertDescription></Alert>}
       {notice && <Alert variant="destructive"><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+      {!deadlineSafety.deadlineKnown && <Alert variant="destructive">
+        <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+        <AlertDescription>
+          The server's original exam deadline cannot be verified. Editing and submission are disabled
+          until the attempt's status and start time can be checked. No extra exam time is granted.
+        </AlertDescription>
+      </Alert>}
+      {(submissionUncertain || !deadlineSafety.deadlineKnown) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <Button variant="outline" disabled={submitting || statusCheckBusy}
+            onClick={() => void checkSubmissionStatus()}>
+            {statusCheckBusy ? "Checking server status…" : "Check server submission status"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            This reads the existing owner-scoped attempt. It does not create another attempt,
+            resubmit answers, extend the exam clock or publish a grade.
+          </p>
+        </div>
+      )}
       {atomicCbtEnabled && restoredAnswersQuery.isSuccess && (
         <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
           <span className={answerSaveFailed ? "text-destructive" : "text-muted-foreground"}>
@@ -565,7 +585,7 @@ export default function TestInterface() {
       )}
       {expired && <Alert><AlertTriangle aria-hidden="true" className="h-4 w-4" /><AlertDescription className="flex flex-wrap items-center justify-between gap-3">
         <span>Time has elapsed. Submit to confirm the server recorded your attempt; late answer edits cannot be accepted.</span>
-        <Button size="sm" variant="outline" disabled={submitting}
+        <Button size="sm" variant="outline" disabled={submitting || statusCheckBusy}
           onClick={() => void submitExam(true)}>Retry submission</Button>
       </AlertDescription></Alert>}
       <Card className="border-border bg-card">
@@ -666,7 +686,7 @@ export default function TestInterface() {
       </section>
       <nav aria-label="Exam question navigation" className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="outline" disabled={questionIndex === 0 || submitting} onClick={() => setQuestionIndex(i => Math.max(0, i - 1))}>Previous</Button>
-        <Button variant="destructive" disabled={submitting} onClick={() => setConfirmSubmit(true)}><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Submit assessment</Button>
+        <Button variant="destructive" disabled={submitting || statusCheckBusy || !deadlineSafety.deadlineKnown} onClick={() => setConfirmSubmit(true)}><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Submit assessment</Button>
         <Button disabled={questionIndex === count - 1 || submitting} onClick={() => setQuestionIndex(i => Math.min(count - 1, i + 1))}>Next</Button>
       </nav>
       <AlertDialog open={confirmSubmit} onOpenChange={setConfirmSubmit}>
@@ -692,7 +712,8 @@ export default function TestInterface() {
           )}
           <div className="flex flex-wrap justify-end gap-2">
             <AlertDialogCancel disabled={submitting}>Continue assessment</AlertDialogCancel>
-            <AlertDialogAction disabled={submitting} onClick={() => void submitExam(expired)}>Confirm submission</AlertDialogAction>
+            <AlertDialogAction disabled={submitting || statusCheckBusy || !deadlineSafety.deadlineKnown}
+              onClick={() => void submitExam(expired)}>Confirm submission</AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>
