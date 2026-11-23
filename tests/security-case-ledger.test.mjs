@@ -70,10 +70,10 @@ test("new UI fails closed when schema is absent and never invents success", asyn
   assert.match(hub,/href: "\/cybersecurity\/case-ledger"/);
   assert.match(hub,/mode: "Deployment-gated"/);
   assert.match(page,/Schema not deployed or accessible/);
-  assert.match(page,/from\("security_case_assets"/);
-  assert.match(page,/from\("security_case_findings"/);
-  assert.match(page,/from\("security_case_finding_history"/);
-  assert.match(page,/from\("security_case_finding_evidence"/);
+  assert.match(page,/ledger\("security_case_assets"\)/);
+  assert.match(page,/ledger\("security_case_findings"\)/);
+  assert.match(page,/ledger\("security_case_finding_history"\)/);
+  assert.match(page,/ledger\("security_case_finding_evidence"\)/);
   assert.match(page,/from\("pentest_engagements"/);
   assert.match(page,/from\("pentest_evidence"/);
   assert.match(page,/owner_id: userId/);
