@@ -62,7 +62,7 @@ function docker(args,ms=8000){
     shell:false,encoding:"utf8",timeout:ms,maxBuffer:524288,
     windowsHide:true,env:childEnv
   });
-  if(r.error||r.status!==0)throw new Error("Pinned local Docker CLI command failed.");
+  if(r.error||r.status!==0)throw new Error("Local Docker command failed (pinned CLI).");
   return r.stdout.trim();
 }
 function localContext(){
