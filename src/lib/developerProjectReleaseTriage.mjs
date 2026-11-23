@@ -1,5 +1,5 @@
 import { normalizeDeveloperProject } from "./developerProjectLab.mjs";
-import { normalizeDeveloperTestSuite } from "./developerProjectTests.mjs";
+import { normalizeDeveloperTestSuite, TEST_KINDS as TEST_KIND_SOURCE } from "./developerProjectTests.mjs";
 import { analyzeDeveloperProjectDependencies } from "./developerProjectDependencies.mjs";
 
 export const DEVELOPER_RELEASE_TRIAGE_SCHEMA = "eternyx-developer-release-triage-v1";
@@ -44,14 +44,11 @@ export const DEVELOPER_TRIAGE_ADVICE = Object.freeze({
   "baseline-not-available": "Save or reopen a project to enable before/after changed-file and dependent-file coverage checks.",
 });
 
-const MEANINGFUL_KINDS = new Set([
-  "text-contains", "text-absent", "json-path-equals", "json-array-length",
-  "html-anchor-exists", "css-selector-exists",
-  "html-image-alt", "html-lang-present",
-  "html-title-present", "html-meta-viewport",
-  "html-local-anchors-resolve", "html-duplicate-ids-absent",
-  "html-local-files-resolve", "css-local-files-resolve", "js-local-imports-resolve",
-]);
+// Presence and syntactic JSON-valid checks are shallow. Every other supported
+// declarative assertion inspects a content, selector or cross-file property.
+const MEANINGFUL_KINDS = new Set(TEST_KIND_SOURCE.filter(kind =>
+  !["file-exists", "file-nonempty", "json-valid"].includes(kind)));
+
 const MAX_TRIAGE_ITEMS = 64;
 
 function lineNumber(value) { return Number.isSafeInteger(value) && value > 0 ? value : 0; }
@@ -144,7 +141,7 @@ export function analyzeDeveloperReleaseTriage(project, tests, baseline, combined
   };
   return {
     schema: DEVELOPER_RELEASE_TRIAGE_SCHEMA,
-    verdict: severityCounts.blocker || severityCounts.review ? "review-required" : "no-triage-findings",
+    verdict: severityCounts.blocker || severityCounts.review ? "review-required" : "no-actionable-findings",
     // This is a source-derived review queue, not a security score or hosted release gate.
     totalItems: list.length,
     truncated: list.length > MAX_TRIAGE_ITEMS,
@@ -166,7 +163,7 @@ export function exportDeveloperReleaseTriage(report) {
     schema: DEVELOPER_RELEASE_TRIAGE_SCHEMA,
     scope: "Local source/test-plan heuristics. No filenames, raw test expectations, source excerpts, runtime or hosted evidence.",
     verdict: DEVELOPER_TRIAGE_RULES.some(code =>
-      SEVERITY[code] !== "info" && report.counts[code] > 0) ? "review-required" : "no-triage-findings",
+      SEVERITY[code] !== "info" && report.counts[code] > 0) ? "review-required" : "no-actionable-findings",
     counts: Object.fromEntries(DEVELOPER_TRIAGE_RULES.map(code => [code, nonnegative(report.counts[code])])),
     totalItems: nonnegative(report.totalItems),
     truncated: report.truncated === true,
