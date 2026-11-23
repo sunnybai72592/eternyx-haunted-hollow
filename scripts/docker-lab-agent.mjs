@@ -11,6 +11,8 @@ import {lockLabContainer} from "../src/lib/dockerLabContainerLock.mjs";
 import {auditSignedAgentRecoveryDirectory} from "../src/lib/dockerStrictRecoveryInventory.mjs";
 import {requireSignedContainerHistoryClear}
   from "../src/lib/dockerSignedContainerHistoryFence.mjs";
+import {requireSignedReceiptReplayClear}
+  from "../src/lib/dockerSignedReceiptReplayFence.mjs";
 import { verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
 import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   validateSignedAgentEngineObserved,validateSignedAgentTarget}
@@ -121,9 +123,29 @@ async function main(){
       process.stdout.write(JSON.stringify({claimId:journal.claimId,alreadyAcknowledged:true})+"\n");
       return;
     }
+    // Receipt-only mode cannot treat a legacy UNKNOWN/failed marker or a
+    // single file read as sufficient proof. Full bounded, double-read owner-
+    // private history must establish this exact uncontested terminal claim.
+    const replay=requireSignedReceiptReplayClear(
+      auditSignedAgentRecoveryDirectory(),{
+        agentId,claimId:journal.claimId,phase:"before_send"
+      });
+    if(replay.outcome!==journal.outcome||
+       replay.containerId!==journal.containerId)
+      throw Error("Receipt replay journal and complete history disagree.");
     requireDurableTerminalBeforeReceipt(journal,journal.outcome);
     const ack=await send("receipt",journal.claimId,journal.outcome);
     validateDockerReceiptAcknowledgement(ack,journal.claimId,journal.outcome);
+    // Re-inspect local evidence AFTER the network acknowledgement, BEFORE
+    // fsyncing receipt_accepted. A changed claim is not safe to certify.
+    const afterReplay=requireSignedReceiptReplayClear(
+      auditSignedAgentRecoveryDirectory(),{
+        agentId,claimId:journal.claimId,phase:"before_ack",
+        originalFileSha256:replay.fileSha256
+      });
+    if(afterReplay.outcome!==replay.outcome||
+       afterReplay.containerId!==replay.containerId)
+      throw Error("Receipt replay evidence changed after server acknowledgement.");
     appendLabEvent(journal.claimId,"receipt_accepted");
     process.stdout.write(JSON.stringify({claimId:journal.claimId,receiptAcknowledged:true,executedAgain:false})+"\n");
     return;
