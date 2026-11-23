@@ -18,8 +18,8 @@ function fakeClient(rows, options = {}) {
         async range(start,end) {
           calls.push({start,end,ids:query.ids,owner:query.owner});
           if(options.error) return { data:null,error:{message:"Service interrupted"} };
-          return { data: rows.filter(r=>r.owner_id===query.owner && query.ids.includes(r.task_id))
-            .slice(start,end+1), error:null };
+          const scoped = rows.filter(r=>r.owner_id===query.owner && query.ids.includes(r.task_id));
+          return { data: scoped.slice(start,end+1), count: scoped.length, error:null };
         },
       };
       return q;
@@ -48,7 +48,7 @@ test("snapshot fails hard on missing pages or foreign rows", async()=>{
   const client=fakeClient([]);
   client.from=()=> {
     const q={select:()=>q,eq:()=>q,in:()=>q,order:()=>q,
-      range:async()=>({data:[{id:"bad",owner_id:"other",task_id:ownedTasks[0].id}],error:null})};
+      range:async()=>({data:[{id:"bad",owner_id:"other",task_id:ownedTasks[0].id}],count:1,error:null})};
     return q;
   };
   await assert.rejects(fetchWorkspaceChecklistSnapshot(client,owner,ownedTasks), /foreign/);
@@ -61,4 +61,63 @@ test("rejects duplicated task IDs, cross-account scope and invalid page settings
     [{...ownedTasks[0],owner_id:"other"}]), /owned/);
   await assert.rejects(fetchWorkspaceChecklistSnapshot(fakeClient([]),owner,
     ownedTasks,{pageSize:501}), /pagination/);
+});
+
+
+test("exact count catches truncated pages that formerly looked complete",async()=>{
+  const rows=Array.from({length:5},(_,i)=>({
+    id:"s"+i,task_id:ownedTasks[0].id,owner_id:owner,
+    title:"Step "+i,done:false,created_at:"2026-11-20",
+  }));
+  const client=fakeClient(rows);
+  const original=client.from.bind(client);
+  client.from=(table)=>{
+    const q=original(table),range=q.range.bind(q);
+    q.range=async(start,end)=>{
+      const result=await range(start,end);
+      return {...result,data:result.data.slice(0,1)};
+    };
+    return q;
+  };
+  await assert.rejects(fetchWorkspaceChecklistSnapshot(client,owner,[ownedTasks[0]],{pageSize:2}),
+    /truncated/);
+});
+
+test("count drift between pages and duplicate step IDs fail closed",async()=>{
+  const rows=Array.from({length:5},(_,i)=>({
+    id:"s"+i,task_id:ownedTasks[0].id,owner_id:owner,
+    title:"Step "+i,done:true,created_at:"2026-11-20",
+  }));
+  const drift=fakeClient(rows);
+  const original=drift.from.bind(drift);
+  drift.from=(table)=>{
+    const q=original(table),range=q.range.bind(q);
+    q.range=async(start,end)=>{
+      const data=await range(start,end);
+      return start>=2?{...data,count:data.count+1}:data;
+    };
+    return q;
+  };
+  await assert.rejects(fetchWorkspaceChecklistSnapshot(drift,owner,[ownedTasks[0]],{pageSize:2}),
+    /changed during backup/);
+  const duplicates=fakeClient([rows[0],{...rows[0]}]);
+  await assert.rejects(fetchWorkspaceChecklistSnapshot(duplicates,owner,[ownedTasks[0]],{pageSize:1}),
+    /duplicate step identity/);
+});
+
+test("inaccessible count and excess server steps never yield partial snapshots",async()=>{
+  const rows=[{id:"one",task_id:ownedTasks[0].id,owner_id:owner,
+    title:"Step",done:true,created_at:"2026-11-20"}];
+  const bad=fakeClient(rows);
+  const original=bad.from.bind(bad);
+  bad.from=(table)=>{
+    const q=original(table),range=q.range.bind(q);
+    q.range=async(start,end)=>({...await range(start,end),count:null});
+    return q;
+  };
+  await assert.rejects(fetchWorkspaceChecklistSnapshot(bad,owner,[ownedTasks[0]]),
+    /trustworthy exact count/);
+  const tooMany=Array.from({length:31},(_,i)=>({...rows[0],id:"step-"+i}));
+  await assert.rejects(fetchWorkspaceChecklistSnapshot(fakeClient(tooMany),owner,[ownedTasks[0]]),
+    /exceeds its step cap/);
 });
