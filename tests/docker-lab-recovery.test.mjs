@@ -93,5 +93,7 @@ test("Edge acknowledges only server-stored agent-reported outcomes",()=>{
  assert.match(source,/alreadyRecorded:data\.reused===true/);
  assert.match(source,/independentExecutionAudit:false/);
  assert.match(source,/docker_command_consume_nonce/);
- assert.match(source,/crypto\.subtle\.verify/);
+ assert.match(source,/verifySignedDockerAgentAction/);
+ const verifier=readFileSync(new URL("../supabase/functions/_shared/docker-action-verifier.mjs",import.meta.url),"utf8");
+ assert.match(verifier,/crypt.subtle.verify/);
 });
