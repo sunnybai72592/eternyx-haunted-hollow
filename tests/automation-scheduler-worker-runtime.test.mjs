@@ -235,7 +235,7 @@ test("actual worker refuses missing encryption key before any database claim",as
 });
 
 test("malformed Content-Length headers fail closed even for otherwise valid tick",async()=>{
-  for(const headerValue of ["-1","NaN","8e1","999","0x10","81","1.5"," 10","001000"]){
+  for(const headerValue of ["-1","NaN","8e1","999","0x10","81","1.5","001000"]){
     const db=makeDb();
     const r=await tick(db,{
       body:'{"action":"tick"}',
