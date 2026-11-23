@@ -175,3 +175,27 @@ native cinematic clips using the legacy 16 FPS interface is not yet supported.
 This is still real-footage editing, not AI scene generation. Cinematic uses
 more CPU time and disk than High, with the existing 30-second/eight-shot
 limits. No cloud media uploads, paid GPU or external API are required.
+
+## Real offline browser playback acceptance
+
+The phone-to-movie pipeline now has a dedicated **headless real Chrome CI gate**
+(`.github/workflows/ai-video-offline-browser.yml`). It uses only synthetic,
+locally generated footage (no customer uploads, Supabase, AI API or hosted
+preview) to produce the same private ZIP and run the same launcher as the UI.
+
+The gate fails, rather than reporting a synthetic green pass, if a real
+Chrome/Chromium executable is unavailable, the HTML5 H.264 or VP9 video cannot
+decode and advance, or the browser visits any host beyond loopback. It opens
+the extracted `watch.html` directly via `file://` and via a short-lived
+127.0.0.1 HTTP server. In desktop and mobile viewports it verifies real
+1280×720 video metadata and playhead advancement, a decoded canvas frame,
+WebM fallback after removing the MP4 source, the authored transcript, real
+poster dimensions, all download links and the downloaded MP4 SHA-256 against
+the final verified receipt.
+
+The workflow pins Python Playwright 1.56.0 and uses Chrome from the GitHub
+runner, with a pinned Ubuntu 24.04 runner. It performs no extra product
+launcher or customer work. **This is an offline browser decode acceptance
+test**, not evidence of all browsers, mobile operating systems, streaming,
+generative AI, or production-deployed service readiness. A failed or absent
+browser workflow means real browser playback is not yet verified.
