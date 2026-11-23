@@ -85,7 +85,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const {data,error:queryError}=await supabase.from("workspace_team_spaces")
       .select("*").order("created_at",{ascending:false}).limit(150);
     if(queryError)throw new Error(queryError.message);
-    if(ownerRef.current!==expectedOwner || epoch.current!==token)return;
+    // Data API results cannot be reused after a mid-request Auth change.
+    await assureOwner(expectedOwner);
+    if(ownerRef.current!==expectedOwner || epoch.current!==token)return null;
     const rows=(data??[]) as Space[];
     const chosen=chooseWorkspaceTeam(rows,selectedId,prefer);
     if(!rows.some(space=>space.id===selectedId)) {
@@ -188,11 +190,17 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     // Every refresh is its own generation. Slower stale responses cannot
     // repopulate data after a newer refresh or account/selection change.
     const token=++epoch.current;
-    await assureOwner(owner);
-    const chosen=await loadSpaces(owner,token,target??selectedId);
-    if(chosen && chosen===selectedId) {
-      // A new selection gets its own guarded detail effect.
-      await loadDetails(chosen,owner,token);
+    try {
+      await assureOwner(owner);
+      const chosen=await loadSpaces(owner,token,target??selectedId);
+      if(chosen && chosen===selectedId) {
+        // A new selection gets its own guarded detail effect.
+        await loadDetails(chosen,owner,token);
+      }
+    }catch(failure){
+      if(epoch.current===token && ownerRef.current===owner)
+        quarantineTeam(); // Network failure is not a revocation, but stale UI must be hidden.
+      throw failure;
     }
   };
   useEffect(()=>{
@@ -213,6 +221,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         // Hide previously cached team data until current membership is checked.
         quarantineTeam();
         void refresh().catch(failure=>{
+          if(!alive || ownerRef.current!==owner)return;
           quarantineTeam();
           setError(errorMessage(failure));
         }).finally(()=>{resumeInFlight.current=false;});
