@@ -1,0 +1,32 @@
+name: Docker live-stop forensic review (offline CI, NO DOCKER ENGINE)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/docker-live-stop-forensics.yml"
+      - "src/lib/dockerLiveStopForensics.mjs"
+      - "scripts/docker-host-live-stop-forensics.mjs"
+      - "tests/docker-live-stop-forensics.test.mjs"
+      - "docs/DOCKER_LIVE_STOP_FORENSICS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  forensic-evidence-contract:
+    name: Validate real journal contracts and refuse unsafe retrospective review
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check forensic validator and operator CLI syntax
+        run: |
+          node --check src/lib/dockerLiveStopForensics.mjs
+          node --check scripts/docker-host-live-stop-forensics.mjs
+          node --check tests/docker-live-stop-forensics.test.mjs
+      - name: Exercise actual local durable journals, tamper refusal and offline review guard
+        run: node --test tests/docker-live-stop-forensics.test.mjs
