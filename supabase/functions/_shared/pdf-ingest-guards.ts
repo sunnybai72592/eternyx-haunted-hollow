@@ -3,6 +3,7 @@
  * These checks do not imply a scanned PDF can be read without OCR.
  */
 export const MAX_PDF_BYTES = 12 * 1024 * 1024;
+export const MAX_IMAGE_OCR_BYTES = 6 * 1024 * 1024;
 export const MAX_PDF_PAGES = 60;
 export const MAX_PDF_EXTRACTED_CHARACTERS = 240_000;
 
