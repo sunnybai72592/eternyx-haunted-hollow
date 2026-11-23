@@ -1218,3 +1218,57 @@ The tests verify atomic complete output, uniqueness under concurrent
 writers, refusal of symlink/hardlink/existing outputs, protected file
 permissions, strict file allowlists, simulated crash leftovers, review and
 import fail-closed behavior, and zero network/VM interaction.
+
+
+## Race-resistant private evidence reads
+
+Following the crash-safe publication controls, all **offline reviewer-case**
+and import-journal file reads now share one bounded private-file reader.
+It is used for both signed report inputs and reviewer private/public keys.
+The writer from the preceding milestone is unchanged.
+
+### Trust and race safeguards
+
+1. The caller first validates the fixed, private directory and filename.
+   The common reader accepts only an absolute path, explicit nonnegative
+   owner UID and a bounded file size of at most **128 KiB**.
+2. It performs an initial no-follow \`lstat\` with nanosecond timestamps.
+   Symlinks, hard-linked files, directories, non-regular devices, empty files,
+   oversized files, wrong owner UID and group/other-accessible files fail.
+3. The descriptor is opened with **O_RDONLY | O_NOFOLLOW | O_NONBLOCK**.
+   This reduces the risk of hanging on a FIFO substituted between initial
+   pathname inspection and open.
+4. The opened descriptor's device, inode, link count, owner/group, mode,
+   byte size, nanosecond modification time and change time must match the
+   initial no-follow pathname observation.
+5. After the binary bytes have been read, their *exact length* and another
+   descriptor inspection must match the original state.
+6. A **final no-follow pathname inspection** must match that same descriptor
+   identity and metadata. Pathname substitution during a read is refused.
+7. Missing files are only accepted for the import journal's optional
+   markers. A file vanishing or changing **after** initial inspection never
+   silently becomes a missing/legacy marker.
+
+The reader does not parse, execute, rewrite or normalize evidence bytes, and
+never starts a guest, opens network services or contacts cloud providers.
+
+This defense narrows common pathname and read-time races but cannot
+defend against a malicious local root process that controls all paths and
+trusted signer keys, or independently authenticate the physical host.
+Shared filesystems and hostile mounts must be assessed separately. No
+software-only file read is a TPM quote or genuine hardware acceptance.
+
+### Free local regression checks
+
+\`\`\`bash
+node --test tests/ctf-firecracker-private-safe-read.test.mjs
+node --test tests/ctf-firecracker-handoff-import-journal.test.mjs
+npm test
+npm run build
+\`\`\`
+
+The tests include signed-integer bounds, missing-marker handling, binary
+integrity, symlinks, hardlinks, wrong ownership/permissions, empty and
+oversized data, and non-regular devices. CI also checks that import recovery
+and all reviewer paths actually use the shared hardening. All test inputs
+are disposable fixtures, not genuine hardware evidence.

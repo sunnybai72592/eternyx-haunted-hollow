@@ -142,7 +142,7 @@ test("reviewer must refuse completed journals whose files changed or disappeared
   await caseDir(async folder=>{
     await commitHandoffImport(input(folder));
     await chmod(join(folder,"operator-public.pem"),0o666);
-    await assert.rejects(auditHandoffImport(input(folder)),/Unsafe/);
+    await assert.rejects(auditHandoffImport(input(folder)),/Unsafe|Untrusted/);
   });
 });
 test("symlinked case, symlinked journal and writable directory cannot be accepted",async()=>{
