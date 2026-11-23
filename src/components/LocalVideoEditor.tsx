@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import LocalRenderReview from "@/components/LocalRenderReview";
 import { buildPortableVideoBundle } from "@/lib/ai/portableVideoBundle.mjs";
+import {
+  VIDEO_DRAFT_LIMITS,createLocalVideoDraft,
+  readLocalVideoDraft,verifyLocalVideoDraftMedia,
+} from "@/lib/ai/localVideoDraft.mjs";
 import rendererPython from "../../gpu-worker/render_video_timeline.py?raw";
 import storyboardPython from "../../gpu-worker/assemble_video_storyboard.py?raw";
 import auditPython from "../../gpu-worker/audit_video_render.py?raw";
@@ -74,6 +78,12 @@ export default function LocalVideoEditor() {
   const [audioWorking, setAudioWorking] = useState(false);
   const [bundleWorking, setBundleWorking] = useState(false);
   const [bundleProgress, setBundleProgress] = useState("");
+  const [draftName, setDraftName] = useState("My ETERNYX video");
+  const [pendingDraft, setPendingDraft] =
+    useState<ReturnType<typeof readLocalVideoDraft> | null>(null);
+  const [draftWorking, setDraftWorking] = useState(false);
+  const [draftProgress, setDraftProgress] = useState("");
+  const draftVersion = useRef(0);
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState("");
   const videoVersion = useRef(0);
@@ -84,9 +94,108 @@ export default function LocalVideoEditor() {
   useEffect(() => () => {
     videoVersion.current++;
     audioVersion.current++;
+    draftVersion.current++;
     urls.current.forEach(url => URL.revokeObjectURL(url));
     if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
   }, []);
+
+  const downloadDraft = () => {
+    try {
+      const saved = createLocalVideoDraft({
+        name:draftName,sources,shots,soundtrack,profile,quality,
+      });
+      saveDownload(saved.json,saved.filename,"application/json");
+      setMessage("");
+      setNotice("Editable project draft saved without any MP4 or audio bytes. Keep the original files to resume later.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save local editing draft.");
+    }
+  };
+
+  const loadDraft = async (file?: File) => {
+    const current=++draftVersion.current;
+    ++videoVersion.current;
+    ++audioVersion.current;
+    setDraftWorking(false);
+    setDraftProgress("");
+    setMessage("");
+    setNotice("");
+    setPendingDraft(null);
+    try {
+      if (!file || file.name !== "eternyx-video-edit-draft.json" ||
+          file.size<1 || file.size>VIDEO_DRAFT_LIMITS.maxBytes)
+        throw new Error("Select a valid eternyx-video-edit-draft.json, at most 32 KiB.");
+      const draft=readLocalVideoDraft(await file.text());
+      if(current!==draftVersion.current)return;
+      setPendingDraft(draft);
+      setNotice("Draft loaded safely. Reconnect all "+(draft.sources.length+(draft.soundtrack?1:0))+
+        " ORIGINAL source files to verify their actual bytes. Your current timeline remains untouched until verification succeeds.");
+    } catch (error) {
+      if(current===draftVersion.current)
+        setMessage(error instanceof Error ? error.message : "This project draft is not valid.");
+    }
+  };
+
+  const restoreDraft = async (files: File[]) => {
+    if (!pendingDraft || draftWorking) return;
+    const current=++draftVersion.current;
+    setDraftWorking(true);
+    setDraftProgress("Checking actual source file bytes locally...");
+    setMessage("");
+    setNotice("");
+    let prepared:LocalFile[]=[];
+    let newAudio:LocalSound|null=null;
+    let committed=false;
+    try {
+      const verified=await verifyLocalVideoDraftMedia(pendingDraft,files,
+        (step:{checked:number;total:number;name:string})=>{
+          if(current===draftVersion.current)
+            setDraftProgress("Verified "+step.checked+"/"+step.total+
+              " original files · "+step.name);
+        });
+      if(current!==draftVersion.current)return;
+      prepared=verified.sources.map((item:{
+        name:string;size:number;sha256:string;file:File;
+      })=>({...item,url:URL.createObjectURL(item.file)}));
+      if(verified.soundtrack){
+        const item=verified.soundtrack as {
+          name:string;size:number;sha256:string;file:File;
+          rightsRef:string;volumePercent:number;
+        };
+        newAudio={...item,url:URL.createObjectURL(item.file)};
+      }
+      if(current!==draftVersion.current)return;
+      ++videoVersion.current;
+      ++audioVersion.current;
+      urls.current.forEach(url=>URL.revokeObjectURL(url));
+      if(audioUrl.current)URL.revokeObjectURL(audioUrl.current);
+      urls.current=prepared.map(f=>f.url);
+      audioUrl.current=newAudio?.url??null;
+      setSources(prepared);
+      setShots(verified.shots);
+      setSoundtrack(newAudio);
+      setSelectedSource(prepared[0].name);
+      setProfile(verified.profile);
+      setQuality(verified.quality);
+      setDraftName(verified.name);
+      setPendingDraft(null);
+      setNotice("Editing project restored: "+verified.verifiedCount+
+        " original files passed SHA-256 verification. Cuts, captions, rights, audio and output settings are editable again.");
+      committed=true;
+    } catch (error) {
+      if(current===draftVersion.current)
+        setMessage(error instanceof Error ? error.message :
+          "Could not verify all original files. Existing timeline was not changed.");
+    } finally {
+      if(!committed){
+        prepared.forEach(f=>URL.revokeObjectURL(f.url));
+        if(newAudio)URL.revokeObjectURL(newAudio.url);
+      }
+      if(current===draftVersion.current){
+        setDraftWorking(false);setDraftProgress("");
+      }
+    }
+  };
 
   const changeShot = (index: number, changes: Partial<LocalShot>) => {
     setShots(old => old.map((shot, i) => i === index ? { ...shot, ...changes } : shot));
@@ -257,9 +366,73 @@ export default function LocalVideoEditor() {
 
         <LocalVideoImportPrep sources={sources} />
 
+        <section className="space-y-3 rounded-lg border border-indigo-400/30 bg-indigo-950/10 p-4"
+          aria-labelledby="local-draft-heading">
+          <h3 id="local-draft-heading" className="flex items-center gap-2 font-semibold">
+            <Film className="h-4 w-4"/>Save or reopen an editable local video project
+          </h3>
+          <p className="text-sm text-slate-300">
+            Save your unfinished cuts, captions, rights references, soundtrack settings,
+            output profile and original file SHA-256 fingerprints as a tiny JSON draft.
+            The draft stores <strong>no MP4/audio bytes</strong>, uses no cloud storage,
+            and can be restored after reselecting the exact original files.
+          </p>
+          <label className="block space-y-1 text-sm">Project title
+            <Input value={draftName} maxLength={VIDEO_DRAFT_LIMITS.maxTitleLength}
+              onChange={e=>setDraftName(e.target.value)}
+              className="border-slate-700 bg-slate-950" />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={!sources.length || draftWorking || working || audioWorking}
+              onClick={downloadDraft}>
+              <Download className="mr-2 h-4 w-4"/>Save editable project draft (.json)
+            </Button>
+          </div>
+          <label className="block space-y-1 text-sm">
+            Open a previously saved eternyx-video-edit-draft.json
+            <Input type="file" accept=".json,application/json"
+              disabled={draftWorking || bundleWorking}
+              className="mt-1 min-h-11 border-slate-700 bg-slate-950 file:text-foreground"
+              onChange={e=>{void loadDraft(e.currentTarget.files?.[0]);e.currentTarget.value="";}}/>
+          </label>
+          {pendingDraft && <div className="space-y-3 rounded border border-indigo-500/40 bg-slate-950/70 p-3">
+            <p className="text-sm font-semibold text-indigo-200">
+              Draft: {pendingDraft.name} · {pendingDraft.shots.length} cuts
+            </p>
+            <p className="text-xs text-slate-300">
+              Before replacing your current editing timeline, select all exact original files:
+            </p>
+            <ul className="space-y-1 text-xs text-slate-300">
+              {[...pendingDraft.sources,...(pendingDraft.soundtrack?[pendingDraft.soundtrack]:[])]
+                .map(source=><li key={source.sha256+source.name} className="break-all">
+                  {source.name} · {(source.size/1024/1024).toFixed(2)} MiB · SHA-256 {source.sha256.slice(0,16)}…
+                </li>)}
+            </ul>
+            <label className="block space-y-1 text-sm">
+              Reattach all original MP4 files{pendingDraft.soundtrack?" and soundtrack":""}
+              <Input type="file" multiple accept=".mp4,.wav,.mp3,.m4a,video/mp4,audio/*"
+                disabled={draftWorking}
+                className="mt-1 min-h-11 border-slate-700 bg-slate-950 file:text-foreground"
+                onChange={e=>{void restoreDraft(Array.from(e.currentTarget.files??[]));e.currentTarget.value="";}}/>
+            </label>
+            <Button variant="ghost" size="sm" disabled={draftWorking}
+              onClick={()=>{++draftVersion.current;setPendingDraft(null);setNotice("Draft restore cancelled; your existing timeline is unchanged.");}}>
+              Cancel draft restore
+            </Button>
+          </div>}
+          {draftWorking&&<p role="status" className="text-xs text-indigo-200">
+            {draftProgress||"Verifying local project files..."}
+          </p>}
+          <p className="text-xs text-amber-100">
+            Restoring is all-or-nothing: wrong, missing or altered source files
+            are rejected; no partial timeline is loaded. Your project JSON is
+            not an MP4 renderer and does not include copyrighted media.
+          </p>
+        </section>
+
         <div className="space-y-3 rounded-lg border border-slate-700 p-4">
           <label htmlFor="local-video-clips" className="flex items-center gap-2 text-sm font-semibold"><Upload className="h-4 w-4"/>Select 1–8 local MP4 clips (up to 64 MiB each)</label>
-          <Input id="local-video-clips" type="file" multiple accept=".mp4,video/mp4" disabled={working}
+          <Input id="local-video-clips" type="file" multiple accept=".mp4,video/mp4" disabled={working || draftWorking || Boolean(pendingDraft)}
             className="min-h-11 border-slate-700 bg-slate-950 file:text-foreground"
             onChange={event => {
               void selectVideos(Array.from(event.currentTarget.files ?? []));
@@ -349,7 +522,7 @@ export default function LocalVideoEditor() {
         <section className="space-y-3 rounded-lg border border-slate-700 p-4" aria-labelledby="local-audio-heading">
           <h3 id="local-audio-heading" className="flex items-center gap-2 font-semibold"><Music2 className="h-4 w-4"/>Optional licensed background audio</h3>
           <label htmlFor="local-audio-file" className="block text-sm">Select WAV, MP3 or M4A (up to 16 MiB)</label>
-          <Input id="local-audio-file" type="file" accept=".wav,.mp3,.m4a,audio/*" disabled={audioWorking}
+          <Input id="local-audio-file" type="file" accept=".wav,.mp3,.m4a,audio/*" disabled={audioWorking || draftWorking || Boolean(pendingDraft)}
             className="min-h-11 border-slate-700 bg-slate-950 file:text-foreground"
             onChange={e => { void selectSoundtrack(e.currentTarget.files?.[0]); e.currentTarget.value = ""; }} />
           {audioWorking && <p role="status" className="text-sm text-cyan-200">Hashing audio locally…</p>}
