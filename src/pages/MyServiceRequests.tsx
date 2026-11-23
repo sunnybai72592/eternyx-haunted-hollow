@@ -143,6 +143,9 @@ export default function MyServiceRequests() {
     setLoading(true);
     setLoadError(false);
     setLoadErrorDetail('');
+    setRows([]);
+    setRowsOwner(null);
+    setTotal(0);
     try {
     let query = supabase.from('service_customer_amendment_queue')
       .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete', { count: 'exact' })
