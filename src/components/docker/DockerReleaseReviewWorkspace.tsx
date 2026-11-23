@@ -1,6 +1,7 @@
 import {useEffect,useState} from "react";
 import DockerReleaseReviewerPanel,{type DockerReleaseReviewerAssignment} from "./DockerReleaseReviewerPanel";
 import {verifyDockerReleaseHistory} from "@/lib/dockerReleaseHistoryIntegrity.mjs";
+import {verifyDockerReleaseAuditExport} from "@/lib/dockerReleaseAuditExport.mjs";
 import {FileCheck2,RefreshCw} from "lucide-react";
 
 export type DockerReleaseReview={
@@ -28,6 +29,7 @@ export default function DockerReleaseReviewWorkspace({reviews,events,assignments
  const [notes,setNotes]=useState<Record<string,string>>({});
  const [confirm,setConfirm]=useState<Record<string,string>>({});
  const [working,setWorking]=useState(false);
+ const [exportingId,setExportingId]=useState<string|null>(null);
  const [integrity,setIntegrity]=useState<Record<string,string>>({});
  useEffect(()=>{
   let active=true;
@@ -56,6 +58,30 @@ export default function DockerReleaseReviewWorkspace({reviews,events,assignments
   if(result.ok!==true)throw Error("Release metadata submission was rejected.");
   setKey(crypto.randomUUID());setDraft(blank());await refresh();
   setNotice("Owner release metadata saved. No signature was checked and no deployment was approved.");
+ });}
+ function exportAudit(r:DockerReleaseReview){void run(async()=>{
+  if(!currentUserId||exportingId)throw Error("Sign in to export your release history.");
+  setExportingId(r.id);
+  try{
+   const report=await onAction("release_export_audit",{reviewId:r.id});
+   if(report.ok!==true)throw Error("Owner release history export unavailable.");
+   const checked=await verifyDockerReleaseAuditExport(report,{
+    ownerId:currentUserId,reviewId:r.id,candidateSha256:r.candidate_sha256,
+    commitSha:r.commit_sha
+   });
+   if(checked.status!=="unanchored_server_report_only")
+    throw Error("Release history export is incomplete or failed local SHA-256 consistency checks.");
+   const payload=JSON.stringify(report,null,2)+"\n";
+   const file=new Blob([payload],{type:"application/json"});
+   if(file.size>65536)throw Error("Export is too large to verify safely.");
+   const url=URL.createObjectURL(file);
+   try{
+    const link=document.createElement("a");
+    link.href=url;link.download="eternyx-docker-release-audit-"+r.id.slice(0,8)+".json";
+    document.body.appendChild(link);link.click();link.remove();
+   }finally{window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+   setNotice("Complete server-reported audit downloaded and locally SHA-256 checked. It is UNANCHORED: verify with independently pinned candidate and tail hashes before trusting it.");
+  }finally{setExportingId(null);}
  });}
  function decide(r:DockerReleaseReview,state:"in_review"|"reviewed"|"blocked"){void run(async()=>{
   const note=notes[r.id]??"";
@@ -119,6 +145,11 @@ export default function DockerReleaseReviewWorkspace({reviews,events,assignments
      <span className="rounded-full border border-border px-3 py-1 text-xs">{r.state.replaceAll("_"," ")}</span>
     </div>
     <p className="text-xs text-muted-foreground">Recorded {new Date(r.created_at).toLocaleString()} · Case {r.id.slice(0,8)}</p>
+    <button type="button" disabled={working||!!exportingId||!loaded||!currentUserId}
+     onClick={()=>exportAudit(r)}
+     className="min-h-11 rounded-lg border border-cyan-500/40 px-4 text-xs disabled:opacity-50">
+     {exportingId===r.id?"Verifying full audit…":"Export complete audit (unanchored JSON)"}
+    </button>
     <div className="space-y-1 break-all font-mono text-xs text-muted-foreground">
      <p>Candidate: {r.candidate_sha256}</p>
      <p>Source: {r.source_snapshot_sha256}</p>

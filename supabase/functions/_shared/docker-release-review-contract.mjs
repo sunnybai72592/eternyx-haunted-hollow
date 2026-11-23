@@ -32,6 +32,10 @@ export function parseDockerReleaseReviewAction(raw){
     !["accept","decline"].includes(raw.decision)||!validNote(raw.note))return null;
   return raw;
  }
+ if(raw.action==="release_export_audit"){
+  if(!exact(raw,["action","reviewId"])||!UUID.test(raw.reviewId||""))return null;
+  return raw;
+ }
  if(raw.action==="release_decide"){
   if(!exact(raw,["action","reviewId","state","note"])||
     !UUID.test(raw.reviewId||"")||
