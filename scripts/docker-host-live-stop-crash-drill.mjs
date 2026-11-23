@@ -52,14 +52,14 @@ function privateDir(path){
 function outside(path,other){
  return path!==other&&!path.startsWith(other+"/")&&!other.startsWith(path+"/");
 }
-function usedPermit(parent,permitId,containerId,commit,runDir){
+function usedPermit(parent,permitId,containerId,commit,runDir,agentId,claimId){
  const path=join(parent,"approved-stop-permit-"+permitId+".used");
  const fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|
   (constants.O_NOFOLLOW||0),0o600);
  try{
   writeSync(fd,JSON.stringify({
    schema:"eternyx-one-time-disposable-docker-stop-permit-v1",
-   permitId,containerId,approvedCommit:commit,runDir,usedAt:new Date().toISOString()
+   permitId,containerId,approvedCommit:commit,runDir,agentId,claimId,usedAt:new Date().toISOString()
   })+"\n");
   fsyncSync(fd);
  }finally{closeSync(fd);}
@@ -130,9 +130,9 @@ try{
  container("running",baseline);
  const runDir=mkdtempSync(join(parent,"eternyx-real-docker-stop-"));
  privateDir(runDir);
- const permitPath=usedPermit(parent,e.ETERNYX_DOCKER_LIVE_STOP_PERMIT_ID,
-  e.ETERNYX_DOCKER_HOST_CONTAINER_ID,e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA,runDir);
  const agentId=randomUUID(),claimId=randomUUID();
+ const permitPath=usedPermit(parent,e.ETERNYX_DOCKER_LIVE_STOP_PERMIT_ID,
+  e.ETERNYX_DOCKER_HOST_CONTAINER_ID,e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA,runDir,agentId,claimId);
  const worker=fileURLToPath(new URL("./docker-live-stop-crash-worker.mjs",import.meta.url));
  const processOutcome=await childStop(worker,runDir,agentId,claimId,
   e.ETERNYX_DOCKER_HOST_CONTAINER_ID,baseline);
