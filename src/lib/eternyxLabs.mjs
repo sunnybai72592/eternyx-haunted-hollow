@@ -24,6 +24,11 @@ export const labCatalog = Object.freeze([
   { id: "securitytxt", title: "Security.txt review", area: "Security disclosure", level: "Foundations", description: "Inspect security-contact metadata without visiting or messaging the site." },
   { id: "events", title: "Security event correlation", area: "Defensive operations", level: "Intermediate", description: "Correlate synthetic login events and spot bounded timing patterns." },
   { id: "tokens", title: "Secure random token generator", area: "Crypto basics", level: "Intermediate", description: "Generate fresh local random bytes using browser Web Crypto." },
+  { id: "ipv6", title: "IPv6 subnet calculator", area: "Network fundamentals", level: "Intermediate", description: "Calculate IPv6 network boundaries and address space with exact 128-bit arithmetic." },
+  { id: "cache", title: "HTTP cache policy clinic", area: "Web defense", level: "Intermediate", description: "Inspect Cache-Control response directives and confidential-data caching risks locally." },
+  { id: "spf", title: "SPF record linting", area: "Email security", level: "Intermediate", description: "Review simplified SPF TXT mechanisms and unsafe mail-policy choices without querying DNS." },
+  { id: "ratelimit", title: "Rate-limit token bucket", area: "API reliability", level: "Intermediate", description: "Simulate actual local token bucket replenishment and allow/deny outcomes." },
+  { id: "sri", title: "Subresource Integrity generator", area: "Web integrity", level: "Intermediate", description: "Compute real SHA-256, SHA-384 or SHA-512 SRI hashes of local text with Web Crypto." },
 ]);
 
 export const sampleHeaders = [
