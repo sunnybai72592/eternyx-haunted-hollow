@@ -185,7 +185,8 @@ export default function AutomationAuditHandoffPanel({
     await load();
     setNotice("Recorded a versioned owner attestation. No deployment, CI check or workflow action was performed.");
   }
-  const active=assessment?.packages.find(p=>p.packageId===selected);
+  const displayedAssessment=assessment?.incidentId===incidentId?assessment:null;
+  const active=displayedAssessment?.packages.find(p=>p.packageId===selected);
   return <section aria-labelledby="eternyx-2u-handoff-heading"
     className="space-y-3 rounded-xl border border-primary/20 p-4">
     <h5 id="eternyx-2u-handoff-heading"
@@ -217,14 +218,14 @@ export default function AutomationAuditHandoffPanel({
         </Button>
       </>}
     </div>
-    {assessment&&<div className="space-y-2 text-xs text-muted-foreground">
-      <p>{assessment.totalPackages} private stored packages;
-        {" "}{assessment.eligibleForManualHandoffCount} with currently
+    {displayedAssessment&&<div className="space-y-2 text-xs text-muted-foreground">
+      <p>{displayedAssessment.totalPackages} private stored packages;
+        {" "}{displayedAssessment.eligibleForManualHandoffCount} with currently
         positive owner reviews and
-        {" "}{assessment.currentManualHandoffCount} matching stored handoff
+        {" "}{displayedAssessment.currentManualHandoffCount} matching stored handoff
         receipts. <strong>No external release checks are verified.</strong>
       </p>
-      <p>Last source assessment: {time(assessment.generatedAt)}. A new
+      <p>Last source assessment: {time(displayedAssessment.generatedAt)}. A new
         authenticated source check is required before every new receipt.</p>
       <label className="block">Package for manual review
         <select value={selected} disabled={busy||disabled}
@@ -234,15 +235,15 @@ export default function AutomationAuditHandoffPanel({
             setNote("");setAckReview(false);setAckCI(false);
             setAckDeployment(false);setAckWorker(false);}}
           className="mt-1 w-full rounded border border-input bg-background p-2">
-          {assessment.packages.length===0&&<option value="">No stored audit package</option>}
-          {assessment.packages.map(p=><option key={p.packageId} value={p.packageId}>
+          {displayedAssessment.packages.length===0&&<option value="">No stored audit package</option>}
+          {displayedAssessment.packages.map(p=><option key={p.packageId} value={p.packageId}>
             {p.packageId.slice(0,8)} · rev {p.incidentRevision} ·
             {" "}{p.eligibleForManualHandoff?"owner reviewed":"requires review"}
           </option>)}
         </select>
       </label>
       {active&&<div className="space-y-2 rounded border border-border/70 p-3">
-        <p>Case revision {assessment.incidentRevision} ·
+        <p>Case revision {displayedAssessment.incidentRevision} ·
           package revision {active.incidentRevision} ·
           captured {time(active.capturedAt)}.</p>
         <p>Last human review: {active.latestReviewDecision?.replaceAll("_"," ")??"None"}
