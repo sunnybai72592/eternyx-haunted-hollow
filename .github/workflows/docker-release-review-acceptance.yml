@@ -16,6 +16,12 @@ on:
       - 'src/components/docker/DockerReleaseReviewerPanel.tsx'
       - 'tests/docker-independent-reviewer-integrity.test.mjs'
       - 'tests/sql/docker-independent-reviewer-db-acceptance.sql'
+      - 'supabase/migrations/20261123130000_docker_full_release_audit_export.sql'
+      - 'src/lib/dockerReleaseAuditExport.mjs'
+      - 'scripts/docker-release-audit-verify.mjs'
+      - 'tests/docker-full-audit-export.test.mjs'
+      - 'tests/sql/docker-full-audit-export-db-acceptance.sql'
+      - 'docs/DOCKER_FULL_RELEASE_AUDIT_EXPORT.md'
   workflow_dispatch:
 
 permissions:
@@ -54,6 +60,12 @@ jobs:
         run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123120000_docker_reviewer_accountability_and_event_chain.sql
       - name: Test owner/reviewer consent, SHA-256 history, update denial and RLS
         run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/docker-independent-reviewer-db-acceptance.sql
+      - name: Test offline pinned SHA-256 audit verification and fail-closed export policies
+        run: node --test tests/docker-full-audit-export.test.mjs
+      - name: Apply owner-only full review audit export SQL
+        run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261123130000_docker_full_release_audit_export.sql
+      - name: Verify actual PostgreSQL complete audit history and cross-owner denial
+        run: docker exec --interactive eternyx-docker-release-review-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/docker-full-audit-export-db-acceptance.sql
       - name: Destroy disposable database
         if: always()
         run: docker rm --force eternyx-docker-release-review-ci || true
