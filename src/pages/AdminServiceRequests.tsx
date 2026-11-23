@@ -109,6 +109,9 @@ export default function AdminServiceRequests() {
     setLoading(true);
     setLoadError(false);
     setLoadErrorDetail('');
+    setRows([]);
+    setDrafts({});
+    setTotal(0);
     try {
     let query = supabase.from('service_admin_amendment_queue')
       .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_customer_answer_at,needs_my_check_extended,needs_follow_up_extended,customer_answers_since_check,amendment_count,pending_amendment_count,last_amendment_submitted_at,needs_my_check_complete,needs_follow_up_complete', { count: 'exact' });
