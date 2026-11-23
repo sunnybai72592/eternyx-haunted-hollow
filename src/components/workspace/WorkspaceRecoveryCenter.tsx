@@ -122,27 +122,33 @@ export default function WorkspaceRecoveryCenter({
     }
   }, [owner]);
 
-  const operate = async (sessionId: string, op: "prepare" | "finalize") => {
+  const operate = async (sessionId: string, op: "prepare" | "finalize" | "cancel") => {
     if (busy || disabled || !inspection || inspection.session_id !== sessionId) return;
     if (op === "prepare" && !workspaceRecoveryCanPrepare(inspection)) return;
     if (op === "finalize" && !workspaceRecoveryCanFinalize(inspection)) return;
+    if (op === "cancel" && inspection.status !== "discarding") return;
     if (op === "prepare") {
       if (window.prompt(
         "Seal EMPTY unfinished import " + inspection.project_name +
         "? It must have no tasks, notes, checklist steps, file claims, or Storage files. " +
         "A second confirmation is required to permanently remove it. Type SEAL to proceed:"
       ) !== "SEAL") return;
-    } else if (window.prompt(
-      "PERMANENTLY DELETE this empty, sealed import project? Its import receipts will also be removed. " +
-      "This cannot be undone. Type DELETE to proceed:"
-    ) !== "DELETE") return;
+    } else if (op === "finalize") {
+      if (window.prompt(
+        "PERMANENTLY DELETE this empty, sealed import project? Its import receipts will also be removed. " +
+        "This cannot be undone. Type DELETE to proceed:"
+      ) !== "DELETE") return;
+    } else if (!window.confirm(
+      "Undo the seal and make this unfinished project active again? No data will be deleted."
+    )) return;
 
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      const name = op === "prepare"
-        ? "workspace_import_prepare_discard" : "workspace_import_finalize_discard";
+      const name = op === "prepare" ? "workspace_import_prepare_discard"
+        : op === "finalize" ? "workspace_import_finalize_discard"
+          : "workspace_import_cancel_discard";
       const { data, error: requestError } = await supabase.rpc(name,
         { p_session_id: sessionId });
       if (requestError || data !== true) throw new Error(
@@ -150,13 +156,15 @@ export default function WorkspaceRecoveryCenter({
       if (currentOwner.current !== owner) return;
       setNotice(op === "prepare"
         ? "Empty import sealed and archived. Inspect again, then confirm final removal."
-        : "Empty import and its private session receipts permanently removed.");
+        : op === "finalize"
+          ? "Empty import and its private session receipts permanently removed."
+          : "Seal reversed. This unfinished project is active and can be resumed.");
       if (op === "finalize") {
         setSelectedId(null);
         setInspection(null);
       }
       await refresh();
-      if (op === "prepare") await inspect(sessionId);
+      if (op !== "finalize") await inspect(sessionId);
       onDiscarded();
     } catch (failure) {
       if (currentOwner.current === owner) {
@@ -279,6 +287,11 @@ export default function WorkspaceRecoveryCenter({
         variant="outline" disabled={busy || disabled || loading}
         onClick={() => void operate(inspection.session_id, "prepare")}>
         <Archive className="mr-1 h-4 w-4" aria-hidden="true" /> Seal empty unfinished import
+      </Button>}
+      {inspection.status === "discarding" && <Button size="sm" type="button"
+        variant="outline" disabled={busy || disabled || loading}
+        onClick={() => void operate(inspection.session_id, "cancel")}>
+        <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" /> Undo seal — keep project
       </Button>}
       {workspaceRecoveryCanFinalize(inspection) && <Button size="sm" type="button"
         variant="destructive" disabled={busy || disabled || loading}
