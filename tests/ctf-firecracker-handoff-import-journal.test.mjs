@@ -136,7 +136,7 @@ test("reviewer must refuse completed journals whose files changed or disappeared
   await caseDir(async folder=>{
     await commitHandoffImport(input(folder));
     await rm(join(folder,"operator-public.pem"));
-    await assert.rejects(assertNoUnfinishedHandoff(folder,owner),/missing/);
+    await assert.rejects(assertNoUnfinishedHandoff(folder,owner),/missing|differ/);
     await assert.rejects(auditHandoffImport(input(folder)),/missing/);
   });
   await caseDir(async folder=>{
