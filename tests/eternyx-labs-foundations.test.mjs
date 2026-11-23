@@ -154,7 +154,7 @@ test("all five working controls appear in Labs without secret uploads or public 
     read("src/lib/eternyxLabsFoundations.mjs"),
   ]);
   assert.match(page,/BrowserSecurityFoundations selected=\{selected\}/);
-  assert.match(page,/Search 15 workstations/);
+  assert.match(page,/Search 20 workstations/);
   for(const id of ["subnet","chmod","csp","cors","cookie"])
     assert.ok(ui.includes('selected==="'+id+'"'));
   assert.match(ui,/role="alert"/);
