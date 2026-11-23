@@ -17,7 +17,7 @@ const record=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 
 export function validateRegisteredStagingTarget(env){
  if(!record(env))fail('config_missing');
- if(env.SERVICES_PREFLIGHT_CONFIRM!=='READ_ONLY_STAGING_ACCEPTANCE')
+ if(!['READ_ONLY_STAGING_ACCEPTANCE','READ_ONLY_STAGING_INVENTORY'].includes(env.SERVICES_PREFLIGHT_CONFIRM))
    fail('operator_approval_missing');
  const ref=env.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF;
  if(typeof ref!=='string'||!REF.test(ref)||ref===PROD||
