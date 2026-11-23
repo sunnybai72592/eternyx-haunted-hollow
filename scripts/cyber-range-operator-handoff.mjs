@@ -6,6 +6,7 @@
 import {
   exportOperatorHandoff,inspectOperatorHandoff,
   importOperatorHandoff,verifyImportedHandoff,
+  resumeOperatorHandoff,auditImportedHandoff,
 } from "../infrastructure/cyber-range/provider/firecracker-operator-handoff.mjs";
 import {validSessionId} from
   "../supabase/functions/_shared/ctf-range-worker-contract.mjs";
@@ -13,6 +14,7 @@ import {validSessionId} from
 const SHA=/^[a-f0-9]{64}$/;
 const EXPORT_ACK="I_APPROVE_OFFLINE_OPERATOR_RECEIPT_EXPORT";
 const IMPORT_ACK="I_APPROVE_OFFLINE_REVIEWER_RECEIPT_IMPORT";
+const RECOVERY_ACK="I_APPROVE_OFFLINE_REVIEWER_IMPORT_RECOVERY";
 const usage=[
   "ETERNYX Labs — manual, signed, offline operator receipt handoff",
   "Operator export (no raw logs/private key):",
@@ -21,6 +23,10 @@ const usage=[
   "  node scripts/cyber-range-operator-handoff.mjs --inspect --session UUID --operator-sha SPKI_SHA256 --transport-sha SHA256",
   "Reviewer exclusive private import (no replacement):",
   "  node scripts/cyber-range-operator-handoff.mjs --import --confirm-offline-receipt --session UUID --operator-sha SPKI_SHA256 --transport-sha SHA256",
+  "Reviewer read-only transaction audit (reports pending vs committed):",
+  "  node scripts/cyber-range-operator-handoff.mjs --audit-import --session UUID --operator-sha SPKI_SHA256 --transport-sha SHA256",
+  "Manually approved recovery of original pending import; never overwrites:",
+  "  node scripts/cyber-range-operator-handoff.mjs --resume-import --confirm-import-recovery --session UUID --operator-sha SPKI_SHA256 --transport-sha SHA256",
   "Reviewer read-only verification of imported signed receipt:",
   "  node scripts/cyber-range-operator-handoff.mjs --verify-import --session UUID --operator-sha SPKI_SHA256 --transport-sha SHA256",
   "Root and exact ETERNYX_OFFLINE_HANDOFF_ACK required for export/import only.",
@@ -34,10 +40,13 @@ try{
   }else{
     const mode=args[0];
     const exporting=mode==="--export",importing=mode==="--import";
-    if(!["--export","--inspect","--import","--verify-import"].includes(mode))
+    const resuming=mode==="--resume-import";
+    if(!["--export","--inspect","--import","--resume-import",
+      "--audit-import","--verify-import"].includes(mode))
       throw Error("Unsupported offline handoff operation");
     const confirm=exporting?"--confirm-offline-transfer":
-      importing?"--confirm-offline-receipt":null;
+      importing?"--confirm-offline-receipt":
+      resuming?"--confirm-import-recovery":null;
     const tail=args.slice(confirm?2:1);
     if(confirm&&args[1]!==confirm)
       throw Error("Manual operator/reviewer confirmation missing");
@@ -61,8 +70,9 @@ try{
        !SHA.test(trustedOperatorFingerprint??"")||
        (!exporting&&!SHA.test(expectedTransportSha256??"")))
       throw Error("Untrusted handoff signer or transport digest");
-    if(exporting||importing){
-      const wanted=exporting?EXPORT_ACK:IMPORT_ACK;
+    if(exporting||importing||resuming){
+      const wanted=exporting?EXPORT_ACK:
+        resuming?RECOVERY_ACK:IMPORT_ACK;
       if(process.platform!=="linux" || (process.getuid?.()??-1)!==0 ||
          process.env.ETERNYX_OFFLINE_HANDOFF_ACK!==wanted)
         throw Error("Explicit trusted root operator transfer approval absent");
@@ -74,7 +84,9 @@ try{
     const output=exporting?
       await exportOperatorHandoff(valuesForCall):
       importing?await importOperatorHandoff(valuesForCall):
+      resuming?await resumeOperatorHandoff(valuesForCall):
       mode==="--inspect"?await inspectOperatorHandoff(valuesForCall):
+      mode==="--audit-import"?await auditImportedHandoff(valuesForCall):
       await verifyImportedHandoff(valuesForCall);
     console.log(JSON.stringify(output));
   }
