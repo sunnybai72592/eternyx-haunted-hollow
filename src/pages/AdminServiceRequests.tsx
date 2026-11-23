@@ -15,7 +15,7 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import { runServiceCountBudget } from '@/lib/serviceCountBudget';
-import { readServicePageWithinBudget } from '@/lib/servicePageReadBudget';
+import { readServiceWindowWithinBudget } from '@/lib/servicePageReadBudget';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
@@ -85,7 +85,7 @@ export default function AdminServiceRequests() {
     all: number | null; followUp: number | null; amendments: number | null;
     clarifications: number | null; unassigned: number | null;
   }>({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
-  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const PAGE_SIZE = 20;
   const [openConversation, setOpenConversation] = useState<string | null>(null);
   const [openScope, setOpenScope] = useState<string | null>(null);
@@ -111,10 +111,10 @@ export default function AdminServiceRequests() {
     setLoadErrorDetail('');
     setRows([]);
     setDrafts({});
-    setTotal(0);
+    setHasMore(false);
     try {
     let query = supabase.from('service_admin_amendment_queue')
-      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_customer_answer_at,needs_my_check_extended,needs_follow_up_extended,customer_answers_since_check,amendment_count,pending_amendment_count,last_amendment_submitted_at,needs_my_check_complete,needs_follow_up_complete', { count: 'exact' });
+      .select('id,user_id,title,service_key,description,contact_email,company,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,priority,priority_rank,assigned_admin_id,needs_follow_up,last_customer_activity_at,last_admin_activity_at,next_action_kind,next_review_on,review_bucket,last_checked_at,needs_my_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_customer_answer_at,needs_my_check_extended,needs_follow_up_extended,customer_answers_since_check,amendment_count,pending_amendment_count,last_amendment_submitted_at,needs_my_check_complete,needs_follow_up_complete');
     if (filter !== 'all') query = query.eq('status', filter);
     if (activeSearch) {
       if (activeSearchField === 'id') {
@@ -140,11 +140,12 @@ export default function AdminServiceRequests() {
     if (sortOrder === 'next_review') query = query.order('next_review_on', { ascending: true, nullsFirst: false });
     if (sortOrder === 'amendments') query = query.order('pending_amendment_count', { ascending: false });
     if (sortOrder === 'clarifications') query = query.order('awaiting_admin_review_count', { ascending: false });
-      const result = await readServicePageWithinBudget<ServiceRow>(
+      const result = await readServiceWindowWithinBudget<ServiceRow>(
         (signal) => query.order('created_at', { ascending: false })
           .order('id', { ascending: false })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
           .abortSignal(signal),
+        PAGE_SIZE,
         () => generation === fetchGeneration.current
           && useAuthStore.getState().user?.id === actor && authorizedFor === actor,
         controller.signal,
@@ -157,18 +158,18 @@ export default function AdminServiceRequests() {
         setLoadErrorDetail(result.message);
         setRows([]);
         setDrafts({});
-        setTotal(0);
+        setHasMore(false);
         return;
       }
-      if (page > 0 && page * PAGE_SIZE >= result.count) {
-        setPage(Math.max(0, Math.ceil(result.count / PAGE_SIZE) - 1));
-        setRows([]);
-        setDrafts({});
+      if (page > 0 && result.rows.length === 0) {
+        // Data may move between buckets; never infer the total from an
+        // empty offset page. Return to the preceding real page instead.
+        setPage((previous) => Math.max(0, previous - 1));
         return;
       }
-      setRows(result.data);
-      setTotal(result.count);
-      setDrafts(Object.fromEntries(result.data.map((item) => [
+      setRows(result.rows);
+      setHasMore(result.hasMore);
+      setDrafts(Object.fromEntries(result.rows.map((item) => [
         item.id, { status: item.status, client_update: item.client_update ?? '' },
       ])));
     } catch {
@@ -178,7 +179,7 @@ export default function AdminServiceRequests() {
       setLoadErrorDetail('The administrator request-list read failed. Its results were not treated as an empty queue.');
       setRows([]);
       setDrafts({});
-      setTotal(0);
+      setHasMore(false);
     } finally {
       if (generation === fetchGeneration.current
         && useAuthStore.getState().user?.id === actor && authorizedFor === actor) {
@@ -198,7 +199,7 @@ export default function AdminServiceRequests() {
     setAuthorizedFor(null);
     setAdminAccessError(false);
     setRows([]);
-    setTotal(0);
+    setHasMore(false);
     setDrafts({});
     setCheckingId(null);
     setSaving(null);
@@ -696,7 +697,7 @@ export default function AdminServiceRequests() {
           </div>
           <Button type="submit" variant="outline" disabled={loading}>Search</Button>
         </form>
-        <span className="text-xs text-muted-foreground">{filtered.length} of {total} matching requests · page {page + 1}</span>
+        <span className="text-xs text-muted-foreground">{filtered.length} loaded requests · page {page + 1} · full total not calculated</span>
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-border p-3">
         <div>
@@ -819,11 +820,11 @@ export default function AdminServiceRequests() {
             {openJournal === item.id && <ServiceRequestJournal requestId={item.id} ownerId={item.user_id} />}
           </Card>;
         })}</div>}
-      {!loadError && total > 0 && (
+      {!loadError && (page > 0 || filtered.length > 0) && (
         <nav aria-label="Service requests pagination" className="mt-6 flex items-center justify-center gap-4">
           <Button type="button" variant="outline" onClick={() => setPage((n) => Math.max(0, n - 1))} disabled={loading || page === 0}>Previous</Button>
-          <span className="text-xs text-muted-foreground">Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
-          <Button type="button" variant="outline" onClick={() => setPage((n) => n + 1)} disabled={loading || (page + 1) * PAGE_SIZE >= total}>Next</Button>
+          <span className="text-xs text-muted-foreground">Page {page + 1} · additional pages {hasMore ? 'available' : 'not detected'}</span>
+          <Button type="button" variant="outline" onClick={() => setPage((n) => n + 1)} disabled={loading || !hasMore}>Next</Button>
         </nav>
       )}
     </main>
