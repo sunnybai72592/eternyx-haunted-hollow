@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Download, FilePlus2, FolderOpen, Play, RotateCcw, Save, ShieldCheck, Trash2, Upload, WandSparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FilePlus2, FolderOpen, Play, RotateCcw, Save, ShieldCheck, Trash2, Upload, WandSparkles, FileJson, FileCheck2, Files, ListFilter, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import ProjectInspectionPanel from "@/components/developer/ProjectInspectionPanel";
 import { replaceDeveloperFileText } from "@/lib/developerProjectInspection.mjs";
+import { duplicateDeveloperFile, editorCursorInfo, editorTabChange, exportJavascriptValidationReport, filterProjectFilenames, formatProjectJson, normalizeProjectWhitespace, validateProjectJavascript } from "@/lib/developerEditorUtils.mjs";
 import {
   PROJECT_STORAGE_KEY, MAX_PROJECT_FILES, MAX_SAVED_PROJECTS,
   addDeveloperFile, checkDeveloperProject, createDeveloperProject, editDeveloperFile,
@@ -48,9 +49,17 @@ export default function DeveloperProjectLab() {
   const [previewRun, setPreviewRun] = useState(0);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const quickOpenRef = useRef<HTMLInputElement>(null);
+  const [quickOpen, setQuickOpen] = useState("");
+  const [cursor, setCursor] = useState({line:1,column:1,selected:0,lines:1,chars:0});
+  const [jsValidation, setJsValidation] = useState<{ filesChecked: number; issues: Array<{file:string;line:number;column:number;code:number;message:string}>; truncated:boolean } | null>(null);
+  const [jsSource, setJsSource] = useState("");
+  const [validatingJs, setValidatingJs] = useState(false);
   const [selection, setSelection] = useState<{ file: string; index: number; length: number } | null>(null);
   const file = project.files.find((item) => item.name === activeFile) || project.files[0];
   const currentSource = JSON.stringify(project.files);
+  const fileMatches = useMemo(() => filterProjectFilenames(project, quickOpen), [project, quickOpen]);
+  const jsStale = jsValidation !== null && jsSource !== currentSource;
   const dirty = savedCopy !== JSON.stringify(project);
   const previewStale = previewHtml !== null && previewSource !== currentSource;
   const findings = useMemo(() => checkDeveloperProject(project), [project]);
@@ -102,6 +111,10 @@ export default function DeveloperProjectLab() {
     setCheckpoints([]);
     setSavedCopy(markSaved ? JSON.stringify(next) : "");
     setFeedback(null);
+    setQuickOpen("");
+    setJsValidation(null);
+    setJsSource("");
+    setCursor(editorCursorInfo(next.files[0].content, 0));
   };
   const update = (fn: (old: Project) => Project) => {
     try {
@@ -196,6 +209,85 @@ export default function DeveloperProjectLab() {
     alert("Checkpoint captured in memory. It will disappear when you close this page.");
   };
 
+  const selectFile = (name: string) => {
+    setActiveFile(name);
+    setRenameName("");
+    setSelection(null);
+    setCursor(editorCursorInfo(project.files.find(entry => entry.name === name)?.content || "", 0));
+    setQuickOpen("");
+  };
+  const trackCursor = (target: HTMLTextAreaElement) => {
+    setCursor(editorCursorInfo(target.value, target.selectionStart, target.selectionEnd));
+  };
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    const target = event.currentTarget;
+    try {
+      const next = editorTabChange(file.content, target.selectionStart, target.selectionEnd, event.shiftKey);
+      if (next.value === file.content) return;
+      const updated = editDeveloperFile(project, file.name, next.value);
+      setProject(updated);
+      setCursor(editorCursorInfo(next.value, next.start, next.end));
+      window.requestAnimationFrame(() => editorRef.current?.setSelectionRange(next.start, next.end));
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Unable to indent.", true); }
+  };
+  const formatSelectedJson = () => {
+    if (!file.name.toLowerCase().endsWith(".json")) return;
+    try {
+      const formatted = formatProjectJson(file.content);
+      if (formatted === file.content) { alert("JSON is already formatted."); return; }
+      const next = commit((old) => editDeveloperFile(old, file.name, formatted));
+      if (next) alert("Formatted the selected JSON file. Restore checkpoint created.");
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Invalid JSON.", true); }
+  };
+  const cleanWhitespace = () => {
+    const normalized = normalizeProjectWhitespace(file.content, { trimTrailing: true });
+    if (normalized === file.content) { alert("Line endings and trailing whitespace are already normalized."); return; }
+    const next = commit((old) => editDeveloperFile(old, file.name, normalized));
+    if (next) alert("Normalized line endings and trailing whitespace. Restore checkpoint created.");
+  };
+  const duplicateFile = () => {
+    try {
+      const result = duplicateDeveloperFile(project, file.name);
+      const next = commit(() => result.project);
+      if (next) selectFile(result.name);
+    } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not duplicate file.", true); }
+  };
+  const validateJs = async () => {
+    if (validatingJs) return;
+    setValidatingJs(true);
+    const source = currentSource;
+    try {
+      const checked = await validateProjectJavascript(project);
+      setJsValidation(checked);
+      setJsSource(source);
+      alert(checked.issues.length ? "JavaScript parser found " + checked.issues.length + " syntax issue(s)." : "JavaScript parse checks found no syntax errors. Runtime correctness is not verified.");
+    } catch { alert("JavaScript parser could not load in this browser.", true); }
+    finally { setValidatingJs(false); }
+  };
+  const exportJsReport = async () => {
+    try {
+      const report = await exportJavascriptValidationReport(project);
+      download("eternyx-js-parse-report.json", report);
+      alert("Exported source-free JavaScript parser findings for the current project.");
+    } catch { alert("Unable to generate JavaScript parser report.", true); }
+  };
+
+  useEffect(() => {
+    const onShortcuts = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (!["s", "enter", "p"].includes(key)) return;
+      event.preventDefault();
+      if (key === "s") save();
+      else if (key === "enter") runPreview();
+      else quickOpenRef.current?.focus();
+    };
+    document.addEventListener("keydown", onShortcuts);
+    return () => document.removeEventListener("keydown", onShortcuts);
+  });
+
   return <div className="min-h-screen bg-background text-white">
     <div className="mx-auto max-w-7xl space-y-6 px-4 pb-16 pt-4 sm:px-6 lg:px-8">
       <Link to="/developer-studio" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-cyan-300"><ArrowLeft className="h-4 w-4" /> Developer Studio</Link>
@@ -224,9 +316,14 @@ export default function DeveloperProjectLab() {
         <Card className="border-slate-800 bg-slate-900/70 text-white">
           <CardHeader><CardTitle className="flex items-center gap-2"><FolderOpen className="h-5 w-5 text-cyan-300" />Project files</CardTitle><CardDescription className="text-slate-400">Text files only; no filesystem or remote repository access.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-1" role="group" aria-label="Project files">{project.files.map((entry) =>
-              <button type="button" key={entry.name} aria-pressed={file.name === entry.name} onClick={() => { setActiveFile(entry.name); setRenameName(""); }}
+            <div className="space-y-2"><Label htmlFor="project-quick-open">Quick open files (Ctrl+P)</Label>
+              <Input ref={quickOpenRef} id="project-quick-open" type="search" value={quickOpen} onChange={e => setQuickOpen(e.target.value.slice(0,80))}
+                onKeyDown={e => { if (e.key === "Enter" && fileMatches.length) selectFile(fileMatches[0]); }}
+                placeholder="Find filename" className="border-slate-700 bg-slate-950 text-white" /></div>
+            <div className="space-y-1" role="group" aria-label="Project files">{project.files.filter(entry => fileMatches.includes(entry.name)).map((entry) =>
+              <button type="button" key={entry.name} aria-pressed={file.name === entry.name} onClick={() => selectFile(entry.name)}
                 className={"w-full rounded-md border px-3 py-2 text-left font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 " + (entry.name === file.name ? "border-cyan-400/70 bg-cyan-950/60 text-cyan-100" : "border-slate-700 bg-slate-950/40 text-slate-300 hover:border-cyan-500/40")}>{entry.name}</button>)}</div>
+            {!fileMatches.length && <p className="text-xs text-slate-400">No filename matches.</p>}
             <p className="text-xs text-slate-400">{project.files.length} / {MAX_PROJECT_FILES} files</p>
             <div className="space-y-2"><Label htmlFor="add-filename">New file name</Label>
               <Input id="add-filename" value={newFileName} maxLength={64} onChange={(e) => setNewFileName(e.target.value)} placeholder="notes.md"
@@ -244,8 +341,20 @@ export default function DeveloperProjectLab() {
           <CardContent className="space-y-3">
             <Label htmlFor="project-editor">File contents</Label>
             <Textarea id="project-editor" ref={editorRef} value={file.content} onChange={(e) => update((old) => editDeveloperFile(old, file.name, e.target.value))}
+              onKeyDown={handleEditorKeyDown} onClick={e => trackCursor(e.currentTarget)} onKeyUp={e => trackCursor(e.currentTarget)} onSelect={e => trackCursor(e.currentTarget)}
               spellCheck={false} className="min-h-[420px] max-h-[70vh] overflow-y-auto border-slate-700 bg-slate-950 font-mono text-sm text-slate-100" />
-            <div className="flex flex-wrap justify-between gap-2"><span className="text-xs text-slate-400">{file.content.length} / 20,000 characters</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span>Line {cursor.line}, column {cursor.column}</span><span>·</span><span>{cursor.selected} selected</span><span>·</span>
+              <span>{file.content.split("\n").length} lines</span><span>·</span><span>{file.content.length} / 20,000 characters</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" disabled={project.files.length >= MAX_PROJECT_FILES} onClick={duplicateFile}><Files className="mr-2 h-4 w-4" />Duplicate file</Button>
+              <Button size="sm" variant="outline" disabled={!file.name.toLowerCase().endsWith(".json")} onClick={formatSelectedJson}><FileJson className="mr-2 h-4 w-4" />Format JSON</Button>
+              <Button size="sm" variant="outline" onClick={cleanWhitespace}><Scissors className="mr-2 h-4 w-4" />Clean whitespace</Button>
+              <Button size="sm" variant="outline" onClick={() => { const blob = new Blob([file.content],{ type:"text/plain;charset=utf-8" }); const href = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=href; a.download=file.name; a.click(); URL.revokeObjectURL(href); }}>
+                <Download className="mr-2 h-4 w-4" />Download file</Button>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2"><span className="text-xs text-slate-400">Shortcuts: Ctrl+S save · Ctrl+Enter preview · Ctrl+P quick open · Tab / Shift+Tab indent</span>
               <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={createCheckpoint}><Save className="mr-2 h-4 w-4" />Checkpoint</Button>
                 <Button size="sm" variant="outline" disabled={checkpoints.length === 0} onClick={restore}><RotateCcw className="mr-2 h-4 w-4" />Restore ({checkpoints.length})</Button></div></div>
           </CardContent>
@@ -254,6 +363,25 @@ export default function DeveloperProjectLab() {
 
       <ProjectInspectionPanel project={project} baseline={savedBaseline} activeFile={file.name}
         onJump={jumpToMatch} onReplace={replaceActiveText} />
+      <Card className="border-slate-800 bg-slate-900/70 text-white">
+        <CardHeader><CardTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-cyan-300" />JavaScript syntax validation</CardTitle>
+          <CardDescription className="text-slate-400">Explicit, local TypeScript parser checks for .js files. No code execution, compilation, type checking or external requests; source text stays in this browser.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" disabled={validatingJs} onClick={() => void validateJs()}><ListFilter className="mr-2 h-4 w-4" />{validatingJs ? "Parsing..." : "Validate JS syntax"}</Button>
+            <Button size="sm" variant="outline" disabled={validatingJs} onClick={() => void exportJsReport()}><Download className="mr-2 h-4 w-4" />Export parse report</Button>
+            {jsStale && <span className="text-xs text-amber-300">Results are stale—project files changed</span>}
+          </div>
+          {jsValidation && <div className="space-y-2">
+            <p className="text-xs text-slate-300">{jsValidation.filesChecked} JavaScript file(s) parsed · {jsValidation.issues.length} issue(s){jsValidation.truncated ? " (limited to 80 issues)" : ""}</p>
+            <div className="max-h-40 space-y-2 overflow-auto" aria-label="JavaScript syntax findings">
+              {jsValidation.issues.length ? jsValidation.issues.map((item, index) =>
+                <p key={index} className="break-all rounded border border-rose-400/30 p-2 text-xs text-rose-200">{item.file}, line {item.line}, col {item.column} · Parser code {item.code}</p>) :
+                <p className="text-xs text-emerald-200">No parser syntax issues found. This does not establish runtime correctness or safety.</p>}
+            </div>
+          </div>}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="border-slate-800 bg-slate-900/70 text-white">
