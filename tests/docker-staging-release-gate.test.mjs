@@ -173,5 +173,5 @@ test("CLI inspects repo, signs and verifies local evidence in real subprocesses"
 test("release gate contains no network, Docker execution or automatic deployment calls",()=>{
  const source=file("scripts/docker-staging-release-gate.mjs");
  assert.doesNotMatch(source,/fetch\(|docker\.sock|execFileSync|spawnSync|Deno\.Command|supabase functions deploy/);
- assert.match(source,/productionDeploymentAuthorized/);
+ assert.match(file("src/lib/dockerStagingEvidence.mjs"),/productionDeploymentAuthorized:false/);
 });
