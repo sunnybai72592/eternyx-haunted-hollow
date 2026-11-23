@@ -348,7 +348,7 @@ export default function EducationHistory(){
       onClick={()=>{setPage(p=>p+1);setSearch("");}}>Next page</Button>
     </nav>
     <p className="text-xs text-muted-foreground">
-     CSV exports are private personal records, not official certificates. Official grades are shown only on the individual result page
+     History entries are not certificates. CSV exports are private personal records. Official grades are shown only on the individual result page
      and require the configured verified-results service. Access and exam deadlines are enforced by the server.
     </p>
    </>}
