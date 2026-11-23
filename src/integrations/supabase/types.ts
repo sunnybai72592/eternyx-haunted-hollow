@@ -38,6 +38,35 @@ export type Database = {
         Update: { assignee_id?: string | null; title?: string; details?: string; status?: string; priority?: string; due_on?: string | null; completed_at?: string | null; updated_at?: string }
         Relationships: []
       }
+      workspace_team_task_comments: {
+        Row: {
+          id:string;space_id:string;task_id:string;author_id:string;
+          body:string;created_at:string;redacted_at:string|null;redacted_by:string|null;
+        }
+        Insert: {
+          id?:string;space_id:string;task_id:string;author_id:string;
+          body:string;created_at?:string;redacted_at?:string|null;redacted_by?:string|null;
+        }
+        Update: {body?:string;redacted_at?:string|null;redacted_by?:string|null}
+        Relationships: []
+      }
+      workspace_team_task_steps: {
+        Row: {
+          id:string;space_id:string;task_id:string;created_by:string;title:string;
+          done:boolean;done_by:string|null;completed_at:string|null;
+          created_at:string;updated_at:string;
+        }
+        Insert: {
+          id?:string;space_id:string;task_id:string;created_by:string;title:string;
+          done?:boolean;done_by?:string|null;completed_at?:string|null;
+          created_at?:string;updated_at?:string;
+        }
+        Update: {
+          title?:string;done?:boolean;done_by?:string|null;
+          completed_at?:string|null;updated_at?:string;
+        }
+        Relationships: []
+      }
       workspace_team_events: {
         Row: { id: number; space_id: string; actor_id: string; entity_id: string; event_type: string; created_at: string }
         Insert: { space_id: string; actor_id: string; entity_id: string; event_type: string; id?: number; created_at?: string }
@@ -3057,6 +3086,24 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_team_post_comment: {
+        Args: {p_space_id:string;p_task_id:string;p_body:string};Returns:string
+      }
+      workspace_team_redact_comment: {
+        Args: {p_space_id:string;p_comment_id:string};Returns:boolean
+      }
+      workspace_team_add_step: {
+        Args: {p_space_id:string;p_task_id:string;p_title:string};Returns:string
+      }
+      workspace_team_check_step: {
+        Args: {
+          p_space_id:string;p_step_id:string;p_done:boolean;
+          p_expected_updated_at:string;
+        };Returns:boolean
+      }
+      workspace_team_remove_step: {
+        Args: {p_space_id:string;p_step_id:string};Returns:boolean
+      }
       workspace_team_role: { Args: { p_space_id: string }; Returns: string | null }
       workspace_team_create: { Args: { p_name: string; p_description?: string }; Returns: string }
       workspace_team_invite: { Args: { p_space_id: string; p_role?: string }; Returns: Json }
