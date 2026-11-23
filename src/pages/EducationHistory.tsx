@@ -101,15 +101,18 @@ export default function EducationHistory(){
   try{validateEducationHistoryDates(fromDate,toDate);return true;}
   catch{return false;}
  },[fromDate,toDate]);
- const shown=useMemo(()=>!dateRangeValid?[]:organizeEducationHistoryPage(
-  history.data?.items??[],titles.data,{
+ const shown=useMemo(()=>!active||accountScope!==user?.id||!dateRangeValid?[]:
+  organizeEducationHistoryPage(history.data?.items??[],titles.data,{
    search,from:fromDate,to:toDate,sort,focus,
-  },user?.id),
-  [history.data?.items,titles.data,search,fromDate,toDate,sort,focus,user?.id,dateRangeValid]);
- const visibleSummary=useMemo(()=>educationHistoryDisplayedSummary(shown,user?.id),
-  [shown,user?.id]);
- const resumeItems=useMemo(()=>educationHistoryResumeFocus(
-  history.data?.items??[],user?.id),[history.data?.items,user?.id]);
+  },user!.id),
+  [active,accountScope,history.data?.items,titles.data,search,fromDate,toDate,sort,focus,user?.id,dateRangeValid]);
+ const visibleSummary=useMemo(()=>active&&accountScope===user?.id
+   ? educationHistoryDisplayedSummary(shown,user!.id)
+   : {visible:0,inProgress:0,submitted:0,flagged:0},
+  [active,accountScope,shown,user?.id]);
+ const resumeItems=useMemo(()=>active&&accountScope===user?.id
+  ? educationHistoryResumeFocus(history.data?.items??[],user!.id):[],
+  [active,accountScope,history.data?.items,user?.id]);
  const summary=useMemo(()=>educationHistoryPageSummary(history.data?.items??[]),
   [history.data?.items]);
  const hasNext=educationHistoryHasNext(page,history.data?.count??null,history.data?.items.length??0);
