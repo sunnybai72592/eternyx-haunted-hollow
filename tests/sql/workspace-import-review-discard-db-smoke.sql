@@ -156,6 +156,35 @@ BEGIN
 END;
 $check$;
 
+-- Legacy Phase 9 finish RPC must NEVER convert a sealed zero-count import
+-- to complete (which would strand it, blocking both Undo and Finalize).
+DO $check$
+DECLARE
+  session jsonb;
+  sid uuid;
+BEGIN
+  session := public.workspace_import_begin(repeat('e',64),3,
+    'Zero-work retry','Transition guard',0,0,0,0);
+  sid := (session->>'session_id')::uuid;
+  PERFORM public.workspace_import_prepare_discard(sid);
+  BEGIN
+    PERFORM public.workspace_import_finish(sid);
+    RAISE EXCEPTION 'A sealed zero-count import was marked complete';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  IF (public.workspace_import_inspect(sid)->>'status') <> 'discarding' THEN
+    RAISE EXCEPTION 'Sealed status was not preserved after rejected finish';
+  END IF;
+  IF NOT public.workspace_import_cancel_discard(sid)
+    OR NOT public.workspace_import_finish(sid) THEN
+    RAISE EXCEPTION 'Normal completion after undo seal did not work';
+  END IF;
+  IF (public.workspace_import_inspect(sid)->>'status') <> 'complete' THEN
+    RAISE EXCEPTION 'Completion after undo was not committed';
+  END IF;
+END;
+$check$;
+
 -- No untrusted account may inspect or discard a session by guessing its UUID.
 SELECT pg_catalog.set_config('request.jwt.claim.sub',
   '11111111-1111-4111-8111-111111111111', false);
