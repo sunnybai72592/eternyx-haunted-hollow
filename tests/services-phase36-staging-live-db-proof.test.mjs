@@ -6,6 +6,7 @@ import {
 } from '../scripts/services-phase36-staging-live-db-proof.mjs';
 import {SERVICES_REPLAY_FILES} from '../scripts/services-pg17-replay-plan.mjs';
 import {REQUIRED_AUDITOR_ASSERTIONS} from '../scripts/services-phase37-auditor-privileges.mjs';
+import {EXPOSED_ROUTINE_CHECKS} from '../scripts/services-phase38-executable-definer-guard.mjs';
 
 const ref='abcdefghijklmnopqrst';
 const now=new Date('2026-11-23T20:40:00.000Z');
@@ -42,8 +43,9 @@ const fullCatalog=()=>({
  phase13_admin_queue:true,phase14_journal:true,
 });
 const safePrivileges=()=>Object.fromEntries(REQUIRED_AUDITOR_ASSERTIONS.map(k=>[k,true]));
+const safeRoutines=()=>Object.fromEntries(EXPOSED_ROUTINE_CHECKS.map(k=>[k,true]));
 const outputs=(history=liveHistory(),catalog=fullCatalog(),verdict=null)=>[
- {role:'services_staging_auditor',db:'postgres',server_time:'2026-11-23T20:40:00+00:00',auditor_privileges:safePrivileges()},
+ {role:'services_staging_auditor',db:'postgres',server_time:'2026-11-23T20:40:00+00:00',auditor_privileges:safePrivileges(),routine_surface:safeRoutines()},
  {managed_migrations:history},
  catalog,
  verdict??{catalog_checks_passed:true,checks_evaluated:64,checks_failed:0,failed_check_ids:[]},
@@ -82,6 +84,9 @@ test('Phase 36 runs EXACT reviewed Phase 27 and Phase 35 SQL in ONE read-only tr
  assert.match(sql,/table_write_privileges_denied/);
  assert.match(sql,/sequence_write_privileges_denied/);
  assert.match(sql,/privileged_memberships_denied/);
+ assert.match(sql,/volatile_security_definer_execute_denied/);
+ assert.match(sql,/private_helper_schema_usage_denied/);
+ assert.match(sql,/security_definer_procedures_execute_denied/);
  assert.match(sql,/SET LOCAL statement_timeout = '12000ms'/);
  assert.match(sql,/FROM supabase_migrations\.schema_migrations/);
  assert.match(sql,/json_agg\(json_build_object\('version'/);
@@ -116,6 +121,8 @@ test('Phase 36 accepts complete 13 named migrations and actual 64/64 positive ca
  assert.equal(proof.sqlTransactionReadOnly,true);
  assert.equal(proof.connectionRoleLeastPrivilegeVerified,true);
  assert.equal(proof.auditorPrivilegeChecksPassed,7);
+ assert.equal(proof.callableRoutineCatalogChecksPassed,3);
+ assert.equal(proof.dangerousExecutableRoutineSurfaceDenied,true);
  assert.equal(proof.securityDefinerFunctionEffectsProven,false);
  for(const key of [
   'stagingProjectIndependentlyRegisteredByManagementApi',
