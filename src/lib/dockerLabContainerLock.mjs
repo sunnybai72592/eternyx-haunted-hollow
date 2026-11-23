@@ -44,7 +44,10 @@ export function lockLabContainer({agentId,claimId,containerId},dir=labJournalDir
   at:new Date().toISOString(),event:"active",agentId:owner,
   claimId:claim,containerId
  })+"\n");
- try{writeSync(fd,bytes);fsyncSync(fd);}finally{closeSync(fd);}
+ try{
+  if(writeSync(fd,bytes)!==bytes.length)throw Error("Incomplete exclusive container lock write.");
+  fsyncSync(fd);
+ }finally{closeSync(fd);}
  syncDir(dir);
  const original=privateLockStat(path);
  let released=false;
@@ -52,7 +55,9 @@ export function lockLabContainer({agentId,claimId,containerId},dir=labJournalDir
   if(released)return;
   // No caller can remove this lock without the original claim having a
   // durable, parsed terminal result. UNKNOWN or partial journals retain it.
-  const journal=readLabClaim(claim,dir);
+  let journal;
+  try{journal=readLabClaim(claim,dir);}
+  catch{throw Error("Exclusive container lock cannot be released without matching durable terminal evidence.");}
   if(journal.agentId!==owner||journal.containerId!==containerId||
      journal.claimId!==claim||journal.outcome===null||
      !["guard_denied","completed","failed"].includes(journal.outcome))
