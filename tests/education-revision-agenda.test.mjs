@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {authorStudyPath,emptyStudyRecords,changeStudyRecord} from "../src/lib/educationStudyPaths.mjs";
 import {blankStudyRevision,recordStudyManualReview,setStudyRevisionInterval,
   buildStudyJourneySessionJson,parseStudyJourneyFile} from "../src/lib/educationStudyRevision.mjs";
-import {buildStudyRevisionAgenda,buildStudyRevisionWeek,
+import {buildStudyRevisionAgenda,buildStudyOverdueBacklog,buildStudyRevisionWeek,
   buildStudyRevisionCalendarIcs} from "../src/lib/educationRevisionAgenda.mjs";
 
 const path=()=>authorStudyPath({title:"Sensitive title",description:"description",
@@ -67,4 +67,25 @@ test("roundtrip remains v2 and rejects invalid selected dates",()=>{
  for(const bad of ["2026-02-30","tomorrow","2026-2-3",""]){
   assert.throws(()=>buildStudyRevisionWeek(p,rows,rev,bad),/Invalid Education agenda date/);
  }
+});
+
+test("overdue backlog stays visible outside the rolling seven-day window",()=>{
+ const {p,rows,rev}=fixture();
+ assert.deepEqual(buildStudyOverdueBacklog(p,rows,rev,"2026-12-01").map(x=>x.number),[1,2]);
+ assert.ok(buildStudyRevisionWeek(p,rows,rev,"2026-12-01").every(day=>day.lessons.length===0));
+});
+test("course scoped event identities never collide for different course content",()=>{
+ const {p,rows,rev}=fixture();
+ const first=buildStudyRevisionCalendarIcs(p,rows,rev,"2026-11-23");
+ const changed={...p,title:"Different authored course"};
+ const second=buildStudyRevisionCalendarIcs(changed,rows,rev,"2026-11-23");
+ const ids=s=>[...s.matchAll(/UID:([^\r\n]+)/g)].map(x=>x[1]);
+ assert.equal(ids(first).length,2);
+ assert.equal(ids(second).length,2);
+ assert.notDeepEqual(ids(first),ids(second));
+ assert.deepEqual(ids(first),ids(buildStudyRevisionCalendarIcs(p,rows,rev,"2026-11-24")));
+});
+test("date rollover is explicit rather than emitting invalid year 10000 events",()=>{
+ const {p,rows,rev}=fixture();
+ assert.throws(()=>buildStudyRevisionWeek(p,rows,rev,"9999-12-30"),/supported range/);
 });
