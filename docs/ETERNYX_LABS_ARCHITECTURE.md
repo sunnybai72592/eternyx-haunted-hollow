@@ -4,7 +4,7 @@
 
 Route: /labs (public, browser-only). Navigation entry is visible on desktop and mobile. The Cybersecurity Hub and Developer Studio link to the same route, not separate duplicate labs.
 
-Fifteen **working**, browser-only exercises (ten existing and five additional network/security fundamentals):
+Twenty **working**, browser-only exercises (fifteen existing plus five defensive-operations tools):
 1. Web developer playground — edit HTML, CSS and JavaScript, explicitly run a restricted iframe preview.
 2. DOM XSS practice — inspect the difference between an HTML sink and a text sink with controlled, local input.
 3. HTTP header clinic — deterministic checks against pasted header text; no outgoing HTTP requests.
@@ -20,8 +20,13 @@ Fifteen **working**, browser-only exercises (ten existing and five additional ne
 13. CSP policy lint — static warning checks for repeated and missing directives or unsafe source tokens; not a full CSP parser.
 14. CORS response trainer — simplified local origin/credentialed sharing logic using pasted headers; no requests or authorization.
 15. Cookie attribute clinic — synthetic Set-Cookie inspection for Secure, HttpOnly, SameSite and name prefix rules; never echoes values.
+16. DNS zone clinic — bounded training A, CNAME, MX and TXT records; detects selected CNAME conflicts without DNS lookups.
+17. HTTP request framing — review pasted HTTP/1.x headers and UTF-8 body lengths, including Transfer-Encoding/Content-Length ambiguity, without sending requests.
+18. security.txt review — checks synthetic disclosure contact, expiry and field structure without contacting a real organization.
+19. Security event correlation — summarizes bounded synthetic severity/event timelines and three login failures within ten minutes; no attacker attribution.
+20. Random token generator — uses browser Web Crypto to create locally displayed random token bytes in hex or base64url; nothing is stored or transmitted.
 
-**Truthful limits:** The fifteen browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
+**Truthful limits:** The twenty browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
 
 ## Boundary and threat model
 
@@ -234,3 +239,64 @@ normalization, duplicate-proof progress, explicit absence of trusted
 certification and unmodified iframe security rules. Manual browser
 verification should also cover track switching, keyboard navigation,
 hints, wrong/correct feedback, result reset on edits, and mobile layouts.
+
+
+## Phase 4 — local defensive-operations tools (five additional workstations)
+
+Twenty workstations are now searchable on the Labs page. Five defensive
+operations exercises are delivered by the pure, bounded
+eternyxLabsOperations.mjs engine and BrowserDefensiveOperations component.
+These add **usable analysis** without a connected target, lab VM, external API,
+authentication, account storage or cloud charges.
+
+1. **DNS record clinic:** count canonical training A, CNAME, MX and quoted
+   TXT records, enforce TTL/IPv4/MX bounds, and warn about a CNAME owner
+   that also has another record type. This does not perform DNS queries,
+   validate DNSSEC, support full RFC zone-file syntax, or publish records.
+2. **HTTP/1.x request framing:** inspect pasted request lines, headers and
+   optional UTF-8 body length, warn about duplicate Content-Length and
+   Transfer-Encoding/Content-Length ambiguity, missing Host, and
+   inconsistent lengths. It does not model live proxy behavior, parse
+   chunked body framing, send traffic or establish exploitability.
+   Authorization and cookie values are never echoed by the result.
+3. **Security.txt:** inspect Contact and Expires field presence, contact URI
+   syntax and expiry using local time. It does not fetch the official
+   well-known endpoint, verify domain ownership or authenticate recipients.
+   Contact values are omitted from the returned report.
+4. **Event correlation:** accept only synthetic
+   UTC-timestamp|severity|event training records from an allowlist, count
+   severities and identify a sliding ten-minute window with three failed
+   logins. This simple exercise is not incident confirmation, identity
+   attribution, log ingestion infrastructure or an automated response.
+5. **Secure random token generator:** use the browser's
+   crypto.getRandomValues to produce 16, 24, 32 or 48 random bytes encoded
+   as hexadecimal or base64url. If cryptographic randomness is unavailable,
+   the tool refuses to fall back to Math.random. A displayed token is a
+   **sensitive value** and must not be shared or treated as a complete
+   credential-management or key-rotation system. Nothing is persisted.
+
+### Scope and validation
+
+All text processing has strict UTF-8 size and record-count limits, explicit
+error states, accessible labels, responsive cards, and safe result fields.
+No tool visits a host, queries DNS, uploads private logs, reads account data,
+activates public customer Labs, launches paid VMs/GPUs, uses an external AI
+model, modifies sessions or claims an automatically certified vulnerability.
+
+The existing fifteen open-book, answer-checked practice questions remain
+separate from the **twenty workstation** count. Their progress is still
+in-memory only. Existing sandboxed preview frames retain the same permissions.
+
+Run before merge:
+
+    node --test tests/eternyx-labs-operations.test.mjs
+    node --test tests/eternyx-labs-practice.test.mjs
+    npm test
+    npm run build
+
+The adversarial test suite covers invalid DNS names/records, CNAME owner
+conflicts, request smuggling warning signals and malformed HTTP framing,
+missing/expired security.txt fields, bounded synthetic event windows, token
+generation using cryptographic randomness, and no network or storage APIs.
+Manual desktop/mobile walkthroughs and independent security review are
+still needed for any production-critical use.
