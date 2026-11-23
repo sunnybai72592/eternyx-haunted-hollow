@@ -10,6 +10,8 @@ import { validateEducationTrustedFinalizerConfig, TRUSTED_FINALIZER_CASES } from
 import { validateEducationResultsReadConfig, RESULTS_CASES } from "./educationHostedResultsConfig.mjs";
 import { assertEducationDbEvidence, DATABASE_CHECKS } from "./educationHostedDbMetadata.mjs";
 import {checkJourneyApproval} from "./educationJourneyHandoff.mjs";
+import {assertJourneyFixtureEvidence,FIXTURE_CHECKS}
+  from "./educationJourneyFixturePreflight.mjs";
 
 const requiredModes = Object.freeze(["preflight", "rehearsal", "journey"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -75,9 +77,16 @@ export const EDUCATION_RELEASE_STAGES = Object.freeze({
   ]),
 });
 
-export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbEvidence, linkedJourney=false) {
-  if(mode==="journey" && linkedJourney!==true) refuse();
-  if(mode!=="journey" && linkedJourney!==false) refuse();
+export function summarizeEducationReleaseEvidence(
+  mode, entries, provenance, dbEvidence, linkedJourney=false, fixtureEvidence
+) {
+  if(mode==="journey"){
+    if(linkedJourney!==true) refuse();
+    assertJourneyFixtureEvidence(fixtureEvidence,{
+      GITHUB_SHA:provenance?.sha,GITHUB_RUN_ID:provenance?.runId,
+      GITHUB_RUN_ATTEMPT:provenance?.attempt,
+    });
+  }else if(linkedJourney!==false || fixtureEvidence!==undefined) refuse();
   // Mandatory direct release-bound audit evidence, not only a green CI step.
   assertEducationDbEvidence(dbEvidence,provenance);
   const stages = EDUCATION_RELEASE_STAGES[mode];
@@ -130,6 +139,9 @@ export function summarizeEducationReleaseEvidence(mode, entries, provenance, dbE
     single_new_attempt_lifecycle_verified:mode==="journey",
     verified_stages:reviewed,
     database_metadata_gate:Object.freeze({status:"passed",checks:DATABASE_CHECKS.length}),
+    journey_fixture_gate:mode==="journey" ?
+      Object.freeze({status:"passed",checks:FIXTURE_CHECKS.length}) :
+      Object.freeze({status:"not_required"}),
     production_tested:false,
     production_certified:false, production_release_approved:false,
   });

@@ -1,0 +1,102 @@
+-- Read-only, staging-only preflight for one fresh Education CBT exam.
+-- Returns fixed booleans only: no UUID, identity, answer-key or score values.
+-- Values are validated before psql, which quotes them via :'variable'.
+BEGIN TRANSACTION READ ONLY;
+WITH
+  exam AS (
+    SELECT t.id,t.teacher_id,t.is_active,t.is_published,t.duration_minutes
+    FROM public.tests t WHERE t.id=:'test_id'::uuid
+  ),
+  questions AS (
+    SELECT q.id,q.question_type,q.points FROM public.questions q
+    WHERE q.test_id=:'test_id'::uuid
+  ),
+  chosen AS (
+    SELECT q.points,o.is_correct FROM public.options o
+    JOIN public.questions q ON q.id=o.question_id
+    WHERE o.id=:'mcq_option_id'::uuid AND q.id=:'mcq_id'::uuid
+  ),
+  student_a AS (
+    SELECT u.id FROM auth.users u
+    WHERE pg_catalog.lower(u.email)=pg_catalog.lower(:'student_a_email')
+  ),
+  student_b AS (
+    SELECT u.id FROM auth.users u
+    WHERE pg_catalog.lower(u.email)=pg_catalog.lower(:'student_b_email')
+  ),
+  reviewer AS (
+    SELECT u.id FROM auth.users u
+    WHERE pg_catalog.lower(u.email)=pg_catalog.lower(:'instructor_email')
+  )
+SELECT pg_catalog.jsonb_build_object(
+  'schema',1,'checks',pg_catalog.jsonb_build_object(
+    'published_approved_exam', EXISTS(
+      SELECT 1 FROM exam t
+      JOIN public.education_publication_requests r ON r.test_id=t.id
+      WHERE r.status='approved' AND t.is_active IS TRUE
+        AND t.is_published IS TRUE AND t.duration_minutes>=30
+    ),
+    'reviewer_is_owned_verified_teacher', EXISTS(
+      SELECT 1 FROM exam e JOIN public.teachers t ON t.id=e.teacher_id
+      JOIN reviewer r ON r.id=t.user_id
+      JOIN public.education_instructor_grants g
+        ON g.teacher_id=t.id AND g.user_id=r.id
+    ),
+    'exactly_two_exam_questions', (SELECT count(*)=2 FROM questions),
+    'exactly_one_mcq_question', (
+      SELECT count(*)=1 FROM questions
+      WHERE id=:'mcq_id'::uuid AND question_type='multiple_choice'
+    ),
+    'exactly_one_written_question', (
+      SELECT count(*)=1 FROM questions
+      WHERE id=:'essay_id'::uuid AND question_type='short_answer'
+    ),
+    'all_question_points_valid', (
+      SELECT count(*)=2 AND
+        pg_catalog.bool_and(points IS NOT NULL AND points BETWEEN 1 AND 1000)
+      FROM questions
+    ),
+    'selected_mcq_option_belongs_to_question', (
+      SELECT count(*)=1 AND pg_catalog.bool_and(is_correct IS NOT NULL)
+      FROM chosen
+    ),
+    'expected_max_matches_questions', (
+      SELECT count(*)=2 AND sum(points)=:'expected_max'::integer
+      FROM questions
+    ),
+    'awarded_written_points_valid', EXISTS(
+      SELECT 1 FROM questions q WHERE q.id=:'essay_id'::uuid
+        AND :'awarded'::integer BETWEEN 0 AND q.points
+    ),
+    'expected_grade_matches_fixed_choice_and_review', EXISTS(
+      SELECT 1 FROM chosen c JOIN questions q ON q.id=:'essay_id'::uuid
+      WHERE q.question_type='short_answer'
+        AND :'awarded'::integer BETWEEN 0 AND q.points
+        AND :'awarded'::integer+
+          CASE WHEN c.is_correct THEN c.points ELSE 0 END
+          =:'expected_score'::integer
+    ),
+    'student_a_is_enrolled', EXISTS(
+      SELECT 1 FROM public.education_test_enrollments e
+      JOIN student_a a ON a.id=e.user_id WHERE e.test_id=:'test_id'::uuid
+    ),
+    'student_b_is_not_enrolled', NOT EXISTS(
+      SELECT 1 FROM public.education_test_enrollments e
+      JOIN student_b b ON b.id=e.user_id WHERE e.test_id=:'test_id'::uuid
+    ),
+    'student_a_has_no_attempt', NOT EXISTS(
+      SELECT 1 FROM public.user_attempts a JOIN student_a u ON u.id=a.user_id
+      WHERE a.test_id=:'test_id'::uuid
+    ),
+    'student_b_has_no_attempt', NOT EXISTS(
+      SELECT 1 FROM public.user_attempts a JOIN student_b u ON u.id=a.user_id
+      WHERE a.test_id=:'test_id'::uuid
+    ),
+    'three_dedicated_auth_identities_exist', (
+      (SELECT count(*)=1 FROM student_a) AND
+      (SELECT count(*)=1 FROM student_b) AND
+      (SELECT count(*)=1 FROM reviewer)
+    )
+  )
+)::text;
+ROLLBACK;

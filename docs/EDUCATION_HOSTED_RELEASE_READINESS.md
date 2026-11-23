@@ -36,6 +36,16 @@ The runner validates the handoff against the preapproved synthetic exam and exac
 
 Even a complete `staging_single_attempt_journey_passed` report only confirms one controlled staging backend route. Production remains NO-GO until staging is independently provisioned, actually exercised, reviewed, browser tested, and formally approved.
 
+### Pre-write journey fixture validation (next release protection)
+
+Before `journey` can create an exam attempt, the manually approved GitHub workflow now executes **15 read-only SQL checks** in the independent staging database. It rejects any inconsistency in approved published exam state, verified instructor ownership, exactly one MCQ and one short-answer question, legitimate selected option, question point bounds, fixed synthetic exam score and maximum, Student A/B enrollment, or whether the one-time exam was already attempted. This is particularly important because an invalid irreversible rehearsal cannot safely be reset automatically.
+
+The SQL checks derive the expected MCQ credit using the **server-side correct answer**, comparing only the resulting fixed boolean to the reviewer-approved expected mark. Student clients never receive the answer key. Instructor/student email addresses are read from protected environment secrets, not shown in report output. The SQL performs no writes; only a signed-off isolated staging PostgreSQL connection can execute it.
+
+On success, `test-results/education-journey-fixture-readiness.json` contains only fixed check names, pass status, and the exact GitHub commit/run/attempt. Both the release runner and final release verdict **independently require** this same-run evidence before permitting any stage to mutate. Old reports, a score mismatch, exhausted exam, or a missing instructor grant fail closed. `preflight` and the existing multi-fixture `rehearsal` remain unchanged.
+
+**This code has not been exercised against a real separate staging project.** It cannot create synthetic accounts/exams, provide staging credentials, validate browser UX, or authorize a production deployment. Those are still explicit human-controlled release prerequisites.
+
 ### Fail-closed requirements
 Use an independently provisioned staging project with deployed, audited Education SQL/RPCs and a recent staging backup. Set the \`rls-staging\` GitHub environment secrets/vars already used by the five existing Education hosted workflows. The staging URL must exactly match its project ref; the ref must differ from production (including the repo's known production fingerprint). All accounts must use the dedicated synthetic \`rls-\` naming convention. Review A attempt must equal result A final attempt; expected grade marks must match. Keep separate in-progress, fresh CBT and finalized-result fixtures.
 

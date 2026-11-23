@@ -133,6 +133,12 @@ jobs:
         env:
           ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
         run: node scripts/staging/educationHostedDbMetadata.mjs
+      - name: Validate fresh journey exam, instructor ownership and expected marks before any write
+        if: inputs.run_mode == 'journey'
+        timeout-minutes: 2
+        env:
+          ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
+        run: node scripts/staging/educationJourneyFixturePreflight.mjs
       - name: Run ordered real-JWT protected backend acceptance and issue staging-only verdict
         timeout-minutes: 35
         run: node scripts/staging/runEducationHostedRelease.mjs
@@ -143,6 +149,7 @@ jobs:
           name: education-hosted-release-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-results/education-hosted-db-metadata.json
+            test-results/education-journey-fixture-readiness.json
             test-results/education-hosted-readonly.json
             test-results/education-hosted-cbt-write.json
             test-results/education-hosted-instructor-final-grade.json

@@ -128,6 +128,14 @@ test("strict audit evidence rejects altered fields and missing run context",()=>
 
 import {HANDOFF_PATH,JOURNEY_APPROVAL,makeJourneyHandoff,
   verifyJourneyHandoff,journeyStageEnv} from "../scripts/staging/educationJourneyHandoff.mjs";
+import {FIXTURE_CHECKS,snapshotJourneyFixture}
+  from "../scripts/staging/educationJourneyFixturePreflight.mjs";
+const journeyFixtureProof=()=>snapshotJourneyFixture({
+  schema:1,checks:Object.fromEntries(FIXTURE_CHECKS.map(k=>[k,true])),
+},{
+  GITHUB_SHA:p.sha,GITHUB_RUN_ID:p.runId,GITHUB_RUN_ATTEMPT:p.attempt,
+  ETERNYX_EDU_RELEASE_MODE:"journey",ETERNYX_EDU_JOURNEY_APPROVAL:JOURNEY_APPROVAL,
+});
 const journeyConfig=()=>({
   GITHUB_SHA:"a".repeat(40),GITHUB_RUN_ID:"101",GITHUB_RUN_ATTEMPT:"1",
   ETERNYX_EDU_RELEASE_MODE:"journey",ETERNYX_EDU_JOURNEY_APPROVAL:JOURNEY_APPROVAL,
@@ -144,7 +152,7 @@ const newHandoff=()=>makeJourneyHandoff(journeyConfig(),
   "10000000-0000-4000-8000-000000000008");
 test("journey requires five real hosted stages, with no production authorization",()=>{
  assert.deepEqual(EDUCATION_RELEASE_STAGES.journey,EDUCATION_RELEASE_STAGES.rehearsal);
- const result=summarizeEducationReleaseEvidence("journey",evidence("journey"),p,dbEvidence(),true);
+ const result=summarizeEducationReleaseEvidence("journey",evidence("journey"),p,dbEvidence(),true,journeyFixtureProof());
  assert.equal(result.outcome,"staging_single_attempt_journey_passed");
  assert.equal(result.single_new_attempt_lifecycle_verified,true);
  assert.equal(result.production_release_approved,false);
@@ -188,4 +196,26 @@ test("private journey data is never uploaded in hosted release workflow",()=>{
  assert.match(wf,/approve_single_attempt_journey/);
  assert.match(wf,/- journey/);
  assert.equal(wf.includes(HANDOFF_PATH),false);
+});
+
+test("same-run single-attempt fixture preflight is mandatory for release verdict",()=>{
+  const p1=journeyFixtureProof();
+  const outcome=summarizeEducationReleaseEvidence(
+    "journey",evidence("journey"),p,dbEvidence(),true,p1);
+  assert.deepEqual(outcome.journey_fixture_gate,{status:"passed",checks:FIXTURE_CHECKS.length});
+  for(const change of [
+    x=>{x.github_run_attempt="2";},
+    x=>{x.passed_checks=14;},
+    x=>{x.results[0].result="failed";},
+    x=>{x.results[0].extra="not-sanitary";},
+    x=>{x.production_tested=true;},
+  ]){
+    const v=structuredClone(p1);change(v);
+    assert.throws(()=>summarizeEducationReleaseEvidence(
+      "journey",evidence("journey"),p,dbEvidence(),true,v));
+  }
+  assert.throws(()=>summarizeEducationReleaseEvidence(
+    "journey",evidence("journey"),p,dbEvidence(),true));
+  assert.throws(()=>summarizeEducationReleaseEvidence(
+    "rehearsal",evidence("rehearsal"),p,dbEvidence(),false,p1));
 });
