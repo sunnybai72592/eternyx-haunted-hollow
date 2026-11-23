@@ -1,0 +1,90 @@
+name: Docker staging fresh-session acceptance — MANUAL AUTH WRITES
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_staging_auth_session_creation:
+        description: "I explicitly authorize two new staging Auth sign-in sessions (writes), not production"
+        required: true
+        type: boolean
+        default: false
+      confirm_isolated_test_accounts:
+        description: "Both accounts are pre-existing, independently pinned, synthetic staging-only accounts"
+        required: true
+        type: boolean
+        default: false
+      staging_project_ref:
+        description: "Independently pinned 20-character staging Supabase project reference"
+        required: true
+        type: string
+      production_project_ref:
+        description: "Different production project ref used ONLY as a deny-pin"
+        required: true
+        type: string
+      release_commit_sha:
+        description: "The exact reviewed Git commit SHA being run on main"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-docker-staging-fresh-auth
+  cancel-in-progress: false
+
+jobs:
+  fresh-sessions-staging:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_staging_auth_session_creation && inputs.confirm_isolated_test_accounts }}
+    name: Operator-approved two short-lived staging Auth sessions and isolated read-only Docker checks
+    runs-on: ubuntu-latest
+    environment: docker-staging
+    timeout-minutes: 10
+    env:
+      ETERNYX_DOCKER_FRESH_AUTH_WRITE_APPROVAL: I_APPROVE_STAGING_AUTH_SESSIONS
+      ETERNYX_DOCKER_INPUT_STAGING_REF: ${{ inputs.staging_project_ref }}
+      ETERNYX_DOCKER_INPUT_PRODUCTION_REF: ${{ inputs.production_project_ref }}
+      ETERNYX_DOCKER_INPUT_RELEASE_SHA: ${{ inputs.release_commit_sha }}
+      ETERNYX_DOCKER_CHECKOUT_COMMIT_SHA: ${{ github.sha }}
+      ETERNYX_DOCKER_APPROVED_COMMIT_SHA: ${{ github.sha }}
+      ETERNYX_DOCKER_STAGING_REF: ${{ vars.ETERNYX_DOCKER_STAGING_REF }}
+      ETERNYX_DOCKER_PRODUCTION_REF: ${{ vars.ETERNYX_DOCKER_PRODUCTION_REF }}
+      ETERNYX_DOCKER_STAGING_URL: ${{ vars.ETERNYX_DOCKER_STAGING_URL }}
+      ETERNYX_DOCKER_STAGING_PINNED_HOST: ${{ vars.ETERNYX_DOCKER_STAGING_PINNED_HOST }}
+      ETERNYX_DOCKER_PRODUCTION_HOST: ${{ vars.ETERNYX_DOCKER_PRODUCTION_HOST }}
+      ETERNYX_DOCKER_STAGING_OWNER_A_WORKSPACE: ${{ vars.ETERNYX_DOCKER_STAGING_OWNER_A_WORKSPACE }}
+      ETERNYX_DOCKER_STAGING_OWNER_B_WORKSPACE: ${{ vars.ETERNYX_DOCKER_STAGING_OWNER_B_WORKSPACE }}
+      ETERNYX_DOCKER_STAGING_OWNER_A_USER_ID: ${{ vars.ETERNYX_DOCKER_STAGING_OWNER_A_USER_ID }}
+      ETERNYX_DOCKER_STAGING_OWNER_B_USER_ID: ${{ vars.ETERNYX_DOCKER_STAGING_OWNER_B_USER_ID }}
+      ETERNYX_DOCKER_PINNED_DEPLOY_MANIFEST_SHA256: ${{ vars.ETERNYX_DOCKER_PINNED_DEPLOY_MANIFEST_SHA256 }}
+      ETERNYX_DOCKER_STAGING_MANIFEST_B64: ${{ secrets.ETERNYX_DOCKER_STAGING_MANIFEST_B64 }}
+      ETERNYX_DOCKER_MANAGEMENT_READ_TOKEN: ${{ secrets.ETERNYX_DOCKER_MANAGEMENT_READ_TOKEN }}
+      ETERNYX_DOCKER_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_DOCKER_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_DOCKER_STAGING_OWNER_A_EMAIL: ${{ secrets.ETERNYX_DOCKER_STAGING_OWNER_A_EMAIL }}
+      ETERNYX_DOCKER_STAGING_OWNER_A_PASSWORD: ${{ secrets.ETERNYX_DOCKER_STAGING_OWNER_A_PASSWORD }}
+      ETERNYX_DOCKER_STAGING_OWNER_B_EMAIL: ${{ secrets.ETERNYX_DOCKER_STAGING_OWNER_B_EMAIL }}
+      ETERNYX_DOCKER_STAGING_OWNER_B_PASSWORD: ${{ secrets.ETERNYX_DOCKER_STAGING_OWNER_B_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install pinned Node dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Refuse bad staging references and test accounts before any staging HTTP call
+        run: node scripts/docker-staging-fresh-auth-acceptance.mjs --preflight
+      - name: Check pinned deployments, create only two staging Auth sessions and verify 8 Docker lists
+        timeout-minutes: 4
+        run: node scripts/docker-staging-fresh-auth-acceptance.mjs --run
+      - name: Store only sanitized staging acceptance metadata (no tokens)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-docker-staging-fresh-auth-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/docker-staging-fresh-auth-acceptance.json
+          if-no-files-found: warn
+          retention-days: 3
