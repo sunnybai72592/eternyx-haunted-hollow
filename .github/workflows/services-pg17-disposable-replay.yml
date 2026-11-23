@@ -1,0 +1,93 @@
+name: Services isolated PostgreSQL 17 migration replay
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*service*.sql"
+      - "scripts/services-pg17-replay-plan.mjs"
+      - "scripts/services-migration-source-guard.mjs"
+      - "scripts/automation-migration-collision-forensics.mjs"
+      - "scripts/automation-migration-collision-baseline.json"
+      - "docs/sql/eternyx/services-phase29-disposable-*.sql"
+      - "tests/services-pg17-replay-plan.test.mjs"
+      - ".github/workflows/services-pg17-disposable-replay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-pg17-disposable-replay-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-replay:
+    name: Replay 13 Services migrations inside networkless disposable PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out source code only
+        uses: actions/checkout@v4
+
+      - name: Install Node 22 for deterministic local plan
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Prove reviewed migration integrity and write ordered plan
+        run: |
+          node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
+          node --test tests/services-pg17-replay-plan.test.mjs
+          node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
+          test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
+
+      - name: Replay Services chain against disposable network-isolated PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="eternyx-services-replay-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run --detach --rm --network none --name "$name" \
+            -e POSTGRES_PASSWORD=synthetic_ci_only postgres:17-alpine > /dev/null
+          trap 'docker rm --force "$name" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for _ in $(seq 1 45); do
+            if docker exec "$name" pg_isready -q -U postgres; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "Disposable PostgreSQL container did not become ready"
+            exit 1
+          fi
+
+          # The bootstrap contains only synthetic auth roles and empty tables.
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < docs/sql/eternyx/services-phase29-disposable-bootstrap.sql > /dev/null
+
+          index=0
+          while IFS= read -r migration; do
+            index=$((index + 1))
+            case "$migration" in
+              supabase/migrations/*service*.sql) ;;
+              *) echo "Unrecognized migration allowlist entry"; exit 1 ;;
+            esac
+            test -f "$migration"
+            echo "Replaying Services migration $index / 13"
+            docker exec -i "$name" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d postgres \
+              < "$migration" > "$RUNNER_TEMP/services-pg17-replay-output.log" 2>&1 || {
+                echo "Disposable replay failed on allowlisted migration $index"
+                tail -n 12 "$RUNNER_TEMP/services-pg17-replay-output.log"
+                exit 1
+              }
+          done < "$RUNNER_TEMP/services-isolated-files.txt"
+          test "$index" -eq 13
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < docs/sql/eternyx/services-phase29-disposable-catalog-assert.sql
+          echo "PASS: isolated Services PG17 replay and catalog checks (no remote deployment)"
+
+      # No Supabase secrets, no linked project, no production/staging database
+      # connection and no artifact upload containing DB rows.
