@@ -20,6 +20,10 @@ import {
   type StructuredComparison,
 } from "@/lib/ai/document-structured-compare";
 import {
+  DocumentPrivacyError, redactDocumentPrivacy, inspectDocumentPrivacy,
+  formatDocumentPrivacyAudit, type PrivacyRedaction,
+} from "@/lib/ai/document-privacy-tools";
+import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_CHARACTERS,
@@ -67,6 +71,19 @@ const AIDocumentIntelligence = () => {
   const [comparisonQuestion, setComparisonQuestion] = useState("");
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const comparisonAI = useAIStudioChat();
+  const [privacyCopy, setPrivacyCopy] = useState<(PrivacyRedaction & {sourceText: string}) | null>(null);
+  const [privacyUseForAI, setPrivacyUseForAI] = useState(false);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
+  const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
+  const privacyTarget = aiPassage ?? source;
+  const privacyCurrent = privacyCopy?.sourceText === privacyTarget ? privacyCopy : null;
+
+  const invalidatePrivacy = () => {
+    setPrivacyCopy(null);
+    setPrivacyUseForAI(false);
+    setPrivacyError(null);
+    setPrivacyNotice(null);
+  };
 
   const invalidateComparison = () => {
     comparisonAI.invalidate();
@@ -76,6 +93,7 @@ const AIDocumentIntelligence = () => {
   };
   const invalidate = () => {
     invalidateComparison();
+    invalidatePrivacy();
     ai.invalidate();
     setInspection(null);
     setSearchResults(null);
@@ -220,6 +238,14 @@ const AIDocumentIntelligence = () => {
       const prompt = structuredComparison
         ? prepareStructuredComparisonAIRequest(structuredComparison, comparisonQuestion)
         : prepareDocumentComparisonAIRequest(comparison!, comparisonQuestion);
+      // Comparison reports are a separate AI submission path. The document
+      // redaction checkbox does NOT silently affect them; warn if the exact
+      // diff prompt contains detected sensitive-looking values.
+      const sensitiveCount = inspectDocumentPrivacy(prompt).findings.length;
+      if (sensitiveCount > 0 && !window.confirm(
+        "The comparison report contains " + sensitiveCount +
+        " possible sensitive values. Sending the ORIGINAL comparison to the external AI Chat provider consumes ai.chat credits and stores chat history. Continue?",
+      )) return;
       setComparisonError(null);
       void comparisonAI.run("ai.documents.analyze", prompt);
     } catch (reason) {
@@ -239,6 +265,8 @@ const AIDocumentIntelligence = () => {
               invalid_source: "Both documents are required.",
               too_many_lines: "Too many lines for comparison.",
             }[reason.code])
+          : reason instanceof DocumentPrivacyError
+          ? "Too many possible sensitive strings in the comparison. Narrow the source data; no AI request was sent."
           : "AI comparison request could not be prepared.";
       setComparisonError(message);
     }
@@ -339,19 +367,85 @@ const AIDocumentIntelligence = () => {
       return;
     }
     setAiPassage(passage);
+    invalidatePrivacy();
     ai.invalidate();
     setError(null);
     setNotice("Excerpt selected. Nothing was uploaded or sent to AI.");
   };
+  const inspectPrivacy = () => {
+    setPrivacyError(null);
+    setPrivacyNotice(null);
+    setPrivacyCopy(null);
+    setPrivacyUseForAI(false);
+    ai.invalidate();
+    try {
+      const redaction = redactDocumentPrivacy(privacyTarget);
+      setPrivacyCopy({ ...redaction, sourceText: privacyTarget });
+      setPrivacyNotice(redaction.report.findings.length
+        ? "Candidate strings masked locally. Inspect the complete text carefully; patterns may miss sensitive information."
+        : "No configured patterns matched. This does NOT prove the document is safe to share.");
+    } catch (reason) {
+      setPrivacyError(reason instanceof DocumentPrivacyError
+        ? reason.code === "too_many_findings"
+          ? "Too many possible sensitive strings to review reliably (limit 250). Narrow the input; no partial copy was produced."
+          : reason.code === "too_large"
+            ? "Privacy scan accepts at most 100,000 characters; narrow the selection."
+            : "Select a nonempty document or highlighted excerpt to inspect."
+        : "Unable to inspect the selected text locally.");
+    }
+  };
+  const copyPrivacyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setPrivacyNotice(label + " copied locally; nothing was sent to AI Chat.");
+      setPrivacyError(null);
+    } catch {
+      setPrivacyError("Clipboard unavailable. Select and copy the content manually.");
+    }
+  };
+  const downloadPrivacyText = (kind: "redacted" | "audit") => {
+    if (!privacyCurrent) return;
+    const value = kind === "redacted"
+      ? privacyCurrent.text : formatDocumentPrivacyAudit(privacyCurrent.report);
+    const url = URL.createObjectURL(new Blob([value], {type: "text/plain;charset=utf-8"}));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = kind === "redacted"
+      ? "eternyx-reviewed-redacted-text.txt"
+      : "eternyx-privacy-pattern-audit.txt";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setPrivacyNotice("Local text export requested. No remote upload was made.");
+  };
   const askAI = () => {
     try {
-      const request = prepareDocumentDraft(aiPassage ?? source, kind, task, instruction);
+      let chosenText = aiPassage ?? source;
+      if (privacyUseForAI) {
+        if (!privacyCurrent || !privacyCurrent.text.trim()) {
+          setError("The reviewed redacted text is stale or missing. Re-run the local privacy inspection before using AI Chat.");
+          return;
+        }
+        chosenText = privacyCurrent.text;
+      } else {
+        // This is an advisory pattern gate. It cannot identify all sensitive
+        // material; require extra confirmation when known patterns are found.
+        const findings = inspectDocumentPrivacy(chosenText).findings.length;
+        if (findings > 0 && !window.confirm(
+          "This text contains " + findings +
+          " possible sensitive strings. Send the UNREDACTED text to the configured external AI provider using ai.chat credits and saved history anyway?",
+        )) return;
+      }
+      const request = prepareDocumentDraft(chosenText, kind, task, instruction);
       setDraft(request);
       setError(null);
       setNotice(null);
       void ai.run(request.featureKey, formatDocumentDraft(request));
     } catch (failure) {
-      setError(explainError(failure));
+      setError(failure instanceof DocumentPrivacyError
+        ? failure.code === "too_many_findings"
+          ? "Too many possible sensitive strings. Narrow the document or select an excerpt; no AI request was sent."
+          : "The document cannot be scanned safely before AI submission."
+        : explainError(failure));
     }
   };
   const copyAIResult = async () => {
@@ -399,6 +493,9 @@ const AIDocumentIntelligence = () => {
             independent fact checking or dedicated document model is activated. Do not send sensitive documents without permission.
             The AI request, including task instructions, must fit 4,000 characters; content is never silently truncated.
             File extension and MIME labels are not verified proof of a document's format.
+            The local Privacy Guard detects only selected patterns. Its redacted-copy switch affects document
+            analysis/extraction, not separate comparison AI prompts; those prompts receive a detection warning
+            and require confirmation if common sensitive-looking values are found.
           </AlertDescription>
         </Alert>
 
@@ -489,6 +586,101 @@ const AIDocumentIntelligence = () => {
             )}
             {error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
             {notice && <Alert role="status" aria-live="polite"><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
+          <CardHeader>
+            <CardTitle className="text-white">Document Privacy Guard · local pattern inspection</CardTitle>
+            <CardDescription className="text-slate-400">
+              Look for selected email addresses, credential assignments, bearer/JWT-like tokens,
+              Luhn-valid payment-card-like numbers and international phone patterns in the current
+              text or highlighted AI excerpt. This is a heuristic aid, not comprehensive privacy protection.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-amber-200">
+              Local scan and redaction only. It does not upload text, identify every secret,
+              validate card ownership, or make a document automatically safe for external AI.
+              Names, addresses, uncommon token formats, and context-dependent private data can remain.
+              Review the entire resulting text before sharing.
+            </p>
+            <p className="text-sm text-slate-300">
+              Target: {aiPassage ? "Highlighted AI excerpt" : "Entire source document"} · {privacyTarget.length.toLocaleString()} characters
+            </p>
+            <Button type="button" variant="outline" disabled={!privacyTarget.trim() || loading} onClick={inspectPrivacy}>
+              <ShieldCheck className="mr-2 h-4 w-4"/>Inspect & build local redacted copy
+            </Button>
+            {privacyCurrent && (
+              <section aria-label="Local privacy review" className="space-y-3 rounded-xl border border-cyan-500/20 bg-slate-950 p-4">
+                <p role="status" className="text-sm text-slate-200">
+                  Detected {privacyCurrent.report.findings.length} candidate strings.
+                  Replaced {privacyCurrent.replacedCharacters} original characters with visible markers.
+                </p>
+                <p className="text-xs text-slate-400">{privacyCurrent.report.note}</p>
+                <ul className="grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
+                  {Object.entries(privacyCurrent.report.counts).map(([key, count]) => (
+                    <li className="rounded border border-slate-800 p-2" key={key}>{key.replace(/_/g, " ")}: {count}</li>
+                  ))}
+                </ul>
+                {privacyCurrent.report.findings.length > 0 && (
+                  <details className="text-xs text-slate-300">
+                    <summary className="cursor-pointer text-cyan-200">
+                      Inspect redaction positions (no matched values shown)
+                    </summary>
+                    <ul className="mt-2 max-h-48 space-y-1 overflow-auto">
+                      {privacyCurrent.report.findings.map((finding, index) => (
+                        <li key={index}>{finding.kind.replace(/_/g, " ")} · line {finding.line},
+                          column {finding.column} · {finding.characters} masked characters</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                <label htmlFor="document-privacy-redacted-output" className="block space-y-2 text-sm text-slate-300">
+                  <span>Full redacted copy · inspect manually before using it</span>
+                  <textarea id="document-privacy-redacted-output" readOnly rows={7}
+                    value={privacyCurrent.text}
+                    className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-white"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline"
+                    onClick={() => void copyPrivacyText(privacyCurrent.text, "Redacted text")}>
+                    <ClipboardCopy className="mr-2 h-4 w-4"/>Copy redacted text
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadPrivacyText("redacted")}>
+                    Download redacted text (.txt)
+                  </Button>
+                  <Button type="button" variant="outline"
+                    onClick={() => void copyPrivacyText(formatDocumentPrivacyAudit(privacyCurrent.report), "Value-free privacy audit")}>
+                    Copy value-free audit
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadPrivacyText("audit")}>
+                    Download audit (.txt)
+                  </Button>
+                </div>
+                <label className="flex items-start gap-2 text-sm text-slate-300">
+                  <input type="checkbox" checked={privacyUseForAI}
+                    onChange={e => { setPrivacyUseForAI(e.target.checked); ai.invalidate(); }}
+                    className="mt-1"
+                  />
+                  <span>Use this reviewed redacted copy for the next document AI Chat analysis/extraction
+                    instead of the raw document or excerpt. AI Chat still sends the selected text
+                    to an external provider, uses ai.chat credits and saves chat history.
+                    No configured pattern match does not imply safety.</span>
+                </label>
+                {privacyUseForAI && <p role="status" className="text-xs text-cyan-200">
+                  Next AI request will use this exact redacted text. Changing the source or
+                  selected excerpt invalidates the copy and switches back to explicit raw-text review.
+                </p>}
+              </section>
+            )}
+            {privacyError && <Alert role="alert" variant="destructive">
+              <XCircle className="h-4 w-4"/><AlertDescription>{privacyError}</AlertDescription>
+            </Alert>}
+            {privacyNotice && <Alert role="status" aria-live="polite">
+              <ShieldCheck className="h-4 w-4"/><AlertDescription>{privacyNotice}</AlertDescription>
+            </Alert>}
           </CardContent>
         </Card>
 
