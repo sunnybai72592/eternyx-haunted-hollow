@@ -16,8 +16,13 @@ BEGIN
     RAISE EXCEPTION 'Owner initial zero-unread snapshot incorrect';
   END IF;
   event_id:=(snapshot->>'latest_event_id')::bigint;
-  IF public.workspace_team_mark_events_seen(sid,event_id)<>event_id
-     OR (public.workspace_team_notification_snapshot(sid)->>'last_seen_event_id')::bigint<>event_id THEN
+  -- PostgreSQL is free to reorder boolean expression evaluation.
+  -- Save first, then inspect a fresh snapshot in a separate statement.
+  IF public.workspace_team_mark_events_seen(sid,event_id)<>event_id THEN
+    RAISE EXCEPTION 'Read receipt RPC rejected the real team event';
+  END IF;
+  snapshot:=public.workspace_team_notification_snapshot(sid);
+  IF (snapshot->>'last_seen_event_id')::bigint<>event_id THEN
     RAISE EXCEPTION 'Read receipt not reflected in consistent snapshot';
   END IF;
   IF public.workspace_team_notification_snapshot(other_space) IS NULL THEN
