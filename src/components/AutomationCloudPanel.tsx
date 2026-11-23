@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { normalizeWorkflowSteps } from "@/lib/automationWorkflow.mjs";
+import { automationControlFailure, shouldInvalidateAutomationCloud } from "@/lib/automationCloudStatus.mjs";
 
 type Step = {
   id: string; kind: string; value?: string; replacement?: string; caseSensitive?: boolean;
@@ -45,15 +46,13 @@ type CloudReply = Record<string, unknown>;
 async function callAutomation(action: string, args: Record<string, unknown> = {}): Promise<CloudReply> {
   const { data, error } = await supabase.functions.invoke("automation-control", { body: { action, ...args } });
   if (error) {
-    let message = "Cloud automation is unavailable. Deploy the database migration and Edge Function first.";
-    try {
-      const response = error.context as Response;
-      if (response && typeof response.json === "function") {
-        const detail = await response.json();
-        if (typeof detail?.error === "string" && detail.error.length <= 200) message = detail.error;
-      }
-    } catch { /* No trusted response payload */ }
-    throw new Error(message);
+    const context = error.context as Response | undefined;
+    const status = typeof context?.status === "number" ? context.status : null;
+    const failure = automationControlFailure(action, status);
+    // Do not surface server bodies: they can contain private data or credentials.
+    const result = new Error(failure.message) as Error & { cloudKind?: string };
+    result.cloudKind = failure.kind;
+    throw result;
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid Automation response.");
   return data as CloudReply;
@@ -103,6 +102,10 @@ export default function AutomationCloudPanel({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<"unchecked" | "available" | "unavailable" | "sign_in_required">("unchecked");
+  const ownerRef = useRef(userId);
+  // Assign during render: old async replies cannot win the next account render.
+  ownerRef.current = userId;
   // Preserve a request key across transport failures for safe user-initiated retries.
   const pendingRun = useRef<{ signature: string; key: string } | null>(null);
   const pendingPreview = useRef<{ signature: string; key: string } | null>(null);
@@ -110,6 +113,7 @@ export default function AutomationCloudPanel({
   useEffect(() => {
     setWorkflows([]); setHistory([]); setSelectedId(null);
     setOutput(null); setPreviewResult(null); setError(""); setNotice(""); setLoaded(false);
+    setBackendStatus("unchecked"); setBusy(false);
     pendingRun.current = null; pendingPreview.current = null;
   }, [userId]);
 
@@ -121,26 +125,44 @@ export default function AutomationCloudPanel({
   } catch { unchanged = false; }
 
   async function manage(task: () => Promise<void>) {
+    if (!userId || busy) return;
+    const owner = userId;
     setBusy(true); setError(""); setNotice("");
     try { await task(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Automation cloud request failed."); }
-    finally { setBusy(false); }
+    catch (cause) {
+      if (ownerRef.current !== owner) return;
+      const kind = cause instanceof Error && "cloudKind" in cause
+        ? (cause as Error & { cloudKind?: string }).cloudKind : undefined;
+      if (kind && shouldInvalidateAutomationCloud(kind)) {
+        setLoaded(false); setWorkflows([]); setHistory([]); setSelectedId(null);
+        setOutput(null); setPreviewResult(null);
+        pendingRun.current = null; pendingPreview.current = null;
+        setBackendStatus(kind === "sign_in_required" ? "sign_in_required" : "unavailable");
+      }
+      setError(cause instanceof Error ? cause.message : "Automation cloud request failed.");
+    }
+    finally { if (ownerRef.current === owner) setBusy(false); }
   }
   async function refresh() {
+    const owner = userId;
     const response = await callAutomation("list");
+    if (ownerRef.current !== owner) throw Error("Automation account changed; retry the request.");
     if (response.source !== "authenticated_server") throw new Error("The server could not verify the workflow list.");
     const verified=readWorkflows(response.workflows);
     setWorkflows(verified);
+    setBackendStatus("available");
     setLoaded(true);
     return verified;
   }
   function select(workflow: SavedWorkflow) {
+    pendingRun.current = null; pendingPreview.current = null;
     setSelectedId(workflow.id);
     setName(workflow.name);
     onLoadSteps(workflow.steps);
     setOutput(null); setPreviewResult(null); setError(""); setNotice("Saved workflow loaded into the editor.");
   }
   function clearSelection() {
+    pendingRun.current = null; pendingPreview.current = null;
     setSelectedId(null); setName("My automation"); setOutput(null); setPreviewResult(null);
   }
 
@@ -150,6 +172,13 @@ export default function AutomationCloudPanel({
       Save named workflows to your ETERNYX account and run their stored steps on the server on demand.
       Only execution counts and operation traces are stored; your input and output text are never persisted to the run-history table.
       Cloud runs use existing backend resources, so hosting/compute usage may have a cost.
+    </p>
+    <p role="status" aria-live="polite" className="rounded-lg border border-border/70 bg-background/60 p-3 text-xs leading-6 text-muted-foreground">
+      <strong>Cloud manual API:</strong>{" "}
+      {backendStatus === "available" ? "Verified for this account by a real workflow-list response. Other integrations and migrations are not verified." :
+        backendStatus === "unavailable" ? "Unavailable or unreachable. Existing cloud records cannot be assumed current; use the local runner above until repaired." :
+        backendStatus === "sign_in_required" ? "Your session was rejected. Sign in again before using cloud actions." :
+        "Not checked for this session. Select Check cloud & load workflows to verify the actual backend. Local execution above works without it."}
     </p>
     <p className="rounded-lg border border-border/70 bg-background/60 p-3 text-xs leading-6 text-muted-foreground">
       <strong>Permission boundaries:</strong> Manual runs require your action. Signed webhooks, scheduled runs and GitHub integrations are separately configured below; GitHub issue writes additionally require owner approval. Workflow templates only copy deterministic text steps. Maximum 20 saved workflows and 30 recorded cloud runs per 24 hours.
@@ -167,13 +196,14 @@ export default function AutomationCloudPanel({
           <label className="min-w-[180px] flex-1 text-sm">Workflow name
             <Input className="mt-1" maxLength={80} value={name} onChange={(event) => { setName(event.target.value); setOutput(null); }} />
           </label>
-          <Button disabled={busy} type="button" variant="outline" onClick={() => manage(async () => { await refresh(); setNotice("Account workflows refreshed."); })}><RefreshCcw className="mr-2 size-4" /> Load workflows</Button>
+          <Button disabled={busy} type="button" variant="outline" onClick={() => manage(async () => { await refresh(); setNotice("Account workflows refreshed."); })}><RefreshCcw className="mr-2 size-4" /> Check cloud & load workflows</Button>
           <Button disabled={busy || !steps.length || !name.trim() || name.trim().length > 80} type="button"
             onClick={() => manage(async () => {
               const response = await callAutomation("save", { name, steps, ...(selectedId ? { workflowId: selectedId } : {}) });
               if (response.ok !== true || typeof response.workflow_id !== "string") throw new Error("Workflow was not saved.");
               const id = response.workflow_id;
-              await refresh(); setSelectedId(id); setOutput(null);
+              await refresh(); if (ownerRef.current !== userId) return;
+              setSelectedId(id); setOutput(null);
               setNotice("Saved on the server. Choose Run saved workflow to execute.");
             })}><Save className="mr-2 size-4" /> {selectedId ? "Save changes" : "Save new workflow"}</Button>
         </div>
@@ -202,6 +232,7 @@ export default function AutomationCloudPanel({
                 const response=await callAutomation("previewWorkflow",{
                   workflowId:selected.id,input,requestKey,
                 });
+                if (ownerRef.current !== userId) return;
                 if(response.source!=="authenticated_preview"||response.executed!==false||
                    response.cloudRunRecorded!==false||
                    response.externalActionTriggered!==false||
@@ -228,6 +259,7 @@ export default function AutomationCloudPanel({
                 const response = await callAutomation("run", {
                   workflowId: selected.id, input, requestKey,
                 });
+                if (ownerRef.current !== userId) return;
                 if (response.source !== "authenticated_server" || typeof response.output !== "string" ||
                     typeof response.runId !== "string" || !Array.isArray(response.trace)) throw new Error("Invalid cloud run result.");
                 pendingRun.current = null;
@@ -236,15 +268,19 @@ export default function AutomationCloudPanel({
               })}><Play className="mr-2 size-4" /> Run saved workflow</Button>
             <Button type="button" variant="outline" disabled={busy} onClick={() => manage(async () => {
               const response = await callAutomation("toggle", { workflowId: selected.id, active: !selected.active });
+              if (ownerRef.current !== userId) return;
               if (response.ok !== true) throw new Error("Could not update workflow state.");
-              await refresh(); setNotice(selected.active ? "Workflow paused." : "Workflow enabled for manual runs.");
+              await refresh(); if (ownerRef.current !== userId) return;
+              setNotice(selected.active ? "Workflow paused." : "Workflow enabled for manual runs.");
             })}><PauseCircle className="mr-2 size-4" /> {selected.active ? "Pause" : "Resume"}</Button>
             <Button type="button" variant="destructive" disabled={busy} onClick={() => {
               if (!window.confirm("Delete this saved workflow? Existing run metadata will remain in your account.")) return;
               void manage(async () => {
                 const response = await callAutomation("delete", { workflowId: selected.id });
+                if (ownerRef.current !== userId) return;
                 if (response.ok !== true) throw new Error("Workflow was not deleted.");
-                clearSelection(); await refresh(); setNotice("Saved workflow deleted.");
+                clearSelection(); await refresh(); if (ownerRef.current !== userId) return;
+                setNotice("Saved workflow deleted.");
               });
             }}><Trash2 className="mr-2 size-4" /> Delete</Button>
           </div>
@@ -276,6 +312,7 @@ export default function AutomationCloudPanel({
         <div className="space-y-3">
           <Button type="button" variant="outline" disabled={busy} onClick={() => manage(async () => {
             const result = await callAutomation("history");
+            if (ownerRef.current !== userId) return;
             if (result.source !== "authenticated_server" || result.rawInputsStored !== false || result.rawOutputsStored !== false) throw new Error("Invalid run-history response.");
             setHistory(readHistory(result.runs)); setNotice("Loaded the 20 most recent authenticated runs.");
           })}><Archive className="mr-2 size-4" /> Load run history</Button>
