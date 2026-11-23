@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import ProjectApiSuitePanel from "@/components/developer/ProjectApiSuitePanel";
 import { ArrowLeft, Copy, ExternalLink, Globe2, Play, ShieldAlert, TerminalSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,7 @@ async function readResponse(response: Response) {
 }
 
 export default function ApiEngineeringWorkbench() {
+  const [searchParams] = useSearchParams();
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("https://jsonplaceholder.typicode.com/todos/1");
   const [headers, setHeaders] = useState("Accept: application/json");
@@ -179,6 +181,8 @@ export default function ApiEngineeringWorkbench() {
             {["Request collections", "Session environments", "Request history", "Import/export", "Response assertions"].map((item) => <span key={item} className="rounded-full border border-slate-700 px-3 py-1.5">{item}</span>)}
           </div>
         </section>
+
+        <ProjectApiSuitePanel initialProjectId={searchParams.get("projectId") || ""} draft={draft} />
 
         <ApiWorkspacePanel draft={draft} onLoad={loadTemplate} envText={envText} onEnvText={setEnvText}
           expectations={expectations} onExpectations={(value) => { setExpectations(value); setAssertionResults([]); }}
