@@ -96,7 +96,7 @@ test('admin focus cards reset incompatible filters and offer real queue sorting'
   assert.match(src, /setPendingAmendmentsOnly\(kind === 'amendments'\)/);
   assert.match(src, /setClarificationFilter\(kind === 'clarifications' \? 'needs_review' : 'all'\)/);
   assert.match(src, /setAssignmentFilter\(kind === 'unassigned' \? 'unassigned' : 'all'\)/);
-  assert.match(src, /onClick=\{\(\) => chooseActionFocus\('unassigned'\)\}/);
+  assert.match(src, /onSelect: \(\) => chooseActionFocus\('unassigned'\)/);
   assert.match(src, /sortOrder === 'amendments'/);
   assert.match(src, /query\.order\('pending_amendment_count', \{ ascending: false \}\)/);
   assert.match(src, /sortOrder === 'clarifications'/);
