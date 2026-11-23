@@ -30,7 +30,10 @@ function validClaim(v: unknown): v is ScheduleClaim {
   return a.ok===true &&
     ["schedule_id","user_id","workflow_id","lease_token","request_key"].every(k=>typeof a[k]==="string" && UUID.test(a[k] as string)) &&
     typeof a.revision==="number" && Number.isInteger(a.revision) && a.revision>0 &&
-    typeof a.ciphertext==="string" && typeof a.nonce==="string";
+    typeof a.ciphertext==="string" &&
+    a.ciphertext.length>=32 && a.ciphertext.length<=2*(SCHEDULE_INPUT_BYTES+16) &&
+    a.ciphertext.length%2===0 && /^[0-9a-f]+$/i.test(a.ciphertext) &&
+    typeof a.nonce==="string" && /^[0-9a-f]{24}$/i.test(a.nonce);
 }
 
 serve(async (req: Request) => {
@@ -84,6 +87,8 @@ serve(async (req: Request) => {
   let processed=0;
   let failed=0;
   let deferred=0;
+  let leaseRecoveryUnconfirmed=0;
+  let retentionCleanupFailed=false;
   let disabled=false;
   // Two claims maximum in one invocation, and at most two concurrent leases
   // across all worker instances (enforced again in the SQL claim transaction).
@@ -94,23 +99,30 @@ serve(async (req: Request) => {
       if (response.error) throw response.error;
       claim=response.data;
     } catch {
-      return reply({error:"Schedule claim service unavailable",processed,failed,deferred},503);
+      return reply({error:"Schedule claim service unavailable",processed,failed,deferred,
+        leaseRecoveryUnconfirmed},503);
     }
     if (typeof claim==="object" && claim!==null && "ok" in claim &&
         (claim as {ok?:boolean}).ok===false) {
       const reason=(claim as {reason?:string}).reason;
       if (reason==="disabled") disabled=true;
       if (reason==="disabled" || reason==="empty" || reason==="capacity_full") break;
-      return reply({error:"Unexpected schedule claim result",processed,failed},503);
+      return reply({error:"Unexpected schedule claim result",processed,failed,deferred,
+        leaseRecoveryUnconfirmed},503);
     }
-    if (!validClaim(claim)) return reply({error:"Invalid schedule claim",processed,failed},503);
+    if (!validClaim(claim)) return reply({error:"Invalid schedule claim",processed,failed,deferred,
+      leaseRecoveryUnconfirmed},503);
 
     try {
       const {data:workflow,error:wError}=await db.from("automation_workflows")
         .select("id,user_id,steps,revision,active,trigger_kind")
         .eq("id",claim.workflow_id).eq("user_id",claim.user_id).maybeSingle();
       if (wError) throw wError;
-      if (!workflow || workflow.active!==true || workflow.trigger_kind!=="manual") {
+      if (!workflow || workflow.id!==claim.workflow_id ||
+          workflow.user_id!==claim.user_id ||
+          !Number.isSafeInteger(workflow.revision) || workflow.revision<1 ||
+          !Array.isArray(workflow.steps) ||
+          workflow.active!==true || workflow.trigger_kind!=="manual") {
         throw new Error("saved_workflow_unavailable");
       }
       const input=await decryptScheduledText(master,claim.ciphertext,claim.nonce,SCHEDULE_INPUT_BYTES);
@@ -173,19 +185,31 @@ serve(async (req: Request) => {
       processed++;
     } catch {
       failed++;
+      // The RPC may return {error} or {ok:false} without throwing.
+      // Never imply the lease was released unless PostgreSQL acknowledged it.
+      let recoveryConfirmed=false;
       try {
-        await db.rpc("automation_fail_scheduled_run",{
-          p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
-          p_schedule_revision:claim.revision,
-        });
+        const {data:failureReceipt,error:failureError}=await db.rpc(
+          "automation_fail_scheduled_run",{
+            p_schedule_id:claim.schedule_id,p_lease_token:claim.lease_token,
+            p_schedule_revision:claim.revision,
+          });
+        recoveryConfirmed=!failureError && failureReceipt?.ok===true;
       } catch {
-        // Never log encrypted input/output. Lease expiration handles recovery.
+        // Do not log schedule IDs, tokens, plaintext or other sensitive data.
       }
+      if(!recoveryConfirmed) leaseRecoveryUnconfirmed++;
     }
   }
   try {
     // Prune aged ciphertext on every authenticated tick; no plaintext retained.
-    await db.rpc("automation_prune_schedule_outputs");
-  } catch { /* background cleanup is best-effort; read paths still enforce expiry */ }
-  return reply({processed,failed,deferred,schedulerEnabled:!disabled,source:"trusted_scheduler_worker"});
+    const {error:pruneError}=await db.rpc("automation_prune_schedule_outputs");
+    if(pruneError) retentionCleanupFailed=true;
+  } catch {
+    // Cleanup is best-effort, but a failed database RPC is not silent success.
+    retentionCleanupFailed=true;
+  }
+  return reply({processed,failed,deferred,leaseRecoveryUnconfirmed,
+    retentionCleanupFailed,schedulerEnabled:!disabled,
+    source:"trusted_scheduler_worker"});
 });
