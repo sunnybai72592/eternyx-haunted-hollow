@@ -159,7 +159,7 @@ export default function SecurityCaseLedger() {
       setHistory((historyResult.data || []) as History[]);
       setLinks((linksResult.data || []) as EvidenceLink[]);
       setEvidence(evidenceResult.data || []);
-      setError(""); setNotice("");
+      setError("");
     }
     setLoadingRecords(false);
   }, [backendReady, userId]);
