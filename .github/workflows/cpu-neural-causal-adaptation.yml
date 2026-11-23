@@ -1,0 +1,44 @@
+name: CPU neural causal rollout adaptation
+
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/adapt_neural_rollout.py"
+      - "gpu-worker/tests/test_adapt_neural_rollout.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-neural-causal-adaptation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/adapt_neural_rollout.py"
+      - "gpu-worker/tests/test_adapt_neural_rollout.py"
+      - "gpu-worker/train_spatiotemporal_neural_video.py"
+      - "gpu-worker/render_video_timeline.py"
+      - ".github/workflows/cpu-neural-causal-adaptation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  causal-adaptation:
+    name: Train neural v2 on causal prefixes and render verified before-after MP4s on CPU
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require local CPU FFmpeg and H264 encoder
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Verify heldout independence, autoregressive training, metrics and actual CPU MP4s
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_adapt_neural_rollout.py' -v
