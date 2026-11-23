@@ -124,7 +124,7 @@ const key=(value,kind)=>{
  if(k.asymmetricKeyType!=="ed25519")throw Error("Separate Ed25519 signing keys required.");
  return k;
 };
-const fp=k=>sha(createPublicKey(k).export({format:"der",type:"spki"}));
+const fp=k=>sha((k.type==="private"?createPublicKey(k):k).export({format:"der",type:"spki"}));
 const decodedSignature=v=>{
  if(!SIG.test(v||""))throw Error("Noncanonical reviewer signature.");
  const sig=Buffer.from(v,"base64url");
