@@ -11,6 +11,7 @@ import argparse
 import json
 from pathlib import Path
 import shutil
+import tempfile
 
 import launch_phone_intake as intake
 import render_video_timeline as renderer
@@ -22,6 +23,69 @@ OUTPUT = "phone-movie-output"
 MAX_PLAN_BYTES = 32768
 PROFILES = {"landscape", "portrait", "square"}
 QUALITIES = {"standard", "high"}
+DELIVERIES = {"mp4", "mp4_with_subtitles", "mp4_webm", "all"}
+
+
+def extra_outputs(mode):
+    return (mode in ("mp4_webm", "all"), mode in ("mp4_with_subtitles", "all"))
+
+
+def verified_variant(path, expected_codec, frames, size, subtitles=False):
+    """Decode/count the real output and independently verify stream codecs."""
+    result = renderer.verify_output(path, frames, size, False)
+    streams = json.loads(renderer.execute([
+        "ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name",
+        "-of", "json", str(path),
+    ], timeout=30))["streams"]
+    videos = [s for s in streams if s.get("codec_type") == "video"]
+    subs = [s for s in streams if s.get("codec_type") == "subtitle"]
+    if (len(videos) != 1 or videos[0].get("codec_name") != expected_codec or
+            len(subs) != int(subtitles) or
+            (subtitles and subs[0].get("codec_name") != "mov_text")):
+        raise ValueError("Rendered delivery codec or subtitle track failed verification")
+    return {**result, "codec": expected_codec, "selectable_subtitles": subtitles}
+
+
+def produce_deliverables(folder, receipt, mode):
+    """Create optional genuine local formats in the unpublished staging folder."""
+    frames = receipt["total_frames"]
+    size = (receipt["video"]["width"], receipt["video"]["height"])
+    master = folder / "video.mp4"
+    outputs = {
+        "video.mp4": verified_variant(master, "h264", frames, size),
+    }
+    subtitles_path = folder / "captions.srt"
+    if subtitles_path.is_symlink() or not subtitles_path.is_file():
+        raise ValueError("Final authored SRT captions are missing")
+    outputs["captions.srt"] = {
+        "sha256": renderer.sha256(subtitles_path),
+        "file_bytes": subtitles_path.stat().st_size,
+    }
+    webm, embedded = extra_outputs(mode)
+    if webm:
+        target = folder / "video.webm"
+        renderer.execute([
+            "ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-n",
+            "-threads", "2", "-i", str(master),
+            "-map", "0:v:0", "-an", "-sn", "-dn",
+            "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "6",
+            "-b:v", "0", "-crf", "27" if receipt["quality"] == "high" else "32",
+            "-pix_fmt", "yuv420p", str(target),
+        ], timeout=180)
+        outputs["video.webm"] = verified_variant(target, "vp9", frames, size)
+    if embedded:
+        target = folder / "video-subtitled.mp4"
+        renderer.execute([
+            "ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-n",
+            "-i", str(master), "-f", "srt", "-i", str(subtitles_path),
+            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "copy",
+            "-c:s", "mov_text", "-metadata:s:s:0", "language=eng",
+            "-an", "-movflags", "+faststart", str(target),
+        ], timeout=90)
+        outputs["video-subtitled.mp4"] = verified_variant(
+            target, "h264", frames, size, subtitles=True)
+    return outputs
+
 
 
 def load_plan(root):
@@ -33,10 +97,12 @@ def load_plan(root):
             plan = json.loads(stream.read().decode("utf8"),object_pairs_hook=unique_keys)
     except (UnicodeError,ValueError,TypeError) as error:
         raise ValueError("Invalid private phone movie plan JSON") from error
-    if (not isinstance(plan,dict) or set(plan)!={"kind","version","profile","quality","shots"} or
+    if (not isinstance(plan,dict) or set(plan) not in ({"kind","version","profile","quality","shots"},
+                          {"kind","version","profile","quality","shots","delivery"}) or
         plan["kind"]!="eternyx_offline_phone_movie" or
         type(plan["version"]) is not int or plan["version"]!=1 or
         plan["profile"] not in PROFILES or plan["quality"] not in QUALITIES or
+        plan.get("delivery", "mp4") not in DELIVERIES or
         not isinstance(plan["shots"],list) or not 1<=len(plan["shots"])<=8):
         raise ValueError("Unsupported or incomplete private phone movie plan")
     total=0
@@ -65,11 +131,17 @@ def preflight(root=ROOT):
             raise ValueError("Conversion trim is shorter than the requested movie cut")
     if (root/OUTPUT).exists() or (root/OUTPUT).is_symlink():
         raise ValueError("Finished phone movie output exists; never overwrite a completed video")
+    webm, embedded = extra_outputs(plan.get("delivery", "mp4"))
+    if webm:
+        intake.check_tool("ffmpeg", ["-hide_banner", "-encoders"], b"libvpx-vp9")
+    if embedded:
+        intake.check_tool("ffmpeg", ["-hide_banner", "-encoders"], b"mov_text")
     checked=intake.preflight(root)
     return {
         "result":"ready","shots":len(plan["shots"]),
         "frames":sum(s["frames"] for s in plan["shots"]),
         "profile":plan["profile"],"quality":plan["quality"],
+        "delivery":plan.get("delivery", "mp4"),
         "originals_verified":checked["source_count"],
         "private_media_uploaded":False,
         "output":OUTPUT,
@@ -118,22 +190,37 @@ def run(root=ROOT,on_stage=None):
         raise ValueError("Refuse to overwrite the existing movie storyboard")
     storyboard.write_text(json.dumps(board,indent=2,ensure_ascii=False)+"\n",encoding="utf8")
     on_stage("Rendering full authentic CPU movie with FFmpeg, captions and verified MP4 manifest...")
-    receipt=renderer.render(storyboard,media,root/OUTPUT,
-                            profile=plan["profile"],quality=plan["quality"])
-    if (receipt.get("model_generation") is not False or
-        receipt.get("version")!=2 or
-        receipt.get("total_frames")!=checked["frames"] or
-        receipt.get("profile")!=plan["profile"] or
-        receipt.get("quality")!=plan["quality"] or
-        receipt.get("video",{}).get("frame_count")!=checked["frames"]):
-        # The FFmpeg renderer has already committed its own verified output,
-        # so retain the file for diagnosis rather than misrepresent success.
-        raise ValueError("Final local FFmpeg receipt does not match the original plan")
-    on_stage("Completed verified final H264 movie with real subtitle and video previews.")
+    stage = Path(tempfile.mkdtemp(prefix=".eternyx-phone-delivery-", dir=root))
+    try:
+        unpublished = stage / "rendered"
+        receipt=renderer.render(storyboard,media,unpublished,
+                                profile=plan["profile"],quality=plan["quality"])
+        if (receipt.get("model_generation") is not False or
+            receipt.get("version")!=2 or
+            receipt.get("total_frames")!=checked["frames"] or
+            receipt.get("profile")!=plan["profile"] or
+            receipt.get("quality")!=plan["quality"] or
+            receipt.get("video",{}).get("frame_count")!=checked["frames"]):
+            raise ValueError("Final local FFmpeg receipt does not match the original plan")
+        on_stage("Encoding and verifying selected final deliverables on CPU...")
+        receipt["delivery"] = plan.get("delivery", "mp4")
+        receipt["deliverables"] = produce_deliverables(
+            unpublished, receipt, receipt["delivery"])
+        (unpublished/"manifest.json").write_text(
+            json.dumps(receipt, indent=2, ensure_ascii=False, allow_nan=False)+"\n",
+            encoding="utf8")
+        if (root/OUTPUT).exists() or (root/OUTPUT).is_symlink():
+            raise ValueError("Final phone video output appeared; refusing overwrite")
+        unpublished.rename(root/OUTPUT)
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)
+    on_stage("Completed verified H264 master and all selected offline delivery formats.")
     return {
         "result":"completed","frames":checked["frames"],
         "shots":checked["shots"],"profile":plan["profile"],
-        "quality":plan["quality"],
+        "quality":plan["quality"],"delivery":plan.get("delivery", "mp4"),
+        "deliverables":list(receipt["deliverables"]),
         "video_sha256":receipt["video"]["sha256"],
         "output":OUTPUT,"media":intake.OUTPUT,
         "private_media_uploaded":False,"model_generation":False,

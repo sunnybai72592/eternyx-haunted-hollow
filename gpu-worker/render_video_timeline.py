@@ -199,7 +199,9 @@ def check_soundtrack(board, root):
     return {**raw, "path": path}
 
 
-def build_command(shots, total, destination, size, soundtrack):
+def build_command(shots, total, destination, size, soundtrack, quality="standard"):
+    if quality not in ("standard", "high"):
+        raise ValueError("Unsupported offline encoder quality")
     width, height = size
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y",
            "-filter_complex_threads", "1", "-threads", "1"]
@@ -213,7 +215,7 @@ def build_command(shots, total, destination, size, soundtrack):
         start, end = shot["start_frame"], shot["start_frame"] + shot["frames"]
         filters = [f"[{i}:v:0]trim=start_frame={start}:end_frame={end}",
                    "setpts=PTS-STARTPTS",
-                   f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+                   f"scale={width}:{height}:flags=lanczos:force_original_aspect_ratio=decrease",
                    f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
                    "setsar=1", "format=yuv420p"]
         if shot["fade_in_frames"]:
@@ -234,7 +236,8 @@ def build_command(shots, total, destination, size, soundtrack):
     else:
         cmd += ["-map", "[outa]", "-c:a", "aac", "-b:a", "96k"]
     cmd += ["-sn", "-dn", "-frames:v", str(total), "-r", str(FPS), "-t", f"{total/FPS:.4f}",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", "-preset", "medium" if quality == "high" else "veryfast",
+            "-crf", "19" if quality == "high" else "23", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", str(destination)]
     return cmd
 
@@ -318,7 +321,7 @@ def render(storyboard, root, output, profile="landscape", quality="standard"):
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack), timeout=120)
+        execute(build_command(shots, total, video_path, size, soundtrack, quality), timeout=180)
         video = verify_output(video_path, total, size, soundtrack is not None)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}

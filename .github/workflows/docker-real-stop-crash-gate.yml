@@ -1,0 +1,33 @@
+name: Docker real disposable stop crash policy (NO DOCKER IN CI)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-real-stop-crash-gate.yml'
+      - 'src/lib/dockerLiveStopCrashGate.mjs'
+      - 'scripts/docker-live-stop-crash-worker.mjs'
+      - 'scripts/docker-host-live-stop-crash-drill.mjs'
+      - 'tests/docker-live-stop-crash-gate.test.mjs'
+      - 'docs/DOCKER_REAL_DISPOSABLE_STOP_CRASH.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-real-stop-policy:
+    name: Verify disposable stop boundary and unauthorized-run refusal (NO DOCKER)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify syntax
+        run: |
+          node --check src/lib/dockerLiveStopCrashGate.mjs
+          node --check scripts/docker-live-stop-crash-worker.mjs
+          node --check scripts/docker-host-live-stop-crash-drill.mjs
+      - name: Execute offline negative policy checks only
+        run: node --test tests/docker-live-stop-crash-gate.test.mjs
