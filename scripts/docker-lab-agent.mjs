@@ -144,7 +144,7 @@ async function main(){
   // A crash or duplicate claim MUST NOT execute a previously reserved claim again.
   // Retain the exclusive lock even if creating/fsyncing a claim journal fails
   // midway: O_EXCL may have created an incomplete file before throwing.
-  retainRecoveryLock=true; // Protect against partial lock/journal fsync failures.
+  retainRecoveryLock=true; // Never auto-unlock after partial lock/journal fsync failures.
   try{
     // Atomically own the exact Docker container BEFORE reserving its claim or
     // making any mutating Docker call. Different agent IDs cannot overlap on
