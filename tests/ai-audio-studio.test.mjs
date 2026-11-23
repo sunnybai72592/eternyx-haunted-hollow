@@ -16,7 +16,7 @@ test("Audio Studio has an authenticated lazy route and the AI Arsenal link", () 
   assert.ok(app.includes('const AIAudioStudio = lazy(() => import("./pages/AIAudioStudio"));'));
   assert.ok(app.includes('path="/ai-arsenal/audio" element={<RequireAuth><AIAudioStudio /></RequireAuth>}'));
   assert.ok(hub.includes('"/ai-arsenal/audio"'));
-  assert.ok(hub.includes("Local workspace ready · AI disabled"));
+  assert.ok(hub.includes("real opt-in microphone dictation"));
 });
 
 test("local audio validator accepts supported media formats within a browser-only boundary", () => {
@@ -100,9 +100,17 @@ test("copy success is based on clipboard receipt, with accessible failure states
   assert.ok(page.includes('aria-live="polite"'));
 });
 
-test("Audio Studio does not submit to providers, reserve credits, or present artificial AI results", () => {
+test("uploaded audio stays local, while separate mic dictation and opt-in chat are accurately described", () => {
   assert.doesNotMatch(page + helperSource, /supabase\.functions\.invoke|ai-generation-job-enqueue|fetch\(/);
-  assert.match(page, /AI transcription and provider speech generation are not configured or enabled/);
+  assert.match(page, /Uploaded audio files remain local and are not automatically transcribed/);
+  assert.match(page, /browser vendor's service/);
+  assert.match(page, /new SpeechSynthesisUtterance/);
   assert.match(page, /Browser preview only · no AI audio generated/);
   assert.match(page, /Planned · not enabled/);
+  assert.match(page, /useAIStudioChat/);
+  assert.match(page, /aiSummary\.run\("ai\.audio\.summarize", prompt\)/);
+  assert.match(page, /recognition\.start\(\)/);
+  assert.match(page, /recognition\.stop\(\)/);
+  assert.match(page, /recognition\.abort\(\)/);
+  assert.match(page, /readDictationSnapshot\(event\.results\)/);
 });
