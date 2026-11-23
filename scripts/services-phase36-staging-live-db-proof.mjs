@@ -14,6 +14,7 @@ import {validateOperatorQuery} from './services-pg17-catalog-verdict-regressions
 import {verifyServicesStagingEvidence,SERVICES_CATALOG_CHECKS} from './services-staging-release-evidence.mjs';
 import {reconcileServicesHistory} from './services-phase35-managed-history-reconciler.mjs';
 import {auditorPrivilegeSelect,validateAuditorPrivilegeResult} from './services-phase37-auditor-privileges.mjs';
+import {exposedRoutineSql,verifyRoutineExposure} from './services-phase38-executable-definer-guard.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const PRODUCTION='wcncuarekaofmfurbtbh';
@@ -71,7 +72,7 @@ export function buildAuditSql(schemaSql,verdictSql){
   '\\set ON_ERROR_STOP on',
   'BEGIN TRANSACTION READ ONLY;',
   "SET LOCAL statement_timeout = '12000ms';",
-  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges) i;",
+  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges, (SELECT row_to_json(s) FROM ("+exposedRoutineSql()+") s) AS routine_surface) i;",
   'SELECT row_to_json(h)::text FROM (',
   " SELECT COALESCE(json_agg(json_build_object('version',version::text,'name',COALESCE(name,'')) ORDER BY version), '[]'::json) AS managed_migrations",
   ' FROM supabase_migrations.schema_migrations',
@@ -97,6 +98,9 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
  let privilegeProof;
  try{privilegeProof=validateAuditorPrivilegeResult(identity.auditor_privileges)}
  catch{fail('auditor_privileges_not_verified')}
+ let surface;
+ try{surface=verifyRoutineExposure(identity.routine_surface)}
+ catch{fail('dangerous_callable_routines_detected')}
  const skew=Math.abs(now.getTime()-Date.parse(identity.server_time));
  if(!Number.isFinite(skew)||skew>5*60*1000)fail('database_clock_invalid');
  if(!Array.isArray(history.managed_migrations)||history.managed_migrations.length===0)
@@ -132,6 +136,8 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
    accepted:true,
    connectionRoleLeastPrivilegeVerified:true,
    auditorPrivilegeChecksPassed:privilegeProof.checksPassed,
+   callableRoutineCatalogChecksPassed:surface.checksPassed,
+   dangerousExecutableRoutineSurfaceDenied:true,
    securityDefinerFunctionEffectsProven:false,
    sqlTransactionReadOnly:true,
    remoteHistoryByNameObserved:true,
