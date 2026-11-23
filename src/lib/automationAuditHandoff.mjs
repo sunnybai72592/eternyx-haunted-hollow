@@ -53,17 +53,40 @@ export function verifiedHandoffAssessment(raw){
       (p.latestHandoffId===null)!==(p.latestHandoffAt===null)){
       throw Error("Inconsistent stored handoff package metadata.");
     }
-    const ready=p.sourceSnapshotCurrent&&p.evidenceExists&&raw.caseConsistent&&
-      p.incidentRevision===raw.incidentRevision&&
-      p.latestReviewId!==null&&
+    // Readiness must be supported by actual source/review state. A positive
+    // decision without its required acknowledgments may still be rejected by
+    // the SQL function, so never infer readiness solely from the label.
+    const sourceReady=p.sourceSnapshotCurrent&&p.evidenceExists&&raw.caseConsistent&&
+      p.incidentRevision===raw.incidentRevision;
+    const reviewReady=sourceReady&&p.latestReviewId!==null&&
       p.latestReviewDecision==="reviewed_for_manual_release_checklist";
-    if(p.eligibleForManualHandoff!==ready||
-      p.manualHandoffCurrent&&(!ready||
-        p.latestHandoffReviewId!==p.latestReviewId)){
-      throw Error("Handoff status is not supported by the latest review.");
+    if(p.eligibleForManualHandoff&&!reviewReady||
+      p.manualHandoffCurrent&&(!p.eligibleForManualHandoff||
+        p.latestHandoffId===null||
+        p.latestHandoffReviewId!==p.latestReviewId||
+        p.incidentRevision!==raw.incidentRevision)){
+      throw Error("Handoff status is not supported by its persisted review and receipt.");
     }
-    if(p.freshnessReason==="current_owner_review"&&!ready) {
-      throw Error("Misleading current owner review signal.");
+    // Match the database's ordered CASE expression rather than accepting
+    // arbitrary "green" labels with otherwise contradictory data.
+    const reason=!p.evidenceExists?"evidence_missing":
+      !raw.caseConsistent?"source_ledger_inconsistent":
+      !sourceReady?"source_changed":
+      p.latestReviewId===null?"no_manual_review":
+      p.latestReviewDecision==="needs_attention"?"latest_review_needs_attention":
+      !p.eligibleForManualHandoff?"review_limitations_missing":
+      "current_owner_review";
+    if(p.freshnessReason!==reason||
+      p.sourceSnapshotCurrent&&(!raw.caseConsistent||
+        p.incidentRevision!==raw.incidentRevision)||
+      Date.parse(p.capturedAt)>Date.parse(raw.generatedAt)||
+      p.latestReviewAt!==null&&(
+        Date.parse(p.latestReviewAt)<Date.parse(p.capturedAt)||
+        Date.parse(p.latestReviewAt)>Date.parse(raw.generatedAt))||
+      p.latestHandoffAt!==null&&(
+        Date.parse(p.latestHandoffAt)<Date.parse(p.capturedAt)||
+        Date.parse(p.latestHandoffAt)>Date.parse(raw.generatedAt))){
+      throw Error("Handoff reason or chronology contradicts stored source records.");
     }
     if(i>0&&Date.parse(p.capturedAt)>Date.parse(raw.packages[i-1].capturedAt)){
       throw Error("Audit packages are not in descending creation order.");
@@ -123,7 +146,8 @@ export function verifiedHandoffHistory(raw,expectedPackageId){
       r.acknowledged_ci_unverified!==true||
       r.acknowledged_deployment_unverified!==true||
       r.acknowledged_worker_unverified!==true||
-      i>0&&r.sequence>=raw.rows[i-1].sequence){
+      i>0&&(r.sequence>=raw.rows[i-1].sequence||
+        Date.parse(r.created_at)>Date.parse(raw.rows[i-1].created_at))){
       throw Error("Invalid immutable handoff receipt.");
     }
     return {id:r.id,reviewId:r.review_id,sequence:r.sequence,
@@ -178,4 +202,36 @@ export function handoffHistoryExport(input,packageId){
     ownerAttestationOnly:true,releaseVerified:false,
     externalExecutionTriggered:false,
   },null,2);
+}
+
+/**
+ * One last authenticated read must agree with the owner's previously
+ * inspected package BEFORE asking them to confirm a new receipt. The SQL
+ * write then repeats the source/review checks atomically under its row lock.
+ * No network access, deployment claim, or workflow execution happens here.
+ */
+export function verifyHandoffPreflight(previousRaw,currentRaw,packageId){
+  if(typeof packageId!=="string"||!uuid.test(packageId)){
+    throw Error("Select a genuine owner audit package.");
+  }
+  const previous=verifiedHandoffAssessment(previousRaw);
+  const current=verifiedHandoffAssessment(currentRaw);
+  const earlier=previous.packages.find(p=>p.packageId===packageId);
+  const latest=current.packages.find(p=>p.packageId===packageId);
+  if(previous.incidentId!==current.incidentId||
+    Date.parse(current.generatedAt)<Date.parse(previous.generatedAt)||
+    !earlier||!latest||!previous.caseConsistent||!current.caseConsistent||
+    !earlier.eligibleForManualHandoff||!latest.eligibleForManualHandoff||
+    earlier.manualHandoffCurrent||latest.manualHandoffCurrent||
+    earlier.latestReviewId!==latest.latestReviewId||
+    earlier.latestReviewDecision!==latest.latestReviewDecision||
+    earlier.latestHandoffId!==latest.latestHandoffId||
+    earlier.incidentRevision!==current.incidentRevision||
+    previous.incidentRevision!==current.incidentRevision||
+    earlier.evidenceId!==latest.evidenceId||
+    earlier.capturedAt!==latest.capturedAt||
+    !latest.sourceSnapshotCurrent){
+    throw Error("Owner audit source, latest review or receipt changed. Inspect the refreshed assessment and reconfirm.");
+  }
+  return current;
 }
