@@ -19,6 +19,7 @@ import {verifySignedOperatorEvidence} from
   "./firecracker-operator-evidence.mjs";
 import {assertNoUnfinishedHandoff} from
   "./firecracker-handoff-import-journal.mjs";
+import {readPrivateOfflineEvidence} from "./firecracker-private-safe-read.mjs";
 import {auditOperatorEvidenceConsistency} from
   "./firecracker-evidence-consistency.mjs";
 import {
@@ -260,23 +261,9 @@ async function trustedDir(dir,owner){
     throw Error("Offline reviewer directory must be private and owner-controlled");
 }
 async function safeRead(file,owner,max,kind="artifact"){
-  const info=await lstat(file);
-  if(!info.isFile()||info.uid!==owner||info.nlink!==1||
-     (info.mode&0o077)!==0||info.size<1||info.size>max)
-    throw Error("Unsafe offline review "+kind+" file");
-  const handle=await open(file,constants.O_RDONLY|constants.O_NOFOLLOW);
-  try{
-    const before=await handle.stat();
-    if(before.dev!==info.dev||before.ino!==info.ino||before.size!==info.size)
-      throw Error("Offline review file changed while opening");
-    const raw=await handle.readFile();
-    const after=await handle.stat();
-    if(after.dev!==before.dev||after.ino!==before.ino||
-       after.size!==before.size||after.mtimeMs!==before.mtimeMs||
-       after.ctimeMs!==before.ctimeMs||raw.length!==before.size)
-      throw Error("Offline review file changed while reading");
-    return raw;
-  }finally{await handle.close();}
+  return readPrivateOfflineEvidence({
+    path:file,owner,maxBytes:max,allowMissing:false,
+  });
 }
 async function loadCase(sessionId,{caseBase=REVIEW_CASE_BASE,owner=0}={}){
   const folder=sessionCasePath(sessionId,caseBase);
