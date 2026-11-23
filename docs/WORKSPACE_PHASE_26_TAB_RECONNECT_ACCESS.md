@@ -22,13 +22,16 @@ repopulate a newly selected team if their responses arrive out of order.
 - A team selection is always made from the latest server-visible list;
   revoked teams cannot survive as stale local selected IDs.
 - A detail panel is displayed only for a **verified owner + team selection**
-  and is immediately hidden on team switching or browser tab hiding.\n  The team-name selection list is also suppressed until fresh server membership\n  queries finish, avoiding flashes of stale revoked team names.
+  and is immediately hidden on team switching or browser tab hiding.
+  The team-name selection list is also suppressed until fresh server membership
+  queries finish, avoiding flashes of stale revoked team names.
 - Tab visibility, returning browser focus, and one-minute foreground checks
   schedule real session and membership revalidation. Cached details are
   quarantined during the recheck. No Realtime delivery is counted from a
   mere subscriber's `SUBSCRIBED` status.
-- Each refresh increments a request generation, preventing outdated
-  earlier responses from committing after account/selection changes.
+- Separate team-list and team-detail request generations prevent outdated
+  responses from committing after account/selection changes without letting
+  one React effect cancel the other's initial fetch.
 - Temporary network failures do **not** prove revocation; they fail closed
   and hide data while allowing manual Retry/Refresh.
 - Deterministic pure function tests cover stale team selection, lost access,
