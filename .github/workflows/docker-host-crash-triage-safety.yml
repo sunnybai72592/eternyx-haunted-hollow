@@ -1,0 +1,35 @@
+name: Docker real-host crash triage policy (OFFLINE CI)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-host-crash-triage-safety.yml'
+      - 'scripts/docker-host-crash-triage.mjs'
+      - 'src/lib/dockerHostReadOnlyAcceptance.mjs'
+      - 'src/lib/dockerHostCrashRoute.mjs'
+      - 'tests/docker-host-crash-triage.test.mjs'
+      - 'docs/DOCKER_HOST_CRASH_TRIAGE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crash-triage-offline-policy:
+    name: Refusal, durable journal and no-Docker-mutation regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test real CLI policy through synthetic Docker transport only
+        run: |
+          node --test tests/docker-host-crash-triage.test.mjs
+          node --test tests/docker-host-readonly-acceptance.test.mjs
+      - name: Static syntax checks (no real Docker or journal mutations)
+        run: |
+          node --check scripts/docker-host-crash-triage.mjs
+          node --check src/lib/dockerHostReadOnlyAcceptance.mjs
+          node --check src/lib/dockerHostCrashRoute.mjs
