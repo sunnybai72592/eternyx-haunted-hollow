@@ -95,7 +95,7 @@ test("16 wrong UUID arguments cause immediate denial",()=>{
 });
 test("17 null or unexpected response structures cannot establish success",()=>{
  for(const value of [null,undefined,[],true,0,"submitted"])
-  assert.throws(()=>verify(value),/could not be verified/);
+  assert.throws(()=>verifyEducationOwnedSubmission(value,attemptId,ownerId,testId),/could not be verified/);
 });
 test("18 unexpected statuses are never treated as verified completion",()=>{
  for(const status of ["graded","pending","expired","failed","in_progress ","success",null]){
