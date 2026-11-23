@@ -54,7 +54,7 @@ BEGIN
  IF p_user_id IS NULL OR p_incident_id IS NULL OR p_evidence_id IS NULL THEN
   RETURN NULL;
  END IF;
- SELECT id,evidence_kind,captured_at INTO e
+ SELECT * INTO e
  FROM public.automation_incident_evidence
  WHERE user_id=p_user_id AND incident_id=p_incident_id AND id=p_evidence_id;
  IF NOT FOUND THEN RETURN NULL; END IF;
