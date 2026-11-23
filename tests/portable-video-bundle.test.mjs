@@ -32,7 +32,7 @@ function fixtureDir(){
 }
 function toolsReady(){
   return ["python3","ffmpeg","ffprobe"].every(cmd=>
-    spawnSync(cmd,["-version"],{encoding:"utf8",timeout:12000}).status===0);
+    spawnSync(cmd,[cmd==="python3"?"--version":"-version"],{encoding:"utf8",timeout:12000}).status===0);
 }
 function extractedZip(zipPath,dest){
   const script=[
