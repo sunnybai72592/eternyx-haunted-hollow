@@ -27,7 +27,7 @@ This milestone closes a genuine trust gap: previously the browser relied on any 
 
 The browser cannot decide the actual exam grade, pass/fail, option correctness, deadline extension, enrollment, or verified student identity. Those belong to the existing **server-side** RLS and approved atomic CBT RPCs. This frontend enhancement does not replace the backend responsibility to verify that saved option IDs belong to the submitted question/attempt.
 
-A changed exam option is **not automatically overwritten**: the student must deliberately select another. Historical/other questions' options are not fetched in bulk, so current-question validation is intentionally incremental rather than a claim of whole-exam option consistency.
+We do not automatically overwrite a saved choice when an exam option changes: the student must deliberately select another. Historical/other questions' options are not fetched in bulk, so current-question validation is intentionally incremental rather than a claim of whole-exam option consistency.
 
 The new `educationExamResponseIntegrity.mjs` helper is deterministic, local-only, does not store personal data on disk, and never contacts a third-party model or API. **61 new tests** verify valid and broken question metadata, answer-key allowlisting, duplicate/invalid option handling, restored-answer scope, lost option warnings, safe review projections, answer builder constraints, real UI wiring and TypeScript JSX parsing. Existing full CI tests, build, desktop/mobile browser acceptance and GitGuardian must pass before merging.
 
