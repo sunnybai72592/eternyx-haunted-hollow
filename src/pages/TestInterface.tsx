@@ -252,6 +252,21 @@ export default function TestInterface() {
     return verifyEducationOwnedSubmission(data,attemptId,ownerId,expectedTestId);
   }, []);
 
+  // Reconcile only the exact existing attempt after a verified owner-scoped
+  // read. This restores an original clock if the initial start_time was
+  // corrupted in query state, without calling start_cbt_attempt again.
+  const recordVerifiedAttempt = useCallback((
+    receipt: { id:string;status:string;startedAt:string },
+    ownerId:string,assessmentId:string,
+  ) => {
+    queryClient.setQueryData<Attempt>(
+      ["education-active-exam-attempt",ownerId,assessmentId],
+      existing => existing?.id===receipt.id
+        ? {...existing,status:receipt.status,start_time:receipt.startedAt}
+        : existing,
+    );
+  },[queryClient]);
+
   const checkSubmissionStatus = useCallback(async () => {
     if(statusCheckRef.current || submittingRef.current || !user?.id ||
        !attemptQuery.data?.id || !validExamId(testId))return;
@@ -262,6 +277,7 @@ export default function TestInterface() {
     try{
       const receipt=await readOwnedSubmissionStatus(attemptQuery.data.id,user.id,testId!);
       if(generation!==submissionGenerationRef.current)return;
+      recordVerifiedAttempt(receipt,user.id,testId!);
       if(receipt.confirmed){
         setSubmissionUncertain(false);
         void queryClient.invalidateQueries({queryKey:["education-owned-attempt-list",user.id]});
@@ -271,7 +287,8 @@ export default function TestInterface() {
         navigate("/test-results/"+receipt.id,{replace:true});
       }else{
         setSubmissionUncertain(true);
-        setNotice(educationSubmissionRecoveryMessage(receipt,deadline));
+        setNotice(educationSubmissionRecoveryMessage(
+          receipt,examDeadline(receipt.startedAt,testQuery.data?.duration_minutes)));
       }
     }catch{
       if(generation===submissionGenerationRef.current){
@@ -284,7 +301,8 @@ export default function TestInterface() {
         setStatusCheckBusy(false);
       }
     }
-  },[attemptQuery.data?.id,user?.id,testId,deadline,readOwnedSubmissionStatus,queryClient,navigate]);
+  },[attemptQuery.data?.id,user?.id,testId,testQuery.data?.duration_minutes,
+    readOwnedSubmissionStatus,recordVerifiedAttempt,queryClient,navigate]);
   const submitExam = useCallback(async (dueToExpiry: boolean) => {
     if (submittingRef.current || statusCheckRef.current || !attemptQuery.data ||
         !testQuery.data || !user || !validExamId(testId)) return;
@@ -363,13 +381,15 @@ export default function TestInterface() {
       try{
         const receipt=await readOwnedSubmissionStatus(attemptQuery.data.id,user.id,testId!);
         if(generation!==submissionGenerationRef.current)return;
+        recordVerifiedAttempt(receipt,user.id,testId!);
         if(receipt.confirmed){
           setSubmissionUncertain(false);
           void queryClient.invalidateQueries({queryKey:["education-owned-attempt-list",user.id]});
           toast.success("Server confirms your assessment submission.");
           navigate("/test-results/"+receipt.id,{replace:true});
         }else{
-          setNotice(educationSubmissionRecoveryMessage(receipt,deadline));
+          setNotice(educationSubmissionRecoveryMessage(
+            receipt,examDeadline(receipt.startedAt,testQuery.data?.duration_minutes)));
         }
       }catch{
         if(generation===submissionGenerationRef.current)
@@ -382,7 +402,8 @@ export default function TestInterface() {
       }
     }
   }, [attemptQuery.data, testQuery.data, user, testId, deadline, answers, navigate,
-    flushPendingAnswers, readOwnedSubmissionStatus, queryClient, restoredAnswersQuery.isSuccess]);
+    flushPendingAnswers, readOwnedSubmissionStatus, recordVerifiedAttempt,
+    queryClient, restoredAnswersQuery.isSuccess]);
   submitRef.current = submitExam;
 
   // A resumed attempt may already be submitted. Do not show editable
