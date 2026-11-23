@@ -74,7 +74,7 @@ test('Phase 14 journal must preserve participant RLS, all six source families an
   const [p13,p14]=await loadSources();
   const mutations=[
     [ /security_invoker = true/, 'security_invoker = false', 'phase14_invoker_journal' ],
-    [ /FROM public\.service_brief_amendments a/, 'FROM public.missing_amendments a', 'phase14_missing_source_service_brief_amendments' ],
+    [ /FROM public\.service_brief_amendments a/, 'FROM public.missing_amendments a', 'phase14_amendment_branches_incomplete' ],
     [ /GRANT SELECT ON public\.service_request_journal TO authenticated;/, 'GRANT SELECT ON public.service_request_journal TO anon;', 'phase14_authenticated_select' ],
   ];
   for(const [find,replace,expected] of mutations){
