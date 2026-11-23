@@ -45,7 +45,7 @@ export function evaluateCatalogOutput(raw){
   throw new Error("Catalog response does not contain all required check rows.");
  const seen=new Map();
  for(const line of lines){
-  const match=/^([a-z][a-z0-9:-]+)\|(pass|fail)$/.exec(line);
+  const match=/^([a-z][a-z0-9_:-]+)\|(pass|fail)$/.exec(line);
   if(!match)throw new Error("Invalid catalog check row.");
   if(seen.has(match[1]))throw new Error("Duplicate catalog check.");
   seen.set(match[1],match[2]);
