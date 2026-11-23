@@ -1,8 +1,10 @@
-import { useId, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useId, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import DeveloperCommandCenter from "@/components/developer/DeveloperCommandCenter";
+import { developerUtilityTab } from "@/lib/developerStudioCatalog.mjs";
 import WorkspaceCaptureLink from "@/components/workspace/WorkspaceCaptureLink";
 import {
-  Activity, ArrowLeft, Braces, Boxes, Copy, FileCode2, Fingerprint, KeyRound, Gauge,
+  ArrowLeft, Braces, Copy, FileCode2, Fingerprint, KeyRound,
   Link2, RefreshCw, ShieldAlert, Sparkles, WandSparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,21 @@ const FeedbackLine = ({ feedback }: { feedback: Feedback }) => feedback ? (
 ) : null;
 
 export default function DeveloperStudio() {
+  const [params, setParams] = useSearchParams();
+  const utilityQuery = params.get("tool");
+  const selectedUtilityTab = developerUtilityTab(utilityQuery);
+  const setUtilityTab = (tab: string) => {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("tool", tab);
+      return next;
+    }, { replace: true });
+  };
+  useEffect(() => {
+    if (!utilityQuery) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("developer-utilities")?.scrollIntoView({ block: "start", behavior: "auto" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [utilityQuery]);
   const [jsonInput, setJsonInput] = useState('{"name":"ETERNYX","status":"building","tools":[]}');
   const [jsonOutput, setJsonOutput] = useState("");
   const [jsonFeedback, setJsonFeedback] = useState<Feedback>(null);
@@ -131,7 +148,7 @@ export default function DeveloperStudio() {
             </div>
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Developer <span className="text-cyan-300">Studio</span></h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-              A practical workbench for everyday development tasks. These utilities run locally in your browser; your input is not sent to an ETERNYX server.
+              Local developer utilities, browser HTTP testing, public GitHub intelligence, and specialist review workbenches—all with explicit execution boundaries.
             </p>
             <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-400">
               {["JSON", "Base64 · UTF-8", "URL encoding", "UUID v4", "JWT decoding"].map((item) => (
@@ -150,93 +167,15 @@ export default function DeveloperStudio() {
           <Button asChild className="shrink-0"><Link to="/labs">Open Labs <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
         </section>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">Workbench</p>
-            <h2 className="mt-1 text-2xl font-bold">Choose a utility</h2>
-          </div>
-          <p className="text-xs text-slate-500">Client-side processing · No account required for these utilities</p>
+        <DeveloperCommandCenter />
+
+        <div id="developer-utilities" className="space-y-1 scroll-mt-24">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Local essentials</p>
+          <h2 className="text-2xl font-bold">Everyday browser utilities</h2>
+          <p className="text-sm text-slate-400">Input stays in your browser. Select a utility below or use the catalog's deep links.</p>
         </div>
 
-        <Card className="border-cyan-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Boxes className="h-5 w-5 text-cyan-300" /> Container & Infrastructure Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Analyze Dockerfiles, Compose services, and Kubernetes manifests for common security and readiness issues.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/container-infrastructure" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open infrastructure workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-violet-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Boxes className="h-5 w-5 text-violet-300" /> Infrastructure as Code Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Review Terraform, Ansible, and Helm configurations for common security and deployment risks.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/infrastructure-as-code" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open IaC workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-cyan-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-cyan-300" /> Observability Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Review Prometheus scrape jobs, alert rules, and Grafana dashboard exports for reliability gaps.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/observability" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open observability workbench ↗</Link></CardContent>
-        </Card>
-        <Card className="border-emerald-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Gauge className="h-5 w-5 text-emerald-300" /> SRE Reliability Workbench</CardTitle>
-            <CardDescription className="text-slate-400">Calculate SLOs and error budgets, and generate incident postmortems and operational runbooks.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/sre-reliability" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">Open SRE workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-rose-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-rose-300" /> CI/CD Pipeline Security Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Review GitHub Actions workflows for risky permissions, unpinned actions, pull-request attack paths, and secret exposure.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/cicd-security" className="text-sm font-medium text-rose-300 hover:text-rose-200">Open pipeline security workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-fuchsia-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Boxes className="h-5 w-5 text-fuchsia-300" /> Software Supply Chain Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Inventory npm dependencies, generate CycloneDX SBOMs, and review lockfile drift, dependency sources, and install-time script risks.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/supply-chain" className="text-sm font-medium text-fuchsia-300 hover:text-fuchsia-200">Open supply chain workbench ↗</Link></CardContent>
-        </Card>
-        <Card className="border-cyan-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Fingerprint className="h-5 w-5 text-cyan-300" /> Artifact Provenance & Release Trust</CardTitle>
-            <CardDescription className="text-slate-400">Review release assets, SHA-256 digests, in-toto/SLSA-style provenance statements, and CycloneDX or SPDX SBOM structure.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/artifact-provenance" className="text-sm font-medium text-cyan-300 hover:text-cyan-200">Open release trust workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-emerald-500/20 bg-slate-900/60 text-white">
-          <CardHeader><CardTitle className="flex items-center gap-2"><FileCode2 className="h-5 w-5 text-emerald-300" /> Database & SQL Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Review SQL scripts and PostgreSQL migrations for destructive operations, unsafe updates, privilege risks, and query-quality issues.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/database-sql" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">Open database workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-sky-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-sky-300" /> Supabase & PostgreSQL RLS Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Review Row-Level Security coverage, policy scope, permissive predicates, and anonymous or public grants.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/rls-security" className="text-sm font-medium text-sky-300 hover:text-sky-200">Open RLS security workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-rose-500/20 bg-slate-900/60 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-rose-300" /> API Security & Threat Intelligence</CardTitle>
-            <CardDescription className="text-slate-400">Review OpenAPI security requirements, JWT validation settings, CORS, HTTP security headers, rate limits, and authorization design with prioritized findings.</CardDescription>
-          </CardHeader>
-          <CardContent><Link to="/developer-studio/api-security" className="text-sm font-medium text-rose-300 hover:text-rose-200">Open API security workbench ↗</Link></CardContent>
-        </Card>
-
-        <Card className="border-violet-500/20 bg-slate-900/60 text-white"><CardHeader><CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-violet-300"/> Web Application Security Review</CardTitle><CardDescription className="text-slate-400">Review response headers, CSP, cookie flags, CSRF/session settings, and security.txt with prioritized defensive guidance.</CardDescription></CardHeader><CardContent><Link to="/cybersecurity/web-security" className="text-sm font-medium text-violet-300 hover:text-violet-200">Open Cybersecurity Hub security review ↗</Link></CardContent></Card>
-        <Tabs defaultValue="json" className="w-full">
+        <Tabs value={selectedUtilityTab} onValueChange={setUtilityTab} className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-slate-900 p-1 sm:grid-cols-5">
             <TabsTrigger value="json" className="gap-2 py-2"><Braces className="h-4 w-4" /><span>JSON</span></TabsTrigger>
             <TabsTrigger value="base64" className="gap-2 py-2"><FileCode2 className="h-4 w-4" /><span>Base64</span></TabsTrigger>
@@ -349,74 +288,10 @@ export default function DeveloperStudio() {
 
         {copyFeedback && <p role="status" aria-live="polite" className="text-center text-sm text-emerald-300">{copyFeedback}</p>}
 
-        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Level up your workflow</p><h2 className="mt-1 text-xl font-semibold text-white">Explore Advanced Developer Tools</h2><p className="mt-1 text-sm text-slate-400">Markdown preview, JSON-to-CSV, HTML entities, timestamps, and line-by-line diff.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/advanced">Open advanced workbench <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">API engineering</p><h2 className="mt-1 text-xl font-semibold text-white">API Engineering Workbench</h2><p className="mt-1 text-sm text-slate-400">Compose HTTP requests, inspect responses, measure latency, and export cURL commands.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/api-workbench">Open API workbench <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Git · GitHub · Cloud deployment</p><h2 className="mt-1 text-xl font-semibold text-white">DevOps Launchpad</h2><p className="mt-1 text-sm text-slate-400">Build Git workflows, generate .gitignore files, and preflight Vercel or Netlify configuration.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/devops">Open DevOps Launchpad <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Vercel · Netlify · Cloud engineering</p><h2 className="mt-1 text-xl font-semibold text-white">Deployment Intelligence</h2><p className="mt-1 text-sm text-slate-400">Audit project readiness, compare environment-variable names, and diagnose common deployment build failures.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/deployment-intelligence">Open Deployment Intelligence <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-violet-400/20 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">Live GitHub intelligence</p><h2 className="mt-1 text-xl font-semibold text-white">GitHub Integration Hub</h2><p className="mt-1 text-sm text-slate-400">Inspect public repository details, branches, recent commits, and Actions activity with live GitHub data.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-hub">Open GitHub Hub <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-violet-400/20 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">GitHub collaboration</p><h2 className="mt-1 text-xl font-semibold text-white">Pull Requests & Issues Center</h2><p className="mt-1 text-sm text-slate-400">Review public repository queues, filter issues and pull requests, and inspect labels, authors, assignees, and activity.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-collaboration">Open Collaboration Center <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-violet-400/20 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">GitHub change intelligence</p><h2 className="mt-1 text-xl font-semibold text-white">Branch & Commit Comparison</h2><p className="mt-1 text-sm text-slate-400">Compare public branches, inspect commits, review changed files, and measure additions and deletions.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-changes">Open Change Intelligence <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-950/40 to-violet-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">CI/CD intelligence</p><h2 className="mt-1 text-xl font-semibold text-white">GitHub Actions Intelligence</h2><p className="mt-1 text-sm text-slate-400">Monitor workflow runs, filter failures and branches, and inspect job and step outcomes with live GitHub data.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-actions">Open Actions Intelligence <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
-
-        <section className="rounded-2xl border border-violet-400/20 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">Release engineering</p><h2 className="mt-1 text-xl font-semibold text-white">GitHub Release Intelligence</h2><p className="mt-1 text-sm text-slate-400">Explore releases, inspect notes and downloadable assets, track tags, and compare versions across public repositories.</p></div>
-            <Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/developer-studio/github-releases">Open Release Intelligence <WandSparkles className="ml-2 h-4 w-4" /></Link></Button>
-          </div>
-        </section>
-
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
           <h2 className="font-semibold">Privacy & security</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Browser-based utilities process pasted input locally. No tool in this workbench sends your text, manifests, lockfiles, or tokens to an ETERNYX backend. JWT decoding only reads the token's first two segments and does not validate its signature or claims. Avoid pasting production secrets into shared or public devices.
+            The five essential utilities above process pasted input locally. Catalog entries clearly distinguish local analysis from live public GitHub data and browser HTTP requests. JWT decoding does not verify signatures or token validity. Avoid pasting production secrets into shared or public devices.
           </p>
         </section>
       </div>
