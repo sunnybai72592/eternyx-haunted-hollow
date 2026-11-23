@@ -62,6 +62,8 @@ jobs:
         run: |
           node --test tests/automation-staging-db-readonly.test.mjs
           bash -n scripts/automation-staging-db-readonly.sh
+      - name: Verify three core Automation function sources and JWT modes (no remote deployment)
+        run: node scripts/automation-staging-core-release.mjs --check-source > "$RUNNER_TEMP/eternyx-core-staging-manifest.json"
       - name: Check utility JavaScript syntax
         run: |
           node --check src/lib/developerStudioUtils.mjs
