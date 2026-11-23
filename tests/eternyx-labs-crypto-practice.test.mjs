@@ -27,12 +27,12 @@ const known=[
  ["pbkdf2-bytes","32"],
 ];
 
-test("25 tracks and 75 distinct locally graded scenarios preserve the previous sixty",()=>{
- assert.equal(PRACTICE_TRACKS.length,25);
- assert.equal(PRACTICE_CASES.length,75);
- assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,75);
- assert.deepEqual(PRACTICE_TRACKS.slice(20).map(c=>c.id),tracks);
- assert.deepEqual(PRACTICE_CASES.slice(60).map(c=>c.id),newIds);
+test("30 tracks and 90 distinct locally graded scenarios preserve the previous sixty",()=>{
+ assert.equal(PRACTICE_TRACKS.length,30);
+ assert.equal(PRACTICE_CASES.length,90);
+ assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,90);
+ assert.deepEqual(PRACTICE_TRACKS.slice(20,25).map(c=>c.id),tracks);
+ assert.deepEqual(PRACTICE_CASES.slice(60,75).map(c=>c.id),newIds);
  for(const track of PRACTICE_TRACKS)assert.equal(PRACTICE_CASES.filter(c=>c.track===track.id).length,3);
  for(const id of newIds){
   const c=getPracticeCase(id);
@@ -93,9 +93,9 @@ test("Web Crypto is required, malformed answers fail closed, and no synchronous 
   ["csv-formulas","1; DROP TABLE"],
  ])await assert.rejects(gradePracticeAnswerAsync(id,answer,webcrypto),undefined,id);
 });
-test("in-memory progress recognizes 75 real IDs but creates no server-verified score",()=>{
+test("in-memory progress recognizes 90 real IDs but creates no server-verified score",()=>{
  const empty=summarizePracticeProgress();
- assert.deepEqual([empty.total,empty.passed,empty.byTrack.length],[75,0,25]);
+ assert.deepEqual([empty.total,empty.passed,empty.byTrack.length],[90,0,30]);
  const mixed=summarizePracticeProgress(["pbkdf2-vector","pbkdf2-vector","aes-tamper","totp-leading-zero","csv-formulas"]);
  assert.equal(mixed.passed,4);
  assert.equal(mixed.byTrack.find(t=>t.id==="pbkdf2").passed,1);
@@ -104,7 +104,7 @@ test("in-memory progress recognizes 75 real IDs but creates no server-verified s
  assert.equal(mixed.authenticated,false);
  assert.equal(mixed.certificateAwarded,false);
  assert.equal(summarizePracticeProgress(new Set(newIds)).passed,15);
- assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(c=>c.id))).passed,75);
+ assert.equal(summarizePracticeProgress(new Set(PRACTICE_CASES.map(c=>c.id))).passed,90);
  assert.throws(()=>summarizePracticeProgress(["forged-result"]));
 });
 test("UI supports leading-zero OTP, async stale-result fences and keeps everything browser-only",async()=>{
@@ -114,7 +114,7 @@ test("UI supports leading-zero OTP, async stale-result fences and keeps everythi
   readFile(new URL("../src/lib/eternyxLabsPractice.mjs",import.meta.url),"utf8"),
   readFile(new URL("../src/lib/eternyxLabsCryptoPractice.mjs",import.meta.url),"utf8"),
  ]);
- assert.match(page,/Practice 75 answer-checked challenges/);
+ assert.match(page,/Practice 90 answer-checked challenges/);
  assert.match(ui,/active.kind==="otp8"/);
  assert.match(ui,/active.kind==="otp6"/);
  assert.match(ui,/gradePracticeAnswerAsync\(caseId,submittedAnswer\)/);

@@ -9,13 +9,13 @@ import {
   checkCidrMembershipLocally,inspectHstsLocally,inspectDmarcLocally,
 } from "../src/lib/eternyxLabsIdentity.mjs";
 
-test("thirty-five unique functional Labs workstations include five new identity and defense utilities",()=>{
+test("forty unique functional Labs workstations include five new identity and defense utilities",()=>{
   const ids=labCatalog.map(x=>x.id);
-  assert.equal(ids.length,35);
-  assert.equal(new Set(ids).size,35);
-  assert.equal(new Set(labCatalog.map(x=>x.title)).size,35);
+  assert.equal(ids.length,40);
+  assert.equal(new Set(ids).size,40);
+  assert.equal(new Set(labCatalog.map(x=>x.title)).size,40);
   assert.deepEqual(ids.slice(25,30),["pkce","hmac","cidrcheck","hsts","dmarc"]);
-  assert.deepEqual(ids.slice(-5),["pbkdf2","aesgcm","totp","origins","csvsafe"]);
+  assert.deepEqual(ids.slice(30,35),["pbkdf2","aesgcm","totp","origins","csvsafe"]);
 });
 test("PKCE S256 exactly matches the known RFC 7636 challenge vector",async()=>{
   const verifier="dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
@@ -181,8 +181,8 @@ test("all five new workstations are wired to responsive UI with no host or stora
     readFile(new URL("../src/lib/eternyxLabsIdentity.mjs",import.meta.url),"utf8"),
   ]);
   assert.match(page,/BrowserIdentityDefense selected=\{selected\}/);
-  assert.match(page,/35 working exercises/);
-  assert.match(page,/Search 35 workstations/);
+  assert.match(page,/40 working exercises/);
+  assert.match(page,/Search 40 workstations/);
   for(const id of ["pkce","hmac","cidrcheck","hsts","dmarc"])
     assert.ok(ui.includes('selected==="'+id+'"'),id);
   assert.match(ui,/role="alert"/);

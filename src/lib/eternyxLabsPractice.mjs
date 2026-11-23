@@ -1,5 +1,5 @@
 /**
- * ETERNYX Labs practice: 75 real, browser-only challenges (15 crypto-checked asynchronously).
+ * ETERNYX Labs practice: 90 real, browser-only challenges (27 crypto-checked asynchronously).
  * Exercises derive answer keys from the same pure calculation utilities as
  * the learner's workstations. Nothing is saved, uploaded or server-graded.
  * Client-side grading is NOT exam security, accreditation or trusted progress.
@@ -24,6 +24,10 @@ import {
   CRYPTO_PRACTICE_TRACKS,CRYPTO_PRACTICE_DEFINITIONS,
   answerForCryptoPractice,answerForDataPractice,
 } from "./eternyxLabsCryptoPractice.mjs";
+import {
+  ADVANCED_DATA_TRACKS,ADVANCED_DATA_DEFINITIONS,
+  answerForStructuredPractice,answerForAdvancedCryptoPractice,
+} from "./eternyxLabsAdvancedDataPractice.mjs";
 
 export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"subnet",title:"IPv4 subnetting",description:"Calculate address ranges and hosts."}),
@@ -47,6 +51,7 @@ export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"hsts",title:"HTTPS transport policy",description:"Reason about HSTS max-age and subdomain requirements."}),
   Object.freeze({id:"dmarc",title:"DMARC mail defense",description:"Count policy fields and warning signals without contacting DNS."}),
   ...CRYPTO_PRACTICE_TRACKS,
+  ...ADVANCED_DATA_TRACKS,
 ]);
 const definitions=[
   ["subnet-network","subnet","Network address · /24",
@@ -407,6 +412,7 @@ const definitions=[
     "Count the comma-separated mailto report endpoints without displaying them in results.",
     "The analysis exposes only the number of report destinations and does not contact any address."],
   ...CRYPTO_PRACTICE_DEFINITIONS,
+  ...ADVANCED_DATA_DEFINITIONS,
 ];
 export const PRACTICE_CASES=Object.freeze(definitions.map((
   [id,track,title,prompt,scenario,kind,config,hint,explanation]
@@ -492,11 +498,16 @@ function answerFor(challenge){
     }
     case "origins":
     case "csvsafe":return answerForDataPractice(challenge);
+    case "jsonmask":return answerForStructuredPractice(challenge);
     case "pkce":
     case "hmac":
     case "pbkdf2":
     case "aesgcm":
-    case "totp":throw Error("Cryptographic challenges require asynchronous Web Crypto grading.");
+    case "totp":
+    case "hkdf":
+    case "ecdsa":
+    case "aesaad":
+    case "jsonhash":throw Error("Cryptographic challenges require asynchronous Web Crypto grading.");
     default:throw Error("Unsupported practice grading track.");
   }
 }
@@ -571,12 +582,14 @@ export function gradePracticeAnswer(id,answer){
 /** Async wrapper preserves all prior synchronous answer contracts. */
 export async function gradePracticeAnswerAsync(id,answer,cryptoApi=globalThis.crypto){
   const challenge=getPracticeCase(id);
-  if(!["pkce","hmac","pbkdf2","aesgcm","totp"].includes(challenge.track))
+  if(!["pkce","hmac","pbkdf2","aesgcm","totp","hkdf","ecdsa","aesaad","jsonhash"].includes(challenge.track))
     return gradePracticeAnswer(id,answer);
   const normalized=normalize(answer,challenge.kind);
   const c=challenge.config;
   let expected;
-  if(["pbkdf2","aesgcm","totp"].includes(challenge.track)){
+  if(["hkdf","ecdsa","aesaad","jsonhash"].includes(challenge.track)){
+    expected=await answerForAdvancedCryptoPractice(challenge,cryptoApi);
+  }else if(["pbkdf2","aesgcm","totp"].includes(challenge.track)){
     expected=await answerForCryptoPractice(challenge,cryptoApi);
   }else if(challenge.track==="pkce"){
     const result=await derivePkceChallengeLocally(c.verifier,cryptoApi);
