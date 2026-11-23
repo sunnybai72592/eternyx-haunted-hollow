@@ -140,6 +140,16 @@ const destinations: Destination[] = [
     limitation: "This route checks for reviewed database tables and fails closed when unavailable. Production migration has not been deployed or verified.",
   },
   {
+    name: "Cybersecurity release readiness",
+    description: "Review a real two-account staging isolation report and the remaining migration and production release blockers.",
+    href: "/cybersecurity/release-readiness",
+    icon: ShieldCheck,
+    category: "Security governance",
+    kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "Imported JSON is not independently attested; production remains blocked until staging acceptance, migration review, rollback, and named sign-off.",
+  },
+  {
     name: "Private evidence handoff and offline verification",
     description: "Create a redacted checksum-protected evidence handoff, verify packet consistency and compare independently supplied evidence files locally.",
     href: "/cybersecurity/evidence-handoff",
