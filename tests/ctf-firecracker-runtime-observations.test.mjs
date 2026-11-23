@@ -149,7 +149,7 @@ test("wrong UUID, unit, digest or extra sidecar metadata never passes",()=>{
 test("every host, teardown, guest and watchdog flag is checked exactly",()=>{
   for(const mode of ["guest-and-watchdog"]){
     for(const [kind,expectations] of Object.entries(observationValues)){
-      const file="runtime-"+kind+".json";
+      const file=kind==="expiry"?"runtime-timeout.json":"runtime-"+kind+".json";
       for(const [field,wanted] of Object.entries(expectations)){
         const f=fixture(mode);
         mutate(f,file,x=>{
