@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
 import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mjs";
+import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails } from "@/lib/workspaceTeamAccess.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -45,15 +46,20 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [taskFilter,setTaskFilter]=useState("all");
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
+  const [verifiedSpaceId,setVerifiedSpaceId]=useState<string|null>(null);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(false);
   const ownerRef=useRef(owner);
   const epoch=useRef(0);
+  const resumeInFlight=useRef(false);
   ownerRef.current=owner;
   const selected=spaces.find(s=>s.id===selectedId)??null;
-  const currentRole=members.find(m=>m.user_id===owner)?.role??null;
+  // Cached data from a former team/owner must never authorize rendering.
+  const currentRole=verifiedSpaceId===selectedId && !disabled
+    ? members.find(m=>m.user_id===owner&&m.space_id===selectedId)?.role??null
+    : null;
   const editor=teamCanEdit(currentRole,selected?.status);
   const canInvite=teamCanInvite(currentRole,selected?.status);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
@@ -69,18 +75,34 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       throw new Error("Your signed-in Workspace account changed. Refresh before changing team data.");
     }
   };
+  const quarantineTeam=()=>{
+    setVerifiedSpaceId(null);
+    setMembers([]);setTasks([]);setEvents([]);setInvites([]);
+    setRevealedToken(null);setDiscussionTaskId(null);
+    setDraft(freshDraft());setLiveRevision(0);
+  };
   const loadSpaces=async(expectedOwner:string,token:number,prefer?:string|null)=>{
     const {data,error:queryError}=await supabase.from("workspace_team_spaces")
       .select("*").order("created_at",{ascending:false}).limit(150);
     if(queryError)throw new Error(queryError.message);
     if(ownerRef.current!==expectedOwner || epoch.current!==token)return;
     const rows=(data??[]) as Space[];
+    const chosen=chooseWorkspaceTeam(rows,selectedId,prefer);
+    if(!rows.some(space=>space.id===selectedId)) {
+      // Revocation or leave: drop all cached personal/team detail immediately.
+      quarantineTeam();
+      if(selectedId)setNotice("This team is no longer available to your account. Local team details were cleared.");
+    }
     setSpaces(rows);
-    setSelectedId(current=>prefer && rows.some(s=>s.id===prefer)?prefer:
-      current && rows.some(s=>s.id===current)?current:rows[0]?.id??null);
+    setSelectedId(chosen);
+    return chosen;
   };
-  const loadDetails=async(id:string,expectedOwner:string,token:number)=>{
-    const target=spaces.find(space=>space.id===id);
+  const loadDetails=async(id:string,expectedOwner:string,token:number,available:Space[]=spaces)=>{
+    const target=available.find(space=>space.id===id);
+    if(!target) {
+      if(epoch.current===token){quarantineTeam();setSelectedId(null);}
+      return;
+    }
     const isOwner=target?.owner_id===expectedOwner;
     const [m,t,e,i]=await Promise.all([
       supabase.from("workspace_team_members").select("*")
@@ -95,16 +117,34 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     ]);
     if(m.error||t.error||e.error||i.error)throw new Error(
       m.error?.message??t.error?.message??e.error?.message??i.error?.message??"Team query failed");
+    // Protect against a user switch while the four queries were in flight.
+    await assureOwner(expectedOwner);
     if(ownerRef.current!==expectedOwner || epoch.current!==token)return;
+    try {
+      verifyWorkspaceTeamDetails({
+        space:target,owner:expectedOwner,spaceId:id,
+        members:m.data??[],tasks:t.data??[],events:e.data??[],
+        invites:i.data??[],
+      });
+    }catch{
+      // A revoked membership is not an empty team. Quarantine old data.
+      quarantineTeam();
+      setSpaces(previous=>previous.filter(space=>space.id!==id));
+      setSelectedId(current=>current===id?null:current);
+      setNotice("Access to this team could not be verified; cached details were cleared.");
+      return;
+    }
     setMembers((m.data??[]) as Member[]);
     setTasks((t.data??[]) as Task[]);
     setEvents((e.data??[]) as Event[]);
     setInvites((i.data??[]) as Invite[]);
+    setVerifiedSpaceId(id);
   };
   useEffect(()=>{
     const token=++epoch.current;
     setSpaces([]);setSelectedId(null);setMembers([]);setTasks([]);
     setEvents([]);setInvites([]);setRevealedToken(null);
+    setVerifiedSpaceId(null);
     setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     setLoading(true);
@@ -123,6 +163,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   useEffect(()=>{
     const token=++epoch.current;
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
+    setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
     setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
     if(!selectedId)return;
@@ -132,7 +173,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         await assureOwner(owner);
         await loadDetails(selectedId,owner,token);
       }catch(failure){
-        if(epoch.current===token && ownerRef.current===owner)setError(errorMessage(failure));
+        if(epoch.current===token && ownerRef.current===owner){
+          quarantineTeam();
+          setError(errorMessage(failure));
+        }
       }finally{
         if(epoch.current===token && ownerRef.current===owner)setLoading(false);
       }
@@ -141,15 +185,50 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   },[owner,selectedId]);
 
   const refresh=async(target?:string|null)=>{
-    const token=epoch.current;
+    // Every refresh is its own generation. Slower stale responses cannot
+    // repopulate data after a newer refresh or account/selection change.
+    const token=++epoch.current;
     await assureOwner(owner);
-    await loadSpaces(owner,token,target??selectedId);
-    if(target??selectedId) {
-      // When opening a newly created space, allow the selectedId effect to load
-      // its data after React commits the new selection.
-      if(!target||target===selectedId)await loadDetails(selectedId!,owner,token);
+    const chosen=await loadSpaces(owner,token,target??selectedId);
+    if(chosen && chosen===selectedId) {
+      // A new selection gets its own guarded detail effect.
+      await loadDetails(chosen,owner,token);
     }
   };
+  useEffect(()=>{
+    let alive=true;
+    let debounce:ReturnType<typeof setTimeout>|null=null;
+    const resume=()=>{
+      if(!alive||disabled)return;
+      if(document.visibilityState==="hidden"){
+        epoch.current++;
+        quarantineTeam();
+        return;
+      }
+      if(document.visibilityState!=="visible"||resumeInFlight.current)return;
+      if(debounce)clearTimeout(debounce);
+      debounce=setTimeout(()=>{
+        if(!alive||resumeInFlight.current)return;
+        resumeInFlight.current=true;
+        // Hide previously cached team data until current membership is checked.
+        quarantineTeam();
+        void refresh().catch(failure=>{
+          quarantineTeam();
+          setError(errorMessage(failure));
+        }).finally(()=>{resumeInFlight.current=false;});
+      },250);
+    };
+    document.addEventListener("visibilitychange",resume);
+    window.addEventListener("focus",resume);
+    const poll=window.setInterval(resume,60000);
+    return ()=>{
+      alive=false;
+      if(debounce)clearTimeout(debounce);
+      window.clearInterval(poll);
+      document.removeEventListener("visibilitychange",resume);
+      window.removeEventListener("focus",resume);
+    };
+  },[owner,selectedId,disabled]);
   const run=async(action:()=>Promise<void>,success:string)=>{
     if(disabled||busy)return;
     setBusy(true);setError("");setNotice("");
@@ -318,7 +397,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     <div className="flex flex-wrap items-center gap-2" aria-label="Select team space">
       {spaces.map(space=><Button type="button" key={space.id} size="sm"
         variant={space.id===selectedId?"default":"outline"} disabled={busy||disabled}
-        onClick={()=>setSelectedId(space.id)}>
+        onClick={()=>{quarantineTeam();setSelectedId(space.id);}}>
         <FolderKanban className="mr-1 h-3.5 w-3.5"/>
         {space.name}{space.status==="archived"?" (archived)":""}
       </Button>)}
