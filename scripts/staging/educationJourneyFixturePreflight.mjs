@@ -13,9 +13,12 @@ import {validateEducationHostedReviewConfig} from "./educationHostedReviewConfig
 import {validateEducationTrustedFinalizerConfig} from "./educationTrustedFinalizerConfig.mjs";
 
 export const FIXTURE_CHECKS=Object.freeze([
-  "published_approved_exam","reviewer_is_owned_verified_teacher",
+  "published_approved_exam","exam_not_password_locked","exam_has_safe_test_window",
+  "reviewer_is_owned_verified_teacher","reviewer_has_one_unambiguous_grant",
+  "instructor_queue_has_spare_capacity",
   "exactly_two_exam_questions","exactly_one_mcq_question",
   "exactly_one_written_question","all_question_points_valid",
+  "mcq_has_one_correct_option","mcq_choices_have_valid_labels",
   "selected_mcq_option_belongs_to_question","expected_max_matches_questions",
   "awarded_written_points_valid","expected_grade_matches_fixed_choice_and_review",
   "student_a_is_enrolled","student_b_is_not_enrolled",
