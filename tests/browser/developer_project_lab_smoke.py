@@ -19,6 +19,88 @@ REPORT = Path("test-results/developer-project-browser-acceptance.json")
 PROJECT_KEY = "eternyx:developer-projects:v1"
 RECOVERY_KEY = "eternyx:developer-recovery:v1"
 API_KEY = "eternyx:developer-project-api-suites:v1"
+RELEASE_OBSERVATIONS = []
+RUNTIME_ERRORS = []
+ASSET_FAILURES = []
+NETWORK_AUDIT = {"blocked_external_requests": 0, "blocked_write_attempts": 0}
+
+def on_runtime_error(error):
+    # Record categories only; exception messages may contain user/source data.
+    value = str(error)
+    if len(RUNTIME_ERRORS) >= 16:
+        return
+    if "ChunkLoadError" in value or "Failed to fetch dynamically imported module" in value:
+        kind = "module-load-error"
+    elif "Missing Supabase frontend configuration" in value:
+        kind = "missing-frontend-config"
+    elif "is not defined" in value:
+        kind = "javascript-reference-error"
+    elif "Cannot read properties" in value or "Cannot set properties" in value:
+        kind = "javascript-type-error"
+    else:
+        kind = "other-js-error"
+    RUNTIME_ERRORS.append(kind)
+
+def on_asset_response(response):
+    uri = urlsplit(response.url)
+    resource = response.request.resource_type
+    if (len(ASSET_FAILURES) < 16 and uri.scheme == urlsplit(ORIGIN).scheme and
+            uri.netloc == urlsplit(ORIGIN).netloc and
+            resource in ("document", "script") and response.status >= 400):
+        ASSET_FAILURES.append({"resource_type": resource, "status": response.status})
+
+def observe_hosted_release(page, viewport, phase, require_current):
+    # Real GET to the exact same-origin public manifest. No credentials,
+    # redirects or body snippets are added to CI artifacts.
+    page.goto(ORIGIN + "/", wait_until="domcontentloaded")
+    observed = page.evaluate("""async () => {
+      const value = {
+        stamp: null,
+        html_id: document.querySelector('meta[name="eternyx-build-id"]')?.content ?? null,
+        client_id: document.documentElement.getAttribute("data-eternyx-build-id")
+      };
+      try {
+        const response = await fetch("/release-info.json", {
+          method: "GET", credentials: "omit", cache: "no-store", redirect: "error"
+        });
+        if (!response.ok || !(response.headers.get("content-type") || "").includes("application/json")) return value;
+        const text = await response.text();
+        if (text.length > 4096) return value;
+        value.stamp = JSON.parse(text);
+      } catch { /* A missing/untrusted manifest cannot establish provenance. */ }
+      return value;
+    }""")
+    stamp = observed.get("stamp") if isinstance(observed, dict) else None
+    expected = os.getenv("GITHUB_SHA", "").lower()
+    source_sha, build_id, status = None, None, "unavailable"
+    html_matches = client_matches = matches_checkout = False
+    if isinstance(stamp, dict):
+        ident = stamp.get("build_id")
+        reported_sha = stamp.get("source_sha")
+        sha_origin = stamp.get("source_sha_origin")
+        if (stamp.get("schema") == 1 and stamp.get("project") == "eternyx" and
+                stamp.get("production_verified") is False and
+                isinstance(ident, str) and re.fullmatch(r"[a-f0-9]{32}", ident) and
+                sha_origin in ("git-checkout", "unavailable") and
+                ((reported_sha is None and sha_origin == "unavailable") or
+                 (isinstance(reported_sha, str) and re.fullmatch(r"[a-f0-9]{40}", reported_sha) and
+                  sha_origin == "git-checkout"))):
+            build_id = ident
+            source_sha = reported_sha
+            html_matches = observed.get("html_id") == ident
+            client_matches = observed.get("client_id") == ident
+            matches_checkout = bool(source_sha and re.fullmatch(r"[a-f0-9]{40}", expected) and source_sha == expected)
+            status = ("source-matched" if matches_checkout else "build-matched") if (
+                html_matches and client_matches) else "inconsistent"
+    RELEASE_OBSERVATIONS.append({
+        "viewport": viewport, "phase": phase, "status": status,
+        "build_id": build_id, "source_sha": source_sha,
+        "html_matches": html_matches, "client_matches": client_matches,
+        "matches_checkout": matches_checkout,
+    })
+    if require_current and status != "source-matched":
+        raise AssertionError("Staging release identity is unknown, stale or mismatched; workflows were not accepted.")
+
 
 def target_origin(args):
     parsed = urlsplit(args.base_url)
@@ -249,12 +331,19 @@ if __name__ == "__main__":
                     def external(route):
                         url=urlsplit(route.request.url)
                         if url.scheme != urlsplit(ORIGIN).scheme or url.netloc != urlsplit(ORIGIN).netloc:
+                            NETWORK_AUDIT["blocked_external_requests"] += 1
+                            return route.abort()
+                        if args.staging and route.request.method not in ("GET", "HEAD"):
+                            NETWORK_AUDIT["blocked_write_attempts"] += 1
                             return route.abort()
                         return route.continue_()
                     context.route("**/*",external)
                     page=context.new_page()
                     page.on("dialog",lambda dialog: dialog.accept())
+                    page.on("pageerror", on_runtime_error)
+                    page.on("response", on_asset_response)
                     try:
+                        observe_hosted_release(page, viewport, "before", args.staging)
                         execute("create-save-reload-reopen",lambda: create_save_reopen(page),viewport)
                         execute("editor-search-format-replace-restore",lambda: editing_and_diagnostics(page),viewport)
                         execute("js-preflight-source-free-report",lambda: actual_preflight(page),viewport)
@@ -262,6 +351,7 @@ if __name__ == "__main__":
                         execute("checksum-recovery-and-tamper",lambda: recovery_and_tamper(page),viewport)
                         execute("project-linked-api-suite",lambda: api_project_link(page,args.staging),viewport)
                         execute("unsafe-import-rejected",lambda: malformed_import_rejected(page),viewport)
+                        observe_hosted_release(page, viewport, "after", args.staging)
                     finally:
                         context.close()
             finally:
@@ -276,6 +366,10 @@ if __name__ == "__main__":
             "browser":"Chrome",
             "target_host":urlsplit(ORIGIN).hostname,
             "network_scope":"same-origin only",
+            "release_observations":RELEASE_OBSERVATIONS,
+            "runtime_errors":RUNTIME_ERRORS,
+            "asset_failures":ASSET_FAILURES,
+            "network_audit":NETWORK_AUDIT,
             "api_requests_executed":not bool(args.staging),
             "finished_at":datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
             "commit":os.getenv("GITHUB_SHA","local-unknown"),
