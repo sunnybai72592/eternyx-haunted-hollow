@@ -12,6 +12,7 @@ import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
+import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 
 type RequestRow = {
   id: string; service_key: string; title: string; description: string;
@@ -45,6 +46,14 @@ export default function MyServiceRequests() {
   const [activeSearch, setActiveSearch] = useState('');
   const [updatesOnly, setUpdatesOnly] = useState(false);
   const [answersOnly, setAnswersOnly] = useState(false);
+  const [pendingReviewsOnly, setPendingReviewsOnly] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'request_updated'>('newest');
+  const pulseGeneration = useRef(0);
+  const [pulseOwner, setPulseOwner] = useState<string | null>(null);
+  const [pulseLoading, setPulseLoading] = useState(false);
+  const [pulseCounts, setPulseCounts] = useState<{
+    all: number | null; newActivity: number | null; answers: number | null; pendingReviews: number | null;
+  }>({ all: null, newActivity: null, answers: null, pendingReviews: null });
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [linkedRequest, setLinkedRequest] = useState<RequestRow | null>(null);
@@ -56,6 +65,40 @@ export default function MyServiceRequests() {
   const [openClarifications, setOpenClarifications] = useState<string | null>(null);
   const [openAmendments, setOpenAmendments] = useState<string | null>(null);
   const [openJournal, setOpenJournal] = useState<string | null>(null);
+  const loadPulse = useCallback(async () => {
+    const seq = ++pulseGeneration.current;
+    if (!userId) {
+      setPulseOwner(null);
+      setPulseLoading(false);
+      setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
+      return;
+    }
+    setPulseLoading(true);
+    const queries = [
+      supabase.from('service_customer_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).eq('user_id', userId),
+      supabase.from('service_customer_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).eq('user_id', userId)
+        .eq('has_updates_since_check_complete', true),
+      supabase.from('service_customer_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).eq('user_id', userId)
+        .gt('awaiting_customer_count', 0),
+      supabase.from('service_customer_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).eq('user_id', userId)
+        .gt('pending_amendment_count', 0),
+    ];
+    const results = await Promise.all(queries);
+    if (seq !== pulseGeneration.current || useAuthStore.getState().user?.id !== userId) return;
+    setPulseCounts({
+      all: results[0].error ? null : results[0].count,
+      newActivity: results[1].error ? null : results[1].count,
+      answers: results[2].error ? null : results[2].count,
+      pendingReviews: results[3].error ? null : results[3].count,
+    });
+    setPulseOwner(userId);
+    setPulseLoading(false);
+  }, [userId]);
+
   const load = useCallback(async () => {
     if (!userId) return;
     const generation = ++requestGeneration.current;
@@ -67,12 +110,17 @@ export default function MyServiceRequests() {
     if (filter !== 'all') query = query.eq('status', filter);
     if (updatesOnly) query = query.eq('has_updates_since_check_complete', true);
     if (answersOnly) query = query.gt('awaiting_customer_count', 0);
+    if (pendingReviewsOnly) query = query.gt('pending_amendment_count', 0);
     if (activeSearch) {
       const escaped = activeSearch.replace(/[%_]/g, (char) => String.fromCharCode(92) + char);
       query = query.ilike('title', '%' + escaped + '%');
     }
-    const { data, error, count } = await query.order('created_at', { ascending: false })
-      .order('id', { ascending: false })
+    const sorted = sortOrder === 'oldest'
+      ? query.order('created_at', { ascending: true })
+      : sortOrder === 'request_updated'
+        ? query.order('updated_at', { ascending: false }).order('created_at', { ascending: false })
+        : query.order('created_at', { ascending: false });
+    const { data, error, count } = await sorted.order('id', { ascending: false })
       .range(page * 20, (page + 1) * 20 - 1);
     if (generation !== requestGeneration.current) return;
     if (error) {
@@ -88,7 +136,7 @@ export default function MyServiceRequests() {
       setTotal(size);
     }
     setLoading(false);
-  }, [userId, page, filter, activeSearch, updatesOnly, answersOnly]);
+  }, [userId, page, filter, activeSearch, updatesOnly, answersOnly, pendingReviewsOnly, sortOrder]);
 
   useEffect(() => {
     requestGeneration.current += 1;
@@ -101,6 +149,8 @@ export default function MyServiceRequests() {
     setActiveSearch('');
     setUpdatesOnly(false);
     setAnswersOnly(false);
+    setPendingReviewsOnly(false);
+    setSortOrder('newest');
     setCheckingId(null);
     setOpenConversation(null);
     setOpenScope(null);
@@ -119,6 +169,17 @@ export default function MyServiceRequests() {
     void load();
     return () => { requestGeneration.current += 1; };
   }, [load]);
+
+  useEffect(() => {
+    if (userId) void loadPulse();
+    else {
+      pulseGeneration.current++;
+      setPulseOwner(null);
+      setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
+      setPulseLoading(false);
+    }
+    return () => { pulseGeneration.current++; };
+  }, [userId, loadPulse]);
   useEffect(() => {
     const selected = new URLSearchParams(location.search).get('request');
     setLinkedRequest(null);
@@ -134,7 +195,7 @@ export default function MyServiceRequests() {
     let active = true;
     setLinkedLoading(true);
     void (async () => {
-      const { data, error } = await supabase.from('service_customer_followup_queue')
+      const { data, error } = await supabase.from('service_customer_amendment_queue')
         .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete')
         .eq('user_id', userId)
         .eq('id', selected)
@@ -164,6 +225,7 @@ export default function MyServiceRequests() {
       setNotice('Your check-in was recorded. This records a manual action, not a read receipt.');
       setLinkedRequest((current) => current?.id === id ? { ...current, last_checked_at: data, has_updates_since_check: false, has_updates_since_check_extended: false, has_updates_since_check_complete: false, clarification_changes_since_check: 0 } : current);
       void load();
+      void loadPulse();
     } catch (reason) {
       console.error('Customer service check-in failed', reason);
       if (useAuthStore.getState().user?.id === userId) setNotice('Could not record your check-in. Verify your connection and account, then retry.');
@@ -212,6 +274,19 @@ export default function MyServiceRequests() {
     setNotice('Export prepared on this device. Keep this copy private.');
   };
 
+  const choosePulse = (kind: 'all' | 'newActivity' | 'answers' | 'pendingReviews') => {
+    setFilter('all');
+    setSearch('');
+    setActiveSearch('');
+    setUpdatesOnly(kind === 'newActivity');
+    setAnswersOnly(kind === 'answers');
+    setPendingReviewsOnly(kind === 'pendingReviews');
+    setSortOrder('newest');
+    setPage(0);
+  };
+
+  const visiblePulse = pulseOwner === userId ? pulseCounts :
+    { all: null, newActivity: null, answers: null, pendingReviews: null };
   const visibleRows = rowsOwner === userId && userId ? rows : [];
   const visibleLinkedRequest = linkedOwner === userId && userId ? linkedRequest : null;
 
@@ -220,8 +295,20 @@ export default function MyServiceRequests() {
       <Button variant="ghost" asChild className="mb-5"><Link to="/services-hub"><ArrowLeft className="mr-2 h-4 w-4" />Services</Link></Button>
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Private service desk</p><h1 className="mt-2 text-3xl font-bold sm:text-4xl">My service requests</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Only your account and authorized administrators can read your briefs. Statuses reflect actual administrator updates.</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); void loadPulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
       </header>
+      {userId && <ServiceActionPulse
+        heading="My service action center"
+        description="Exact counts of your requests. Choose a card to clear other search filters and focus on one real type of work."
+        refreshing={pulseLoading}
+        onRefresh={() => void loadPulse()}
+        items={[
+          { id: 'all', label: 'All my requests', count: visiblePulse.all, description: 'Submitted service requests', active: !updatesOnly && !answersOnly && !pendingReviewsOnly && filter === 'all' && !activeSearch, onSelect: () => choosePulse('all') },
+          { id: 'new-activity', label: 'Activity since my check', count: visiblePulse.newActivity, description: 'Requests with saved updates', active: updatesOnly && !answersOnly && !pendingReviewsOnly, onSelect: () => choosePulse('newActivity') },
+          { id: 'answers', label: 'Questions to answer', count: visiblePulse.answers, description: 'Requests awaiting your answer', active: answersOnly && !updatesOnly && !pendingReviewsOnly, onSelect: () => choosePulse('answers') },
+          { id: 'reviews', label: 'Brief changes pending', count: visiblePulse.pendingReviews, description: 'Requests awaiting team review', active: pendingReviewsOnly && !updatesOnly && !answersOnly, onSelect: () => choosePulse('pendingReviews') },
+        ]}
+      />}
       <form className="mb-6 flex flex-wrap items-end gap-3" onSubmit={(event) => {
         event.preventDefault();
         if (search.trim().length > 80) { setNotice('Search term must be 80 characters or fewer.'); return; }
@@ -241,6 +328,16 @@ export default function MyServiceRequests() {
         </div>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={updatesOnly} onChange={(event) => { setPage(0); setUpdatesOnly(event.target.checked); }} />Activity since my check</label>
         <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={answersOnly} onChange={(event) => { setPage(0); setAnswersOnly(event.target.checked); }} />Questions awaiting my answer</label>
+        <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={pendingReviewsOnly} onChange={(event) => { setPage(0); setPendingReviewsOnly(event.target.checked); }} />Brief changes pending review</label>
+        <div>
+          <label htmlFor="owner-service-sort" className="mb-1 block text-xs font-medium">Order</label>
+          <select id="owner-service-sort" value={sortOrder} onChange={(event) => { setPage(0); setSortOrder(event.target.value as typeof sortOrder); }}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="newest">Newest submitted first</option>
+            <option value="oldest">Oldest submitted first</option>
+            <option value="request_updated">Recently edited request records</option>
+          </select>
+        </div>
         <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
         <span className="text-xs text-muted-foreground">{visibleRows.length} of {total} matching requests</span>
       </form>
@@ -265,14 +362,14 @@ export default function MyServiceRequests() {
           </div>
           <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />
           <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />
-          <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />
+          <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); void loadPulse(); }} />
           <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />
           <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />
         </Card>
       )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The service desk may require its database migration to be deployed. No results are being simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
-        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
+        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
         : <div className="space-y-4">{visibleRows.map((item) => {
           const status = serviceRequestStatuses[item.status] ?? serviceRequestStatuses.submitted;
           return <Card key={item.id} className="border-border/70 p-5 sm:p-7">
