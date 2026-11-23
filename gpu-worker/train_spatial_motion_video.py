@@ -334,15 +334,15 @@ def warp(frame,shifts,strength):
                 (shifts[y1*TILES_X+x0],(1-wx)*wy),
                 (shifts[y1*TILES_X+x1],wx*wy),
             ]
-            dx=sum(vector[0][0]*w for vector,w in vectors)*strength/100
-            dy=sum(vector[0][1]*w for vector,w in vectors)*strength/100
+            dx=sum(vector[0]*w for vector,w in vectors)*strength/100
+            dy=sum(vector[1]*w for vector,w in vectors)*strength/100
             xx=max(0,min(v2.W-1,round(x-dx)))
             yy=max(0,min(v2.H-1,round(y-dy)))
             out[y*v2.W+x]=frame[yy*v2.W+xx]
     return bytes(out)
 
 
-def sample_frames(base,tag_adapter,motion,tag,seconds,seed,
+def sample_frames(base,tag_adapter,motion,tag,seconds=1,seed=42,
                   strength=85,stability=45,variation=6):
     if tag not in tag_adapter["tags"] or tag not in motion["tags"]:
         raise ValueError("Sampling requires an actually trained motion and color tag")
