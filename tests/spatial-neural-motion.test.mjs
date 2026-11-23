@@ -99,9 +99,10 @@ test("motion-training report rejects fake tags, missing source hashes and invent
     r=>{r.metrics.cool.source_count=2;},
     r=>{r.epochs=5;},r=>{r.seed=-1;},r=>{r.training_seconds=-1;},
   ];
-  for(const edit of mutations){
+  for(const [index,edit] of mutations.entries()){
     const bad=structuredClone(training);edit(bad);
-    assert.throws(()=>readSpatialMotionTraining(JSON.stringify(bad)));
+    assert.throws(()=>readSpatialMotionTraining(JSON.stringify(bad)),
+      undefined,"Invalid motion training fixture #"+index+" must be rejected");
   }
   for(const raw of ["{","[]",null," ".repeat(SPATIAL_MOTION_LIMITS.reportBytes+1)]){
     assert.throws(()=>readSpatialMotionTraining(raw));
