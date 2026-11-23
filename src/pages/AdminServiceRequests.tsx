@@ -14,6 +14,7 @@ import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
+import { runServiceCountBudget } from '@/lib/serviceCountBudget';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
@@ -70,6 +71,8 @@ export default function AdminServiceRequests() {
   const [reviewBucket, setReviewBucket] = useState<'all' | ServiceReviewBucket>('all');
   const [actionFilter, setActionFilter] = useState<'all' | ServiceNextAction>('all');
   const countGeneration = useRef(0);
+  const sharedCountAbortRef = useRef<AbortController | null>(null);
+  const [reviewCountLoading, setReviewCountLoading] = useState(false);
   const [queueCounts, setQueueCounts] = useState<Record<ServiceReviewBucket, number | null>>({
     unscheduled: null, overdue: null, due_today: null, upcoming: null,
   });
@@ -205,74 +208,113 @@ export default function AdminServiceRequests() {
 
   const loadQueueCounts = useCallback(async () => {
     if (!authorized || !user?.id) return;
+    const actor = user.id;
     const seq = ++countGeneration.current;
+    actionCountGeneration.current++;
+    sharedCountAbortRef.current?.abort();
+    setActionCountLoading(false);
+    const controller = new AbortController();
+    sharedCountAbortRef.current = controller;
+    setReviewCountLoading(true);
     const buckets: ServiceReviewBucket[] = ['overdue', 'due_today', 'upcoming', 'unscheduled'];
-    const data = await Promise.all(buckets.map((bucket) =>
+    const probes = buckets.map((bucket) => (signal: AbortSignal) =>
       supabase.from('service_admin_review_queue')
-        .select('id', { head: true, count: 'exact' }).eq('review_bucket', bucket)
-    ));
-    if (seq !== countGeneration.current) return;
-    setQueueCounts({
-      overdue: data[0].error ? null : data[0].count,
-      due_today: data[1].error ? null : data[1].count,
-      upcoming: data[2].error ? null : data[2].count,
-      unscheduled: data[3].error ? null : data[3].count,
-    });
+        .select('id', { head: true, count: 'exact' })
+        .eq('review_bucket', bucket).abortSignal(signal)
+    );
+    try {
+      const { counts } = await runServiceCountBudget(
+        probes,
+        () => seq === countGeneration.current && useAuthStore.getState().user?.id === actor,
+        controller.signal,
+      );
+      if (seq !== countGeneration.current || useAuthStore.getState().user?.id !== actor) return;
+      setQueueCounts({
+        overdue: counts[0], due_today: counts[1], upcoming: counts[2], unscheduled: counts[3],
+      });
+    } finally {
+      if (seq === countGeneration.current && useAuthStore.getState().user?.id === actor) {
+        sharedCountAbortRef.current = null;
+        setReviewCountLoading(false);
+      }
+    }
   }, [authorized, user?.id]);
 
   const loadActionCounts = useCallback(async () => {
+    if (!authorized || !user?.id) return;
+    const actor = user.id;
     const seq = ++actionCountGeneration.current;
-    if (!authorized || !user?.id) {
-      setActionCountOwner(null);
-      setActionCountLoading(false);
-      setActionCounts({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
-      return;
-    }
+    countGeneration.current++;
+    sharedCountAbortRef.current?.abort();
+    setReviewCountLoading(false);
+    const controller = new AbortController();
+    sharedCountAbortRef.current = controller;
     setActionCountLoading(true);
     const queries = [
-      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' }),
-      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
-        .eq('needs_follow_up_complete', true),
-      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
-        .gt('pending_amendment_count', 0),
-      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
-        .gt('awaiting_admin_review_count', 0),
-      supabase.from('service_admin_amendment_queue').select('id', { head: true, count: 'exact' })
-        .is('assigned_admin_id', null),
+      (signal: AbortSignal) => supabase.from('service_admin_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_admin_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).eq('needs_follow_up_complete', true).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_admin_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).gt('pending_amendment_count', 0).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_admin_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).gt('awaiting_admin_review_count', 0).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_admin_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).is('assigned_admin_id', null).abortSignal(signal),
     ];
-    const results = await Promise.all(queries);
-    if (seq !== actionCountGeneration.current || useAuthStore.getState().user?.id !== user.id) return;
-    setActionCounts({
-      all: results[0].error ? null : results[0].count,
-      followUp: results[1].error ? null : results[1].count,
-      amendments: results[2].error ? null : results[2].count,
-      clarifications: results[3].error ? null : results[3].count,
-      unassigned: results[4].error ? null : results[4].count,
-    });
-    setActionCountOwner(user.id);
-    setActionCountLoading(false);
+    try {
+      const { counts } = await runServiceCountBudget(
+        queries,
+        () => seq === actionCountGeneration.current && useAuthStore.getState().user?.id === actor,
+        controller.signal,
+      );
+      if (seq !== actionCountGeneration.current || useAuthStore.getState().user?.id !== actor) return;
+      setActionCounts({
+        all: counts[0], followUp: counts[1], amendments: counts[2],
+        clarifications: counts[3], unassigned: counts[4],
+      });
+      setActionCountOwner(actor);
+    } finally {
+      if (seq === actionCountGeneration.current && useAuthStore.getState().user?.id === actor) {
+        sharedCountAbortRef.current = null;
+        setActionCountLoading(false);
+      }
+    }
   }, [authorized, user?.id]);
+
+  const invalidateCountCards = () => {
+    // A saved request may change every summary bucket. Show unknown
+    // counts until the operator explicitly refreshes them again.
+    countGeneration.current++;
+    actionCountGeneration.current++;
+    sharedCountAbortRef.current?.abort();
+    sharedCountAbortRef.current = null;
+    setReviewCountLoading(false);
+    setActionCountLoading(false);
+    setActionCountOwner(null);
+    setQueueCounts({ unscheduled: null, overdue: null, due_today: null, upcoming: null });
+    setActionCounts({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
+  };
 
   useEffect(() => { if (authorized) void load(); }, [authorized, load]);
   useEffect(() => {
-    if (authorized) void loadQueueCounts();
-    else {
-      countGeneration.current += 1;
-      setQueueCounts({ unscheduled: null, overdue: null, due_today: null, upcoming: null });
-    }
-    return () => { countGeneration.current += 1; };
-  }, [authorized, loadQueueCounts]);
-
-  useEffect(() => {
-    if (authorized) void loadActionCounts();
-    else {
+    // No nine-query exact-count burst when the admin desk opens.
+    // Existing filters still query the protected view normally.
+    countGeneration.current++;
+    actionCountGeneration.current++;
+    sharedCountAbortRef.current?.abort();
+    sharedCountAbortRef.current = null;
+    setReviewCountLoading(false);
+    setActionCountLoading(false);
+    setActionCountOwner(null);
+    setQueueCounts({ unscheduled: null, overdue: null, due_today: null, upcoming: null });
+    setActionCounts({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
+    return () => {
+      countGeneration.current++;
       actionCountGeneration.current++;
-      setActionCountOwner(null);
-      setActionCountLoading(false);
-      setActionCounts({ all: null, followUp: null, amendments: null, clarifications: null, unassigned: null });
-    }
-    return () => { actionCountGeneration.current++; };
-  }, [authorized, loadActionCounts]);
+      sharedCountAbortRef.current?.abort();
+    };
+  }, [authorized, user?.id]);
 
   useEffect(() => {
     if (!authorized) return;
@@ -514,8 +556,7 @@ export default function AdminServiceRequests() {
         } : row));
         setFeedback('Request ' + item.id + ' updated in the database.');
         void load();
-        void loadQueueCounts();
-        void loadActionCounts();
+        invalidateCountCards();
       }
     } catch (reason) {
       console.error('Admin service request verification or write failed', reason);
@@ -567,7 +608,7 @@ export default function AdminServiceRequests() {
       {authorized && <ServiceDeskReadiness mode="admin" />}
       {authorized && <ServiceActionPulse
         heading="Service operations action center"
-        description="Exact request counts across the administrator's permitted queue. Choose a card to clear other filters and focus the desk."
+        description="Load / refresh exact counts on demand. Task cards continue to apply real server filters even when counts are unknown."
         refreshing={actionCountLoading}
         onRefresh={() => void loadActionCounts()}
         items={[
@@ -581,7 +622,11 @@ export default function AdminServiceRequests() {
       <section aria-label="Verified internal review workload" className="mb-6 rounded-xl border border-border p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Internal review workload</h2>
-          <p className="text-xs text-muted-foreground">Exact database counts across all requests · UTC calendar · not customer SLAs</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => void loadQueueCounts()}
+            disabled={reviewCountLoading || !authorized}>
+            {reviewCountLoading ? 'Checking…' : 'Load / refresh review counts'}
+          </Button>
+          <p className="text-xs text-muted-foreground">Exact counts on demand · UTC calendar · not customer SLAs</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(['overdue', 'due_today', 'upcoming', 'unscheduled'] as const).map((bucket) => (
@@ -728,9 +773,9 @@ export default function AdminServiceRequests() {
             </div>
             <ServiceRequestSectionLinks requestId={item.id} ownerId={item.user_id} mode="admin" />
             {openConversation === item.id && <ServiceRequestTimeline requestId={item.id} ownerId={item.user_id} refreshToken={Date.parse(item.updated_at)} />}
-            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} />}
+            {openTriage === item.id && <ServiceTriagePanel requestId={item.id} onSaved={() => { void load(); invalidateCountCards(); }} />}
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
-            {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => { void load(); void loadActionCounts(); }} />}
+            {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => { void load(); invalidateCountCards(); }} />}
             {openAmendments === item.id && <ServiceBriefAmendments requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
             {openJournal === item.id && <ServiceRequestJournal requestId={item.id} ownerId={item.user_id} />}
           </Card>;
