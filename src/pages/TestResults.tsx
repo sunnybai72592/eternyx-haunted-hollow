@@ -10,6 +10,10 @@ import {
 } from "@/lib/educationVerifiedResultsRpc";
 import { projectVerifiedAttempt, projectVerifiedAnswers } from "@/lib/educationVerifiedPresentation.mjs";
 import {
+  buildEducationVisibleResultCsv, normalizeEducationResultEvidence,
+  sortEducationResultEvidence, summarizeEducationResultEvidence,
+} from "@/lib/educationResultEvidence.mjs";
+import {
   annotateEducationTextReport, buildEducationPrivateAnswerCsv,
   educationAnswerReviewLabel, educationResultProvenance,
   filterEducationAnswerReview, summarizeEducationAnswerReview,
@@ -29,6 +33,8 @@ type Attempt = {
 type QuestionResult = {
   id: string; question_text: string; points: number | null;
   is_correct: boolean | null; points_awarded: number | null; user_answer: string;
+  response_number: number; metadata_available: boolean;
+  response_kind: "written" | "choice" | "blank";
 };
 type Assessment = { id: string; title: string; description: string | null };
 
@@ -41,11 +47,11 @@ function downloadReport(text: string, attemptId: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function downloadAnswerCsv(csv: string, attemptId: string) {
+function downloadAnswerCsv(csv: string, attemptId: string, suffix = "") {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = "eternyx-private-answers-" + attemptId + ".csv";
+  link.download = "eternyx-private-answers-" + attemptId + suffix + ".csv";
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -55,6 +61,7 @@ export default function TestResults() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
   const [answerSearch, setAnswerSearch] = useState("");
   const [answerFilter, setAnswerFilter] = useState<"all" | "pending" | "reviewed" | "correct" | "incorrect">("all");
+  const [answerSort, setAnswerSort] = useState<"recorded" | "reverse" | "question">("recorded");
   const [exportError, setExportError] = useState("");
   const viewerRef = useRef(user?.id);
   useLayoutEffect(() => {
@@ -63,6 +70,7 @@ export default function TestResults() {
     // Never carry a prior account's answer search or export error state over.
     setAnswerSearch("");
     setAnswerFilter("all");
+    setAnswerSort("recorded");
     setExportError("");
   }, [user?.id]);
   const validAttemptId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attemptId ?? "");
@@ -117,29 +125,22 @@ export default function TestResults() {
     queryFn: async () => {
       // Pending verified mode does not even REQUEST correctness or points
       // from the API. Only a matching final ledger receipt unlocks grades.
+      // Include question.test_id for exact membership verification; never
+      // request option correctness or instructor answer keys.
       const request = gradeRevealed
         ? supabase.from("user_answers")
-          .select("question_id,is_correct,points_awarded,selected_option_id,short_answer_text,questions(id,question_text,points)")
+          .select("question_id,is_correct,points_awarded,selected_option_id,short_answer_text,questions(id,question_text,points,test_id)")
           .eq("attempt_id", attemptId!)
         : supabase.from("user_answers")
-          .select("question_id,selected_option_id,short_answer_text,questions(id,question_text,points)")
+          .select("question_id,selected_option_id,short_answer_text,questions(id,question_text,points,test_id)")
           .eq("attempt_id", attemptId!);
       const { data, error } = await request;
       if (error) throw error;
-      return (data ?? []).map((answer: any) => {
-        const question = Array.isArray(answer.questions) ? answer.questions[0] : answer.questions;
-        return {
-          id: answer.question_id,
-          question_text: question?.question_text || "Question unavailable",
-          points: typeof question?.points === "number" ? question.points : null,
-          is_correct: gradeRevealed && typeof answer.is_correct === "boolean" ? answer.is_correct : null,
-          points_awarded: gradeRevealed && typeof answer.points_awarded === "number" ? answer.points_awarded : null,
-          // Post-submission options may be RLS-hidden. Never render a raw
-          // database UUID as though it were the student's choice text.
-          user_answer: answer.short_answer_text ||
-            (answer.selected_option_id ? "Selected option recorded" : "No answer"),
-        };
-      });
+      // A duplicate, malformed or cross-assessment answer is not an
+      // authentic review row. Fail the query closed, preserving retry UX.
+      return normalizeEducationResultEvidence(
+        data ?? [], attemptQuery.data!.test_id, gradeRevealed,
+      ) as QuestionResult[];
     },
   });
 
@@ -148,11 +149,16 @@ export default function TestResults() {
   const reviewCounts = useMemo(
     () => summarizeEducationAnswerReview(answersQuery.data ?? [], gradeRevealed),
     [answersQuery.data, gradeRevealed]);
+  const evidenceCounts = useMemo(() => summarizeEducationResultEvidence(
+    answersQuery.data ?? []), [answersQuery.data]);
+  const evidenceReady = answersQuery.isSuccess &&
+    evidenceCounts.restrictedQuestionMetadata === 0;
   const effectiveFilter = gradeRevealed ? answerFilter :
     answerFilter === "all" ? "all" : "pending";
-  const visibleAnswers = useMemo(
-    () => filterEducationAnswerReview(answersQuery.data ?? [], answerSearch, effectiveFilter, gradeRevealed),
-    [answersQuery.data, answerSearch, effectiveFilter, gradeRevealed]);
+  const visibleAnswers = useMemo(() => sortEducationResultEvidence(
+    filterEducationAnswerReview(answersQuery.data ?? [], answerSearch, effectiveFilter, gradeRevealed),
+    answerSort,
+  ), [answersQuery.data, answerSearch, effectiveFilter, gradeRevealed, answerSort]);
 
   const refreshResults = () => {
     // Explicit user action; no background polling or extra hosted traffic.
@@ -165,7 +171,7 @@ export default function TestResults() {
 
   const download = () => {
     if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
-        answersQuery.isPending || answersQuery.error ||
+        answersQuery.isPending || answersQuery.error || !evidenceReady ||
         (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))) return;
     try {
       const text = buildAssessmentReport(displayedAttempt, testQuery.data,
@@ -178,7 +184,7 @@ export default function TestResults() {
   };
   const downloadCsv = () => {
     if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
-        !answersQuery.isSuccess || !Array.isArray(answersQuery.data) ||
+        !answersQuery.isSuccess || !Array.isArray(answersQuery.data) || !evidenceReady ||
         (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))) return;
     try {
       const csv = buildEducationPrivateAnswerCsv({
@@ -190,6 +196,24 @@ export default function TestResults() {
       setExportError("");
     } catch {
       setExportError("Your private CSV could not be prepared. Refresh your answers and retry.");
+    }
+  };
+
+  const downloadFilteredCsv = () => {
+    if (!attemptQuery.data || !displayedAttempt || !summary.completed ||
+        !evidenceReady || visibleAnswers.length===0 ||
+        (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))) return;
+    try {
+      const csv = buildEducationVisibleResultCsv({
+        attempt: displayedAttempt, answers: visibleAnswers,
+        receipt: verifiedQuery.data, verifiedMode: verifiedStudentResultsEnabled,
+        gradeRevealed: gradeRevealed && summary.graded,
+        scope: "Displayed answers · filter " + effectiveFilter + " · sort " + answerSort,
+      });
+      downloadAnswerCsv(csv, displayedAttempt.id, "-displayed");
+      setExportError("");
+    } catch {
+      setExportError("Displayed answers could not be safely exported. Check the loaded records and retry.");
     }
   };
 
@@ -294,7 +318,7 @@ export default function TestResults() {
                   <CardDescription>Search and filter only your own server-returned answer records.
                     Availability and grading depend on the assessment service; counts here are not the total number of exam questions.</CardDescription></CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid gap-3 rounded-lg border border-border bg-background p-4 sm:grid-cols-2">
+                  <div className="grid gap-3 rounded-lg border border-border bg-background p-4 sm:grid-cols-3">
                     <div>
                       <label htmlFor="education-answer-search" className="mb-2 block text-sm font-medium">Find a submitted answer</label>
                       <div className="relative">
@@ -316,18 +340,53 @@ export default function TestResults() {
                         {gradeRevealed && <option value="incorrect">Marked incorrect</option>}
                       </select>
                     </div>
+                    <div>
+                      <label htmlFor="education-answer-sort" className="mb-2 block text-sm font-medium">Sort returned answers</label>
+                      <select id="education-answer-sort" value={answerSort}
+                        onChange={event => setAnswerSort(event.target.value as typeof answerSort)}
+                        className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                        <option value="recorded">Original response order</option>
+                        <option value="reverse">Reverse response order</option>
+                        <option value="question">Question wording A–Z</option>
+                      </select>
+                    </div>
                   </div>
+                  {answersQuery.isSuccess && <div role="note" className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
+                    <p>Returned response evidence: {evidenceCounts.returned} answer rows ·
+                      {evidenceCounts.verifiedQuestionMetadata} with verified assessment-question metadata ·
+                      {evidenceCounts.restrictedQuestionMetadata} with restricted question metadata.</p>
+                    <p className="mt-1">{evidenceCounts.writtenResponses} written ·
+                      {evidenceCounts.selectedOptions} selected-choice records ·
+                      {evidenceCounts.blankResponses} blank records.
+                      These counts describe only returned answers, not all questions on the exam.</p>
+                  </div>}
+                  {answersQuery.isSuccess && !evidenceReady && <Alert variant="destructive">
+                    <AlertCircle aria-hidden="true" className="h-4 w-4" />
+                    <AlertDescription>
+                      Some returned answers have restricted question metadata. Those rows remain visible
+                      for personal review, but exports are disabled because their assessment membership
+                      cannot be fully verified. Try checking the latest result or contact your instructor.
+                    </AlertDescription>
+                  </Alert>}
                   <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
                     {visibleAnswers.length} of {reviewCounts.returned} returned answers displayed
                     {gradeRevealed ? " · " + reviewCounts.pending + " awaiting review · " +
                       (reviewCounts.reviewed + reviewCounts.correct + reviewCounts.incorrect) + " reviewed or marked" :
                       " · Official correctness and marks are not available"}.
                   </p>
-                  {(answerSearch || effectiveFilter !== "all") && (
-                    <Button variant="ghost" size="sm" onClick={() => { setAnswerSearch(""); setAnswerFilter("all"); }}>
+                  <div className="flex flex-wrap gap-2">
+                    {gradeRevealed && reviewCounts.pending>0 && <Button variant="outline" size="sm"
+                      onClick={() => { setAnswerSearch(""); setAnswerFilter("pending"); }}>
+                      Show returned answers awaiting review ({reviewCounts.pending})
+                    </Button>}
+                  {(answerSearch || effectiveFilter !== "all" || answerSort !== "recorded") && (
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setAnswerSearch(""); setAnswerFilter("all"); setAnswerSort("recorded");
+                    }}>
                       Clear answer filters
                     </Button>
                   )}
+                  </div>
                   {answersQuery.isPending && <p role="status">Loading submitted answers…</p>}
                   {answersQuery.error && (
                     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -340,7 +399,10 @@ export default function TestResults() {
                     <p className="text-sm text-muted-foreground">No returned answers match these filters.</p>}
                   {visibleAnswers.map((answer, index) => (
                     <div key={answer.id} className="rounded-lg border border-border bg-background p-4 text-sm">
-                      <p className="font-semibold">{index + 1}. {answer.question_text}</p>
+                      <p className="font-semibold">Response {answer.response_number}. {answer.question_text}</p>
+                      {!answer.metadata_available && <p role="note" className="mt-1 text-xs text-destructive">
+                        Question metadata restricted. This response is excluded from downloadable evidence.
+                      </p>}
                       <p className="mt-2 break-words text-muted-foreground">Submitted answer: {answer.user_answer}</p>
                       <p className="mt-1 text-muted-foreground">{educationAnswerReviewLabel(answer, gradeRevealed)}
                         {gradeRevealed && answer.points_awarded !== null && answer.points !== null
@@ -357,19 +419,27 @@ export default function TestResults() {
                 <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
                 {attemptQuery.isFetching || verifiedQuery.isFetching ? "Checking result…" : "Check latest result"}
               </Button>
-              <Button variant="outline" disabled={!summary.completed || !answersQuery.isSuccess ||
+              <Button variant="outline" disabled={!summary.completed || !evidenceReady ||
                 (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
                 onClick={download}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download report (.txt)</Button>
-              <Button variant="outline" disabled={!summary.completed || !answersQuery.isSuccess ||
+              <Button variant="outline" disabled={!summary.completed || !evidenceReady ||
                 (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
                 onClick={downloadCsv}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Download my answers (.csv)</Button>
+              <Button variant="outline" disabled={!summary.completed || !evidenceReady ||
+                visibleAnswers.length===0 ||
+                (verifiedStudentResultsEnabled && (verifiedQuery.isPending || !!verifiedQuery.error))}
+                onClick={downloadFilteredCsv}>
+                <Download aria-hidden="true" className="mr-2 h-4 w-4" />Download displayed answers (.csv)
+              </Button>
               {exportError && <p role="alert" className="w-full text-sm text-destructive">{exportError}</p>}
               <Button asChild variant="outline"><Link to="/education">Back to Education</Link></Button>
               <Button asChild variant="outline"><Link to="/education/history">My assessments</Link></Button>
               <p className="w-full text-xs text-muted-foreground">
                 Reports are downloaded locally and are not certificates. CSV exports can contain your private written answers;
                 keep them on a trusted device. CSV marks are included only for a matching verified final-grade receipt.
-                Legacy scores are explicitly labeled unverified. Retakes depend on the exam service and are not enabled here.
+                Legacy scores are explicitly labeled unverified. The displayed-answer CSV uses only
+                your current local filters and retains original response numbering.
+                Retakes depend on the exam service and are not enabled here.
               </p>
             </div>
           </>
