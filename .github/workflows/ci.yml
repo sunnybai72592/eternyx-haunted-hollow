@@ -76,6 +76,10 @@ jobs:
         run: |
           node --check src/lib/workspaceTeamAccess.mjs
           node --check tests/workspace-team-fresh-snapshot.test.mjs
+      - name: Validate Phase 31 complete pages and account-fenced mutations
+        run: |
+          node --check src/lib/workspaceTeamAccess.mjs
+          node --check tests/workspace-team-complete-pages.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)

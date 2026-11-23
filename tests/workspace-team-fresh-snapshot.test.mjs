@@ -74,7 +74,7 @@ test("create/join avoid a duplicate refresh and invitation codes remain visible"
     "Team space created. Only explicitly invited members can access its tasks.",
     "Team invitation accepted. Your new membership is private to this account.",
     "One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",
-  ])assert.ok(source.includes(label+'",false);'),"Should skip duplicate/destructive refresh: "+label);
+  ])assert.ok(source.includes(label+'",false,'),"Should skip duplicate/destructive refresh: "+label);
   assert.ok(source.includes("if(refreshAfter)await refresh();"));
   assert.ok(source.includes("setRevealedToken({token:receipt.token,role:receipt.role,expires:receipt.expires_at});"));
   assert.ok(source.includes('setRevealedToken(null); // one-time invite secrets should not reappear'));
@@ -82,6 +82,6 @@ test("create/join avoid a duplicate refresh and invitation codes remain visible"
 test("mutation success message is shown only after successful verification refresh",()=>{
   const source=readFileSync(new URL("../src/components/workspace/WorkspaceTeamsPanel.tsx",import.meta.url),"utf8");
   const run=source.slice(source.indexOf("const run=async("),source.indexOf("const createTeam="));
-  assert.match(run,/await action\(\);[\s\S]*if\(refreshAfter\)await refresh\(\);[\s\S]*setNotice\(success\)/);
+  assert.match(run,/const result=await action\(\);[\s\S]*if\(refreshAfter\)await refresh\(\);[\s\S]*onConfirmed\?\.\(result\);[\s\S]*setNotice\(success\)/);
   assert.ok(!/setNotice\(success\);[\s\S]*await refresh\(\);/.test(run));
 });

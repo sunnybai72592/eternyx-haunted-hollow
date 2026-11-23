@@ -89,3 +89,24 @@ export function requireWorkspacePreferredTeam(rows,preferred=null){
   }
   return true;
 }
+
+
+// Phase 31: Data API limit(20/500) alone cannot prove the full team roster.
+// Require exact PostgREST total, correct identities and zero duplicate rows.
+export function verifyWorkspaceTeamCompletePage(kind,rows,count,limit,idKey){
+  if(!["members","tasks"].includes(kind)||!Number.isSafeInteger(limit)||
+     limit<=0||!["user_id","id"].includes(idKey)||!Array.isArray(rows)||
+     !Number.isSafeInteger(count)||count<0||count>limit||
+     rows.length!==count||rows.some(r=>!r||typeof r[idKey]!=="string"||!r[idKey])||
+     new Set(rows.map(r=>r[idKey])).size!==rows.length){
+    throw Error("Workspace "+kind+" list incomplete or untrusted; refresh before editing");
+  }
+  return rows;
+}
+// Epoch-fenced commits prevent an account switch from publishing late RPC
+// receipts (including one-time invitation codes) into another user's UI.
+export function isWorkspaceActionCurrent(expectedOwner,currentOwner,expectedEpoch,currentEpoch){
+  return typeof expectedOwner==="string"&&!!expectedOwner&&
+    expectedOwner===currentOwner&&Number.isSafeInteger(expectedEpoch)&&
+    expectedEpoch>0&&expectedEpoch===currentEpoch;
+}
