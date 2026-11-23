@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import DockerIncidents,{type DockerIncident,type DockerIncidentEvent} from "@/components/docker/DockerIncidents";
 import DockerReadinessPanel,{type DockerReadiness} from "@/components/docker/DockerReadinessPanel";
+import DockerReleaseReviewWorkspace,{type DockerReleaseReview,type DockerReleaseReviewEvent} from "@/components/docker/DockerReleaseReviewWorkspace";
 import {buildDockerOwnerClaimExport} from "@/lib/dockerLabOwnerExport.mjs";
 type Policy={enabled:boolean;daily_limit:number;incident_hold?:boolean;incident_hold_at?:string|null};
 type Agent={id:string;display_name:string;status:string};
@@ -34,6 +35,8 @@ export default function DockerControlReview(){
   const [events,setEvents]=useState<Event[]>([]);
   const [incidents,setIncidents]=useState<DockerIncident[]>([]);
   const [incidentEvents,setIncidentEvents]=useState<DockerIncidentEvent[]>([]);
+  const [releaseReviews,setReleaseReviews]=useState<DockerReleaseReview[]>([]);
+  const [releaseReviewEvents,setReleaseReviewEvents]=useState<DockerReleaseReviewEvent[]>([]);
   const [agentId,setAgentId]=useState("");
   const [operation,setOperation]=useState<"start"|"stop"|"restart">("stop");
   const [containerId,setContainerId]=useState("");
@@ -57,6 +60,8 @@ export default function DockerControlReview(){
     setEvents(Array.isArray(data.events)?data.events as Event[]:[]);
     setIncidents(Array.isArray(data.incidents)?data.incidents as DockerIncident[]:[]);
     setIncidentEvents(Array.isArray(data.incidentEvents)?data.incidentEvents as DockerIncidentEvent[]:[]);
+    setReleaseReviews(Array.isArray(data.releaseReviews)?data.releaseReviews as DockerReleaseReview[]:[]);
+    setReleaseReviewEvents(Array.isArray(data.releaseReviewEvents)?data.releaseReviewEvents as DockerReleaseReviewEvent[]:[]);
     setLoaded(true);
   },[]);
   useEffect(()=>{if(user?.id)load().catch(e=>setError(e instanceof Error?e.message:"Docker control unavailable"));},[user?.id,load]);
@@ -219,6 +224,7 @@ export default function DockerControlReview(){
       </div>
     </section>
     <DockerIncidents requests={requests} incidents={incidents} events={incidentEvents} refresh={load}/>
+    <DockerReleaseReviewWorkspace reviews={releaseReviews} events={releaseReviewEvents} loaded={loaded} onAction={control} refresh={load}/>
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <h2 className="flex items-center gap-2 text-xl font-semibold"><ClipboardCheck className="h-5 w-5 text-cyan-500"/> Recent audit events</h2>
       <div className="mt-3 space-y-2">{events.map((item,index)=><p key={item.request_id+item.occurred_at+index} className="rounded-lg border border-border px-3 py-2 text-sm">{item.event_kind} · {item.request_id.slice(0,8)} <span className="text-xs text-muted-foreground">· {new Date(item.occurred_at).toLocaleString()}</span></p>)}</div>
