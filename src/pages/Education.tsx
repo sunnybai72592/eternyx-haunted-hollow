@@ -126,6 +126,21 @@ export default function Education() {
           </p>
         </header>
 
+        <section aria-label="Local learner practice" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-semibold text-foreground">Practice with a real learner worksheet</h2>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+              Import an instructor-exported, answer-key-free JSON worksheet, respond at your own pace,
+              flag questions for review and save a resume file locally. No sign-in or fake score required.
+            </p>
+          </div>
+          <Button asChild variant="outline" className="min-h-11 shrink-0">
+            <Link to="/education/practice">Open Practice Workspace
+              <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </section>
+
         {!authLoading && isAuthenticated && (
           <>
           <section aria-label="Local question-bank authoring" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
