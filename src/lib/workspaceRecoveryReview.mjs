@@ -56,6 +56,7 @@ export function workspaceRecoveryWarnings(report) {
 export function workspaceRecoveryPhase(status) {
   switch (status) {
     case "active": return "Unfinished — select the same archive to resume";
+    case "held": return "Protected — import writes paused; saved work retained";
     case "complete": return "Complete — previously restored";
     case "discarding": return "Sealed — ready for final removal only after server recheck";
     default: return "Unknown status — refresh and review";

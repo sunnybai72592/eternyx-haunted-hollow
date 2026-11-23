@@ -679,6 +679,15 @@ export default function DigitalWorkspace() {
               }} />
             <WorkspaceRecoveryCenter owner={owner} disabled={busy || loading}
               projects={projects} refreshKey={recoveryRefreshKey}
+              onCheckpoint={(id) => {
+                setShowArchived(true);
+                setSearch("");
+                setProjectId(id);
+                setNotice("Preserve a current v3 backup using Export with checklists or Backup files + checklists. These exports do not include historical revisions.");
+                window.setTimeout(() =>
+                  document.getElementById("workspace-project-export-controls")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }), 25);
+              }}
               onOpen={(id) => {
                 setShowArchived(true);
                 setSearch("");
@@ -743,7 +752,7 @@ export default function DigitalWorkspace() {
                     onClick={pinProject}>{selected.pinned ? <PinOff className="mr-2 h-4 w-4" aria-hidden="true" /> :
                       <Pin className="mr-2 h-4 w-4" aria-hidden="true" />}
                     {selected.pinned ? "Unpin" : "Pin project"}</Button>
-                  <Button type="button" variant="outline" disabled={busy}
+                  <Button id="workspace-project-export-controls" type="button" variant="outline" disabled={busy}
                     onClick={() => exportProject("legacy")}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Legacy JSON</Button>
                   <Button type="button" variant="outline" disabled={busy}
                     onClick={() => exportProject("checklists")}><Download className="mr-2 h-4 w-4" aria-hidden="true" /> Export with checklists</Button>

@@ -17,15 +17,20 @@ export type Database = {
       workspace_import_sessions: {
         Row: { id: string; owner_id: string; project_id: string; source_sha256: string;
           source_version: number; expected_tasks: number; expected_steps: number;
-          expected_items: number; expected_files: number; status: string;
+          expected_items: number; expected_files: number; status: string; baseline_signature: string | null; checkpoint_at: string | null;
+          held_at: string | null; hold_reason: string;
           created_at: string; updated_at: string }
         Insert: { id?: string; owner_id: string; project_id: string; source_sha256: string;
           source_version: number; expected_tasks: number; expected_steps: number;
           expected_items: number; expected_files: number; status?: string;
+          baseline_signature?: string | null; checkpoint_at?: string | null;
+          held_at?: string | null; hold_reason?: string;
           created_at?: string; updated_at?: string }
         Update: { id?: string; owner_id?: string; project_id?: string; source_sha256?: string;
           source_version?: number; expected_tasks?: number; expected_steps?: number;
           expected_items?: number; expected_files?: number; status?: string;
+          baseline_signature?: string | null; checkpoint_at?: string | null;
+          held_at?: string | null; hold_reason?: string;
           created_at?: string; updated_at?: string }
         Relationships: []
       }
@@ -2992,6 +2997,8 @@ export type Database = {
       }
     }
     Functions: {
+      workspace_import_set_hold: { Args: { p_session_id: string; p_hold: boolean; p_reason?: string }; Returns: boolean }
+      workspace_import_integrity: { Args: { p_session_id: string }; Returns: Json }
       workspace_import_inspect: { Args: { p_session_id: string }; Returns: Json }
       workspace_import_prepare_discard: { Args: { p_session_id: string }; Returns: boolean }
       workspace_import_finalize_discard: { Args: { p_session_id: string }; Returns: boolean }
