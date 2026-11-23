@@ -142,6 +142,22 @@ or treated as independently authenticated.
     grants any production migration, paid service activation, scheduler
     execution or release permission.
 
+## Existing migration timestamp collisions
+
+The current repository may already contain SQL files with the same 14-digit
+Supabase migration version. The planner reports the **exact duplicate
+timestamps as hard deployment blockers**, even when its offline code-generation
+CI step succeeds. Never rename, delete or repair historical migrations
+blindly: if one has been applied remotely, changing its timestamp could cause
+unsafe replay. Reconcile against a **successful independent read-only staging
+migration history** and inspect the conflicting source files before seeking
+specific approval for a remediation PR.
+
+An offline plan report's exit code reflects whether its source manifest is
+generated consistently, not whether staging is approved or safe to deploy.
+The report's `blockers`, `duplicateMigrationVersions`,
+`readyForExecution:false` and absence of operator approval are authoritative.
+
 ## Honest boundaries
 
 Passing the offline CI source plan establishes only that the checked-in
