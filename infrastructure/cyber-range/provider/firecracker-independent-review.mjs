@@ -24,6 +24,10 @@ import {auditOperatorEvidenceConsistency} from
 import {
   createSignedReviewDisposition,verifySignedReviewDisposition,
 } from "./firecracker-review-disposition.mjs";
+import {
+  CASE_CHECKPOINT_FILE,CASE_CHECKPOINT_ACK,buildCaseCheckpoint,
+  verifyCaseCheckpoint,
+} from "./firecracker-review-checkpoint.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -442,4 +446,108 @@ export async function verifyIndependentReviewDisposition({
   if(status.sessionId!==sessionId)
     throw Error("Offline disposition belongs to an unrelated review case");
   return status;
+}
+
+
+/**
+ * Re-verify signatures, latest structured metadata and private import journal
+ * before hashing the raw files that comprise a complete local review case.
+ */
+async function loadedVerifiedCheckpoint({
+  sessionId,operatorFingerprint,reviewerFingerprint,
+  caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
+  const keys=await reviewerKeys({owner});
+  const [operatorRaw,reviewRaw,dispositionRaw]=await Promise.all([
+    safeRead(join(source.folder,"operator-report.json"),owner,MAX_RECEIPT),
+    safeRead(join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT),
+    safeRead(join(source.folder,"review-disposition.json"),owner,MAX_RECEIPT),
+  ]);
+  const operatorReport=JSON.parse(operatorRaw.toString("utf8"));
+  if(JSON.stringify(operatorReport)!==JSON.stringify(source.operatorReport))
+    throw Error("Signed operator source changed during offline checkpoint check");
+  const reviewReport=JSON.parse(reviewRaw.toString("utf8"));
+  const report=JSON.parse(dispositionRaw.toString("utf8"));
+  const verifiedDisposition=verifySignedReviewDisposition({
+    ...source,...keys,operatorReport,reviewReport,report,
+    operatorFingerprint,reviewerFingerprint,
+  });
+  if(verifiedDisposition.sessionId!==sessionId)
+    throw Error("Foreign disposition cannot be checkpointed");
+  const files={
+    "operator-report.json":operatorRaw,
+    "operator-public.pem":Buffer.from(source.operatorPublicPem,"utf8"),
+    "review-verdict.json":reviewRaw,
+    "review-disposition.json":dispositionRaw,
+    "reviewer-public.pem":Buffer.from(keys.reviewerPublicPem,"utf8"),
+    ...source.artifacts,
+  };
+  const checkpoint=buildCaseCheckpoint({
+    verifiedDisposition,operatorFingerprint,reviewerFingerprint,files,
+  });
+  return {folder:source.folder,checkpoint};
+}
+
+/** Offline, read-only digest that MUST be pinned outside the case directory. */
+export async function inspectIndependentCaseCheckpoint(options={}){
+  const {checkpoint}=await loadedVerifiedCheckpoint(options);
+  return Object.freeze({
+    sessionId:checkpoint.doc.sessionId,mode:checkpoint.doc.mode,
+    decision:checkpoint.doc.decision,
+    checkpointSha256:checkpoint.checkpointSha256,
+    hashedFiles:checkpoint.doc.fileDigests.length,
+    signedDispositionReverified:true,
+    externallyPinnedDigestMatched:false,
+    checkpointSealed:false,
+    physicalHostAttested:false,productionReady:false,publicLabsEnabled:false,
+  });
+}
+
+/**
+ * Human authorized one-write local checkpoint; the checksum MUST separately
+ * be copied to a trusted external record to resist local file rollback.
+ */
+export async function sealIndependentCaseCheckpoint({
+  acknowledgment,...options
+}={}){
+  if(acknowledgment!==CASE_CHECKPOINT_ACK)
+    throw Error("Separate case checkpoint sealing acknowledgment is mandatory");
+  const {folder,checkpoint}=await loadedVerifiedCheckpoint(options);
+  const path=join(folder,CASE_CHECKPOINT_FILE);
+  const file=await open(path,constants.O_WRONLY|constants.O_CREAT|
+    constants.O_EXCL|constants.O_NOFOLLOW,0o600);
+  try{
+    const initial=await file.stat();
+    if(!initial.isFile()||initial.uid!==(options.owner??0)||
+       initial.nlink!==1||(initial.mode&0o077)!==0||initial.size!==0)
+      throw Error("Untrusted new private case checkpoint file");
+    await file.writeFile(checkpoint.bytes);
+    await file.sync();
+    if((await file.stat()).size!==checkpoint.bytes.length)
+      throw Error("Incomplete offline case checkpoint write");
+  }finally{await file.close();}
+  const directory=await open(folder,constants.O_RDONLY|constants.O_DIRECTORY);
+  try{await directory.sync();}finally{await directory.close();}
+  return Object.freeze({
+    sessionId:checkpoint.doc.sessionId,
+    checkpointSha256:checkpoint.checkpointSha256,
+    privateCheckpointRecorded:true,
+    externalPinStillRequired:true,
+    physicalHostAttested:false,productionReady:false,publicLabsEnabled:false,
+  });
+}
+
+/** No private key, no writes. Reject absent, stale or rolled-back sealed cases. */
+export async function verifyIndependentCaseCheckpoint({
+  externallyPinnedSha256,...options
+}={}){
+  const {folder,checkpoint}=await loadedVerifiedCheckpoint(options);
+  const raw=await safeRead(join(folder,CASE_CHECKPOINT_FILE),
+    options.owner??0,8192);
+  return verifyCaseCheckpoint({
+    savedBytes:raw,recomputed:checkpoint,
+    externallyPinnedSha256,
+  });
 }

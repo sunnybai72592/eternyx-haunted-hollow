@@ -831,3 +831,101 @@ they do not launch KVM, request paid compute, contact cloud providers, enable
 public labs, sign a real human decision or prove a physical security boundary.
 Production readiness and independently authenticated hardware measurements
 remain a separate workstream.
+
+
+## Sealed, externally pinned offline reviewer case checkpoint
+
+This milestone adds a **local integrity checkpoint** following the existing
+operator v2 signature, independent reviewer endorsement, and constrained
+signed reviewer disposition. It **does not** turn an archival disposition into
+hardware acceptance, source authenticity proof, or production authorization.
+
+### Scope and coverage
+
+The read-only inspection command re-verifies the following before computing
+a deterministic private-case digest:
+
+1. Signed operator v2 report and externally pinned operator identity.
+2. Signed reviewer endorsement and independently pinned reviewer identity.
+3. Separate signed reviewer disposition and its controlled outcome/reasons.
+4. Structured preflight/image metadata consistency and accepted import journal
+   (or explicitly legacy manually staged inputs without a transaction journal).
+5. Exact raw bytes of **both public PEM keys, the three signed JSON receipts,
+   host preflight metadata, image inventory, supervisor journal, cgroup-death
+   file**, and any guest challenge or systemd expiry record required by the
+   signed operating mode.
+
+The sealed file only contains **file names, SHA-256 digests and lengths**,
+the validated session/mode, the reviewer’s already signed disposition and
+pinned public-key fingerprints. Raw private logs, VM images and signing
+private keys are **not** included in the checkpoint. All unsupported input
+files, missing records, wrong keys and mismatched signed evidence are
+rejected by the private reviewer workflow.
+
+### First inspect the case (read-only)
+
+Use an isolated reviewer machine and the **externally trusted** operator
+and reviewer SPKI DER fingerprints:
+
+```bash
+sudo node scripts/cyber-range-review-checkpoint.mjs --inspect   --session UUID   --operator-sha OPERATOR_SPKI_SHA256   --reviewer-sha REVIEWER_SPKI_SHA256
+```
+
+The command returns the deterministic `checkpointSha256`, the
+disposition and file count, but **does not** write a file or create an
+external trust pin.
+
+### Deliberately seal exactly one private checkpoint
+
+After independently inspecting the full original case and its actual source
+provenance, record the expected SHA-256 on an **independently controlled,
+tamper-resistant record** (for example, an approved paper log or audited
+offline register), not only inside the review case or on the same removable
+disk.
+
+```bash
+export ETERNYX_CASE_CHECKPOINT_ACK=I_APPROVE_OFFLINE_CASE_CHECKPOINT
+sudo --preserve-env=ETERNYX_CASE_CHECKPOINT_ACK   node scripts/cyber-range-review-checkpoint.mjs   --seal --confirm-case-checkpoint   --session UUID   --operator-sha OPERATOR_SPKI_SHA256   --reviewer-sha REVIEWER_SPKI_SHA256
+```
+
+The CLI exclusively creates
+`/var/lib/eternyx-reviewer/cases/<UUID>/case-checkpoint.json`
+with root ownership, private 0600 permissions and synchronized file and
+directory writes. An existing or partially written checkpoint **cannot**
+be overwritten. Preserve the failure state for investigation instead of
+silently deleting or modifying an evidence record.
+
+### Verify a saved checkpoint against an *external* SHA
+
+```bash
+sudo node scripts/cyber-range-review-checkpoint.mjs --verify   --session UUID   --operator-sha OPERATOR_SPKI_SHA256   --reviewer-sha REVIEWER_SPKI_SHA256   --checkpoint-sha INDEPENDENTLY_RECORDED_CHECKPOINT_SHA256
+```
+
+The verifier reads the original case, verifies the three signatures again,
+checks structured metadata, recomputes the source hashes, checks the exact
+saved checkpoint bytes and compares the result with the trusted out-of-band
+SHA-256. It does not load the reviewer private key, contact a host, start
+Firecracker or reach a cloud provider.
+
+**Trust limitation:** A local checkpoint SHA cannot prevent rollback if an
+attacker controls both the case and the expected hash, or can replace the
+external trust record. It detects differences **only** when the original
+checkpoint hash was obtained and protected separately. Signatures likewise
+do not independently prove the physical KVM host or source logs were honest.
+
+The output deliberately retains
+`physicalHostAttested:false`,
+`independentSourceAuthenticityVerified:false`,
+`publicLabsEnabled:false` and `productionReady:false`.
+
+### Free no-VM regression checks
+
+```bash
+node --test tests/ctf-firecracker-review-checkpoint.test.mjs
+npm test
+npm run build
+```
+
+Tests run with disposable in-memory keys and fabricated source bytes. Neither
+CI nor this feature enables public Labs, allocates paid VMs or GPUs, makes
+external AI requests, or performs a real-host hardware acceptance test.
