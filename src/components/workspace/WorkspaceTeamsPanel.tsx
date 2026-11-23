@@ -47,6 +47,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
   const [verifiedSpaceId,setVerifiedSpaceId]=useState<string|null>(null);
+  const [spaceListVerified,setSpaceListVerified]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState(false);
@@ -56,7 +57,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const detailsEpoch=useRef(0);
   const resumeInFlight=useRef(false);
   ownerRef.current=owner;
-  const selected=spaces.find(s=>s.id===selectedId)??null;
+  const selected=spaceListVerified ? spaces.find(s=>s.id===selectedId)??null : null;
   // Cached data from a former team/owner must never authorize rendering.
   const currentRole=verifiedSpaceId===selectedId && !disabled
     ? members.find(m=>m.user_id===owner&&m.space_id===selectedId)?.role??null
@@ -77,6 +78,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     }
   };
   const quarantineTeam=()=>{
+    setSpaceListVerified(false);
     setVerifiedSpaceId(null);
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
     setRevealedToken(null);setDiscussionTaskId(null);
@@ -97,6 +99,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(selectedId)setNotice("This team is no longer available to your account. Local team details were cleared.");
     }
     setSpaces(rows);
+    setSpaceListVerified(true);
     setSelectedId(chosen);
     return chosen;
   };
@@ -147,6 +150,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     const token=++spacesEpoch.current;
     detailsEpoch.current++; // invalidate a previous owner's detail queries
     setSpaces([]);setSelectedId(null);setMembers([]);setTasks([]);
+    setSpaceListVerified(false);
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
     setTaskFilter("all");setDiscussionTaskId(null);setLiveRevision(0);
@@ -407,13 +411,16 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     {notice&&<p role="status" className="break-words text-sm text-cyan-300">{notice}</p>}
     {loading&&<p role="status" className="text-sm text-muted-foreground">Loading owner-scoped team data…</p>}
     <div className="flex flex-wrap items-center gap-2" aria-label="Select team space">
-      {spaces.map(space=><Button type="button" key={space.id} size="sm"
+      {!spaceListVerified&&<p role="status" className="text-xs text-muted-foreground">
+        Rechecking team membership before showing shared details…
+      </p>}
+      {spaceListVerified&&spaces.map(space=><Button type="button" key={space.id} size="sm"
         variant={space.id===selectedId?"default":"outline"} disabled={busy||disabled}
         onClick={()=>{quarantineTeam();setSelectedId(space.id);}}>
         <FolderKanban className="mr-1 h-3.5 w-3.5"/>
         {space.name}{space.status==="archived"?" (archived)":""}
       </Button>)}
-      {!spaces.length&&!loading&&<p className="text-sm text-muted-foreground">
+      {spaceListVerified&&!spaces.length&&!loading&&<p className="text-sm text-muted-foreground">
         No team memberships yet. Create a team or accept an invitation.
       </p>}
     </div>
