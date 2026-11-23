@@ -45,6 +45,17 @@ jobs:
           node scripts/services-migration-source-guard.mjs > /dev/null
           node scripts/services-staging-release-evidence.mjs
 
+      - name: Independently verify approved staging project registration (GET-only)
+        env:
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_CONFIRM: ${{ inputs.acknowledgment }}
+          SERVICES_STAGING_AUDIT_POOLER_HOST: ${{ vars.SERVICES_STAGING_AUDIT_POOLER_HOST }}
+          SERVICES_STAGING_EXPECTED_ORG_SLUG: ${{ vars.SERVICES_STAGING_EXPECTED_ORG_SLUG }}
+          SERVICES_STAGING_EXPECTED_PROJECT_NAME: ${{ vars.SERVICES_STAGING_EXPECTED_PROJECT_NAME }}
+          SERVICES_STAGING_MANAGEMENT_API_TOKEN: ${{ secrets.SERVICES_STAGING_MANAGEMENT_API_TOKEN }}
+        run: node scripts/services-phase41-registered-staging-project.mjs
+
       - name: Ensure PostgreSQL client is available for live staging read-only proof
         run: |
           if ! command -v psql > /dev/null 2>&1; then
