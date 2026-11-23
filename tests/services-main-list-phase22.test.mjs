@@ -116,19 +116,20 @@ test('budget refuses invalid deadlines without performing private query', async 
 
 test('customer list is account-bound, abortable, paginated, exact, retryable and never auto-retried', async () => {
   const owner=await read('src/pages/MyServiceRequests.tsx');
-  assert.match(owner,/import \{ readServicePageWithinBudget \}/);
+  assert.match(owner,/import \{ readServiceWindowWithinBudget \}/);
   assert.match(owner,/requestAbortRef = useRef<AbortController \| null>/);
   assert.match(owner,/requestAbortRef\.current\?\.abort\(\)/);
   assert.match(owner,/const generation = \+\+requestGeneration\.current/);
-  assert.match(owner,/readServicePageWithinBudget<RequestRow>\(/);
+  assert.match(owner,/readServiceWindowWithinBudget<RequestRow>\(/);
   assert.match(owner,/\.eq\('user_id', userId\)/);
-  assert.match(owner,/count: 'exact'/);
-  assert.match(owner,/\.range\(page \* 20, \(page \+ 1\) \* 20 - 1\)\.abortSignal\(signal\)/);
+  assert.match(owner,/setHasMore\(result\.hasMore\)/);
+  assert.match(owner,/\.range\(page \* 20, \(page \+ 1\) \* 20\)/);
+  assert.match(owner,/\.range\(page \* 20, \(page \+ 1\) \* 20\)\.abortSignal\(signal\)/);
   assert.match(owner,/generation === requestGeneration\.current && useAuthStore\.getState\(\)\.user\?\.id === userId/);
   assert.match(owner,/if \(result\.kind === 'unavailable'\)/);
   assert.match(owner,/setLoadErrorDetail\(result\.message\)/);
   assert.match(owner,/setRowsOwner\(null\)/);
-  assert.match(owner,/setPage\(Math\.max\(0, Math\.ceil\(result\.count \/ 20\) - 1\)\)/);
+  assert.match(owner,/setPage\(\(previous\) => Math\.max\(0, previous - 1\)\)/);
   assert.match(owner,/role="status" className="mt-2 text-sm text-muted-foreground">\{loadErrorDetail\}/);
   assert.match(owner,/onClick=\{\(\) => void load\(\)\}>Try again/);
   assert.doesNotMatch(owner,/setTimeout\(\(\) => void load/);
@@ -136,19 +137,20 @@ test('customer list is account-bound, abortable, paginated, exact, retryable and
 
 test('administrator list has the same bounded cancellation and admin-account safeguards', async () => {
   const admin=await read('src/pages/AdminServiceRequests.tsx');
-  assert.match(admin,/import \{ readServicePageWithinBudget \}/);
+  assert.match(admin,/import \{ readServiceWindowWithinBudget \}/);
   assert.match(admin,/adminListAbortRef = useRef<AbortController \| null>/);
   assert.match(admin,/adminListAbortRef\.current\?\.abort\(\)/);
   assert.match(admin,/const generation = \+\+fetchGeneration\.current/);
-  assert.match(admin,/readServicePageWithinBudget<ServiceRow>\(/);
-  assert.match(admin,/count: 'exact'/);
-  assert.match(admin,/\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE - 1\)\s*\.abortSignal\(signal\)/);
+  assert.match(admin,/readServiceWindowWithinBudget<ServiceRow>\(/);
+  assert.match(admin,/setHasMore\(result\.hasMore\)/);
+  assert.match(admin,/\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE\)/);
+  assert.match(admin,/\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE\)\s*\.abortSignal\(signal\)/);
   assert.match(admin,/useAuthStore\.getState\(\)\.user\?\.id === actor && authorizedFor === actor/);
   assert.match(admin,/if \(result\.kind === 'unavailable'\)/);
   assert.match(admin,/setLoadErrorDetail\(result\.message\)/);
   assert.match(admin,/setDrafts\(\{\}\)/);
-  assert.match(admin,/setTotal\(0\)/);
-  assert.match(admin,/setPage\(Math\.max\(0, Math\.ceil\(result\.count \/ PAGE_SIZE\) - 1\)\)/);
+  assert.match(admin,/setHasMore\(false\)/);
+  assert.match(admin,/setPage\(\(previous\) => Math\.max\(0, previous - 1\)\)/);
   assert.match(admin,/onClick=\{\(\) => void load\(\)\}>Retry/);
   assert.match(admin,/supabase\.rpc\('is_admin'\)/);
 });

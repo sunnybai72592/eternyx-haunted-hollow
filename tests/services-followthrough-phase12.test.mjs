@@ -67,8 +67,8 @@ test('owner desk filters persisted activity including new and closed clarificati
   assert.match(owner, /Activity since my check/);
   assert.match(owner, /supabase\.rpc\('mark_service_request_checked'/);
   assert.match(owner, /clarification_changes_since_check: 0/);
-  assert.match(owner, /if \(page > 0 && page \* 20 >= result\.count\)/);
-  assert.match(owner, /setPage\(Math\.max\(0, Math\.ceil\(result\.count \/ 20\) - 1\)\)/);
+  assert.match(owner, /if \(page > 0 && result\.rows\.length === 0\)/);
+  assert.match(owner, /setPage\(\(previous\) => Math\.max\(0, previous - 1\)\)/);
   assert.match(owner, /setLoading\(false\)/);
   assert.doesNotMatch(owner, /localStorage\.setItem/);
 });

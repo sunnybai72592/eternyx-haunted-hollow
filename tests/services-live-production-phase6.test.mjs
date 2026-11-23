@@ -14,7 +14,7 @@ test('customer requests hide previous account rows before cleanup effects run', 
   assert.match(source, /setOpenConversation\(null\)/);
   assert.match(source, /setOpenScope\(null\)/);
   assert.match(source, /setRows\(\[\]\)/);
-  assert.match(source, /setTotal\(0\)/);
+  assert.match(source, /setHasMore\(false\)/);
   assert.match(source, /setPage\(0\)/);
   assert.match(source, /setActiveSearch\(''\)/);
 });
@@ -26,7 +26,7 @@ test('request filter changes and account transitions discard stale fetch complet
   assert.match(source, /requestGeneration\.current \+= 1;\s*requestAbortRef\.current\?\.abort\(\)/);
   assert.match(source, /\.eq\('user_id', userId\)/);
   assert.match(source, /setRowsOwner\(userId\)/);
-  assert.match(source, /if \(page > 0 && page \* 20 >= result\.count\)/);
+  assert.match(source, /if \(page > 0 && result\.rows\.length === 0\)/);
   assert.match(source, /No requests match this view/);
 });
 

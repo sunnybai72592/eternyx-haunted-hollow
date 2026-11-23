@@ -14,7 +14,7 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import { runServiceCountBudget } from '@/lib/serviceCountBudget';
-import { readServicePageWithinBudget } from '@/lib/servicePageReadBudget';
+import { readServiceWindowWithinBudget } from '@/lib/servicePageReadBudget';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
@@ -50,7 +50,7 @@ export default function MyServiceRequests() {
   const [loadError, setLoadError] = useState(false);
   const [loadErrorDetail, setLoadErrorDetail] = useState('');
   const [page, setPage] = useState(0);
-  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [filter, setFilter] = useState<'all' | ServiceRequestStatus>('all');
   const [search, setSearch] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
@@ -145,10 +145,10 @@ export default function MyServiceRequests() {
     setLoadErrorDetail('');
     setRows([]);
     setRowsOwner(null);
-    setTotal(0);
+    setHasMore(false);
     try {
     let query = supabase.from('service_customer_amendment_queue')
-      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete', { count: 'exact' })
+      .select('id,service_key,title,description,status,client_update,created_at,updated_at,expected_outcome,timeframe,constraints,last_admin_activity_at,last_checked_at,has_updates_since_check,open_clarification_count,awaiting_customer_count,awaiting_admin_review_count,last_clarification_activity_at,has_updates_since_check_extended,clarification_changes_since_check,amendment_count,pending_amendment_count,last_amendment_reviewed_at,has_updates_since_check_complete')
       .eq('user_id', userId);
     if (filter !== 'all') query = query.eq('status', filter);
     if (updatesOnly) query = query.eq('has_updates_since_check_complete', true);
@@ -163,9 +163,10 @@ export default function MyServiceRequests() {
       : sortOrder === 'request_updated'
         ? query.order('updated_at', { ascending: false }).order('created_at', { ascending: false })
         : query.order('created_at', { ascending: false });
-      const result = await readServicePageWithinBudget<RequestRow>(
+      const result = await readServiceWindowWithinBudget<RequestRow>(
         (signal) => sorted.order('id', { ascending: false })
-          .range(page * 20, (page + 1) * 20 - 1).abortSignal(signal),
+          .range(page * 20, (page + 1) * 20).abortSignal(signal),
+        20,
         () => generation === requestGeneration.current && useAuthStore.getState().user?.id === userId,
         controller.signal,
       );
@@ -176,25 +177,25 @@ export default function MyServiceRequests() {
         setLoadErrorDetail(result.message);
         setRows([]);
         setRowsOwner(null);
-        setTotal(0);
+        setHasMore(false);
         return;
       }
-      if (page > 0 && page * 20 >= result.count) {
-        setRows([]);
-        setRowsOwner(null);
-        setPage(Math.max(0, Math.ceil(result.count / 20) - 1));
+      if (page > 0 && result.rows.length === 0) {
+        // Rows can disappear after a filter, status update or deletion.
+        // Walk back one page without inventing a global row count.
+        setPage((previous) => Math.max(0, previous - 1));
         return;
       }
-      setRows(result.data);
+      setRows(result.rows);
       setRowsOwner(userId);
-      setTotal(result.count);
+      setHasMore(result.hasMore);
     } catch {
       if (generation !== requestGeneration.current || useAuthStore.getState().user?.id !== userId) return;
       setLoadError(true);
       setLoadErrorDetail('The private request-list read failed. No empty inbox was inferred.');
       setRows([]);
       setRowsOwner(null);
-      setTotal(0);
+      setHasMore(false);
     } finally {
       if (generation === requestGeneration.current && useAuthStore.getState().user?.id === userId) {
         requestAbortRef.current = null;
@@ -209,7 +210,7 @@ export default function MyServiceRequests() {
     setLoading(false);
     setRows([]);
     setRowsOwner(null);
-    setTotal(0);
+    setHasMore(false);
     setPage(0);
     setFilter('all');
     setSearch('');
@@ -548,7 +549,7 @@ export default function MyServiceRequests() {
           </select>
         </div>
         <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
-        <span className="text-xs text-muted-foreground">{visibleRows.length} of {total} matching requests</span>
+        <span className="text-xs text-muted-foreground">{visibleRows.length} requests loaded · page {page + 1} · full total not calculated</span>
       </form>
       {notice && <p role="status" className="mb-4 rounded-lg border border-primary/20 p-3 text-sm text-muted-foreground">{notice}</p>}
       {linkedLoading && <p className="mb-4 text-sm text-muted-foreground">Opening your private request…</p>}
@@ -585,7 +586,7 @@ export default function MyServiceRequests() {
       )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The database request failed. The connection, API exposure, or migration might be unavailable; this is not an empty inbox. Use the read-only feature checks above and retry. No results are simulated.</p><p role="status" className="mt-2 text-sm text-muted-foreground">{loadErrorDetail}</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
         : loading && visibleRows.length === 0 ? <Card className="p-8 text-center text-muted-foreground">Loading your service requests…</Card>
-        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{total > 0 || filter !== 'all' || activeSearch ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
+        : visibleRows.length === 0 ? <Card className="p-8 text-center"><ClipboardList className="mx-auto mb-4 h-10 w-10 text-primary" /><h2 className="text-xl font-semibold">{page > 0 || filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'No requests match this view' : 'No requests yet'}</h2><p className="mt-2 text-muted-foreground">{filter !== 'all' || activeSearch || updatesOnly || answersOnly || pendingReviewsOnly ? 'Try changing the status, search or activity filters.' : 'Your confirmed project briefs will appear here.'}</p><Button asChild className="mt-5"><Link to="/services/request">Submit a brief</Link></Button></Card>
         : <div className="space-y-4">{visibleRows.map((item) => {
           if (selectedPanel && visibleLinkedRequest?.id === item.id) return null;
           const status = serviceRequestStatuses[item.status] ?? serviceRequestStatuses.submitted;
@@ -652,11 +653,11 @@ export default function MyServiceRequests() {
             {openConversation === item.id && user && <ServiceRequestTimeline requestId={item.id} ownerId={user.id} refreshToken={Date.parse(item.updated_at)} />}
           </Card>;
         })}</div>}
-      {!loadError && total > 0 && (
+      {!loadError && (page > 0 || visibleRows.length > 0) && (
         <nav aria-label="My service requests pages" className="mt-6 flex items-center justify-center gap-3">
           <Button type="button" variant="outline" disabled={loading || page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
-          <span className="text-xs text-muted-foreground">Page {page + 1} of {Math.max(1, Math.ceil(total / 20))}</span>
-          <Button type="button" variant="outline" disabled={loading || (page + 1) * 20 >= total} onClick={() => setPage((p) => p + 1)}>Next</Button>
+          <span className="text-xs text-muted-foreground">Page {page + 1} · additional pages {hasMore ? 'available' : 'not detected'}</span>
+          <Button type="button" variant="outline" disabled={loading || !hasMore} onClick={() => setPage((p) => p + 1)}>Next</Button>
         </nav>
       )}
       <p className="mt-7 text-center text-xs text-muted-foreground">These are enquiries, not paid orders. No price, timeline or delivery is promised until separately agreed.</p>
