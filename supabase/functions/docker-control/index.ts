@@ -1,6 +1,7 @@
 // Signed-in owner-only Docker operation REVIEW. Does not contact Docker.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { verifiedDockerOwnerId } from "../_shared/docker-owner-guard.mjs";
 import { parseDockerControlRequest, effectiveDockerControlState } from "../_shared/docker-control-contract.mjs";
 import { reconcileDockerClaim, dockerDispatchOverview } from "../_shared/docker-dispatch-observability.mjs";
 import { parseDockerIncidentAction } from "../_shared/docker-incident-contract.mjs";
@@ -47,8 +48,9 @@ serve(async(req:Request)=>{
   }catch{return reply({error:"Invalid JSON body"},400);}
   if(!parsed)return reply({error:"Invalid Docker control action"},400);
   const {user,supabase}=await authenticateUser(req);
-  if(!user||!supabase||user.is_anonymous)return reply({error:"Sign in to review Docker operations"},401);
-  const owner=user.id;
+  const verifiedOwner=verifiedDockerOwnerId(user,supabase);
+  if(!user||!supabase||user.is_anonymous||!verifiedOwner)return reply({error:"Sign in to review Docker operations"},401);
+  const owner=verifiedOwner;
   try{
     if(parsed.action==="list"){
       const [policy,requests,events,agents,dispatch,incidents,incidentEvents,reports]=await Promise.all([
