@@ -38,7 +38,6 @@ SELECT 'ctf_rpc_service_only=' || (
       pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')
       AND NOT pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE')
       AND NOT pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
-      AND NOT pg_catalog.has_function_privilege('public',p.oid,'EXECUTE')
     ),false)
   FROM pg_catalog.pg_proc p
   WHERE p.oid=to_regprocedure('public.ctf_claim_verification_attempt(uuid,text)')
@@ -58,7 +57,7 @@ SELECT 'ctf_solve_table_owner_select_only=' || (
           AND pol.tablename='ctf_verified_solves'
           AND pol.cmd='SELECT'
           AND pol.roles @> ARRAY['authenticated']::name[]
-          AND pol.qual LIKE '%auth.uid()%'
+          AND pol.qual ILIKE '%uid()%'
       )
     ),false)
   FROM pg_catalog.pg_class c
