@@ -519,3 +519,104 @@ test("cinematic plan remains strictly bounded, while legacy options are unchange
   assert.match(ui,/24 FPS/);
   assert.match(ui,/720p/);
 });
+
+test("per-shot source timing and fades validate strictly but preserve old plan bytes",()=>{
+  const clips=[local("first.mov",Buffer.from("first")),local("second.mp4",Buffer.from("second"))];
+  const old=validatePhoneMoviePlan({files:clips,moviePlan:plan(clips),seconds:3});
+  assert.equal(Object.hasOwn(old.shots[0],"start_seconds"),false);
+  assert.equal(Object.hasOwn(old.shots[0],"fade_in_frames"),false);
+  const custom=plan(clips,{shots:[
+    {...plan(clips).shots[0],start_seconds:1,frames:32,fade_in_frames:4,fade_out_frames:8},
+    {...plan(clips).shots[1],start_seconds:0,frames:16,fade_in_frames:8,fade_out_frames:0},
+  ]});
+  const accepted=validatePhoneMoviePlan({files:clips,moviePlan:custom,seconds:3});
+  assert.equal(accepted.shots[0].start_seconds,1);
+  assert.equal(accepted.shots[0].fade_in_frames,4);
+  assert.equal(accepted.shots[1].fade_out_frames,0);
+  assert.throws(()=>validatePhoneMoviePlan({files:clips,moviePlan:plan(clips,{
+    shots:[{...custom.shots[0],start_seconds:2},custom.shots[1]]}),seconds:3}),
+    /source window/);
+  assert.throws(()=>validatePhoneMoviePlan({files:clips,moviePlan:plan(clips,{
+    shots:[{...custom.shots[0],fade_out_frames:9},custom.shots[1]]}),seconds:3}),
+    /Shot fade/);
+  assert.throws(()=>validatePhoneMoviePlan({files:clips,moviePlan:plan(clips,{
+    shots:[{...custom.shots[0],start_seconds:NaN},custom.shots[1]]}),seconds:3}),
+    /source window/);
+  assert.throws(()=>validatePhoneMoviePlan({files:clips,moviePlan:plan(clips,{
+    shots:[{...custom.shots[0],arbitrary_url:"https://bad.example"},custom.shots[1]]}),seconds:3}),
+    /movie cut/);
+  const ui=readFileSync(new URL("../src/components/LocalVideoImportPrep.tsx",import.meta.url),"utf8");
+  for(const label of ["setMovieTrimSeconds","setMovieShotSeconds",
+    "setMovieFadeInFrames","setMovieFadeOutFrames","totalMovieSeconds","validShotWindows"]){
+    assert.ok(ui.includes(label),label);
+  }
+});
+
+test("REAL 24FPS two-shot movie uses independent original offsets, cuts, true fades and provenance",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-shot-timing-"));
+  try{
+    const files=[getFixture(dir,"one.mov",30,5,"80x48"),
+      getFixture(dir,"two.mp4",24,6,"80x48")];
+    const base=plan(files);
+    const moviePlan=plan(files,{
+      quality:"cinematic",delivery:"mp4",
+      shots:[
+        {...base.shots[0],frames:32,start_seconds:1,fade_in_frames:4,fade_out_frames:8},
+        {...base.shots[1],frames:16,start_seconds:2,fade_in_frames:8,fade_out_frames:4},
+      ],
+    });
+    const bundle=await buildPortablePhoneMovie({files,start:0,seconds:5,moviePlan,pythonSources});
+    const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
+    const before=JSON.parse(run("python3",["finish_phone_movie.py","--check"],{cwd:folder}));
+    assert.equal(before.frames,72);
+    assert.equal(before.fps,24);
+    run("python3",["finish_phone_movie.py","--run"],{cwd:folder,timeout:240000});
+    const out=join(folder,"phone-movie-output");
+    const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+    assert.equal(receipt.video.fps,"24/1");
+    assert.equal(receipt.video.frame_count,72);
+    assert.equal(receipt.video.duration_seconds,3);
+    assert.deepEqual(receipt.source_ranges.map(r=>[r.original_filename,r.source_start_seconds,r.duration_seconds]),[
+      ["one.mov",1,2],["two.mp4",2,1],
+    ]);
+    assert.equal(receipt.shots[0].fade_in_frames,6);
+    assert.equal(receipt.shots[0].fade_out_frames,12);
+    assert.equal(receipt.shots[1].fade_in_frames,12);
+    assert.equal(receipt.shots[1].fade_out_frames,6);
+    assert.equal(receipt.shots[1].timeline_start_frame,48);
+    const actual=JSON.parse(readFileSync(join(folder,"local-video-media/preparation-report.json"),"utf8"));
+    assert.deepEqual(actual.clips.map(r=>[r.start_seconds,r.seconds_limit,r.prepared_frames]),[
+      [1,2,48],[2,1,24],
+    ]);
+    assert.equal(receipt.source_ranges[0].source_sha256,hash(readFileSync(join(folder,"phone-clips/one.mov"))));
+    assert.equal(receipt.source_ranges[1].source_sha256,hash(readFileSync(join(folder,"phone-clips/two.mp4"))));
+    const srt=readFileSync(join(out,"captions.srt"),"utf8");
+    const vtt=readFileSync(join(out,"captions.vtt"),"utf8");
+    assert.match(srt,/00:00:02,000 --> 00:00:03,000/);
+    assert.match(vtt,/00:00:02\.000 --> 00:00:03\.000/);
+    assert.equal(receipt.video.sha256,hash(readFileSync(join(out,"video.mp4"))));
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("REAL legacy 16FPS direct movie preserves per-shot cuts and fails closed on short footage",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-legacy-edits-"));
+  try{
+    const clips=[getFixture(dir,"first.mov",30,4),getFixture(dir,"second.mp4",24,2)];
+    const original=plan(clips);
+    const moviePlan=plan(clips,{shots:[
+      {...original.shots[0],start_seconds:1,frames:32,fade_in_frames:4},
+      {...original.shots[1],start_seconds:1,frames:32},
+    ]});
+    const bundle=await buildPortablePhoneMovie({files:clips,moviePlan,start:0,seconds:4,pythonSources});
+    const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
+    assert.throws(()=>run("python3",["finish_phone_movie.py","--run"],{cwd:folder,timeout:180000}));
+    assert.equal(existsSync(join(folder,"phone-movie-output")),false);
+    // Real original input is untouched on failed cut; no invented repeated frames.
+    assert.equal(hash(readFileSync(join(folder,"phone-clips/second.mp4"))),
+      hash(readFileSync(join(dir,"second.mp4"))));
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
