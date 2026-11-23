@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFeaturesForStudio } from "@/lib/ai/registry";
 import {
+  MAX_COMPARISON_AI_CHANGES, MAX_COMPARISON_LINES,
+  DocumentCompareError, compareLocalDocuments,
+  formatDocumentComparison, prepareDocumentComparisonAIRequest,
+  type DocumentComparison,
+} from "@/lib/ai/document-compare-tools";
+import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_CHARACTERS,
@@ -43,8 +49,23 @@ const AIDocumentIntelligence = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const sourceField = useRef<HTMLTextAreaElement>(null);
   const fileReadVersion = useRef(0);
+  const comparisonReadVersion = useRef(0);
+  const [comparisonSource, setComparisonSource] = useState("");
+  const [comparisonFileName, setComparisonFileName] = useState<string | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonIgnoreWhitespace, setComparisonIgnoreWhitespace] = useState(false);
+  const [comparison, setComparison] = useState<DocumentComparison | null>(null);
+  const [comparisonQuestion, setComparisonQuestion] = useState("");
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const comparisonAI = useAIStudioChat();
 
+  const invalidateComparison = () => {
+    comparisonAI.invalidate();
+    setComparison(null);
+    setComparisonError(null);
+  };
   const invalidate = () => {
+    invalidateComparison();
     ai.invalidate();
     setInspection(null);
     setSearchResults(null);
@@ -85,6 +106,86 @@ const AIDocumentIntelligence = () => {
     }
   };
 
+  const chooseComparisonFile = async (file: File | null) => {
+    const version = ++comparisonReadVersion.current;
+    invalidateComparison();
+    setComparisonLoading(!!file);
+    setComparisonSource("");
+    setComparisonFileName(null);
+    if (!file) {
+      setComparisonLoading(false);
+      return;
+    }
+    try {
+      const loaded = await readLocalDocument(file);
+      if (version !== comparisonReadVersion.current) return;
+      setComparisonSource(loaded.text);
+      setComparisonFileName(loaded.name);
+    } catch (failure) {
+      if (version === comparisonReadVersion.current) {
+        setComparisonError(explainError(failure));
+      }
+    } finally {
+      if (version === comparisonReadVersion.current) setComparisonLoading(false);
+    }
+  };
+  const editComparisonSource = (value: string) => {
+    comparisonReadVersion.current += 1;
+    setComparisonLoading(false);
+    setComparisonSource(value);
+    setComparisonFileName(null);
+    invalidateComparison();
+  };
+  const compareDocuments = () => {
+    invalidateComparison();
+    try {
+      setComparison(compareLocalDocuments(source, comparisonSource, {
+        beforeName: fileName, afterName: comparisonFileName,
+        ignoreWhitespace: comparisonIgnoreWhitespace,
+      }));
+    } catch (reason) {
+      const messages: Record<string, string> = {
+        invalid_source: "Enter nonempty text in both source boxes.",
+        too_long: "Each comparison input must contain at most 100,000 characters.",
+        too_many_lines: "Each input must have at most 1,200 lines for bounded local comparison.",
+      };
+      setComparisonError(reason instanceof DocumentCompareError
+        ? messages[reason.code] || "Comparison could not be completed safely."
+        : "Local comparison failed.");
+    }
+  };
+  const downloadComparison = (format: "txt" | "json") => {
+    if (!comparison) return;
+    const contents = format === "txt" ? formatDocumentComparison(comparison)
+      : JSON.stringify(comparison, null, 2);
+    const url = URL.createObjectURL(new Blob([contents], {
+      type: format === "txt" ? "text/plain;charset=utf-8" : "application/json",
+    }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "eternyx-local-document-diff." + format;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const analyzeComparison = () => {
+    if (!comparison) return;
+    try {
+      const prompt = prepareDocumentComparisonAIRequest(comparison, comparisonQuestion);
+      setComparisonError(null);
+      void comparisonAI.run("ai.documents.analyze", prompt);
+    } catch (reason) {
+      const message = reason instanceof DocumentCompareError
+        ? ({
+            no_changes: "No changes to analyze. The two documents match under the selected comparison mode.",
+            too_many_changes: "AI analysis accepts at most 12 changed lines. Narrow your source texts; no AI request was made.",
+            too_long: "The differences exceed the chat message budget. Narrow both sources manually; no text was silently truncated.",
+            invalid_question: "The comparison question must be at most 250 characters.",
+            invalid_source: "Both documents are required.",
+            too_many_lines: "Too many lines for comparison.",
+          }[reason.code]) : "AI comparison request could not be prepared.";
+      setComparisonError(message);
+    }
+  };
   const setEditedSource = (value: string) => {
     fileReadVersion.current += 1;
     setLoading(false);
@@ -100,6 +201,12 @@ const AIDocumentIntelligence = () => {
     setLoading(false);
     setKind("txt");
     setSource("");
+    comparisonReadVersion.current += 1;
+    setComparisonSource("");
+    setComparisonFileName(null);
+    setComparisonIgnoreWhitespace(false);
+    setComparisonQuestion("");
+    setComparisonLoading(false);
     setAiPassage(null);
     setFileName(null);
     setSearchTerm("");
@@ -323,6 +430,132 @@ const AIDocumentIntelligence = () => {
             )}
             {error && <Alert role="alert" variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
             {notice && <Alert role="status" aria-live="polite"><ShieldCheck className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
+          <CardHeader>
+            <CardTitle className="text-white">Local two-document comparison</CardTitle>
+            <CardDescription className="text-slate-400">
+              Compare the source above (A) to an independent text file or pasted text (B).
+              Deterministic line-by-line differences are computed privately in your browser, not generated by AI.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-slate-400">
+              Bounded to {MAX_COMPARISON_LINES.toLocaleString()} lines and 100,000 characters per input.
+              Reordered blocks may appear as removed and added lines. Only the optional AI analysis button
+              transmits the difference text to the existing ETERNYX AI Chat provider.
+            </p>
+            <p className="break-all text-sm text-slate-300">Source A: {fileName || "Current pasted/edited document"}</p>
+            <label htmlFor="document-compare-file" className="block text-sm text-slate-300">Optional source B text file</label>
+            <input
+              id="document-compare-file" type="file" accept=".txt,.md,.markdown,.csv,.json,.log"
+              onChange={e => {
+                void chooseComparisonFile(e.target.files?.[0] ?? null);
+                e.currentTarget.value = "";
+              }}
+              className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-700 file:px-3 file:py-1 file:text-white"
+            />
+            {comparisonLoading && <p role="status" className="text-sm text-cyan-200">Reading source B locally…</p>}
+            <label htmlFor="document-compare-source" className="block space-y-2 text-sm text-slate-300">
+              <span>Source B {comparisonFileName ? "· " + comparisonFileName : "· pasted or edited text"}</span>
+              <textarea id="document-compare-source" rows={7} maxLength={MAX_DOCUMENT_CHARACTERS}
+                value={comparisonSource} onChange={e => editComparisonSource(e.target.value)}
+                placeholder="Paste the second document to compare with source A above…"
+                className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white placeholder:text-slate-500"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" checked={comparisonIgnoreWhitespace} onChange={e => {
+                setComparisonIgnoreWhitespace(e.target.checked); invalidateComparison();
+              }} />
+              Ignore whitespace changes when matching lines
+            </label>
+            <Button type="button" disabled={!source.trim() || !comparisonSource.trim() || loading || comparisonLoading}
+              onClick={compareDocuments}>
+              <FileCheck2 className="mr-2 h-4 w-4" />Compare documents locally
+            </Button>
+            {comparison && (
+              <div className="space-y-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-4">
+                <Badge variant="outline">Actual local text diff · no AI call</Badge>
+                <p role="status" className="text-sm text-slate-300">
+                  {comparison.identical ? "No line differences found under this comparison mode." :
+                    comparison.removedLines + " removed · " + comparison.addedLines + " added · " +
+                    comparison.unchangedLines + " unchanged lines"}
+                </p>
+                <p className="text-xs text-slate-400">
+                  Source A: {comparison.beforeName} ({comparison.beforeLines} lines). Source B:
+                  {" "}{comparison.afterName} ({comparison.afterLines} lines). Exact original line numbers are retained.
+                </p>
+                {comparison.changes.length > 60 && <p className="text-xs text-amber-200">
+                  Displaying the first 60 of {comparison.changes.length} changed lines.
+                  Download the complete report to inspect all changes.
+                </p>}
+                <ul className="max-h-72 space-y-2 overflow-y-auto text-xs text-slate-300">
+                  {comparison.changes.slice(0, 60).map((entry, index) => (
+                    <li key={index} className="rounded-md border border-slate-700 p-2">
+                      <strong className={entry.kind === "removed" ? "text-rose-300" : "text-emerald-300"}>
+                        {entry.kind === "removed" ? "Removed · A line " + entry.beforeLine : "Added · B line " + entry.afterLine}
+                      </strong>
+                      <p className="mt-1 whitespace-pre-wrap break-words">{entry.text || "(empty line)"}</p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => void copy(formatDocumentComparison(comparison), "Full document differences")}>
+                    <ClipboardCopy className="mr-2 h-4 w-4" />Copy full difference report
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadComparison("txt")}>
+                    Download all (.txt)
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadComparison("json")}>
+                    Download all (.json)
+                  </Button>
+                </div>
+              </div>
+            )}
+            <section aria-label="Optional AI difference analysis" className="space-y-3 rounded-xl border border-violet-400/20 bg-slate-950 p-4">
+              <h3 className="font-semibold text-white">Optional AI interpretation of actual changes</h3>
+              <p className="text-sm text-slate-400">
+                Only clicking Analyze changes with AI Chat sends the bounded diff text to an external
+                model, uses existing ai.chat credits and stores chat history. Maximum {MAX_COMPARISON_AI_CHANGES}
+                changed lines; larger comparisons must be narrowed manually, without silent truncation.
+                The model's interpretation is not independent verification of either original document.
+              </p>
+              <label htmlFor="document-comparison-question" className="block space-y-2 text-sm text-slate-300">
+                <span>Optional comparison question · maximum 250 characters</span>
+                <input id="document-comparison-question" value={comparisonQuestion} maxLength={250}
+                  onChange={e => { setComparisonQuestion(e.target.value); comparisonAI.invalidate(); }}
+                  placeholder="Which requirements changed and need review?"
+                  className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white"
+                />
+              </label>
+              <Button type="button" onClick={analyzeComparison}
+                disabled={!comparison || comparison.identical || comparison.changes.length > MAX_COMPARISON_AI_CHANGES || comparisonAI.loading}>
+                {comparisonAI.loading ? "Analyzing comparison…" : "Analyze changes with AI Chat"}
+              </Button>
+              {comparison && comparison.changes.length > MAX_COMPARISON_AI_CHANGES && (
+                <p role="status" className="text-xs text-amber-200">
+                  This comparison has {comparison.changes.length} changed lines.
+                  Narrow the documents to at most {MAX_COMPARISON_AI_CHANGES} differences for optional AI analysis.
+                  Full local copy and downloads still work.
+                </p>
+              )}
+              {comparisonAI.error && <Alert role="alert" variant="destructive">
+                <XCircle className="h-4 w-4" /><AlertDescription>{comparisonAI.error}</AlertDescription>
+              </Alert>}
+              {comparisonAI.result && <div className="space-y-2">
+                <Badge variant="outline">AI interpretation · verify against both documents</Badge>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-sm text-slate-200">{comparisonAI.result}</pre>
+                <Button type="button" variant="outline" onClick={() => void copy(comparisonAI.result!, "AI document comparison")}>
+                  <ClipboardCopy className="mr-2 h-4 w-4" />Copy AI interpretation
+                </Button>
+              </div>}
+            </section>
+            {comparisonError && <Alert role="alert" variant="destructive">
+              <XCircle className="h-4 w-4" /><AlertDescription>{comparisonError}</AlertDescription>
+            </Alert>}
           </CardContent>
         </Card>
 
