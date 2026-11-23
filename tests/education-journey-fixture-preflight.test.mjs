@@ -17,12 +17,12 @@ const executor=readFileSync(new URL("../scripts/staging/educationJourneyFixtureP
 const release=readFileSync(new URL("../scripts/staging/runEducationHostedRelease.mjs",import.meta.url),"utf8");
 const workflow=readFileSync(new URL("../.github/workflows/education-hosted-release-readiness.yml",import.meta.url),"utf8");
 
-test("only exact fifteen successful fixture checks produce a sanitized read-only report",()=>{
-  assert.equal(FIXTURE_CHECKS.length,15);
+test("only exact twenty-one successful fixture checks produce a sanitized read-only report",()=>{
+  assert.equal(FIXTURE_CHECKS.length,21);
   assert.equal(new Set(FIXTURE_CHECKS).size,FIXTURE_CHECKS.length);
   const proof=snapshotJourneyFixture(raw(),env);
   assert.equal(assertJourneyFixtureEvidence(proof,env),true);
-  assert.equal(proof.passed_checks,15);
+  assert.equal(proof.passed_checks,21);
   assert.equal(proof.production_tested,false);
   assert.equal(proof.production_certified,false);
   assert.equal(JSON.stringify(proof).includes("10000000-"),false);
@@ -68,6 +68,13 @@ test("fixture SQL is read only, only returns booleans and checks instructor and 
   assert.match(sql,/expected_score/);
   assert.match(sql,/expected_max/);
   assert.match(sql,/user_attempts/);
+  assert.match(sql,/access_password_hash/);
+  assert.match(sql,/duration_minutes BETWEEN 30 AND 1440/);
+  assert.match(sql,/count\(\*\) FILTER \(WHERE is_correct IS TRUE\)=1/);
+  assert.match(sql,/option_text/);
+  assert.match(sql,/education_written_reviews/);
+  assert.match(sql,/count\(\*\)<90/);
+  assert.match(sql,/reviewer_has_one_unambiguous_grant/);
   for(const key of FIXTURE_CHECKS)assert.ok(sql.includes("'"+key+"'"),key);
 });
 test("single-use planning happens before any write and DB password is step scoped",()=>{
@@ -82,4 +89,17 @@ test("single-use planning happens before any write and DB password is step scope
   assert.doesNotMatch(executor,/process\.stdout\.write\(done\.stdout|process\.stderr\.write\(done\.stderr/);
   assert.ok(release.indexOf("assertJourneyFixtureEvidence(fixtureEvidence") <
     release.indexOf("for(const stage of stages)"));
+});
+
+// These are all fail-closed source-level regression contracts; live staging
+// still has to prove the grants and the actual exam fixtures.
+test("new one-shot safeguards match the deployed atomic CBT and review source contracts",()=>{
+  const atomic=readFileSync(new URL("../scripts/sql/staging-education-cbt-atomic-security.sql",import.meta.url),"utf8");
+  const review=readFileSync(new URL("../scripts/sql/staging-education-written-review.sql",import.meta.url),"utf8");
+  assert.match(atomic,/access_password_hash/);
+  assert.match(atomic,/NOT BETWEEN 1 AND 1440/);
+  assert.match(review,/LIMIT 100/);
+  for(const name of ["exam_not_password_locked","exam_has_safe_test_window","reviewer_has_one_unambiguous_grant","instructor_queue_has_spare_capacity","mcq_has_one_correct_option","mcq_choices_have_valid_labels"])
+    assert.ok(FIXTURE_CHECKS.includes(name),name);
+  assert.ok(sql.includes("JOIN public.teachers t ON t.id=g.teacher_id AND t.user_id=g.user_id"));
 });

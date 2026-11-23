@@ -4,12 +4,18 @@
 BEGIN TRANSACTION READ ONLY;
 WITH
   exam AS (
-    SELECT t.id,t.teacher_id,t.is_active,t.is_published,t.duration_minutes
+    SELECT t.id,t.teacher_id,t.is_active,t.is_published,
+      t.duration_minutes,t.access_password_hash
     FROM public.tests t WHERE t.id=:'test_id'::uuid
   ),
   questions AS (
     SELECT q.id,q.question_type,q.points FROM public.questions q
     WHERE q.test_id=:'test_id'::uuid
+  ),
+  mcq_options AS (
+    SELECT o.id,o.is_correct,o.option_text
+    FROM public.options o
+    WHERE o.question_id=:'mcq_id'::uuid
   ),
   chosen AS (
     SELECT q.points,o.is_correct FROM public.options o
@@ -34,13 +40,45 @@ SELECT pg_catalog.jsonb_build_object(
       SELECT 1 FROM exam t
       JOIN public.education_publication_requests r ON r.test_id=t.id
       WHERE r.status='approved' AND t.is_active IS TRUE
-        AND t.is_published IS TRUE AND t.duration_minutes>=30
+        AND t.is_published IS TRUE
+    ),
+    'exam_not_password_locked', EXISTS(
+      SELECT 1 FROM exam t
+      WHERE NULLIF(pg_catalog.btrim(
+        COALESCE(t.access_password_hash,'')), '') IS NULL
+    ),
+    'exam_has_safe_test_window', EXISTS(
+      SELECT 1 FROM exam t
+      WHERE t.duration_minutes BETWEEN 30 AND 1440
     ),
     'reviewer_is_owned_verified_teacher', EXISTS(
       SELECT 1 FROM exam e JOIN public.teachers t ON t.id=e.teacher_id
       JOIN reviewer r ON r.id=t.user_id
       JOIN public.education_instructor_grants g
         ON g.teacher_id=t.id AND g.user_id=r.id
+    ),
+    'reviewer_has_one_unambiguous_grant', (
+      SELECT count(*)=1
+      FROM public.education_instructor_grants g
+      JOIN public.teachers t ON t.id=g.teacher_id AND t.user_id=g.user_id
+      JOIN reviewer r ON r.id=g.user_id
+    ),
+    'instructor_queue_has_spare_capacity', (
+      SELECT count(*)<90 FROM public.user_answers a
+      JOIN public.user_attempts ua ON ua.id=a.attempt_id
+      JOIN public.questions q ON q.id=a.question_id
+        AND q.test_id=ua.test_id
+      JOIN public.tests t ON t.id=ua.test_id
+      JOIN public.education_publication_requests p ON p.test_id=t.id
+        AND p.status='approved'
+      LEFT JOIN public.education_written_reviews mr ON mr.answer_id=a.id
+      JOIN exam e ON e.teacher_id=t.teacher_id
+      WHERE mr.answer_id IS NULL
+        AND t.is_published IS TRUE
+        AND ua.status IN ('submitted','auto_submitted')
+        AND q.question_type='short_answer'
+        AND pg_catalog.char_length(pg_catalog.btrim(
+          COALESCE(a.short_answer_text,'')))>0
     ),
     'exactly_two_exam_questions', (SELECT count(*)=2 FROM questions),
     'exactly_one_mcq_question', (
@@ -55,6 +93,18 @@ SELECT pg_catalog.jsonb_build_object(
       SELECT count(*)=2 AND
         pg_catalog.bool_and(points IS NOT NULL AND points BETWEEN 1 AND 1000)
       FROM questions
+    ),
+    'mcq_has_one_correct_option', (
+      SELECT count(*) FILTER (WHERE is_correct IS TRUE)=1
+        AND count(*)>=2 AND count(*)<=10
+      FROM mcq_options
+    ),
+    'mcq_choices_have_valid_labels', (
+      SELECT count(*) BETWEEN 2 AND 10
+        AND pg_catalog.bool_and(is_correct IS NOT NULL)
+        AND pg_catalog.bool_and(pg_catalog.char_length(
+          pg_catalog.btrim(COALESCE(option_text,'')))>0)
+      FROM mcq_options
     ),
     'selected_mcq_option_belongs_to_question', (
       SELECT count(*)=1 AND pg_catalog.bool_and(is_correct IS NOT NULL)

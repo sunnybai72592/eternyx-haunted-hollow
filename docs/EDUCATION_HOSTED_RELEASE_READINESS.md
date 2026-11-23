@@ -44,6 +44,8 @@ The SQL checks derive the expected MCQ credit using the **server-side correct an
 
 On success, `test-results/education-journey-fixture-readiness.json` contains only fixed check names, pass status, and the exact GitHub commit/run/attempt. Both the release runner and final release verdict **independently require** this same-run evidence before permitting any stage to mutate. Old reports, a score mismatch, exhausted exam, or a missing instructor grant fail closed. `preflight` and the existing multi-fixture `rehearsal` remain unchanged.
 
+The staging-only fixture audit also rejects password-locked tests (the atomic start RPC intentionally prohibits them), exams outside a safe 30–1440-minute rehearsal window, MCQs without exactly one correct answer or meaningful option labels, instructors with ambiguous multiple verified grants, and a nearly saturated instructor queue (90 or more pending written reviews against the RPC's 100-row limit). These conservative checks avoid a false-negative one-shot run and keep its score model unambiguous. The fixed, sanitized evidence now requires **21** booleans, and none expose an answer key or actual user data.
+
 **This code has not been exercised against a real separate staging project.** It cannot create synthetic accounts/exams, provide staging credentials, validate browser UX, or authorize a production deployment. Those are still explicit human-controlled release prerequisites.
 
 ### Fail-closed requirements
