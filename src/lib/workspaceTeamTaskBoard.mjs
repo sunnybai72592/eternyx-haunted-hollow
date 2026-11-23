@@ -61,3 +61,66 @@ export function workspaceTeamTaskStatusPayload(task,toStatus,spaceId,memberIds){
     ...validated,p_expected_updated_at:task.updated_at,
   };
 }
+
+
+// Phase 34: explicitly selected columns may differ from the one-click
+// progression. All moves still use the same optimistic-concurrency RPC.
+export const WORKSPACE_TEAM_BOARD_DRAG_MIME="application/x-eternyx-team-task+json";
+const MAX_DRAG_RECEIPT_BYTES=650;
+export function workspaceTeamTaskMovePayload(task,toStatus,spaceId,memberIds){
+  if(!task||typeof spaceId!=="string"||!spaceId||
+     task.space_id!==spaceId||typeof task.id!=="string"||!task.id||
+     !WORKSPACE_TEAM_STATUSES.includes(task.status)||
+     !WORKSPACE_TEAM_STATUSES.includes(toStatus)||
+     toStatus===task.status||
+     typeof task.updated_at!=="string"||
+     !Number.isFinite(Date.parse(task.updated_at))||
+     !Array.isArray(memberIds)||
+     memberIds.some(id=>typeof id!=="string"||!id)){
+    throw Error("Task move is invalid or requires a fresh team review");
+  }
+  const validated=normalizeTeamTaskDraft({
+    title:task.title,details:task.details,status:toStatus,
+    priority:task.priority,due:task.due_on??"",
+    assignee:task.assignee_id??"",
+  },memberIds);
+  return {p_space_id:spaceId,p_task_id:task.id,
+    ...validated,p_expected_updated_at:task.updated_at};
+}
+export function workspaceTeamBoardDragReceipt(task,spaceId){
+  if(!task||typeof spaceId!=="string"||!spaceId||
+     task.space_id!==spaceId||typeof task.id!=="string"||!task.id||
+     !WORKSPACE_TEAM_STATUSES.includes(task.status)||
+     typeof task.updated_at!=="string"||
+     !Number.isFinite(Date.parse(task.updated_at))){
+    throw Error("Cannot drag a task without a verified team snapshot");
+  }
+  const receipt=JSON.stringify({
+    v:1,space_id:spaceId,task_id:task.id,
+    from_status:task.status,updated_at:task.updated_at,
+  });
+  if(receipt.length>MAX_DRAG_RECEIPT_BYTES)throw Error("Invalid task drag receipt");
+  return receipt;
+}
+export function workspaceTeamBoardResolveDrag(receipt,spaceId,visibleTasks){
+  if(typeof receipt!=="string"||!receipt||
+     receipt.length>MAX_DRAG_RECEIPT_BYTES||
+     typeof spaceId!=="string"||!spaceId||
+     !Array.isArray(visibleTasks)||visibleTasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT)
+    throw Error("Untrusted or oversized board drag data");
+  let data;
+  try {data=JSON.parse(receipt);}catch{throw Error("Invalid board drag receipt");}
+  if(!data||Array.isArray(data)||typeof data!=="object"||
+     Object.keys(data).length!==5||
+     data.v!==1||data.space_id!==spaceId||
+     typeof data.task_id!=="string"||!data.task_id||
+     !WORKSPACE_TEAM_STATUSES.includes(data.from_status)||
+     typeof data.updated_at!=="string"||
+     !Number.isFinite(Date.parse(data.updated_at)))
+    throw Error("Board drag identity or scope was not verified");
+  const matches=visibleTasks.filter(task=>
+    task?.id===data.task_id&&task.space_id===spaceId&&
+    task.status===data.from_status&&task.updated_at===data.updated_at);
+  if(matches.length!==1)throw Error("Task changed during drag; refresh and retry");
+  return matches[0];
+}
