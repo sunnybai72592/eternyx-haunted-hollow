@@ -71,7 +71,7 @@ test('review queue filters and sorts on the database, never fake local rows', as
   assert.match(src, /query\.eq\('next_action_kind', actionFilter\)/);
   assert.match(src, /query\.order\('next_review_on', \{ ascending: true, nullsFirst: false \}\)/);
   assert.match(src, /count: 'exact'/);
-  assert.match(src, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE - 1\)/);
+  assert.match(src, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE\)/);
   assert.match(src, /setReviewBucket\('all'\)/);
   assert.match(src, /setActionFilter\('all'\)/);
   assert.match(src, /setSortOrder\('newest'\)/);
