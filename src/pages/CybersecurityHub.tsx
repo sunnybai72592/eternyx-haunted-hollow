@@ -140,6 +140,16 @@ const destinations: Destination[] = [
     limitation: "This route checks for reviewed database tables and fails closed when unavailable. Production migration has not been deployed or verified.",
   },
   {
+    name: "Private evidence provenance and SHA-256",
+    description: "Hash actual private evidence bytes, compare repeat downloads, trace investigation references and export a local verification manifest.",
+    href: "/cybersecurity/evidence-provenance",
+    icon: FileCheck2,
+    category: "Security governance",
+    kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "Locally observed hashes are not trusted server attestations or legal chain of custody. Private read-only metadata and explicit file downloads.",
+  },
+  {
     name: "Unified private security cases",
     description: "Review real private assessment and investigation versions together by the same declared in-scope target, with analyst-only triage and history.",
     href: "/cybersecurity/unified-cases",
