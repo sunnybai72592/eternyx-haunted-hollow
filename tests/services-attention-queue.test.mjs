@@ -63,7 +63,7 @@ test('privileged updates still hit original request table, and triage saves refr
   const triage = await read('src/components/services/ServiceTriagePanel.tsx');
   assert.match(admin, /\.from\('service_requests'\)/);
   assert.match(admin, /\.eq\('updated_at', item\.updated_at\)/);
-  assert.match(admin, /<ServiceTriagePanel requestId=\{item\.id\} onSaved=\{\(\) => \{ void load\(\); void loadQueueCounts\(\); void loadActionCounts\(\); \}\}/);
+  assert.match(admin, /<ServiceTriagePanel requestId=\{item\.id\} onSaved=\{\(\) => \{ void load\(\); invalidateCountCards\(\); \}\}/);
   assert.match(triage, /onSaved\?: \(\) => void/);
   assert.match(triage, /onSaved\?\.\(\)/);
   assert.match(admin, /disabled=\{value === 'in_progress' \|\| value === 'completed'\}/);

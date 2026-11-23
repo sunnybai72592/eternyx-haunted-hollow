@@ -13,6 +13,7 @@ import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
+import { runServiceCountBudget } from '@/lib/serviceCountBudget';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
 import ServiceRequestSectionLinks from '@/components/services/ServiceRequestSectionLinks';
 import { readRequestPanel } from '@/lib/serviceRequestPanels';
@@ -55,6 +56,7 @@ export default function MyServiceRequests() {
   const [pendingReviewsOnly, setPendingReviewsOnly] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'request_updated'>('newest');
   const pulseGeneration = useRef(0);
+  const pulseAbortRef = useRef<AbortController | null>(null);
   const [pulseOwner, setPulseOwner] = useState<string | null>(null);
   const [pulseLoading, setPulseLoading] = useState(false);
   const [pulseCounts, setPulseCounts] = useState<{
@@ -75,37 +77,59 @@ export default function MyServiceRequests() {
   const [openJournal, setOpenJournal] = useState<string | null>(null);
   const loadPulse = useCallback(async () => {
     const seq = ++pulseGeneration.current;
+    pulseAbortRef.current?.abort();
     if (!userId) {
       setPulseOwner(null);
       setPulseLoading(false);
       setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
       return;
     }
+    const controller = new AbortController();
+    pulseAbortRef.current = controller;
     setPulseLoading(true);
+    // Deliberately construct only one count query at a time. The queue
+    // view is layered; eagerly firing four exact counts on page entry
+    // can amplify load when a database is already slow.
     const queries = [
-      supabase.from('service_customer_amendment_queue')
-        .select('id', { head: true, count: 'exact' }).eq('user_id', userId),
-      supabase.from('service_customer_amendment_queue')
+      (signal: AbortSignal) => supabase.from('service_customer_amendment_queue')
+        .select('id', { head: true, count: 'exact' }).eq('user_id', userId).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_customer_amendment_queue')
         .select('id', { head: true, count: 'exact' }).eq('user_id', userId)
-        .eq('has_updates_since_check_complete', true),
-      supabase.from('service_customer_amendment_queue')
+        .eq('has_updates_since_check_complete', true).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_customer_amendment_queue')
         .select('id', { head: true, count: 'exact' }).eq('user_id', userId)
-        .gt('awaiting_customer_count', 0),
-      supabase.from('service_customer_amendment_queue')
+        .gt('awaiting_customer_count', 0).abortSignal(signal),
+      (signal: AbortSignal) => supabase.from('service_customer_amendment_queue')
         .select('id', { head: true, count: 'exact' }).eq('user_id', userId)
-        .gt('pending_amendment_count', 0),
+        .gt('pending_amendment_count', 0).abortSignal(signal),
     ];
-    const results = await Promise.all(queries);
-    if (seq !== pulseGeneration.current || useAuthStore.getState().user?.id !== userId) return;
-    setPulseCounts({
-      all: results[0].error ? null : results[0].count,
-      newActivity: results[1].error ? null : results[1].count,
-      answers: results[2].error ? null : results[2].count,
-      pendingReviews: results[3].error ? null : results[3].count,
-    });
-    setPulseOwner(userId);
-    setPulseLoading(false);
+    try {
+      const { counts } = await runServiceCountBudget(
+        queries,
+        () => seq === pulseGeneration.current && useAuthStore.getState().user?.id === userId,
+        controller.signal,
+      );
+      if (seq !== pulseGeneration.current || useAuthStore.getState().user?.id !== userId) return;
+      setPulseCounts({
+        all: counts[0], newActivity: counts[1], answers: counts[2], pendingReviews: counts[3],
+      });
+      setPulseOwner(userId);
+    } finally {
+      if (seq === pulseGeneration.current && useAuthStore.getState().user?.id === userId) {
+        pulseAbortRef.current = null;
+        setPulseLoading(false);
+      }
+    }
   }, [userId]);
+
+  const invalidatePulse = () => {
+    pulseGeneration.current++;
+    pulseAbortRef.current?.abort();
+    pulseAbortRef.current = null;
+    setPulseOwner(null);
+    setPulseLoading(false);
+    setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
+  };
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -181,15 +205,18 @@ export default function MyServiceRequests() {
   }, [load]);
 
   useEffect(() => {
-    if (userId) void loadPulse();
-    else {
+    // Counts are opt-in. Do not launch four additional exact-count queries
+    // when entering the service desk or changing accounts.
+    pulseGeneration.current++;
+    pulseAbortRef.current?.abort();
+    setPulseOwner(null);
+    setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
+    setPulseLoading(false);
+    return () => {
       pulseGeneration.current++;
-      setPulseOwner(null);
-      setPulseCounts({ all: null, newActivity: null, answers: null, pendingReviews: null });
-      setPulseLoading(false);
-    }
-    return () => { pulseGeneration.current++; };
-  }, [userId, loadPulse]);
+      pulseAbortRef.current?.abort();
+    };
+  }, [userId]);
   // Focus links encode only an allowlisted task category, never search,
   // customer identity or a request UUID. Private request deep links win.
   useEffect(() => {
@@ -276,7 +303,7 @@ export default function MyServiceRequests() {
       setNotice('Your check-in was recorded. This records a manual action, not a read receipt.');
       setLinkedRequest((current) => current?.id === id ? { ...current, last_checked_at: data, has_updates_since_check: false, has_updates_since_check_extended: false, has_updates_since_check_complete: false, clarification_changes_since_check: 0 } : current);
       void load();
-      void loadPulse();
+      invalidatePulse();
     } catch (reason) {
       console.error('Customer service check-in failed', reason);
       if (useAuthStore.getState().user?.id === userId) setNotice('Could not record your check-in. Verify your connection and account, then retry.');
@@ -425,7 +452,7 @@ export default function MyServiceRequests() {
       <Button variant="ghost" asChild className="mb-5"><Link to="/services-hub"><ArrowLeft className="mr-2 h-4 w-4" />Services</Link></Button>
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Private service desk</p><h1 className="mt-2 text-3xl font-bold sm:text-4xl">My service requests</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Only your account and authorized administrators can read your briefs. Statuses reflect actual administrator updates.</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); void loadPulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void load(); invalidatePulse(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild><Link to="/services/request">New request</Link></Button></div>
       </header>
       {userId && <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Private queue sharing and export">
         <Button type="button" variant="outline" size="sm" disabled={!currentFocusPreset()}
@@ -442,7 +469,7 @@ export default function MyServiceRequests() {
       {userId && <ServiceDeskReadiness mode="customer" />}
       {userId && <ServiceActionPulse
         heading="My service action center"
-        description="Exact counts of your requests. Choose a card to clear other search filters and focus on one real type of work."
+        description="Select Load / refresh counts to fetch exact request totals on demand. Cards still filter the server when counts are unavailable."
         refreshing={pulseLoading}
         onRefresh={() => void loadPulse()}
         items={[
@@ -512,8 +539,8 @@ export default function MyServiceRequests() {
           <ServiceRequestSectionLinks requestId={visibleLinkedRequest.id} ownerId={user.id} mode="customer" />
           {(!selectedPanel || selectedPanel === 'conversation') && <ServiceRequestTimeline requestId={visibleLinkedRequest.id} ownerId={user.id} refreshToken={Date.parse(visibleLinkedRequest.updated_at)} />}
           {(!selectedPanel || selectedPanel === 'scope') && <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />}
-          {(!selectedPanel || selectedPanel === 'clarifications') && <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); void loadPulse(); }} />}
-          {(!selectedPanel || selectedPanel === 'brief-changes') && <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />}
+          {(!selectedPanel || selectedPanel === 'clarifications') && <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
+          {(!selectedPanel || selectedPanel === 'brief-changes') && <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
           {(!selectedPanel || selectedPanel === 'journal') && <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />}
         </Card>
       )}
@@ -563,12 +590,12 @@ export default function MyServiceRequests() {
               onClick={() => setOpenClarifications((current) => current === item.id ? null : item.id)}>
               <ClipboardList className="mr-2 h-4 w-4" />{openClarifications === item.id ? 'Close clarifications' : 'Clarification questions (' + item.open_clarification_count + ' open)'}
             </Button>
-            {openClarifications === item.id && user && <ServiceClarifications requestId={item.id} ownerId={user.id} onChanged={() => void load()} />}
+            {openClarifications === item.id && user && <ServiceClarifications requestId={item.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
             <Button type="button" variant="outline" className="mt-4 mr-2" aria-expanded={openAmendments === item.id}
               onClick={() => setOpenAmendments((current) => current === item.id ? null : item.id)}>
               <ClipboardList className="mr-2 h-4 w-4" />{openAmendments === item.id ? 'Close brief changes' : 'Brief changes (' + item.amendment_count + ')'}
             </Button>
-            {openAmendments === item.id && user && <ServiceBriefAmendments requestId={item.id} ownerId={user.id} onChanged={() => void load()} />}
+            {openAmendments === item.id && user && <ServiceBriefAmendments requestId={item.id} ownerId={user.id} onChanged={() => { void load(); invalidatePulse(); }} />}
             <Button type="button" variant="outline" className="mt-4 mr-2" aria-expanded={openJournal === item.id}
               onClick={() => setOpenJournal((current) => current === item.id ? null : item.id)}>
               <ClipboardList className="mr-2 h-4 w-4" />{openJournal === item.id ? 'Close activity journal' : 'Activity journal'}

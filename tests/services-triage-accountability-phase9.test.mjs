@@ -76,12 +76,12 @@ test('queue workload counts come from verified database head/count queries', asy
   const src = await read('src/pages/AdminServiceRequests.tsx');
   assert.match(src, /const loadQueueCounts = useCallback/);
   assert.match(src, /if \(!authorized \|\| !user\?\.id\) return/);
-  assert.match(src, /Promise\.all\(buckets\.map/);
+  assert.match(src, /runServiceCountBudget\(/);
   assert.match(src, /from\('service_admin_amendment_queue'\)/);
   assert.match(src, /select\('id', \{ head: true, count: 'exact' \}\)/);
   assert.match(src, /\.eq\('review_bucket', bucket\)/);
-  assert.match(src, /if \(seq !== countGeneration\.current\) return/);
-  assert.match(src, /data\[0\]\.error \? null : data\[0\]\.count/);
+  assert.match(src, /if \(seq !== countGeneration\.current \|\| useAuthStore\.getState\(\)\.user\?\.id !== actor\) return/);
+  assert.match(src, /overdue: counts\[0\]/);
   assert.match(src, /queueCounts\[bucket\] \?\? '—'/);
   assert.match(src, /onClick=\{\(\) => \{ setReviewBucket\(/);
   assert.match(src, /loadQueueCounts\(\)/);

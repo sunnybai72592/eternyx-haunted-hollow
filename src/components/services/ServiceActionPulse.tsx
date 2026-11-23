@@ -27,7 +27,7 @@ export default function ServiceActionPulse({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>
-          <RefreshCw className="mr-2 h-4 w-4" />{refreshing ? 'Refreshing…' : 'Refresh counts'}
+          <RefreshCw className="mr-2 h-4 w-4" />{refreshing ? 'Checking…' : 'Load / refresh counts'}
         </Button>
       </div>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -48,13 +48,13 @@ export default function ServiceActionPulse({
             <span className="text-xs font-medium leading-5">{item.label}</span>
             <span className="text-2xl font-bold tabular-nums">{item.count === null ? '—' : item.count}</span>
             <span className="text-xs leading-4 text-muted-foreground">
-              {item.count === null ? 'Count unavailable · filter still works' : item.description}
+              {item.count === null ? 'Not loaded or unavailable · filter still works' : item.description}
             </span>
           </button>
         ))}
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Counts are exact database results for requests, not message totals. A dash means unavailable, not zero.
+        Counts are exact database results for requests, not message totals. A dash means not loaded or unavailable, never zero.
         Filters use the server and never bypass account permissions.
       </p>
     </section>

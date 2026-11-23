@@ -138,8 +138,8 @@ test('admin verified saves retain optimistic conflict detection and account-scop
   assert.match(action, /\.maybeSingle\(\)/);
   assert.match(action, /Delivery statuses require a separately verified agreement/);
   assert.match(action, /if \(useAuthStore\.getState\(\)\.user\?\.id === actor\) setSaving\(null\)/);
-  assert.match(action, /void loadQueueCounts\(\)/);
-  assert.match(action, /void loadActionCounts\(\)/);
+  assert.match(action, /invalidateCountCards\(\)/);
+  assert.doesNotMatch(action, /void loadActionCounts\(\)/);
 });
 
 test('Phase 19 requires real multi-account database verification and no migration', async () => {
