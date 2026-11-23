@@ -46,7 +46,9 @@ function signed(kind,key,{claimId=null,outcome=null,nonce=null,signedAt=null}={}
  data.signature=sign(null,Buffer.from(agentActionMessage(data)),key).toString("base64url");
  return data;
 }
-test("actual signed HTTP → actual Postgres claim, permit, receipt, incident and revocation",async t=>{
+test("actual signed HTTP → actual Postgres claim, permit, receipt, incident and revocation",{
+ skip:process.env.ETERNYX_DOCKER_HTTP_POSTGRES_CI!=="1"?"Disposable PostgreSQL fixture exists only in the dedicated isolated CI job":false
+},async t=>{
  const agent=generateKeyPairSync("ed25519"),serverKey=generateKeyPairSync("ed25519");
  const signer=await webcrypto.subtle.importKey("pkcs8",
   serverKey.privateKey.export({type:"pkcs8",format:"der"}),

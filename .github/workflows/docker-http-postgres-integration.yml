@@ -56,6 +56,8 @@ jobs:
             docker exec --interactive eternyx-docker-postgres-http-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
           done
       - name: Verify live HTTP signed claims, permits, receipts, containment and revocation
+        env:
+          ETERNYX_DOCKER_HTTP_POSTGRES_CI: '1'
         run: node --test tests/docker-http-postgres-integration.test.mjs
       - name: Remove temporary PostgreSQL even on failure
         if: always()
