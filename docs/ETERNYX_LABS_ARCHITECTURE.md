@@ -4,7 +4,7 @@
 
 Route: /labs (public, browser-only). Navigation entry is visible on desktop and mobile. The Cybersecurity Hub and Developer Studio link to the same route, not separate duplicate labs.
 
-Twenty **working**, browser-only exercises (fifteen existing plus five defensive-operations tools):
+Twenty-five **working**, browser-only exercises (twenty existing plus five advanced browser diagnostics):
 1. Web developer playground — edit HTML, CSS and JavaScript, explicitly run a restricted iframe preview.
 2. DOM XSS practice — inspect the difference between an HTML sink and a text sink with controlled, local input.
 3. HTTP header clinic — deterministic checks against pasted header text; no outgoing HTTP requests.
@@ -25,8 +25,13 @@ Twenty **working**, browser-only exercises (fifteen existing plus five defensive
 18. security.txt review — checks synthetic disclosure contact, expiry and field structure without contacting a real organization.
 19. Security event correlation — summarizes bounded synthetic severity/event timelines and three login failures within ten minutes; no attacker attribution.
 20. Random token generator — uses browser Web Crypto to create locally displayed random token bytes in hex or base64url; nothing is stored or transmitted.
+21. IPv6 subnet calculator — exact 128-bit CIDR network, range end and address count without DNS or network scans.
+22. HTTP Cache-Control clinic — static analysis of caching and privacy directives for synthetic response examples.
+23. SPF record linter — simplified local SPF TXT mechanism analysis, DNS lookup budget and permissive-all warnings; no DNS queries.
+24. Token bucket simulator — deterministic request allow/deny decisions with bounded capacity, refill rate and event times; no enforcement against a server.
+25. Subresource Integrity hash builder — real Web Crypto SHA-256/384/512 base64 digests of exact local training content, never fetching remote scripts.
 
-**Truthful limits:** The twenty browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
+**Truthful limits:** The twenty-five browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
 
 ## Boundary and threat model
 
@@ -356,3 +361,53 @@ challenges. Manual responsive browser review remains necessary.
 
 No cloud, GPU, paid AI API, network scan, account secret, remote target,
 public hosted Labs enablement or Firecracker VM launch is introduced.
+
+
+## Phase 6 — five advanced browser diagnostics (25 total workstations)
+
+Five more functional browser workstations are implemented as bounded pure
+functions in src/lib/eternyxLabsAdvanced.mjs and the responsive
+BrowserAdvancedDiagnostics component.
+
+- **IPv6 CIDR** uses exact BigInt 128-bit arithmetic to calculate the
+  normalized address, network, end of range and decimal size; supports
+  compressed and expanded eight-hextet addresses including /0 and /128.
+  It does not model embedded IPv4 addresses, perform DNS, scan a subnet
+  or assume all addresses are assignable. IPv6 has no IPv4 broadcast.
+- **Cache-Control policy clinic** inspects pasted headers for duplicate
+  and conflicting directives, public/private, no-store, no-cache,
+  max-age and sensitive-response shared-cache risks. It never fetches
+  content or certifies real browser/cache behavior.
+- **SPF linter** recognizes a limited set of SPF mechanisms, warning about
+  permissive +all, missing termination, ptr, more than ten lookup terms,
+  and text after all. It does not resolve DNS, expand macros, recursively
+  evaluate include/redirect, or authenticate senders; it is not a full
+  RFC 7208 implementation.
+- **Token bucket simulator** uses exact bounded integer-second arithmetic
+  with capacity 1–100, refill 1–20 tokens per second, and up to 60
+  monotonic timestamps in the first hour. It reports each allow/deny
+  result. It never sends a request or enforces real server quotas.
+- **Subresource Integrity generator** computes true Web Crypto
+  SHA-256/SHA-384/SHA-512 digests of the exact entered UTF-8 bytes and
+  produces the corresponding SRI attribute. It does not fetch a script,
+  modify HTML, or verify origin identity or CORS. Avoid pasting secrets.
+
+All five tools use bounded inputs, accessible labels, clear errors and
+mobile-responsive results. The original three restricted iframe
+previews and 30 answer-checked local learning scenarios remain intact.
+
+### Merge verification
+
+    node --test tests/eternyx-labs-advanced.test.mjs
+    node --test tests/eternyx-labs-operations.test.mjs
+    node --test tests/eternyx-labs-advanced-practice.test.mjs
+    npm test
+    npm run build
+
+Regressions cover exact IPv6 CIDR math, invalid compression, caching
+risk warnings, simplified SPF syntax/lookup limits, token bucket
+refill decisions and real SHA digest vectors. CI plus manual desktop
+and mobile verification is required before shipping.
+
+No hosted Labs, Firecracker/VM activation, paid GPU/cloud/API, real rate
+limit, live target scan, certification, billing, or new backend is enabled.
