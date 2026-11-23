@@ -40,6 +40,11 @@ jobs:
           node --check scripts/workspace-team-staging-realtime.mjs
           node --check src/lib/workspaceRealtimeAcceptance.mjs
           node --check tests/workspace-staging-realtime.test.mjs
+      - name: Check Phase 23 approved disposable write probe syntax (offline only)
+        run: |
+          node --check scripts/workspace-team-staging-write-roles.mjs
+          node --check src/lib/workspaceRoleWriteAcceptance.mjs
+          node --check tests/workspace-role-write-acceptance.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
