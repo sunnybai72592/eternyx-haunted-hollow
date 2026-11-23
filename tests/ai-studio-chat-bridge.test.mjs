@@ -19,7 +19,7 @@ const request = await import("data:text/javascript;base64," + Buffer.from(compil
 test("the studio chat bridge supports only explicitly reviewed text-capable feature keys", () => {
   assert.deepEqual([...request.STUDIO_CHAT_FEATURES], [
     "ai.writing.generate", "ai.writing.translate", "ai.coding.assist", "ai.coding.review",
-    "ai.documents.analyze", "ai.documents.extract", "ai.research.summarize",
+    "ai.documents.analyze", "ai.documents.extract", "ai.research.summarize", "ai.audio.summarize",
   ]);
   for (const key of request.STUDIO_CHAT_FEATURES) {
     const message = request.prepareStudioChatMessage(key, "  Sample source  ");

@@ -33,7 +33,7 @@ const plannedStudios = [
   },
   {
     name: "AI Audio Studio",
-    description: "Private audio inspection and browser speech preview; AI transcription and provider generation remain disabled.",
+    description: "Local audio inspection, real opt-in microphone dictation, browser voice preview, and optional AI Chat transcript summarization. Uploaded-file transcription is pending.",
     icon: AudioLines,
   },
   {
@@ -187,7 +187,7 @@ const AIArsenal = () => {
                       <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-primary">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio"].includes(studio.name) ? "Local tools + opt-in AI Chat" : ["AI Audio Studio", "AI Document Intelligence", "AI Research Studio", "AI Agents Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio", "AI Audio Studio"].includes(studio.name) ? "Local tools + opt-in AI Chat" : ["AI Audio Studio", "AI Document Intelligence", "AI Research Studio", "AI Agents Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
                     </div>
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>
