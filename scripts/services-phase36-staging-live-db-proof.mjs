@@ -15,6 +15,7 @@ import {verifyServicesStagingEvidence,SERVICES_CATALOG_CHECKS} from './services-
 import {reconcileServicesHistory} from './services-phase35-managed-history-reconciler.mjs';
 import {auditorPrivilegeSelect,validateAuditorPrivilegeResult} from './services-phase37-auditor-privileges.mjs';
 import {exposedRoutineSql,verifyRoutineExposure} from './services-phase38-executable-definer-guard.mjs';
+import {phase39Sql,validatePhase39Facts} from './services-phase39-definer-safety.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const PRODUCTION='wcncuarekaofmfurbtbh';
@@ -72,7 +73,7 @@ export function buildAuditSql(schemaSql,verdictSql){
   '\\set ON_ERROR_STOP on',
   'BEGIN TRANSACTION READ ONLY;',
   "SET LOCAL statement_timeout = '12000ms';",
-  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges, (SELECT row_to_json(s) FROM ("+exposedRoutineSql()+") s) AS routine_surface) i;",
+  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges, (SELECT row_to_json(s) FROM ("+exposedRoutineSql()+") s) AS routine_surface, (SELECT row_to_json(z) FROM ("+phase39Sql()+") z) AS definer_hardening) i;",
   'SELECT row_to_json(h)::text FROM (',
   " SELECT COALESCE(json_agg(json_build_object('version',version::text,'name',COALESCE(name,'')) ORDER BY version), '[]'::json) AS managed_migrations",
   ' FROM supabase_migrations.schema_migrations',
@@ -101,6 +102,9 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
  let surface;
  try{surface=verifyRoutineExposure(identity.routine_surface)}
  catch{fail('dangerous_callable_routines_detected')}
+ let definerProof;
+ try{definerProof=validatePhase39Facts(identity.definer_hardening)}
+ catch{fail('definer_searchpath_risk_detected')}
  const skew=Math.abs(now.getTime()-Date.parse(identity.server_time));
  if(!Number.isFinite(skew)||skew>5*60*1000)fail('database_clock_invalid');
  if(!Array.isArray(history.managed_migrations)||history.managed_migrations.length===0)
@@ -137,6 +141,8 @@ export function validateLiveAuditOutput(output,target,now=new Date()){
    connectionRoleLeastPrivilegeVerified:true,
    auditorPrivilegeChecksPassed:privilegeProof.checksPassed,
    callableRoutineCatalogChecksPassed:surface.checksPassed,
+   definerHardeningCatalogChecksPassed:definerProof.catalogFacts,
+   insecureDefinerSearchPathDenied:true,
    dangerousExecutableRoutineSurfaceDenied:true,
    securityDefinerFunctionEffectsProven:false,
    sqlTransactionReadOnly:true,

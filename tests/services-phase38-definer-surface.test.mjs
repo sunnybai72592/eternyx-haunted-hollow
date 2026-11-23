@@ -21,7 +21,7 @@ const fixture=()=>[
   {role:'services_staging_auditor',db:'postgres',
    server_time:'2026-11-23T21:30:00+00:00',
    auditor_privileges:Object.fromEntries(REQUIRED_AUDITOR_ASSERTIONS.map(k=>[k,true])),
-   routine_surface:ok()},
+   routine_surface:ok(),definer_hardening:{auditor_nonvolatile_definer_execute_denied:true,client_definer_unsafe_search_path_denied:true,definer_trigger_unsafe_search_path_denied:true}},
   {managed_migrations:SERVICES_REPLAY_FILES.map((file,i)=>({
    name:file.slice(15,-4),version:'202611'+String(22000000+i).padStart(8,'0')
   }))},
