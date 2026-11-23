@@ -283,10 +283,10 @@ const destinations: Destination[] = [
 
 
 const journey = [
-  { number: "01", title: "Research the exposure", href: "/vulnerability-scanner", detail: "Review published CVE evidence; do not mistake a public record for a confirmed target vulnerability." },
-  { number: "02", title: "Document the threat", href: "/cybersecurity/threat-modeling", detail: "Map the relevant assets, trust boundaries, and hypotheses before testing." },
-  { number: "03", title: "Authorize the engagement", href: "/black-hat-pentesting", detail: "Record ownership, written scope, permitted methods, and evidence in your private engagement." },
-  { number: "04", title: "Record remediation", href: "/cybersecurity/assessment-remediation", detail: "Register verified findings, assign an owner, and export a report for retest." },
+  { step: "01", title: "Research the exposure", href: "/vulnerability-scanner", detail: "Review published CVE evidence; do not mistake a public record for a confirmed target vulnerability." },
+  { step: "02", title: "Document the threat", href: "/cybersecurity/threat-modeling", detail: "Map the relevant assets, trust boundaries, and hypotheses before testing." },
+  { step: "03", title: "Authorize the engagement", href: "/black-hat-pentesting", detail: "Record ownership, written scope, permitted methods, and evidence in your private engagement." },
+  { step: "04", title: "Record remediation", href: "/cybersecurity/assessment-remediation", detail: "Register verified findings, assign an owner, and export a report for retest." },
 ] as const;
 
 const modes = ["All execution types", "Local review", "Provider-backed", "Account workspace", "Limited telemetry", "Local lab", "Deployment-gated", "Learning resources"] as const;
@@ -508,8 +508,8 @@ const CybersecurityHub = () => {
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {journey.map((step) => (
-              <Link key={step.number} to={step.href} className="group rounded-2xl border border-cyan-300/15 bg-card/80 p-5 transition-colors hover:border-cyan-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                <div className="flex items-center justify-between text-xs font-bold text-cyan-200"><span>{step.number} / STEP</span><ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
+              <Link key={step.step} to={step.href} className="group rounded-2xl border border-cyan-300/15 bg-card/80 p-5 transition-colors hover:border-cyan-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                <div className="flex items-center justify-between text-xs font-bold text-cyan-200"><span>{step.step} / STEP</span><ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
                 <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
                 <p className="mt-2 text-xs leading-5 text-slate-400">{step.detail}</p>
               </Link>
