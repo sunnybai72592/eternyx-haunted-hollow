@@ -230,8 +230,12 @@ BEGIN
     WHERE space_id=sid AND entity_id=task AND event_type='comment_redacted')<>2 THEN
     RAISE EXCEPTION 'Expected two unique redactions (author and owner)';
   END IF;
-  IF NOT public.workspace_team_remove_step(sid,step)
-    OR EXISTS(SELECT 1 FROM public.workspace_team_task_steps WHERE id=step) THEN
+  IF NOT public.workspace_team_remove_step(sid,step) THEN
+    RAISE EXCEPTION 'Owner step removal was not acknowledged';
+  END IF;
+  -- PostgreSQL can evaluate boolean-expression operands in any order.
+  -- Check post-mutation state in a separate statement, never OR-chained.
+  IF EXISTS(SELECT 1 FROM public.workspace_team_task_steps WHERE id=step) THEN
     RAISE EXCEPTION 'Owner step removal did not persist';
   END IF;
   PERFORM public.workspace_team_set_status(sid,'archived');
