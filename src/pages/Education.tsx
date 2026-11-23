@@ -1,10 +1,15 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, BookOpen, Clock3, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, Clock3, ListChecks, RefreshCw, Search, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/store/authStore";
 import { filterEducationTests, normalizeEducationTest } from "@/lib/educationCatalog.mjs";
+import {
+  continueEducationCatalogItems, countEducationCatalogProgress,
+  filterEducationCatalogProgress, indexEducationOwnedAttempts,
+  prioritizeEducationCatalog,
+} from "@/lib/educationCatalogProgress.mjs";
 import { educationAttemptNavigation } from "@/lib/educationAttemptNavigation.mjs";
 import { atomicCbtEnabled } from "@/lib/educationCbtRpc";
 import { publicationRpcEnabled, listEnrolledEducationTests } from "@/lib/educationPublicationRpc";
@@ -32,6 +37,15 @@ export default function Education() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
+  const [progressFilter, setProgressFilter] = useState<"all" | "in_progress" | "available" | "submitted" | "unavailable">("all");
+  const previousUserRef = useRef(user?.id);
+  useLayoutEffect(() => {
+    if (previousUserRef.current === user?.id) return;
+    previousUserRef.current = user?.id;
+    setSearch("");
+    setSort("newest");
+    setProgressFilter("all");
+  }, [user?.id]);
 
   // Never return a different account's catalog from the React Query cache.
   const { data: tests = [], isPending, isFetching, error, refetch } = useQuery<EducationTest[]>({
@@ -65,15 +79,36 @@ export default function Education() {
       const { data, error } = await supabase.from("user_attempts")
         .select("id,test_id,user_id,status").eq("user_id", user!.id);
       if (error) throw error;
-      return (data ?? []).filter(row => row.user_id === user!.id) as OwnedExamAttempt[];
+      const rows = (data ?? []) as OwnedExamAttempt[];
+      // A mixed-owner, malformed or ambiguous server record must never be
+      // silently converted into permission to open a new assessment.
+      indexEducationOwnedAttempts(rows, user!.id);
+      return rows.filter(row => row.user_id === user!.id);
     },
   });
-  const ownedAttemptByTest = useMemo(() =>
-    new Map((attemptsQuery.data ?? []).map(attempt => [attempt.test_id, attempt])),
-    [attemptsQuery.data]);
+  const indexedAttempts = useMemo(() => attemptsQuery.isSuccess && user?.id
+    ? indexEducationOwnedAttempts(attemptsQuery.data ?? [], user.id)
+    : { byTest: new Map<string, OwnedExamAttempt>(), conflictTests: [] as string[] },
+    [attemptsQuery.isSuccess, attemptsQuery.data, user?.id]);
+  const ownedAttemptByTest = indexedAttempts.byTest;
   const attemptCheckReady = !atomicCbtEnabled || tests.length === 0 || attemptsQuery.isSuccess;
-
-  const visible = useMemo(() => filterEducationTests(tests, search, sort), [tests, search, sort]);
+  const progress = useMemo(() =>
+    countEducationCatalogProgress(tests, ownedAttemptByTest, attemptCheckReady, user?.id),
+    [tests, ownedAttemptByTest, attemptCheckReady, user?.id]);
+  const resumable = useMemo(() =>
+    atomicCbtEnabled && attemptCheckReady
+      ? continueEducationCatalogItems(tests, ownedAttemptByTest, true, user?.id)
+      : [], [tests, ownedAttemptByTest, attemptCheckReady, user?.id]);
+  const visible = useMemo(() => {
+    const searched = filterEducationTests(tests, search, sort);
+    const narrowed = atomicCbtEnabled
+      ? filterEducationCatalogProgress(searched, ownedAttemptByTest,
+          attemptCheckReady, user?.id, progressFilter)
+      : searched;
+    return sort === "next_action"
+      ? prioritizeEducationCatalog(narrowed, ownedAttemptByTest, attemptCheckReady, user?.id)
+      : narrowed;
+  }, [tests, search, sort, ownedAttemptByTest, attemptCheckReady, user?.id, progressFilter]);
   const busy = authLoading || (isAuthenticated && isPending);
 
   return (
@@ -180,8 +215,54 @@ export default function Education() {
                 <Button variant="outline" onClick={() => void attemptsQuery.refetch()}>Retry attempt check</Button>
               </AlertDescription></Alert>
             )}
+            {atomicCbtEnabled && attemptCheckReady && indexedAttempts.conflictTests.length > 0 && (
+              <Alert variant="destructive"><AlertDescription>
+                {indexedAttempts.conflictTests.length} assessment {indexedAttempts.conflictTests.length === 1 ? "has" : "have"}
+                conflicting attempt records. Its start/resume action is disabled until an authorized server review resolves the conflict.
+                No attempt was selected arbitrarily.
+              </AlertDescription></Alert>
+            )}
+            {atomicCbtEnabled && attemptCheckReady && tests.length > 0 && (
+              <section aria-label="Your assessment progress" className="space-y-3">
+                <h3 className="flex items-center gap-2 font-semibold">
+                  <ListChecks className="h-4 w-4 text-primary" aria-hidden="true"/>Your assessment progress
+                </h3>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {([
+                    ["In progress", progress.in_progress],
+                    ["Available", progress.available],
+                    ["Submitted", progress.submitted],
+                    ["Needs verification", progress.unavailable],
+                  ] as const).map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-border bg-card p-4">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-2xl font-bold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Counts describe only the {progress.total} assessment listings returned for your account.
+                  No grades or certificates are inferred from attempt status.
+                </p>
+                {resumable.length > 0 && <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="font-semibold">Continue where you left off</h4>
+                    <Button variant="outline" size="sm" onClick={() => setProgressFilter("in_progress")}>
+                      Show all in-progress assessments
+                    </Button>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    {resumable.map(item => <Button key={item.id} asChild variant="outline" className="min-h-11">
+                      <Link to={item.path}>{item.title} · {item.duration_minutes} min
+                        <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4"/>
+                      </Link>
+                    </Button>)}
+                  </div>
+                </div>}
+              </section>
+            )}
             {tests.length > 0 && (
-              <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-[1fr_auto]">
+              <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-3">
                 <div>
                   <label htmlFor="education-search" className="mb-2 block text-sm font-medium">Find an assessment</label>
                   <div className="relative">
@@ -198,14 +279,31 @@ export default function Education() {
                     <option value="newest">Newest first</option>
                     <option value="title">Title A–Z</option>
                     <option value="shortest">Shortest duration</option>
+                    {atomicCbtEnabled && <option value="next_action">Resume first</option>}
                   </select>
                 </div>
+                {atomicCbtEnabled && <div>
+                  <label htmlFor="education-progress-filter" className="mb-2 block text-sm font-medium">
+                    My assessment status
+                  </label>
+                  <select id="education-progress-filter" value={progressFilter}
+                    disabled={!attemptCheckReady}
+                    onChange={e => setProgressFilter(e.target.value as typeof progressFilter)}
+                    className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
+                    <option value="all">All statuses</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="available">Available to start</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="unavailable">Needs verification</option>
+                  </select>
+                </div>}
               </div>
             )}
 
             <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
               {visible.length} {visible.length === 1 ? "assessment" : "assessments"} displayed
               {tests.length !== visible.length ? ` out of ${tests.length}` : ""}.
+              {atomicCbtEnabled && !attemptCheckReady ? " Attempt status verification is pending." : ""}
             </p>
 
             {visible.length > 0 ? (
@@ -251,10 +349,14 @@ export default function Education() {
                 <BookOpen aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-primary" />
                 <h3 className="text-lg font-semibold">{tests.length ? "No matching assessments" : "No active assessments available"}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {tests.length ? "Try a different title or description." : "No active tests were returned for this account. Check again later."}
+                  {tests.length ? "No returned assessments match the current title, status and sorting filters." :
+                    "No active tests were returned for this account. Check again later."}
                 </p>
                 {tests.length > 0 && (
-                  <Button variant="outline" className="mt-4" onClick={() => { setSearch(""); setSort("newest"); }}>Clear filters</Button>
+                  <Button variant="outline" className="mt-4"
+                    onClick={() => { setSearch(""); setSort("newest"); setProgressFilter("all"); }}>
+                    Clear filters
+                  </Button>
                 )}
               </div>
             )}
