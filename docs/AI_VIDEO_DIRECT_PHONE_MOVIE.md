@@ -199,3 +199,30 @@ launcher or customer work. **This is an offline browser decode acceptance
 test**, not evidence of all browsers, mobile operating systems, streaming,
 generative AI, or production-deployed service readiness. A failed or absent
 browser workflow means real browser playback is not yet verified.
+
+## Per-shot cinematic editing: offsets, cuts, fades, and real source provenance
+
+Direct-to-finished-MP4 export now supports **independent shot starts, lengths,
+and fade-in/out settings** within the existing one-ZIP, one-launch workflow.
+Every original recording may be trimmed to its own whole-second offset
+(relative to the shared initial start) and assigned its own 1–3 second cut.
+The default-duration control updates all shot lengths together, while each
+shot's own length can then be adjusted independently. An on-screen timeline
+shows cumulative movie time and the selected source range for each shot.
+
+The source window must accommodate every offset plus cut; all cuts together
+must remain at most 30 seconds. Fade in/out may be 0, 0.25, or 0.5 seconds.
+These are actual FFmpeg fades **to/from black**, not cross-dissolves. On the
+24 FPS preset, 16 FPS-authored frame counts are converted exactly to 24 FPS
+(e.g., 4 frames → 6 frames, 8 frames → 12 frames). The unchanged legacy plan
+format still works when optional per-shot fields are omitted.
+
+All per-shot original offsets and lengths are checked against the private
+source manifest and against the converted clip's actual decoded frame count.
+Only the selected individual source intervals are normalized, reducing
+unnecessary CPU conversion. The local finished `manifest.json` contains a
+`source_ranges` list with original names, exact start/length, original hashes,
+and prepared-clip hashes. Original footage and rights information are kept
+locally; any unavailable/too-short clip fails closed without publishing a
+finished movie. Old 16 FPS editing drafts and conversion-only projects
+remain valid. The separate 24 FPS draft-editing limitation still applies.
