@@ -1,0 +1,39 @@
+name: Docker signed agent legacy-claim history fence (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-agent-history-fence.yml'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'src/lib/dockerSignedContainerHistoryFence.mjs'
+      - 'tests/docker-signed-container-history-fence.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_HISTORY_FENCE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  history-quarantine:
+    name: Refuse legacy UNKNOWN claims before signed Docker mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check actual agent and exact recovery-history fence
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerSignedContainerHistoryFence.mjs
+          node --check tests/docker-signed-container-history-fence.test.mjs
+      - name: Test old attempts, live claim ordering and shared filesystem locks without Docker
+        run: |
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
