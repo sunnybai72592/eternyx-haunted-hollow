@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
+    "automation:staging:plan": "node scripts/automation-staging-deployment-plan.mjs",
     "audit:tools": "node scripts/audit-tool-registry.mjs",
     "services:staging:acceptance": "node scripts/services-live-readonly-preflight.mjs",
     "audit:supabase:security": "node scripts/review-supabase-security.mjs",
