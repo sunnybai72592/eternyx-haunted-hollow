@@ -3,8 +3,10 @@
 // No signed remote dispatch, no automatic retry, no container start or restart.
 import {spawnSync} from "node:child_process";
 import {readFileSync,lstatSync} from "node:fs";
+import {join,dirname} from "node:path";
+import {fileURLToPath} from "node:url";
 import {lockLabAgent,reserveLabClaim,appendLabEvent} from "../src/lib/dockerLabRecovery.mjs";
-import {validateLiveStopContainer} from "../src/lib/dockerLiveStopCrashGate.mjs";
+import {validateLiveStopContainer,validateLiveStopHostEvidence} from "../src/lib/dockerLiveStopCrashGate.mjs";
 import {validateDockerHostReadOnlyPins} from "../src/lib/dockerHostReadOnlyAcceptance.mjs";
 
 const e=process.env;
@@ -43,6 +45,33 @@ try{
  if(!st.isDirectory()||st.isSymbolicLink()||
     st.uid!==process.getuid()||(st.mode&0o077)!==0)
   throw Error("Disposable crash journal is not operator-owned private directory.");
+ const permitId=e.ETERNYX_DOCKER_LIVE_STOP_PERMIT_ID;
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(permitId||""))
+  throw Error("Approved one-use permit identifier is required.");
+ const permitFile=join(dirname(dir),"approved-stop-permit-"+permitId+".used");
+ const permitStat=lstatSync(permitFile);
+ if(!permitStat.isFile()||permitStat.isSymbolicLink()||
+    permitStat.uid!==process.getuid()||(permitStat.mode&0o077)!==0||
+    permitStat.size>2048)throw Error("Untrusted one-use permit record.");
+ const permit=JSON.parse(readFileSync(permitFile,"utf8"));
+ if(permit.schema!=="eternyx-one-time-disposable-docker-stop-permit-v1"||
+    permit.permitId!==permitId||permit.containerId!==containerId||
+    permit.approvedCommit!==e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA||
+    permit.runDir!==dir||permit.agentId!==agentId||permit.claimId!==claimId)
+  throw Error("Permit not bound to exact one-time claim and worker.");
+ const acceptanceScript=fileURLToPath(new URL("./docker-host-network-evidence.mjs",import.meta.url));
+ const hostOutput=spawnSync(process.execPath,[acceptanceScript,"--inspect"],{
+  encoding:"utf8",shell:false,maxBuffer:524288,timeout:30000,env:e,windowsHide:true
+ });
+ if(hostOutput.error||hostOutput.status!==0||typeof hostOutput.stdout!=="string")
+  throw Error("Second rootless real-host operator acceptance failed before Docker mutation.");
+ const hostEvidence=validateLiveStopHostEvidence(JSON.parse(hostOutput.stdout),{
+  approvedSourceCommitSha:e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA,
+  containerId,daemonIdentitySha256:pins.expectedDaemonIdSha256,
+  imageSha256:pins.expectedImageSha256
+ });
+ if(hostEvidence.managedContainerPolicySha256!==e.ETERNYX_DOCKER_LIVE_STOP_POLICY_SHA256)
+  throw Error("Pinned disposable container policy changed before mutation.");
  const fullPins={
   containerId:pins.containerId,imageSha256:pins.expectedImageSha256,
   managedContainerPolicySha256:e.ETERNYX_DOCKER_LIVE_STOP_POLICY_SHA256
