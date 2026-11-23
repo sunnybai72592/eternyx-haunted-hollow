@@ -6,7 +6,7 @@
 
 A separate Supabase project named **Eternyx Staging** was confirmed using the connected Supabase project inventory, and was reported as `ACTIVE_HEALTHY` running PostgreSQL 17 in `us-east-1`, in the same organization as ETERNYX production. It is a *different project* from the production-linked ETERNYX instance.
 
-A read-only staging query and managed migration listing observed **three pentest/security-area migrations**, **zero of the 13 named Services migrations**, and no `public.service_requests`, `public.service_brief_amendments` or `public.service_request_journal` tables. This is a point-in-time observation, **not** a live connected execution of the Phase 36 Services security gate. Re-check before any deployment. The new Phase 42 inventory also checks all six Services catalog markers, not just those three tables.
+A read-only staging query and managed migration listing observed **three pentest/security-area migrations**, **zero of the 13 named Services migrations**, and **all six Services schema markers absent**: requests, customer followup queue, brief amendments, customer amendment queue, admin amendment queue, and request journal. This is a point-in-time observation using connected staging read-only metadata access, **not** a live connected execution of the Phase 36 Services security gate. Re-check before any deployment.
 
 **Services staging deployment is missing and remains a release blocker.** The previous assumption that no separate staging project had been created is no longer accurate.
 
