@@ -107,3 +107,56 @@ export async function readServicePageWithinBudget<T>(
     controller.abort();
   }
 }
+
+
+/**
+ * Exact, count-free page window. Fetch pageSize + 1 actual rows to prove
+ * whether a next page exists. The extra row is NEVER displayed or exported.
+ * Page totals are intentionally unknown; no approximate/fictional totals.
+ */
+export type ServiceWindowReadOutcome<T> =
+  | { kind: 'ready'; rows: T[]; hasMore: boolean }
+  | { kind: 'canceled' }
+  | { kind: 'unavailable'; message: string };
+
+export async function readServiceWindowWithinBudget<T>(
+  request: (signal: AbortSignal) => PromiseLike<{
+    data: T[] | null;
+    error: { code?: string | null; message?: string | null } | null;
+  }>,
+  pageSize: number,
+  current: () => boolean,
+  signal?: AbortSignal,
+  timeoutMs = 15_000,
+): Promise<ServiceWindowReadOutcome<T>> {
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new Error('Invalid Services window size');
+  }
+  const result = await readServicePageWithinBudget<T>(
+    async (signalValue) => {
+      const response = await request(signalValue);
+      // This count is the actual number of rows in the bounded window,
+      // never a claim about all matching database records.
+      return {
+        data: response.data,
+        count: Array.isArray(response.data) ? response.data.length : null,
+        error: response.error,
+      };
+    },
+    current,
+    signal,
+    timeoutMs,
+  );
+  if (result.kind !== 'ready') return result;
+  if (result.data.length > pageSize + 1) {
+    return {
+      kind: 'unavailable',
+      message: 'The request page exceeded the expected bounded window. No incomplete results were displayed.',
+    };
+  }
+  return {
+    kind: 'ready',
+    rows: result.data.slice(0, pageSize),
+    hasMore: result.data.length > pageSize,
+  };
+}
