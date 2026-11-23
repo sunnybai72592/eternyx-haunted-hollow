@@ -121,10 +121,11 @@ test("no Docker binary, server or network is actually invoked in the refusal har
 test("actual signed agent verifies CLI pins before first Docker command and on each invocation",()=>{
  const s=readFileSync(new URL("../scripts/docker-lab-agent.mjs",import.meta.url),"utf8");
  const func=s.slice(s.indexOf("function docker(args,ms=8000){"),s.indexOf("function localContext(){"));
- assert.match(func,/const cli=verifyPinnedDockerCliExecutable\(process\.env\)/);
+ assert.match(func,/withPinnedDockerCliFile\(process\.env,cli=>spawnSync\(cli\.execPath,args/);
  assert.match(func,/const childEnv=signedDockerCliEnvironment\(homedir\(\)\)/);
- assert.match(func,/spawnSync\(cli\.path,args/);
+ assert.match(func,/stdio:\["ignore","pipe","pipe",cli\.fd\]/);
  assert.match(func,/env:childEnv/);
+ assert.doesNotMatch(func,/spawnSync\(cli\.path,args/);
  assert.doesNotMatch(func,/spawnSync\("docker"/);
  assert.doesNotMatch(func,/shell:true/);
  const preflight=s.indexOf("const pins=validateSignedAgentEnginePins(process.env)");
