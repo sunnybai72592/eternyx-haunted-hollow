@@ -44,7 +44,7 @@ const domains = [
     id: "network",
     number: "03",
     title: "Network & infrastructure",
-    description: "Structure authorized assessments, preserve evidence, and drive findings to closure.",
+    description: "Link authorized engagement scope, private evidence snapshots, and analyst-owned remediation workflows.",
     icon: Network,
     href: "/cybersecurity/assessment-remediation",
     capabilities: ["Assessment register", "Evidence tracking", "Remediation ownership"],
@@ -118,6 +118,16 @@ const destinations: Destination[] = [
     kind: "Workbench",
     mode: "Local review",
     limitation: "Local STRIDE model and export; not a discovered or verified deployment weakness.",
+  },
+  {
+    name: "Private assessment cases",
+    description: "Work from attested pentest scope, manage analyst findings and remediation, and save versioned private evidence snapshots.",
+    href: "/cybersecurity/cases",
+    icon: FileCheck2,
+    category: "Security governance",
+    kind: "Workbench",
+    mode: "Account workspace",
+    limitation: "Requires signed-in, attested engagement; snapshots are owner-protected but findings and retests are analyst-reported, not independently verified.",
   },
   {
     name: "Assessment & remediation",
@@ -286,6 +296,7 @@ const journey = [
   { step: "01", title: "Research the exposure", href: "/vulnerability-scanner", detail: "Review published CVE evidence; do not mistake a public record for a confirmed target vulnerability." },
   { step: "02", title: "Document the threat", href: "/cybersecurity/threat-modeling", detail: "Map the relevant assets, trust boundaries, and hypotheses before testing." },
   { step: "03", title: "Authorize the engagement", href: "/black-hat-pentesting", detail: "Record ownership, written scope, permitted methods, and evidence in your private engagement." },
+  { step: "03A", title: "Save the private case", href: "/cybersecurity/cases", detail: "Record scoped assets, findings and retests, then store an auditable private snapshot." },
   { step: "04", title: "Record remediation", href: "/cybersecurity/assessment-remediation", detail: "Register verified findings, assign an owner, and export a report for retest." },
 ] as const;
 
