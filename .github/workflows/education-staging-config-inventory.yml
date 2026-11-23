@@ -1,0 +1,76 @@
+name: Education hosted staging configuration inventory (no network)
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: Report configuration blockers for this Education release mode
+        required: true
+        type: choice
+        options:
+          - preflight
+          - rehearsal
+          - journey
+        default: preflight
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: Inspect protected staging configuration without database access
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    timeout-minutes: 5
+    env:
+      ETERNYX_EDU_INVENTORY_MODE: ${{ inputs.run_mode }}
+      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+      ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+      ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+      ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+      ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+      ETERNYX_EDU_STAGING_TEST_ID: ${{ vars.ETERNYX_EDU_STAGING_TEST_ID }}
+      ETERNYX_EDU_STAGING_QUESTION_ID: ${{ vars.ETERNYX_EDU_STAGING_QUESTION_ID }}
+      ETERNYX_EDU_STAGING_OPTION_ID: ${{ vars.ETERNYX_EDU_STAGING_OPTION_ID }}
+      ETERNYX_EDU_STAGING_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_STAGING_ATTEMPT_ID }}
+      ETERNYX_EDU_STAGING_ANSWER_ID: ${{ vars.ETERNYX_EDU_STAGING_ANSWER_ID }}
+      ETERNYX_EDU_WRITE_TEST_ID: ${{ vars.ETERNYX_EDU_WRITE_TEST_ID }}
+      ETERNYX_EDU_WRITE_MCQ_ID: ${{ vars.ETERNYX_EDU_WRITE_MCQ_ID }}
+      ETERNYX_EDU_WRITE_MCQ_OPTION_ID: ${{ vars.ETERNYX_EDU_WRITE_MCQ_OPTION_ID }}
+      ETERNYX_EDU_WRITE_ESSAY_ID: ${{ vars.ETERNYX_EDU_WRITE_ESSAY_ID }}
+      ETERNYX_EDU_REVIEW_TEST_ID: ${{ vars.ETERNYX_EDU_REVIEW_TEST_ID }}
+      ETERNYX_EDU_REVIEW_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_REVIEW_ATTEMPT_ID }}
+      ETERNYX_EDU_REVIEW_ANSWER_ID: ${{ vars.ETERNYX_EDU_REVIEW_ANSWER_ID }}
+      ETERNYX_EDU_REVIEW_AWARDED_POINTS: ${{ vars.ETERNYX_EDU_REVIEW_AWARDED_POINTS }}
+      ETERNYX_EDU_FINALIZE_EXPECTED_SCORE: ${{ vars.ETERNYX_EDU_FINALIZE_EXPECTED_SCORE }}
+      ETERNYX_EDU_FINALIZE_EXPECTED_MAX: ${{ vars.ETERNYX_EDU_FINALIZE_EXPECTED_MAX }}
+      ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT }}
+      ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT: ${{ vars.ETERNYX_EDU_RESULT_LEGACY_A_ATTEMPT }}
+      ETERNYX_EDU_RESULT_A_SCORE: ${{ vars.ETERNYX_EDU_RESULT_A_SCORE }}
+      ETERNYX_EDU_RESULT_A_MAX: ${{ vars.ETERNYX_EDU_RESULT_A_MAX }}
+      ETERNYX_EDU_RESULT_B_SCORE: ${{ vars.ETERNYX_EDU_RESULT_B_SCORE }}
+      ETERNYX_EDU_RESULT_B_MAX: ${{ vars.ETERNYX_EDU_RESULT_B_MAX }}
+      ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
+      ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report missing configuration names, project isolation and offline fixture validity
+        run: node scripts/staging/educationStagingConfigurationInventory.mjs
+      - name: Upload sanitized configuration inventory even when blocked
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-staging-configuration-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-configuration-inventory.json
+          if-no-files-found: warn
+          retention-days: 7
