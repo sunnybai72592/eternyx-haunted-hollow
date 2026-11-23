@@ -27,11 +27,11 @@ const cases=[
   ["cookie-weak","4"],
   ["cookie-session","1"],
 ];
-test("exactly fifteen graded practice cases span five tracks and each has three live scenarios",()=>{
-  assert.equal(PRACTICE_TRACKS.length,5);
-  assert.equal(PRACTICE_CASES.length,15);
-  assert.deepEqual(PRACTICE_CASES.map(c=>c.id),cases.map(c=>c[0]));
-  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,15);
+test("exactly thirty graded practice cases span ten tracks and each has three live scenarios",()=>{
+  assert.equal(PRACTICE_TRACKS.length,10);
+  assert.equal(PRACTICE_CASES.length,30);
+  assert.deepEqual(PRACTICE_CASES.slice(0,15).map(c=>c.id),cases.map(c=>c[0]));
+  assert.equal(new Set(PRACTICE_CASES.map(c=>c.id)).size,30);
   for(const track of PRACTICE_TRACKS)
     assert.equal(PRACTICE_CASES.filter(c=>c.track===track.id).length,3);
   for(const c of PRACTICE_CASES){
@@ -130,7 +130,7 @@ test("trim and common octal/binary notation are normalized, but malicious and ma
 test("per-track progress is actual unique correct cases, idempotent and never saved",()=>{
   const empty=summarizePracticeProgress();
   assert.deepEqual([empty.passed,empty.total,empty.saved,empty.authenticated,empty.certificateAwarded],
-    [0,15,false,false,false]);
+    [0,30,false,false,false]);
   const duplicate=summarizePracticeProgress([
     "subnet-network","subnet-network","subnet-hosts","cors-wildcard",
   ]);
