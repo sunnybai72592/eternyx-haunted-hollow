@@ -111,11 +111,11 @@ test('counts invalidate after real writes and never persist across account chang
   assert.match(admin, /return \(\) => \{\s*countGeneration\.current\+\+;\s*actionCountGeneration\.current\+\+;/);
   assert.match(admin, /setActionCountOwner\(null\)/);
   assert.match(admin, /setActionCountLoading\(false\)/);
-  assert.match(admin, /void loadActionCounts\(\);/);
+  assert.match(admin, /onRefresh=\{\(\) => void loadActionCounts\(\)\}/);
   assert.match(admin, /onSaved=\{\(\) => \{ void load\(\); invalidateCountCards\(\); \}\}/);
   assert.match(admin, /onChanged=\{\(\) => \{ void load\(\); invalidateCountCards\(\); \}\}/);
   assert.match(owner, /setPulseOwner\(null\)/);
-  assert.match(owner, /void loadPulse\(\);/);
+  assert.match(owner, /onRefresh=\{\(\) => void loadPulse\(\)\}/);
   assert.match(owner, /pulseGeneration\.current\+\+/);
   assert.doesNotMatch(admin, /sessionStorage\.setItem|localStorage\.setItem/);
 });
