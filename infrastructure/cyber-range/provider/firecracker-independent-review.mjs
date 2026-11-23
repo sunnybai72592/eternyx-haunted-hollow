@@ -28,6 +28,9 @@ import {
   CASE_CHECKPOINT_FILE,CASE_CHECKPOINT_ACK,buildCaseCheckpoint,
   verifyCaseCheckpoint,
 } from "./firecracker-review-checkpoint.mjs";
+import {
+  auditOfflineRuntimeObservations,requiredRuntimeObservationFiles,
+} from "./firecracker-runtime-observations.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -549,5 +552,42 @@ export async function verifyIndependentCaseCheckpoint({
   return verifyCaseCheckpoint({
     savedBytes:raw,recomputed:checkpoint,
     externallyPinnedSha256,
+  });
+}
+
+
+/**
+ * Supplemental, read-only runtime-observation consistency check.
+ * Signatures of the original files and the final human disposition must
+ * verify first. The sidecars themselves are operator-collected and unsigned.
+ * A successful check is NOT independent journal authentication.
+ */
+export async function auditIndependentRuntimeObservations({
+  sessionId,operatorFingerprint,reviewerFingerprint,
+  caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
+  const keys=await reviewerKeys({owner});
+  const [reviewBytes,decisionBytes]=await Promise.all([
+    safeRead(join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT),
+    safeRead(join(source.folder,"review-disposition.json"),owner,MAX_RECEIPT),
+  ]);
+  const disposition=verifySignedReviewDisposition({
+    ...source,...keys,
+    reviewReport:JSON.parse(reviewBytes.toString("utf8")),
+    report:JSON.parse(decisionBytes.toString("utf8")),
+    operatorFingerprint,reviewerFingerprint,
+  });
+  if(disposition.sessionId!==sessionId||disposition.productionReady!==false)
+    throw Error("Unsigned or unrelated reviewer decision blocks runtime audit");
+  const needed=requiredRuntimeObservationFiles(disposition.mode);
+  const observations=Object.fromEntries(await Promise.all(
+    needed.map(async ({sidecar})=>[
+      sidecar,await safeRead(join(source.folder,sidecar),owner,4096),
+    ])
+  ));
+  return auditOfflineRuntimeObservations({
+    ...source,operatorFingerprint,sidecars:observations,
   });
 }
