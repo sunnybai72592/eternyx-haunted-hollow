@@ -44,7 +44,7 @@ try{
    productionDeploymentAuthorized:false
   })+"\n");
  }else{
-  const report=await inspectDockerHostReadOnly(cfg,{
+  const report=await inspectDockerHostReadOnly(pins(),{
    env,execDocker:docker,socketStat:lstatSync,
    journalEntries:journals,uid:process.getuid()
   });
