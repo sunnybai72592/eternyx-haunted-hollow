@@ -49,6 +49,50 @@ export function validateDockerHostJournal(entries){
   throw Error("Unresolved or corrupt Docker claim journal: investigate manually.");
  return entries.length;
 }
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const OPS=new Set(["start","stop","restart"]);
+export function validateDockerCrashTriageJournal(entries,claim,pinnedContainerId){
+ if(!Array.isArray(entries)||entries.length>100||!claim||
+    typeof claim!=="object"||Array.isArray(claim)||
+    Object.keys(claim).sort().join(",")!==
+    ["agentId","claimId","operation","containerId","events","outcome",
+     "attempted","acknowledged","attentionRequired"].sort().join(","))
+  throw Error("Invalid or unbounded crash-triage journal inventory.");
+ if(!UUID.test(claim.claimId||"")||!UUID.test(claim.agentId||"")||
+    !OPS.has(claim.operation)||claim.containerId!==pinnedContainerId||
+    claim.acknowledged!==false||claim.attentionRequired!==true)
+  throw Error("Crash triage requires an exact unresolved operator-owned claim.");
+ const sequences=[
+  ["reserved"],["reserved","attempted"],["reserved","guard_denied"],
+  ["reserved","attempted","completed"],["reserved","attempted","failed"]
+ ];
+ if(!Array.isArray(claim.events)||
+    !sequences.some(a=>JSON.stringify(a)===JSON.stringify(claim.events))||
+    claim.attempted!==claim.events.includes("attempted")||
+    claim.outcome!==(claim.events.includes("guard_denied")?"guard_denied":
+      claim.events.includes("completed")?"completed":
+      claim.events.includes("failed")?"failed":null))
+  throw Error("Claim transition and recorded terminal outcome disagree.");
+ const match=entries.filter(e=>e&&e.claimId===claim.claimId);
+ if(match.length!==1||entries.some(e=>!e||e.error||
+   (e.claimId===claim.claimId?
+     e.agentId!==claim.agentId||e.operation!==claim.operation||
+     e.acknowledged!==false||e.attentionRequired!==true||
+     e.outcome!==claim.outcome||e.attempted!==claim.attempted:
+     e.attentionRequired!==false||e.acknowledged!==true)))
+  throw Error("Unrelated unresolved or mismatched journal blocks crash triage.");
+ return {
+  journalCount:entries.length,
+  stage:claim.outcome!==null?"terminal_unacknowledged":
+    claim.attempted?"attempted_outcome_unknown":"reserved_only",
+  claimId:claim.claimId,
+  agentId:claim.agentId,
+  operation:claim.operation,
+  attempted:claim.attempted,
+  outcome:claim.outcome
+ };
+}
+
 function parseBounded(output,max=524288){
  if(typeof output!=="string"||output.length<2||output.length>max)
   throw Error("Missing or excessive Docker host metadata.");
@@ -80,7 +124,7 @@ function verifySocket(stat,uid){
 }
 export async function inspectDockerHostReadOnly(pins,{
  env={},execDocker,socketStat,journalEntries=()=>[],uid=0,
- observedAt=()=>new Date().toISOString()
+ observedAt=()=>new Date().toISOString(),recoveryTriage=null
 }={}){
  const cfg=validateDockerHostReadOnlyPins(pins,env);
  if(typeof execDocker!=="function"||typeof socketStat!=="function"||
@@ -88,7 +132,10 @@ export async function inspectDockerHostReadOnly(pins,{
   throw Error("Missing local-only Docker inspection transports.");
  // No Docker command runs before this admission gate.
  verifySocket(socketStat(cfg.socketPath),uid);
- const journalCount=validateDockerHostJournal(await journalEntries());
+ const allJournals=await journalEntries();
+ const triage=recoveryTriage===null?null:
+  validateDockerCrashTriageJournal(allJournals,recoveryTriage,cfg.containerId);
+ const journalCount=triage?triage.journalCount:validateDockerHostJournal(allJournals);
  const run=async args=>{
   if(!Array.isArray(args)||args.some(s=>typeof s!=="string"))
    throw Error("Docker CLI arguments malformed.");
@@ -134,6 +181,33 @@ export async function inspectDockerHostReadOnly(pins,{
  const time=observedAt();
  if(typeof time!=="string"||!Number.isFinite(Date.parse(time))||
     new Date(time).toISOString()!==time)throw Error("Untrusted observation clock.");
+ if(triage){
+  const running=first.State?.Running,status=first.State?.Status;
+  if(typeof running!=="boolean"||
+     !["running","exited","created","paused","restarting","dead"].includes(status))
+   throw Error("Crash triage requires an interpretable stable live container state.");
+  return {
+   schema:"eternyx-docker-host-crash-triage-v1",
+   scope:"operator_initiated_local_unix_socket_read_only_crash_triage",
+   observedAt:time,daemonIdentitySha256:cfg.expectedDaemonIdSha256,
+   socketEndpointSha256:hash("ETERNYX_DOCKER_HOST_SOCKET_V1\n"+endpoint),
+   imageSha256:cfg.expectedImageSha256,containerId:cfg.containerId,
+   managedContainerPolicySha256:firstPolicy.policySha256,
+   claimId:triage.claimId,agentId:triage.agentId,
+   claimOperation:triage.operation,claimJournalStage:triage.stage,
+   recordedOutcome:triage.outcome,attemptedRecorded:triage.attempted,
+   observedContainerStatus:status,observedContainerRunning:running,
+   journalClaimsChecked:journalCount,unresolvedClaimsObserved:true,
+   pinnedRootlessEngineObserved:true,networkNoneObserved:true,
+   stableDoubleInspectObserved:true,realDockerEngineReadOnlyContacted:true,
+   localMutationReexecuted:false,mutationOutcomeIndependentlyVerified:false,
+   automaticRetryAuthorized:false,receiptOnlyReplayAuthorized:false,
+   controlledCrashRecoveryTestPerformed:false,
+   independentHostAttestation:false,externalNetworkIsolationProved:false,
+   productionDeploymentAuthorized:false,stagingDockerExecutionAuthorized:false,
+   independentOperatorReviewRequired:true
+  };
+ }
  return {
   schema:"eternyx-docker-host-readonly-observation-v1",
   scope:"operator_initiated_local_unix_socket_read_only",
