@@ -34,12 +34,12 @@ test("only a genuinely newer, role-matched server task update can prove delivery
 test("subscribed alone never proves delivery, outsider packets always block",()=>{
   const p=proof();
   assert.equal(checkWorkspaceRealtimeEvidence(p).verified_realtime_delivery,true);
-  assert.throws(()=>checkWorkspaceRealtimeEvidence({...p,delivered:[]}),/not every authorized/i);
+  assert.throws(()=>checkWorkspaceRealtimeEvidence({...p,delivered:[]}),/not every authorized/ii);
   assert.throws(()=>checkWorkspaceRealtimeEvidence({...p,outsiderCount:1}),/outsider/);
   assert.throws(()=>checkWorkspaceRealtimeEvidence({...p,subscribed:["owner","editor","viewer"]}),/subscriber/);
   assert.throws(()=>checkWorkspaceRealtimeEvidence({...p,serverRow:{...event,space_id:"other"}}),/persisted/);
   assert.throws(()=>checkWorkspaceRealtimeEvidence({...p,
-    delivered:[{role:"owner",eventId:11},{role:"editor",eventId:11},{role:"viewer",eventId:12}]}),/not every authorized/);
+    delivered:[{role:"owner",eventId:11},{role:"editor",eventId:11},{role:"viewer",eventId:12}]}),/not every authorized/i);
 });
 test("staging result is not a production, browser, revocation or migration certificate",()=>{
   const r=checkWorkspaceRealtimeEvidence(proof());
