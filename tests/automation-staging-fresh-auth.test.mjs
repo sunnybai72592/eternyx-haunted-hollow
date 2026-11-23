@@ -237,3 +237,86 @@ test("protected workflow uses fresh password secrets ONLY after Management proje
   assert.ok(firstPassword>stageProof);
   assert.match(w,/inputs\.run_mode == 'ONE_TEMPORARY_WORKFLOW' && inputs\.write_approval == 'I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN'/);
 });
+
+test("approved one-workflow mode reuses only two fresh sign-ins across inspect, execute, replay, isolation and cleanup",async()=>{
+  let logins=0,saved=false,deleted=false,completed=false,runs=0,denied=0;
+  const accountSessions=sessions();
+  const calls=[];
+  const expected=runLocalWorkflow("  Bravo \nBravo\n Alpha ",getWorkflowPreset("sort"));
+  const fetcher=async(url,options)=>{
+    const path=new URL(url).pathname;
+    const identity=options.headers.Authorization;
+    calls.push(path);
+    if(path==="/auth/v1/token"){
+      const account=JSON.parse(options.body);
+      const index=account.email===alice?0:account.email===bob?1:-1;
+      if(index<0)throw Error("Unexpected synthetic login");
+      logins++;return json(accountSessions[index]);
+    }
+    const owner=identity==="Bearer "+accountSessions[0].access_token?"a":
+      identity==="Bearer "+accountSessions[1].access_token?"b":"invalid";
+    assert.notEqual(owner,"invalid");
+    if(path==="/auth/v1/user")
+      return json({id:owner==="a"?uidA:uidB,is_anonymous:false});
+    assert.equal(path,"/functions/v1/automation-control");
+    const body=JSON.parse(options.body);
+    if(body.action==="list")return json({
+      source:"authenticated_server",
+      workflows:saved&&!deleted&&owner==="a"?[{
+        id:workflowId,name:"ETERNYX staging acceptance "+identifier.slice(0,8),
+        revision:1,active:true,trigger_kind:"manual",
+      }]:[],
+    });
+    if(body.action==="history")return json({
+      source:"authenticated_server",rawInputsStored:false,
+      rawOutputsStored:false,runs:completed&&owner==="a"?[{
+        id:runId,workflow_id:workflowId,status:"completed",
+        trigger_type:"manual",output_lines:expected.outputLines,
+        created_at:"2026-11-23T15:30:00Z",
+        trace:Array.from({length:4},(_,i)=>({id:"s"+i,kind:"trim"})),
+      }]:[],
+    });
+    if(body.action==="save"){
+      assert.equal(owner,"a");assert.equal(saved,false);
+      saved=true;return json({ok:true,workflow_id:workflowId});
+    }
+    if(body.action==="run"){
+      assert.equal(body.workflowId,workflowId);
+      assert.equal(body.requestKey,requestKey);
+      if(owner==="b"){denied++;return json({error:"not found"},404);}
+      runs++;completed=true;
+      return json({
+        source:"authenticated_server",executedManually:true,
+        replayed:runs>1,runId,output:expected.output,
+        outputLines:expected.outputLines,
+        trace:Array.from({length:4},(_,i)=>({id:"s"+i})),
+      });
+    }
+    if(body.action==="delete"){
+      assert.equal(owner,"a");
+      assert.equal(body.workflowId,workflowId);
+      deleted=true;return json({ok:true,workflow_id:workflowId});
+    }
+    throw Error("Unexpected control action: "+body.action);
+  };
+  let id=0;
+  const report=await runFreshTwoOwnerAcceptance(env({
+    ETERNYX_AUTOMATION_TWO_OWNER_MODE:"ONE_TEMPORARY_WORKFLOW",
+    ETERNYX_AUTOMATION_TWO_OWNER_WRITE_CONSENT:"I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN",
+  }),{now,fetcher,uuid:()=>[identifier,requestKey][id++]});
+  assert.equal(logins,2);
+  assert.equal(saved,true);assert.equal(deleted,true);
+  assert.equal(runs,2);assert.equal(denied,1);
+  assert.equal(report.mode,"execute");
+  assert.equal(report.initialInspectionPassed,true);
+  assert.equal(report.manualWorkflowVerified,true);
+  assert.equal(report.isolationVerified,true);
+  assert.equal(report.singleWorkflowDeleted,true);
+  assert.equal(report.persistedHistoryMayRemain,true);
+  assert.equal(report.releaseAuthorized,false);
+  assert.equal(report.productionReady,false);
+  assert.equal(calls.filter(x=>x==="/auth/v1/token").length,2);
+  assert.ok(calls.every(x=>[
+    "/auth/v1/token","/auth/v1/user","/functions/v1/automation-control",
+  ].includes(x)));
+});
