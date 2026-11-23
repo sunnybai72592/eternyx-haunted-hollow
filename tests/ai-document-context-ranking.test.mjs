@@ -38,9 +38,15 @@ test("tie breaking is deterministic and candidate/result bounds are enforced", (
   assert.deepEqual(rank.rankDocumentContext("coating", [{ chunk_index: 0, content: "coating".repeat(5000) }]), []);
 });
 
-test("backend caller retains owner check, scans at most 200 and uses question-aware lookup", () => {
+test("backend caller retains the owner boundary and retrieves relevant text beyond index 200", () => {
   assert.match(chat, /\.eq\("user_id", user\.id\)/);
-  assert.match(chat, /\.limit\(200\)/);
-  assert.match(chat, /rankDocumentContext\(question, data \?\? \[\], limit\)/);
+  assert.match(chat, /\.eq\("document_id", documentId\)/);
+  assert.match(chat, /getDocumentQueryTerms\(question\)/);
+  assert.match(chat, /\.ilike\("content", "%" \+ term \+ "%"\)/);
+  assert.match(chat, /\.limit\(40\)/);
+  assert.match(chat, /\.slice\(0, 6\)/);
+  assert.match(chat, /rankDocumentContext\(question, \[\.\.\.uniqueChunks\.values\(\)\], limit\)/);
   assert.match(chat, /retrieveRelevantChunks\(supabase, documentId, message, 5\)/);
+  assert.match(chat, /No matching document passages were found/);
+  assert.doesNotMatch(chat, /\.limit\(200\)/);
 });
