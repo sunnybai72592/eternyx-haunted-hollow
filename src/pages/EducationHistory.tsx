@@ -8,7 +8,7 @@ import {formatAssessmentDate,assessmentDuration} from "@/lib/educationResults.mj
 import {
  buildEducationHistoryPageCsv,educationHistoryDisplayedSummary,
  educationHistoryResumeFocus,educationHistorySafeAction,
- organizeEducationHistoryPage,
+ organizeEducationHistoryPage,validateEducationHistoryDates,
 } from "@/lib/educationHistoryWorkbench.mjs";
 import {
  EDUCATION_HISTORY_PAGE_SIZE,
@@ -97,11 +97,15 @@ export default function EducationHistory(){
    return result;
   },
  });
- const shown=useMemo(()=>organizeEducationHistoryPage(
+ const dateRangeValid=useMemo(()=>{
+  try{validateEducationHistoryDates(fromDate,toDate);return true;}
+  catch{return false;}
+ },[fromDate,toDate]);
+ const shown=useMemo(()=>!dateRangeValid?[]:organizeEducationHistoryPage(
   history.data?.items??[],titles.data,{
    search,from:fromDate,to:toDate,sort,focus,
   },user?.id),
-  [history.data?.items,titles.data,search,fromDate,toDate,sort,focus,user?.id]);
+  [history.data?.items,titles.data,search,fromDate,toDate,sort,focus,user?.id,dateRangeValid]);
  const visibleSummary=useMemo(()=>educationHistoryDisplayedSummary(shown,user?.id),
   [shown,user?.id]);
  const resumeItems=useMemo(()=>educationHistoryResumeFocus(
@@ -209,14 +213,22 @@ export default function EducationHistory(){
        <label htmlFor="history-from-utc" className="mb-2 block text-sm font-medium">Started on or after (UTC)</label>
        <input id="history-from-utc" type="date" value={fromDate}
         max={toDate||undefined}
-        onChange={event=>setFromDate(event.target.value)}
+        onChange={event=>{
+         const value=event.target.value;
+         if(toDate&&value>toDate)setToDate("");
+         setFromDate(value);
+        }}
         className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"/>
       </div>
       <div>
        <label htmlFor="history-to-utc" className="mb-2 block text-sm font-medium">Started on or before (UTC)</label>
        <input id="history-to-utc" type="date" value={toDate}
         min={fromDate||undefined}
-        onChange={event=>setToDate(event.target.value)}
+        onChange={event=>{
+         const value=event.target.value;
+         if(fromDate&&value<fromDate)setFromDate("");
+         setToDate(value);
+        }}
         className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"/>
       </div>
       <div>
@@ -240,6 +252,9 @@ export default function EducationHistory(){
        </select>
       </div>
      </div>
+     {!dateRangeValid&&<p role="alert" className="mt-2 text-xs text-destructive">
+      This UTC date range is invalid. Adjust the dates before reviewing or exporting.
+     </p>}
      <p className="mt-3 text-xs text-muted-foreground">
       Date, title search, focus and sorting operate only on the {history.data.items.length} attempt records loaded on page {page+1}.
       Dates use UTC. The server-wide status selector above is separate.
