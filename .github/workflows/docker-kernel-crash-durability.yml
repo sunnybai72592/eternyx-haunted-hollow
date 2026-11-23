@@ -1,0 +1,33 @@
+name: Docker Linux kernel crash durability (NO DOCKER ENGINE IN CI)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-kernel-crash-durability.yml'
+      - 'scripts/docker-crash-durability-worker.mjs'
+      - 'scripts/docker-host-kernel-sigkill-drill.mjs'
+      - 'src/lib/dockerKernelCrashDurability.mjs'
+      - 'tests/docker-kernel-crash-durability.test.mjs'
+      - 'docs/DOCKER_REAL_KERNEL_SIGKILL_DRILL.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-sigkill-journal-durability:
+    name: Actual CI runner SIGKILL/fsync journal durability (not real Docker host)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check, no Docker Engine used
+        run: |
+          node --check scripts/docker-crash-durability-worker.mjs
+          node --check scripts/docker-host-kernel-sigkill-drill.mjs
+          node --check src/lib/dockerKernelCrashDurability.mjs
+      - name: Execute actual isolated child SIGKILL and fsynced journal checks
+        run: node --test tests/docker-kernel-crash-durability.test.mjs
