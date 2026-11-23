@@ -33,6 +33,9 @@ on:
       - 'tests/ctf-firecracker-review-checkpoint.test.mjs'
       - 'infrastructure/cyber-range/provider/firecracker-runtime-observations.mjs'
       - 'tests/ctf-firecracker-runtime-observations.test.mjs'
+      - 'infrastructure/cyber-range/provider/firecracker-runtime-addendum.mjs'
+      - 'scripts/cyber-range-runtime-addendum.mjs'
+      - 'tests/ctf-firecracker-runtime-addendum.test.mjs'
       - 'tests/ctf-firecracker-systemd-supervisor.test.mjs'
       - 'tests/ctf-firecracker-boot-controller.test.mjs'
       - '.github/workflows/ctf-firecracker-hardware-acceptance.yml'
@@ -65,6 +68,7 @@ jobs:
             tests/ctf-firecracker-review-disposition.test.mjs \
             tests/ctf-firecracker-review-checkpoint.test.mjs \
             tests/ctf-firecracker-runtime-observations.test.mjs \
+            tests/ctf-firecracker-runtime-addendum.test.mjs \
             tests/ctf-firecracker-systemd-supervisor.test.mjs \
             tests/ctf-firecracker-boot-controller.test.mjs
       - name: No operator approval must refuse live guest boot
