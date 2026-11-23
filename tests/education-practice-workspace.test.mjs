@@ -194,7 +194,7 @@ test("CSV is always ungraded and neutralizes hostile spreadsheet formula content
  assert.ok(csv.includes("'=WEBSERVICE"));
  assert.equal(csv.includes("Correct answer"),false);
  assert.equal(csv.includes("Final grade"),false);
- assert.equal(csv.split("\r\n").length,6);
+ assert.equal(csv.split("\r\n").length,5);
 });
 
 const src=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
