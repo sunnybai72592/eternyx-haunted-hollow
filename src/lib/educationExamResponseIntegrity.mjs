@@ -19,16 +19,18 @@ function questionSet(questions){
   if(!Array.isArray(questions)||questions.length<1||
      questions.length>EDUCATION_EXAM_MAX_QUESTIONS)
     throw new Error("Assessment questions are missing or exceed the configured limit.");
-  const seen=new Set();
+  const seen=new Set(),seenOrder=new Set();
   for(const question of questions){
     if(!question||!validExamId(question.id)||seen.has(question.id)||
        !knownTypes.has(question.question_type)||
        !cleanedText(question.question_text,4000)||
        !Number.isSafeInteger(question.points)||question.points<1||question.points>1000||
-       !Number.isSafeInteger(question.order_index)||question.order_index<0){
+       !Number.isSafeInteger(question.order_index)||question.order_index<0||
+       seenOrder.has(question.order_index)){
       throw new Error("Assessment question metadata is invalid or duplicated.");
     }
     seen.add(question.id);
+    seenOrder.add(question.order_index);
   }
   return seen;
 }
