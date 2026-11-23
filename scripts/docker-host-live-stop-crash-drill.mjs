@@ -29,7 +29,10 @@ function liveHost(){
   approvedSourceCommitSha:e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA,
   containerId:e.ETERNYX_DOCKER_HOST_CONTAINER_ID,
   daemonIdentitySha256:e.ETERNYX_DOCKER_HOST_DAEMON_ID_SHA256,
-  imageSha256:e.ETERNYX_DOCKER_HOST_IMAGE_SHA256
+  imageSha256:e.ETERNYX_DOCKER_HOST_IMAGE_SHA256,
+  managedContainerPolicySha256:e.ETERNYX_DOCKER_LIVE_STOP_POLICY_SHA256,
+  socketEndpointSha256:e.ETERNYX_DOCKER_HOST_SOCKET_SHA256,
+  routeSnapshotSha256:e.ETERNYX_DOCKER_HOST_ROUTE_SHA256
  });
 }
 function container(expectedState,baseline){
@@ -116,6 +119,8 @@ try{
     !SHA.test(e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA||"")||
     !HEX.test(e.ETERNYX_DOCKER_HOST_CONTAINER_ID||"")||
     !HEX.test(e.ETERNYX_DOCKER_LIVE_STOP_POLICY_SHA256||"")||
+    !HEX.test(e.ETERNYX_DOCKER_HOST_SOCKET_SHA256||"")||
+    !HEX.test(e.ETERNYX_DOCKER_HOST_ROUTE_SHA256||"")||
     !UUID.test(e.ETERNYX_DOCKER_LIVE_STOP_PERMIT_ID||""))
   throw Error("Separate written permit, approved source, isolated host, and exact pinned disposable target required.");
  const parent=realpathSync(e.ETERNYX_DOCKER_LIVE_STOP_PRIVATE_DIR||"");
