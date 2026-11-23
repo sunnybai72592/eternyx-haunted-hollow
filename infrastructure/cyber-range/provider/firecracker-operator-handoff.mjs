@@ -17,6 +17,9 @@ import {
 } from "./firecracker-operator-evidence.mjs";
 import {HARDWARE_EVIDENCE_DIR} from "./firecracker-hardware-evidence.mjs";
 import {REVIEW_CASE_BASE} from "./firecracker-independent-review.mjs";
+import {
+  commitHandoffImport,auditHandoffImport,
+} from "./firecracker-handoff-import-journal.mjs";
 
 export const REVIEW_INBOX="/var/lib/eternyx-reviewer/inbox";
 const SHA=/^[a-f0-9]{64}$/;
@@ -257,9 +260,9 @@ export async function inspectOperatorHandoff(options={}){
  * acquired independently and are never inside this operator transfer packet.
  * Incomplete/crashed imports remain blocked, not overwritten automatically.
  */
-export async function importOperatorHandoff({
+async function runReviewerImport({
   sessionId,trustedOperatorFingerprint,expectedTransportSha256,
-  caseDir=REVIEW_CASE_BASE,owner=0,
+  caseDir=REVIEW_CASE_BASE,owner=0,resume=false,
 }={}){
   fixedDir(caseDir,REVIEW_CASE_BASE);
   const {envelope,verification}=await inspectInbox({
@@ -268,30 +271,48 @@ export async function importOperatorHandoff({
   await privateDir(caseDir,owner);
   const folder=join(caseDir,requireSession(sessionId));
   await privateDir(folder,owner);
-  const files=[
-    ["operator-report.json",Buffer.from(
-      JSON.stringify(envelope.operatorReport)+"\n","utf8")],
-    ["operator-public.pem",Buffer.from(envelope.operatorPublicPem,"utf8")],
-  ];
-  if(files[0][1].length>MAX_REPORT||files[1][1].length>MAX_PEM)
-    throw Error("Unsafe operator receipt input length");
-  // Never replace preexisting independently staged or partially imported data.
-  for(const [name] of files){
-    try{
-      await lstat(join(folder,name));
-      throw Error("Existing reviewer case file requires human reconciliation");
-    }catch(e){
-      if(e?.code!=="ENOENT")throw e;
-    }
-  }
-  for(const [name,body] of files)
-    await writeOnce(join(folder,name),body,owner);
-  await syncDir(folder);
+  const receiptBytes=Buffer.from(
+    JSON.stringify(envelope.operatorReport)+"\n","utf8");
+  const publicPemBytes=Buffer.from(envelope.operatorPublicPem,"utf8");
+  const record=await commitHandoffImport({
+    folder,owner,sessionId,operatorSignerFingerprint:trustedOperatorFingerprint,
+    transportSha256:expectedTransportSha256,receiptBytes,publicPemBytes,resume,
+  });
   return Object.freeze({
     sessionId,mode:verification.mode,importedOffline:true,
-    importedFiles:2,independentSourcesIncluded:false,
-    humanReviewStillRequired:true,productionReady:false,
+    ...(resume?{manuallyResumed:true}:{}),
+    importedFiles:2,importJournalCommitted:record.verified,
+    independentSourcesIncluded:false,humanReviewStillRequired:true,
+    productionReady:false,
   });
+}
+/** Only a new, pre-inspected reviewer case may start a fresh import. */
+export async function importOperatorHandoff(options={}){
+  return runReviewerImport({...options,resume:false});
+}
+/**
+ * Recovery never deletes or overwrites: its existing start journal must
+ * match the externally pinned receipt; any partial file must match exactly.
+ */
+export async function resumeOperatorHandoff(options={}){
+  return runReviewerImport({...options,resume:true});
+}
+/**
+ * Read-only state inspection can report pending, committed or legacy
+ * without starting a recovery or promoting partially imported evidence.
+ */
+export async function auditImportedHandoff({
+  sessionId,trustedOperatorFingerprint,expectedTransportSha256,
+  caseDir=REVIEW_CASE_BASE,owner=0,
+}={}){
+  fixedDir(caseDir,REVIEW_CASE_BASE);
+  await inspectInbox({sessionId,trustedOperatorFingerprint,
+    expectedTransportSha256,owner});
+  await privateDir(caseDir,owner);
+  const folder=join(caseDir,requireSession(sessionId));
+  return auditHandoffImport({folder,owner,sessionId,
+    operatorSignerFingerprint:trustedOperatorFingerprint,
+    transportSha256:expectedTransportSha256,allowLegacy:true});
 }
 /**
  * Reader compares the transferred packet against staged exact operator inputs,
@@ -316,7 +337,15 @@ export async function verifyImportedHandoff({
        JSON.stringify(envelope.operatorReport)+"\n","utf8"))||
      !pem.equals(Buffer.from(envelope.operatorPublicPem,"utf8")))
     throw Error("Reviewer staged operator receipt diverged from pinned handoff");
+  const commit=await auditHandoffImport({
+    folder,owner,sessionId,
+    operatorSignerFingerprint:trustedOperatorFingerprint,
+    transportSha256:expectedTransportSha256,
+  });
+  if(commit.state!=="committed"||commit.verified!==true)
+    throw Error("Reviewer import is not durably committed");
   return Object.freeze({
+    importJournalCommitted:true,
     ...verification,importIntegrityVerified:true,
     independentSourcesIncluded:false,productionReady:false,
   });
