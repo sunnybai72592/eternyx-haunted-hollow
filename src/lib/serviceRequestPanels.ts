@@ -34,6 +34,7 @@ export function readRequestPanel(search: string, mode: ServicePanelMode): AdminR
 
 export function buildRequestPanelLink(origin: string, requestId: string, mode: 'customer', panel: CustomerRequestPanel): string;
 export function buildRequestPanelLink(origin: string, requestId: string, mode: 'admin', panel: AdminRequestPanel): string;
+export function buildRequestPanelLink(origin: string, requestId: string, mode: ServicePanelMode, panel: AdminRequestPanel): string;
 export function buildRequestPanelLink(origin: string, requestId: string, mode: ServicePanelMode, panel: AdminRequestPanel): string {
   if (!requestIdPattern.test(requestId)) throw new Error('Invalid request reference');
   if (!matchesMode(panel, mode)) throw new Error('Unsupported Services request panel');
