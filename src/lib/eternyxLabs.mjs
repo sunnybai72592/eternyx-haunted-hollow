@@ -34,6 +34,11 @@ export const labCatalog = Object.freeze([
   { id: "cidrcheck", title: "IPv4 and IPv6 CIDR membership", area: "Network fundamentals", level: "Intermediate", description: "Check whether an address belongs to a CIDR block without network probes." },
   { id: "hsts", title: "HSTS transport policy clinic", area: "Web hardening", level: "Intermediate", description: "Review HTTP Strict-Transport-Security directives without contacting a website." },
   { id: "dmarc", title: "DMARC email defense clinic", area: "Email security", level: "Intermediate", description: "Inspect synthetic DMARC policy, alignment and enforcement coverage without DNS." },
+  { id: "pbkdf2", title: "PBKDF2 key derivation", area: "Cryptographic fundamentals", level: "Intermediate", description: "Derive real PBKDF2-HMAC-SHA256 bytes using a new random salt." },
+  { id: "aesgcm", title: "AES-GCM authenticated encryption", area: "Cryptographic integrity", level: "Intermediate", description: "Encrypt, decrypt and reject modified training ciphertext with ephemeral AES-256-GCM." },
+  { id: "totp", title: "TOTP one-time code calculator", area: "Identity security", level: "Intermediate", description: "Compute RFC 6238 training OTPs with real Web Crypto HMAC and a specified timestamp." },
+  { id: "origins", title: "Browser origin comparison", area: "Web security", level: "Foundations", description: "Compare HTTP(S) URL origins without fetching DNS or revealing query values." },
+  { id: "csvsafe", title: "CSV formula neutralizer", area: "Data safety", level: "Intermediate", description: "Quote synthetic CSV cell values and neutralize common spreadsheet formula triggers." },
 ]);
 
 export const sampleHeaders = [

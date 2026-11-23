@@ -8,14 +8,15 @@ import {
 import {labCatalog} from "../src/lib/eternyxLabs.mjs";
 const read=path=>readFile(new URL("../"+path,import.meta.url),"utf8");
 
-test("five original foundation workstations remain in a thirty-tool Labs catalog",()=>{
+test("five original foundation workstations remain in a thirty-five-tool Labs catalog",()=>{
   const ids=labCatalog.map(x=>x.id);
-  assert.equal(ids.length,30);
-  assert.equal(new Set(ids).size,30);
+  assert.equal(ids.length,35);
+  assert.equal(new Set(ids).size,35);
   assert.deepEqual(ids.slice(10,15),["subnet","chmod","csp","cors","cookie"]);
   assert.deepEqual(ids.slice(15,20),["dns","http","securitytxt","events","tokens"]);
   assert.deepEqual(ids.slice(20,25),["ipv6","cache","spf","ratelimit","sri"]);
-  assert.deepEqual(ids.slice(-5),["pkce","hmac","cidrcheck","hsts","dmarc"]);
+  assert.deepEqual(ids.slice(25,30),["pkce","hmac","cidrcheck","hsts","dmarc"]);
+  assert.deepEqual(ids.slice(-5),["pbkdf2","aesgcm","totp","origins","csvsafe"]);
 });
 
 test("IPv4 CIDR calculator computes standard network boundaries and masks",()=>{
@@ -156,7 +157,7 @@ test("all five working controls appear in Labs without secret uploads or public 
     read("src/lib/eternyxLabsFoundations.mjs"),
   ]);
   assert.match(page,/BrowserSecurityFoundations selected=\{selected\}/);
-  assert.match(page,/Search 30 workstations/);
+  assert.match(page,/Search 35 workstations/);
   for(const id of ["subnet","chmod","csp","cors","cookie"])
     assert.ok(ui.includes('selected==="'+id+'"'));
   assert.match(ui,/role="alert"/);
