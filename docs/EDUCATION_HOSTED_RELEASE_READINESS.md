@@ -17,7 +17,7 @@ With the read-only approval selected, it executes:
 
 ### One-time mode — \`rehearsal\`
 Requires *every* separate opt-in: CBT write/no-retake acknowledgment; instructor review/persistent-mark acknowledgment; trusted final grade/immutable acknowledgment; and the full-rehearsal irreversible-action acknowledgment. It runs the read-only suite first, then:
-1. Start, save MCQ + written response, and submit **one fresh synthetic exam**, with cross-account/late-write/idempotency checks.
+1. Start, save MCQ + written response, and submit **one fresh synthetic exam**, with cross-account/late-write/idempotency checks and nine direct-table forgery/denial probes. These are destructive **attempts** if staging permissions are broken; the run halts immediately and does not reset evidence.
 2. Record **one synthetic instructor's actual written-answer review** on a separately prepared, already submitted attempt.
 3. Finalize that **same reviewed attempt** with the staging-only trusted key; verify immutable ledger, idempotency, and owner-only results.
 4. Re-verify the finalized attempt via the separate result-reader suite (the result A fixture **must match** the reviewed/finalized attempt and its expected score/max).
