@@ -116,6 +116,15 @@ def preview_isolation(page):
     assert "worker-src 'none'" in doc
     preview=page.frame_locator('iframe[title="Isolated project preview"]')
     expect(preview.locator("#message")).to_have_text("Try editing these files.")
+    # Rendered DOM can be visible before the trailing inline script has
+    # installed its click listener. Wait for the actual sandboxed srcdoc
+    # document load, without relaxing the interaction or CSP assertions.
+    frame_handle = frame.element_handle()
+    assert frame_handle is not None
+    isolated_frame = frame_handle.content_frame()
+    assert isolated_frame is not None
+    isolated_frame.wait_for_load_state("load", timeout=10000)
+    assert isolated_frame.evaluate("document.readyState") == "complete"
     preview.locator("#hello").click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
     page.get_by_role("group", name="Project files").get_by_role("button", name="index.html").click()
