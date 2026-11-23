@@ -130,5 +130,5 @@ test('no database migration or production verification claim in Phase 23',async(
   assert.match(doc,/no new SQL migration/i);
   assert.match(doc,/Phase 13 before Phase 14/i);
   assert.match(doc,/customer A[\s\S]*customer B[\s\S]*administrator/i);
-  assert.match(doc,/not proof of production readiness/i);
+  assert.match(doc,/not proof of\s+production readiness/i);
 });
