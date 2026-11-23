@@ -182,6 +182,7 @@ export default function DeveloperProjectLab() {
           <span role="status" className={dirty ? "text-xs text-amber-300" : "text-xs text-emerald-300"}>{dirty ? "Unsaved changes" : "Saved locally"}</span>
           <Button type="button" onClick={save}><Save className="mr-2 h-4 w-4" />Save browser copy</Button>
           <Button type="button" variant="outline" onClick={() => download("eternyx-project.json", exportDeveloperProject(project))}><Download className="mr-2 h-4 w-4" />Export project</Button>
+          {saved.some(item => item.id === project.id) && <Button asChild variant="outline"><Link to={"/developer-studio/api-workbench?projectId=" + encodeURIComponent(project.id)}>Open project API tests</Link></Button>}
         </div>
       </div>
 
