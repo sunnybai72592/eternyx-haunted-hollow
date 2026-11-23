@@ -130,6 +130,16 @@ const destinations: Destination[] = [
     limitation: "Authenticated, owner-scoped snapshot reviews only. Priority points reflect analyst inputs; no live scanning, SOC, or independently verified risk scoring.",
   },
   {
+    name: "Indexed security case ledger (staging gated)",
+    description: "Manage owner-scoped relational assets, findings, remediation status and history once the reviewed database schema is deployed.",
+    href: "/cybersecurity/case-ledger",
+    icon: FileCheck2,
+    category: "Security governance",
+    kind: "Workbench",
+    mode: "Deployment-gated",
+    limitation: "This route checks for reviewed database tables and fails closed when unavailable. Production migration has not been deployed or verified.",
+  },
+  {
     name: "Private assessment cases",
     description: "Work from attested pentest scope, manage analyst findings and remediation, and save versioned private evidence snapshots.",
     href: "/cybersecurity/cases",
