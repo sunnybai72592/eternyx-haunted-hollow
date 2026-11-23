@@ -1,0 +1,34 @@
+name: Real local video precision timeline
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai/localVideoTimeline.mjs"
+      - "src/components/LocalVideoTimeline.tsx"
+      - "src/components/LocalVideoEditor.tsx"
+      - "tests/local-video-timeline.test.mjs"
+      - ".github/workflows/local-video-precision-timeline.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai/localVideoTimeline.mjs"
+      - "src/components/LocalVideoTimeline.tsx"
+      - "src/components/LocalVideoEditor.tsx"
+      - "tests/local-video-timeline.test.mjs"
+      - ".github/workflows/local-video-precision-timeline.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  precision-timeline:
+    name: Validate exact source-frame cuts, project preservation and local playback boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test visual timeline operations against real offline storyboard and local draft schemas
+        run: node --test tests/local-video-timeline.test.mjs
