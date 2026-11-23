@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SetStateAction } from "react";
 import LocalRenderReview from "@/components/LocalRenderReview";
 import { buildPortableVideoBundle } from "@/lib/ai/portableVideoBundle.mjs";
 import {
@@ -11,6 +11,10 @@ import auditPython from "../../gpu-worker/audit_video_render.py?raw";
 import localLauncherPython from "../../gpu-worker/launch_portable_video.py?raw";
 import LocalVideoImportPrep from "@/components/LocalVideoImportPrep";
 import LocalVideoTimeline from "@/components/LocalVideoTimeline";
+import {
+  newTimelineHistory,commitTimelineHistory,undoTimelineHistory,
+  redoTimelineHistory,resetTimelineHistory,timelineHistoryStatus,
+} from "@/lib/ai/localVideoEditHistory.mjs";
 import LocalMotionComposer from "@/components/LocalMotionComposer";
 import LocalLearnedVideoStudio from "@/components/LocalLearnedVideoStudio";
 import TinyNeuralVideoStudio from "@/components/TinyNeuralVideoStudio";
@@ -70,7 +74,17 @@ async function fingerprint(file: File, kind: "video" | "audio"): Promise<LocalFi
 
 export default function LocalVideoEditor() {
   const [sources, setSources] = useState<LocalFile[]>([]);
-  const [shots, setShots] = useState<LocalShot[]>([]);
+  const [timelineHistory,setTimelineHistory] = useState(()=>newTimelineHistory());
+  const shots = timelineHistory.present as LocalShot[];
+  // All shot edits (manual form AND visual timeline) participate in the same
+  // bounded undo/redo journal. Metadata only, never private File/Blob bytes.
+  const setShots = (update:SetStateAction<LocalShot[]>)=>{
+    setTimelineHistory(old=>commitTimelineHistory(old,
+      typeof update==="function"?update(old.present as LocalShot[]):update));
+  };
+  const historyStatus=timelineHistoryStatus(timelineHistory);
+  const undoShotEdit=()=>setTimelineHistory(old=>undoTimelineHistory(old));
+  const redoShotEdit=()=>setTimelineHistory(old=>redoTimelineHistory(old));
   const [soundtrack, setSoundtrack] = useState<LocalSound | null>(null);
   const [profile, setProfile] = useState<RenderProfile>("landscape");
   const [quality, setQuality] = useState<RenderQuality>("standard");
@@ -177,7 +191,7 @@ export default function LocalVideoEditor() {
       urls.current=prepared.map(f=>f.url);
       audioUrl.current=newAudio?.url??null;
       setSources(prepared);
-      setShots(verified.shots);
+      setTimelineHistory(resetTimelineHistory(verified.shots));
       setSoundtrack(newAudio);
       setSelectedSource(prepared[0].name);
       setProfile(verified.profile);
@@ -233,7 +247,7 @@ export default function LocalVideoEditor() {
       urls.current = prepared.map(item => item.url);
       committed = true;
       setSources(prepared);
-      setShots(prepared.map(file => newShot(file.name)));
+      setTimelineHistory(resetTimelineHistory(prepared.map(file => newShot(file.name))));
       setSelectedSource(prepared[0].name);
       setNotice("Files hashed locally. Add captions and rights references before exporting.");
     } catch (error) {
@@ -468,6 +482,8 @@ export default function LocalVideoEditor() {
         {sources.length > 0 && (
           <LocalVideoTimeline shots={shots} sources={sources}
             disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
+            canUndo={historyStatus.undo} canRedo={historyStatus.redo}
+            onUndo={undoShotEdit} onRedo={redoShotEdit}
             onChange={next=>{
               setShots(next);
               setMessage("");

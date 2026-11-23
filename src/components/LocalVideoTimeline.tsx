@@ -1,11 +1,11 @@
 import {useEffect,useMemo,useRef,useState} from "react";
-import {Clapperboard,Copy,GitMerge,Scissors,SkipBack,SkipForward,Trash2} from "lucide-react";
+import {Clapperboard,Copy,GitMerge,Scissors,SkipBack,SkipForward,Trash2,Undo2,Redo2,Play,Pause} from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {
   timelineSegments,timelineSeek,timelineTimecode,splitTimelineShot,
   duplicateTimelineShot,moveTimelineShot,removeTimelineShot,
-  nudgeTimelineShot,joinTimelineShots,
+  nudgeTimelineShot,joinTimelineShots,repositionTimelineShot,
 } from "@/lib/ai/localVideoTimeline.mjs";
 
 type Shot={
@@ -13,14 +13,24 @@ type Shot={
   rightsRef:string;fadeInFrames:number;fadeOutFrames:number;
 };
 type Source={name:string;url:string;sha256:string;size:number};
-type Props={shots:Shot[];sources:Source[];onChange:(next:Shot[])=>void;disabled?:boolean};
+type Props={
+  shots:Shot[];sources:Source[];onChange:(next:Shot[])=>void;
+  disabled?:boolean;canUndo?:boolean;canRedo?:boolean;
+  onUndo?:()=>void;onRedo?:()=>void;
+};
 
-export default function LocalVideoTimeline({shots,sources,onChange,disabled=false}:Props){
+export default function LocalVideoTimeline({
+  shots,sources,onChange,disabled=false,
+  canUndo=false,canRedo=false,onUndo=()=>{},onRedo=()=>{},
+}:Props){
   const [selected,setSelected]=useState(0);
   const [playhead,setPlayhead]=useState(0);
   const [error,setError]=useState("");
   const [captionPreview,setCaptionPreview]=useState(true);
   const video=useRef<HTMLVideoElement|null>(null);
+  const dragging=useRef<number|null>(null);
+  const previewPlaying=useRef(false);
+  const [previewActive,setPreviewActive]=useState(false);
   const state=useMemo(()=>{
     try{return {timeline:timelineSegments(shots),error:""};}
     catch(err){return {timeline:null,error:err instanceof Error?err.message:"Invalid edited timeline."};}
@@ -36,7 +46,7 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
   const active=timeline?.segments[Math.min(selected,shots.length-1)]??null;
   const source=sources.find(s=>s.name===current?.sourceName);
   useEffect(()=>{
-    if(!video.current||!current)return;
+    if(!video.current||!current||previewPlaying.current)return;
     const element=video.current;
     if(element.readyState>=1){
       element.pause();
@@ -47,10 +57,33 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
     setSelected(old=>Math.max(0,Math.min(old,shots.length-1)));
     setPlayhead(old=>Math.max(0,Math.min(old,max)));
   },[shots.length,max]);
+  const stopPreview=()=>{
+    previewPlaying.current=false;
+    setPreviewActive(false);
+    video.current?.pause();
+  };
+  const playSelected=async()=>{
+    if(disabled||!active||!video.current)return;
+    try{
+      if(previewPlaying.current){stopPreview();return;}
+      stopPreview();
+      const element=video.current;
+      const first=timelineSeek(shots,active.startFrame);
+      element.currentTime=first.sourceSeconds;
+      setPlayhead(active.startFrame);
+      previewPlaying.current=true;
+      setPreviewActive(true);
+      await element.play();
+    }catch{
+      stopPreview();
+      setError("Your browser could not play the original local clip. Try the native video controls.");
+    }
+  };
   const choose=(index:number)=>{
     if(!timeline)return;
     const s=timeline.segments[index];
     if(!s)return;
+    stopPreview();
     setSelected(index);setPlayhead(s.startFrame);
     setError("");
   };
@@ -60,6 +93,7 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
       const updated=fn();
       const next=timelineSegments(updated);
       const index=Math.max(0,Math.min(nextIndex,updated.length-1));
+      stopPreview();
       onChange(updated);
       setSelected(index);
       setPlayhead(seekAt===undefined?next.segments[index].startFrame:
@@ -76,6 +110,7 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
     if(!timeline)return;
     try{
       const target=timelineSeek(shots,frame);
+      stopPreview();
       setPlayhead(target.globalFrame);
       setSelected(target.index);
       setError("");
@@ -90,7 +125,18 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
   };
   return(
     <section className="space-y-4 rounded-lg border border-cyan-400/30 bg-cyan-950/10 p-4"
-      aria-labelledby="local-precision-timeline">
+      aria-labelledby="local-precision-timeline"
+      onKeyDown={event=>{
+        const target=event.target as HTMLElement;
+        if(disabled||!(event.ctrlKey||event.metaKey)||event.altKey||
+           target.closest("input,textarea,select,[contenteditable=true]"))return;
+        if(event.key.toLowerCase()==="z"){
+          if(event.shiftKey&&canRedo){event.preventDefault();stopPreview();onRedo();}
+          else if(!event.shiftKey&&canUndo){event.preventDefault();stopPreview();onUndo();}
+        }else if(event.key.toLowerCase()==="y"&&canRedo){
+          event.preventDefault();stopPreview();onRedo();
+        }
+      }}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="local-precision-timeline" className="flex items-center gap-2 font-semibold text-cyan-100">
           <Clapperboard className="h-4 w-4"/>Interactive 16 FPS editing timeline
@@ -105,6 +151,19 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
         boundaries while preserving the same editable storyboard.
       </p>
       {state.error?<p role="alert" className="text-sm text-amber-200">{state.error}</p>:null}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={disabled||!canUndo}
+          onClick={()=>{stopPreview();onUndo();}}>
+          <Undo2 className="mr-1 h-4 w-4"/>Undo cut edit
+        </Button>
+        <Button size="sm" variant="outline" disabled={disabled||!canRedo}
+          onClick={()=>{stopPreview();onRedo();}}>
+          <Redo2 className="mr-1 h-4 w-4"/>Redo cut edit
+        </Button>
+        <span className="self-center text-xs text-slate-400">
+          Up to 40 steps · Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y when a timeline button is focused.
+        </span>
+      </div>
       {timeline&&<>
         <div className="overflow-x-auto rounded border border-slate-700 bg-slate-950 p-2"
           aria-label="Editable sequence of original video cuts">
@@ -113,7 +172,25 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
               aria-label={"Select shot "+(s.index+1)+", "+s.sourceName+", "+
                 timelineTimecode(s.startFrame)+" to "+timelineTimecode(s.endFrame)}
               aria-pressed={selected===s.index}
-              disabled={disabled}
+              disabled={disabled} draggable={!disabled}
+              onDragStart={event=>{
+                dragging.current=s.index;
+                event.dataTransfer.effectAllowed="move";
+                event.dataTransfer.setData("text/plain",String(s.index));
+              }}
+              onDragOver={event=>{
+                if(!disabled&&dragging.current!==null){
+                  event.preventDefault();event.dataTransfer.dropEffect="move";
+                }
+              }}
+              onDrop={event=>{
+                event.preventDefault();
+                const from=dragging.current;dragging.current=null;
+                if(from!==null&&from!==s.index){
+                  apply(()=>repositionTimelineShot(shots,from,s.index),s.index);
+                }
+              }}
+              onDragEnd={()=>{dragging.current=null;}}
               onClick={()=>choose(s.index)}
               onKeyDown={event=>{
                 if(["ArrowLeft","ArrowRight","Home","End"].includes(event.key)){
@@ -176,10 +253,39 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
                 try{e.currentTarget.currentTime=current.sourceSeconds;}catch{}
               }}
               onTimeUpdate={e=>{
-                if(e.currentTarget.currentTime>=current.cutEndSeconds)
-                  e.currentTarget.pause();
+                if(!previewPlaying.current)return;
+                const time=e.currentTarget.currentTime;
+                if(time>=current.cutEndSeconds-0.005){
+                  stopPreview();
+                  return;
+                }
+                // Browser playback is an approximate source preview. The
+                // offline renderer checks exact CFR 16FPS input and output.
+                const sourceFrame=Math.max(current.sourceFrame,
+                  Math.floor(time*16+1e-6));
+                const localFrame=sourceFrame-shots[current.index].startFrame;
+                const globalFrame=timeline.segments[current.index].startFrame+
+                  Math.max(0,Math.min(shots[current.index].frames-1,localFrame));
+                setPlayhead(globalFrame);
               }}
+              onPause={()=>{
+                if(previewPlaying.current){
+                  previewPlaying.current=false;setPreviewActive(false);
+                }
+              }}
+              onEnded={()=>stopPreview()}
             />
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" disabled={disabled||!active||!sameSelected}
+                onClick={()=>{void playSelected();}}>
+                {previewActive?<Pause className="mr-1 h-4 w-4"/>:
+                  <Play className="mr-1 h-4 w-4"/>}
+                {previewActive?"Pause cut preview":"Play selected cut"}
+              </Button>
+              <span className="text-xs text-slate-400">
+                Plays original frames within selected in/out points.
+              </span>
+            </div>
             <p className="text-xs text-amber-200">
               This is the original source clip, NOT the assembled, faded or
               caption-burned final video. Browser seeks are approximate;
@@ -254,6 +360,7 @@ export default function LocalVideoTimeline({shots,sources,onChange,disabled=fals
         {error&&<p role="alert" className="text-sm text-rose-200">{error}</p>}
         <p className="text-xs text-slate-400">
           Keyboard: focus a timeline cut and press ←/→ to navigate, Home/End to jump.
+          On desktop, drag a cut block to another position; on touch devices use Move left/right.
           All operations update the same validated source-frame storyboard and are
           included in saved drafts and portable ZIP exports. Actual source duration
           and frame rate are checked again during the local CPU render.

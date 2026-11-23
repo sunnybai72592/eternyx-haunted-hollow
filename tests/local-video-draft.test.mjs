@@ -157,7 +157,7 @@ test("live Studio has explicit save/reopen/reattach UX and transactional object 
   assert.match(ui,/Save editable project draft/);
   assert.match(ui,/Reattach all original MP4/);
   assert.match(ui,/setSources\(prepared\)/);
-  assert.match(ui,/setShots\(verified\.shots\)/);
+  assert.match(ui,/setTimelineHistory\(resetTimelineHistory\(verified\.shots\)\)/);
   assert.match(ui,/if\(!committed\)/);
   assert.match(ui,/URL\.revokeObjectURL/);
   assert.match(ui,/Your current timeline remains untouched until verification succeeds/);
