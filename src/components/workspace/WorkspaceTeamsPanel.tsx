@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Archive, CheckCircle2, ClipboardCopy, Columns3, Download, FolderKanban, List, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed"
 import {
   workspaceTeamBoardColumns,workspaceTeamNextTaskStatus,
   workspaceTeamNextTaskLabel,workspaceTeamTaskStatusPayload,
+  workspaceTeamTaskMovePayload,workspaceTeamBoardDragReceipt,
+  workspaceTeamBoardResolveDrag,WORKSPACE_TEAM_BOARD_DRAG_MIME,
 } from "@/lib/workspaceTeamTaskBoard.mjs";
 import {
   workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
@@ -59,6 +61,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [taskQuery,setTaskQuery]=useState("");
   const [taskSort,setTaskSort]=useState("updated");
   const [taskLayout,setTaskLayout]=useState<"list"|"board">("list");
+  const [dragOverColumn,setDragOverColumn]=useState<string|null>(null);
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
   const [verifiedSpaceId,setVerifiedSpaceId]=useState<string|null>(null);
@@ -197,7 +200,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
-    setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskLayout("list");setDragOverColumn(null);
+    setDiscussionTaskId(null);setLiveRevision(0);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
     setLoading(true);
@@ -219,7 +223,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
-    setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
+    setTaskLayout("list");setDragOverColumn(null);
+    setDiscussionTaskId(null);setLiveRevision(0);
     if(!selectedId)return;
     setLoading(true);
     void (async()=>{
@@ -494,10 +499,55 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     },"Task moved to "+(next==="done"?"done":next==="todo"?"to do":"in progress")+".",true,
     ()=>{if(draft.id===task.id)setDraft(freshDraft());});
   };
+  const moveTaskToStatus=(task:Task,toStatus:string)=>{
+    if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
+       verifiedSpaceId!==selected.id||task.status===toStatus)return;
+    // Use only the current RLS-loaded team row, not an external drag payload.
+    void run(async()=>{
+      const params=workspaceTeamTaskMovePayload(task,toStatus,selected.id,memberIds);
+      const {data,error:queryError}=await supabase.rpc("workspace_team_save_task",params);
+      if(queryError||!data)throw new Error(
+        queryError?.message??"Task move was not confirmed by the team backend");
+    },"Task moved to "+(toStatus==="todo"?"To do":toStatus==="done"?
+      "Done":"In progress")+".",true,
+    ()=>{if(draft.id===task.id)setDraft(freshDraft());});
+  };
+  const startBoardDrag=(event:DragEvent<HTMLElement>,task:Task)=>{
+    if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
+       verifiedSpaceId!==selected.id){event.preventDefault();return;}
+    try {
+      const receipt=workspaceTeamBoardDragReceipt(task,selected.id);
+      event.dataTransfer.setData(WORKSPACE_TEAM_BOARD_DRAG_MIME,receipt);
+      event.dataTransfer.effectAllowed="move";
+    }catch(failure){
+      event.preventDefault();
+      setError(errorMessage(failure));
+    }
+  };
+  const dropBoardTask=(event:DragEvent<HTMLElement>,toStatus:string)=>{
+    event.preventDefault();setDragOverColumn(null);
+    if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
+       verifiedSpaceId!==selected.id)return;
+    try {
+      const receipt=event.dataTransfer.getData(WORKSPACE_TEAM_BOARD_DRAG_MIME);
+      const task=workspaceTeamBoardResolveDrag(receipt,selected.id,visibleTasks);
+      if(task.status!==toStatus)moveTaskToStatus(task,toStatus);
+    }catch(failure){setError(errorMessage(failure));}
+  };
   const renderTeamTask=(task:Task,board=false)=><div key={task.id}
     className={board?"space-y-2 rounded-lg border border-border bg-background/60 p-3 text-xs":
       "flex flex-wrap items-center gap-3 py-3 text-xs"}>
     <div className="min-w-0 flex-1">
+      {board&&editor&&<div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">Move between columns</span>
+        <span draggable={!busy&&!disabled&&!loading}
+          onDragStart={event=>startBoardDrag(event,task)}
+          onDragEnd={()=>setDragOverColumn(null)}
+          className="cursor-grab rounded-md border border-border bg-muted px-2 py-1 text-xs active:cursor-grabbing"
+          title="Drag to another column. On touch or keyboard, use the Move to status menu.">
+          Drag card
+        </span>
+      </div>}
       <p className="font-medium break-words">{task.title}</p>
       <p className="text-muted-foreground break-words">{task.details.slice(0,300)}</p>
       <p className="text-muted-foreground">
@@ -526,6 +576,17 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
           onClick={()=>quickMoveTask(task)}>
           {workspaceTeamNextTaskLabel(task)}
         </Button>
+        <label className="flex items-center gap-1 text-xs">
+          Move to
+          <select aria-label={"Move "+task.title+" to status"}
+            value={task.status} disabled={busy||disabled||loading}
+            onChange={event=>moveTaskToStatus(task,event.target.value)}
+            className="min-h-9 rounded-md border border-border bg-background px-2 text-xs">
+            <option value="todo">To do</option>
+            <option value="in_progress">In progress</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
         <Button size="sm" type="button" variant="ghost"
           disabled={busy||disabled||loading}
           aria-label={"Delete "+task.title} onClick={()=>removeTask(task)}>Delete</Button>
@@ -808,9 +869,27 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
             {visibleTasks.map(task=>renderTeamTask(task))}
           </div>
         :
-          <div className="grid gap-3 lg:grid-cols-3" aria-label="Shared team task board">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {editor?"Drag a card handle to another column, or use Move to for touch and keyboard navigation.":
+                "This team board is read-only for your current role."}
+              Changes are saved by the team backend before the board updates.
+            </p>
+            <div className="grid gap-3 lg:grid-cols-3" aria-label="Shared team task board">
             {boardColumns.map(column=><section key={column.status}
-              aria-label={column.label+" tasks"} className="min-w-0 rounded-lg border border-border p-3">
+              aria-label={column.label+" tasks"}
+              onDragOver={event=>{
+                if(!editor||disabled||busy||loading||
+                   !event.dataTransfer.types.includes(WORKSPACE_TEAM_BOARD_DRAG_MIME))return;
+                event.preventDefault();event.dataTransfer.dropEffect="move";
+                setDragOverColumn(previous=>previous===column.status?previous:column.status);
+              }}
+              onDragLeave={()=>setDragOverColumn(previous=>
+                previous===column.status?null:previous)}
+              onDrop={event=>dropBoardTask(event,column.status)}
+              className={"min-w-0 rounded-lg border p-3 "+
+                (dragOverColumn===column.status&&editor?
+                  "border-cyan-500 bg-cyan-500/10":"border-border")}>
               <h5 className="mb-3 text-sm font-semibold">
                 {column.label} ({column.tasks.length})
               </h5>
@@ -820,6 +899,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                   <p className="py-3 text-xs text-muted-foreground">No matching tasks in this column.</p>}
               </div>
             </section>)}
+            </div>
           </div>
         }
         {!visibleTasks.length&&<p className="py-3 text-xs text-muted-foreground">
