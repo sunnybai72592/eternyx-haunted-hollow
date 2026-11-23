@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - '.github/workflows/automation-staging-db-offline-contract.yml'
+      - 'scripts/eternyx-missing-backend-release.mjs'
+      - 'scripts/eternyx-staging-ctf-catalog.sh'
+      - 'scripts/sql/eternyx-staging-ctf-catalog.sql'
+      - 'tests/eternyx-missing-backend-release.test.mjs'
+      - 'supabase/migrations/20261122170000_ctf_verified_missions.sql'
       - 'scripts/automation-staging-core-release.mjs'
       - 'scripts/automation-staging-functions-catalog.sh'
       - 'scripts/sql/automation-staging-functions-catalog.sql'
@@ -50,12 +55,13 @@ jobs:
             sleep 1
           done
           docker exec eternyx-readonly-probe-fixture pg_isready -U postgres
-      - name: Bootstrap isolated Auth and apply actual Automation SQL migrations
+      - name: Bootstrap isolated Auth and apply actual CTF and Automation SQL migrations
         shell: bash
         run: |
           set -euo pipefail
           for file in \
             tests/sql/ctf-range-db-bootstrap.sql \
+            supabase/migrations/20261122170000_ctf_verified_missions.sql \
             supabase/migrations/20261122220000_automation_manual_control_plane.sql \
             supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql \
             supabase/migrations/20261122234500_automation_scheduled_runs.sql; do
@@ -147,6 +153,44 @@ jobs:
             exit 1
           fi
           echo "Actual PostgreSQL tenant RLS failure blocked staged function release."
+      - name: Validate ACTUAL CTF mission SQL grants, service-only RPC and owner RLS on PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < scripts/sql/eternyx-staging-ctf-catalog.sql > "$RUNNER_TEMP/ctf-stage-catalog.txt"
+          node --input-type=module - "$RUNNER_TEMP/ctf-stage-catalog.txt" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import assert from "node:assert/strict";
+          import {parseCtfCatalog} from "./scripts/eternyx-missing-backend-release.mjs";
+          const data=parseCtfCatalog(readFileSync(process.argv[2],"utf8"));
+          assert.deepEqual(Object.values(data.observed),Array(7).fill(true));
+          assert.equal(data.ctfFlagSecretChecked,false);
+          assert.equal(data.productionReady,false);
+          console.log("Real PostgreSQL 17 confirms CTF owner-only RLS, verification RPC grants and rate table.");
+          NODE
+      - name: Disable CTF solve RLS in the disposable fixture and require the release gate to reject it
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec eternyx-readonly-probe-fixture psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "ALTER TABLE public.ctf_verified_solves DISABLE ROW LEVEL SECURITY" > /dev/null
+          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < scripts/sql/eternyx-staging-ctf-catalog.sql > "$RUNNER_TEMP/ctf-stage-catalog-broken.txt"
+          if node --input-type=module - "$RUNNER_TEMP/ctf-stage-catalog-broken.txt" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import {parseCtfCatalog} from "./scripts/eternyx-missing-backend-release.mjs";
+          parseCtfCatalog(readFileSync(process.argv[2],"utf8"));
+          NODE
+          then
+            echo "::error::CTF catalog wrongly approved staging with owner RLS disabled"
+            exit 1
+          fi
+          echo "Disabled verified CTF owner RLS correctly blocks four-function release."
+      - name: Run four-function admission and source verification tests without hosted credentials
+        run: node --test tests/eternyx-missing-backend-release.test.mjs
       - name: Always remove the disposable offline PostgreSQL fixture
         if: always()
         run: docker rm --force eternyx-readonly-probe-fixture || true
