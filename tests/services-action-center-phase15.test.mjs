@@ -13,7 +13,7 @@ test('action cards are accessible, display real counts and never fabricate unava
   assert.match(ui, /onClick=\{item\.onSelect\}/);
   assert.match(ui, /aria-pressed/);
   assert.match(ui, /item\.count === null \? '—' : item\.count/);
-  assert.match(ui, /Count unavailable · filter still works/);
+  assert.match(ui, /Not loaded or unavailable · filter still works/);
   assert.match(ui, /Exact database results for requests|Counts are exact database results for requests/);
   assert.match(ui, /onClick=\{onRefresh\}/);
   assert.doesNotMatch(ui, /Math\.random|localStorage|mock|sampleCount/);
@@ -30,10 +30,10 @@ test('owner action center makes exact independent account-scoped count requests'
   assert.match(src, /\.gt\('awaiting_customer_count', 0\)/);
   assert.match(src, /\.gt\('pending_amendment_count', 0\)/);
   assert.match(src, /setPulseCounts\(/);
-  assert.match(src, /results\[0\]\.error \? null : results\[0\]\.count/);
+  assert.match(src, /all: counts\[0\], newActivity: counts\[1\]/);
   assert.match(src, /useAuthStore\.getState\(\)\.user\?\.id !== userId/);
   assert.match(src, /pulseOwner === userId \? pulseCounts/);
-  assert.match(src, /return \(\) => \{ pulseGeneration\.current\+\+; \}/);
+  assert.match(src, /return \(\) => \{\s*pulseGeneration\.current\+\+;\s*pulseAbortRef\.current\?\.abort\(\)/);
 });
 
 test('owner shortcuts select exclusive real filters, preserving server pagination', async () => {
@@ -48,7 +48,7 @@ test('owner shortcuts select exclusive real filters, preserving server paginatio
   assert.match(src, /if \(pendingReviewsOnly\) query = query\.gt\('pending_amendment_count', 0\)/);
   assert.match(src, /Brief changes pending review/);
   assert.match(src, /onRefresh=\{\(\) => void loadPulse\(\)\}/);
-  assert.match(src, /onChanged=\{\(\) => \{ void load\(\); void loadPulse\(\); \}\}/);
+  assert.match(src, /onChanged=\{\(\) => \{ void load\(\); invalidatePulse\(\); \}\}/);
 });
 
 test('owner sort options use real request timestamps and stable server-side ties', async () => {
@@ -83,9 +83,9 @@ test('admin action center derives exact counts from real access-controlled queue
   assert.match(src, /\.gt\('pending_amendment_count', 0\)/);
   assert.match(src, /\.gt\('awaiting_admin_review_count', 0\)/);
   assert.match(src, /\.is\('assigned_admin_id', null\)/);
-  assert.match(src, /results\[4\]\.error \? null : results\[4\]\.count/);
+  assert.match(src, /unassigned: counts\[4\]/);
   assert.match(src, /actionCountOwner === user\?\.id \? actionCounts\.all : null/);
-  assert.match(src, /useAuthStore\.getState\(\)\.user\?\.id !== user\.id/);
+  assert.match(src, /useAuthStore\.getState\(\)\.user\?\.id !== actor/);
 });
 
 test('admin focus cards reset incompatible filters and offer real queue sorting', async () => {
@@ -105,15 +105,15 @@ test('admin focus cards reset incompatible filters and offer real queue sorting'
   assert.match(src, /Most answers awaiting review/);
 });
 
-test('counts refresh after real writes and never persist across account changes', async () => {
+test('counts invalidate after real writes and never persist across account changes', async () => {
   const admin = await read('src/pages/AdminServiceRequests.tsx');
   const owner = await read('src/pages/MyServiceRequests.tsx');
-  assert.match(admin, /return \(\) => \{ actionCountGeneration\.current\+\+; \}/);
+  assert.match(admin, /return \(\) => \{\s*countGeneration\.current\+\+;\s*actionCountGeneration\.current\+\+;/);
   assert.match(admin, /setActionCountOwner\(null\)/);
   assert.match(admin, /setActionCountLoading\(false\)/);
   assert.match(admin, /void loadActionCounts\(\);/);
-  assert.match(admin, /onSaved=\{\(\) => \{ void load\(\); void loadQueueCounts\(\); void loadActionCounts\(\); \}\}/);
-  assert.match(admin, /onChanged=\{\(\) => \{ void load\(\); void loadActionCounts\(\); \}\}/);
+  assert.match(admin, /onSaved=\{\(\) => \{ void load\(\); invalidateCountCards\(\); \}\}/);
+  assert.match(admin, /onChanged=\{\(\) => \{ void load\(\); invalidateCountCards\(\); \}\}/);
   assert.match(owner, /setPulseOwner\(null\)/);
   assert.match(owner, /void loadPulse\(\);/);
   assert.match(owner, /pulseGeneration\.current\+\+/);
