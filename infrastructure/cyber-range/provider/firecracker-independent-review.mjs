@@ -20,6 +20,7 @@ import {verifySignedOperatorEvidence} from
 import {assertNoUnfinishedHandoff} from
   "./firecracker-handoff-import-journal.mjs";
 import {readPrivateOfflineEvidence} from "./firecracker-private-safe-read.mjs";
+import {verifyStableOfflineCaseSnapshot} from "./firecracker-case-snapshot.mjs";
 import {auditOperatorEvidenceConsistency} from
   "./firecracker-evidence-consistency.mjs";
 import {
@@ -269,21 +270,42 @@ async function loadCase(sessionId,{caseBase=REVIEW_CASE_BASE,owner=0}={}){
   const folder=sessionCasePath(sessionId,caseBase);
   await trustedDir(caseBase,owner);
   await trustedDir(folder,owner);
-  // An interrupted transfer cannot be endorsed by a second reviewer.
-  // Legacy manually staged cases without an import journal remain eligible
-  // for explicit human review; they cannot claim handoff verification.
-  await assertNoUnfinishedHandoff(folder,owner);
-  const [operatorReport,operatorPublicPem]=await Promise.all([
+  // An unfinished import cannot be reviewed. Legacy manually staged cases
+  // do not claim verified handoff provenance.
+  const handoff=await assertNoUnfinishedHandoff(folder,owner);
+  const [operatorBytes,operatorPublicBytes]=await Promise.all([
     safeRead(join(folder,"operator-report.json"),owner,MAX_RECEIPT),
     safeRead(join(folder,"operator-public.pem"),owner,MAX_KEY,"operator public key"),
   ]);
-  const parsed=JSON.parse(operatorReport.toString("utf8"));
-  const names=requiredReviewArtifacts(parsed?.payload?.mode);
+  const parsed=JSON.parse(operatorBytes.toString("utf8"));
+  const mode=parsed?.payload?.mode;
+  const names=requiredReviewArtifacts(mode);
   const entries=await Promise.all(names.map(async name=>
     [name,await safeRead(join(folder,name),owner,MAX_ARTIFACT)]));
+  const journal=handoff.importCommitted===true?Object.fromEntries(
+    await Promise.all([
+      ".operator-import.pending.json",".operator-import.committed.json",
+    ].map(async name=>[name,await safeRead(join(folder,name),owner,2048)]))
+  ):{};
+  const caseSourceFiles={
+    "operator-report.json":operatorBytes,
+    "operator-public.pem":operatorPublicBytes,
+    ...Object.fromEntries(entries),...journal,
+  };
+  // Detect cross-file swaps made between the first reads and this second
+  // pass. No signer will use a case that no longer matches its raw snapshot.
+  await verifyStableOfflineCaseSnapshot({
+    folder,owner,mode,expectedFiles:caseSourceFiles,
+  });
   return {folder,operatorReport:parsed,
-    operatorPublicPem:operatorPublicPem.toString("utf8"),
-    artifacts:Object.fromEntries(entries)};
+    operatorPublicPem:operatorPublicBytes.toString("utf8"),
+    artifacts:Object.fromEntries(entries),caseSourceFiles};
+}
+async function recheckCaseSourceFiles(source,owner=0,extraFiles={}){
+  return verifyStableOfflineCaseSnapshot({
+    folder:source.folder,mode:source.operatorReport.payload.mode,owner,
+    expectedFiles:{...source.caseSourceFiles,...extraFiles},
+  });
 }
 async function reviewerKeys({owner=0,privateRequired=false,
   publicPath=REVIEWER_PUBLIC_KEY,privatePath=REVIEWER_PRIVATE_KEY}={}){
@@ -294,6 +316,16 @@ async function reviewerKeys({owner=0,privateRequired=false,
   const privatePem=privateRequired?(await safeRead(privatePath,owner,MAX_KEY,
     "reviewer private key")).toString("utf8"):undefined;
   return {reviewerPublicPem:publicPem,reviewerPrivatePem:privatePem};
+}
+async function recheckReviewerKeys(keys,{owner=0,privateRequired=false}={}){
+  const publicPem=(await safeRead(REVIEWER_PUBLIC_KEY,owner,MAX_KEY)).toString("utf8");
+  if(publicPem!==keys.reviewerPublicPem)
+    throw Error("Reviewer public key changed during offline signing");
+  if(privateRequired){
+    const privatePem=(await safeRead(REVIEWER_PRIVATE_KEY,owner,MAX_KEY)).toString("utf8");
+    if(privatePem!==keys.reviewerPrivatePem)
+      throw Error("Reviewer private key changed during offline signing");
+  }
 }
 /** Strict production paths. No user-selected paths or network access. */
 export async function inspectIndependentReviewCase({
@@ -329,6 +361,8 @@ export async function signIndependentReviewCase({
     ...source,...keys,operatorFingerprint,reviewerFingerprint,reviewerAck,
   });
   const serialized=Buffer.from(JSON.stringify(report)+"\n","utf8");
+  await recheckCaseSourceFiles(source,owner);
+  await recheckReviewerKeys(keys,{owner,privateRequired:true});
   await publishOfflineEvidence({
     folder:source.folder,name:"review-verdict.json",data:serialized,owner,
   });
@@ -377,8 +411,9 @@ export async function signIndependentReviewDisposition({
   const source=await loadCase(sessionId,{caseBase,owner});
   auditOperatorEvidenceConsistency({...source,operatorFingerprint});
   const keys=await reviewerKeys({owner,privateRequired:true});
-  const reviewReport=JSON.parse((await safeRead(
-    join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT)).toString("utf8"));
+  const reviewBytes=await safeRead(
+    join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT);
+  const reviewReport=JSON.parse(reviewBytes.toString("utf8"));
   const report=createSignedReviewDisposition({
     ...source,...keys,reviewReport,operatorFingerprint,
     reviewerFingerprint,decision,reasons,acknowledgment,
@@ -386,6 +421,8 @@ export async function signIndependentReviewDisposition({
   const serialized=Buffer.from(JSON.stringify(report)+"\n","utf8");
   if(serialized.length>MAX_RECEIPT)
     throw Error("Offline reviewer disposition unexpectedly oversized");
+  await recheckCaseSourceFiles(source,owner,{"review-verdict.json":reviewBytes});
+  await recheckReviewerKeys(keys,{owner,privateRequired:true});
   await publishOfflineEvidence({
     folder:source.folder,name:"review-disposition.json",data:serialized,owner,
   });
@@ -457,7 +494,16 @@ async function loadedVerifiedCheckpoint({
   const checkpoint=buildCaseCheckpoint({
     verifiedDisposition,operatorFingerprint,reviewerFingerprint,files,
   });
-  return {folder:source.folder,checkpoint};
+  const caseSnapshot={
+    ...source.caseSourceFiles,
+    "review-verdict.json":reviewRaw,
+    "review-disposition.json":dispositionRaw,
+  };
+  await recheckCaseSourceFiles(source,owner,{
+    "review-verdict.json":reviewRaw,
+    "review-disposition.json":dispositionRaw,
+  });
+  return {folder:source.folder,checkpoint,caseSnapshot};
 }
 
 /** Offline, read-only digest that MUST be pinned outside the case directory. */
@@ -484,7 +530,11 @@ export async function sealIndependentCaseCheckpoint({
 }={}){
   if(acknowledgment!==CASE_CHECKPOINT_ACK)
     throw Error("Separate case checkpoint sealing acknowledgment is mandatory");
-  const {folder,checkpoint}=await loadedVerifiedCheckpoint(options);
+  const {folder,checkpoint,caseSnapshot}=await loadedVerifiedCheckpoint(options);
+  await verifyStableOfflineCaseSnapshot({
+    folder,mode:checkpoint.doc.mode,owner:options.owner??0,
+    expectedFiles:caseSnapshot,
+  });
   await publishOfflineEvidence({
     folder,name:CASE_CHECKPOINT_FILE,data:checkpoint.bytes,
     owner:options.owner??0,
@@ -591,8 +641,23 @@ async function loadedRuntimeAddendumContext({
   if(audit.sessionId!==sessionId ||audit.mode!==checkpoint.mode||
      audit.productionReady!==false)
     throw Error("Runtime sidecar audit contradicts sealed case identity");
+  const checkpointRaw=await safeRead(
+    join(source.folder,CASE_CHECKPOINT_FILE),owner,8192);
+  const caseSnapshot={
+    ...source.caseSourceFiles,
+    "review-verdict.json":reviewBytes,
+    "review-disposition.json":dispositionBytes,
+    "case-checkpoint.json":checkpointRaw,
+    ...sidecars,
+  };
+  await recheckCaseSourceFiles(source,owner,{
+    "review-verdict.json":reviewBytes,
+    "review-disposition.json":dispositionBytes,
+    "case-checkpoint.json":checkpointRaw,
+    ...sidecars,
+  });
   return {
-    folder:source.folder,keys,checkpoint,audit,sidecars,
+    folder:source.folder,keys,checkpoint,audit,sidecars,caseSnapshot,
     operatorFingerprint,reviewerFingerprint,
   };
 }
@@ -611,6 +676,11 @@ export async function signIndependentRuntimeAddendum({
     ...data,...data.keys,
     acknowledgment,
   });
+  await verifyStableOfflineCaseSnapshot({
+    folder:data.folder,mode:data.checkpoint.mode,owner,
+    expectedFiles:data.caseSnapshot,
+  });
+  await recheckReviewerKeys(data.keys,{owner,privateRequired:true});
   await publishOfflineEvidence({
     folder:data.folder,name:RUNTIME_ADDENDUM_FILE,
     data:addendum.bytes,owner,
