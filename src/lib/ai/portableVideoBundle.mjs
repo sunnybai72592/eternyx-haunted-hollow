@@ -9,7 +9,7 @@ import {
 } from "./localVideoEditor.mjs";
 
 export const PORTABLE_BUNDLE_LIMITS=Object.freeze({
-  maxFiles:18,maxEntryBytes:64*1024*1024,maxTotalBytes:8*64*1024*1024+16*1024*1024+512*1024,
+  maxFiles:21,maxEntryBytes:64*1024*1024,maxTotalBytes:8*64*1024*1024+16*1024*1024+512*1024,
   maxRendererBytes:128*1024,maxZipBytes:0xffffffff,
 });
 const SHA=/^[0-9a-f]{64}$/;
@@ -110,6 +110,27 @@ function windows(profile,quality){
     "",
   ].join("\r\n");
 }
+function guiLinux(){
+  return [
+    "#!/bin/sh",
+    "set -eu",
+    'cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"',
+    'python3 launch_portable_video.py --gui',
+    "",
+  ].join("\n");
+}
+function guiWindows(){
+  return [
+    "@echo off",
+    "setlocal",
+    'pushd "%~dp0" || exit /b 1',
+    "py -3 launch_portable_video.py --gui",
+    "set EXITCODE=%ERRORLEVEL%",
+    "popd",
+    "exit /b %EXITCODE%",
+    "",
+  ].join("\r\n");
+}
 function readme(profile,quality,shotCount,seconds){
   return [
     "ETERNYX — PORTABLE OFFLINE CPU VIDEO EDITING PROJECT",
@@ -121,9 +142,16 @@ function readme(profile,quality,shotCount,seconds){
     "No Python packages, GPU, cloud API, model downloads or subscriptions.",
     "",
     "1. Extract the entire ZIP to a NEW local folder, retaining the media/ folder.",
-    "2. macOS/Linux: open Terminal in that folder and run: sh render-macos-linux.sh",
-    "   Windows: double-click render-windows.cmd, or use Command Prompt:",
-    "   render-windows.cmd",
+    "2. Recommended: Open the local desktop renderer:",
+    "   Windows: double-click launch-video-windows.cmd",
+    "   macOS/Linux: sh launch-video-macos-linux.sh",
+    "   (Desktop UI requires Python's standard Tkinter module.)",
+    "   The app checks exact media SHA-256 and dependencies, shows live stages,",
+    "   and supports cancellation and cleanup of temporary outputs.",
+    "   Fallback (no graphical desktop):",
+    "   python3 launch_portable_video.py --check",
+    "   python3 launch_portable_video.py --run",
+    "   Original direct scripts remain: render-windows.cmd / render-macos-linux.sh",
     "3. Finished project appears in the NEW eternyx-video-output/ directory:",
     "   video.mp4, preview.html, captions.srt, manifest.json.",
     "",
@@ -133,6 +161,8 @@ function readme(profile,quality,shotCount,seconds){
     "The renderer checks real input SHA-256, source dimensions, decoded 16 FPS",
     "constant-frame-rate frame counts, rights references, and FFmpeg output.",
     "It refuses to overwrite an existing eternyx-video-output/ directory.",
+    "Local desktop render uses a fresh private staging folder before final",
+    "promotion, so failed or cancelled jobs cannot publish partial outputs.",
     "To render again, rename/move the finished output directory first.",
     "",
     "Requested project: "+shotCount+" shots, "+seconds.toFixed(2)+" seconds at 16 FPS.",
@@ -153,7 +183,8 @@ export async function buildPortableVideoBundle({
     throw new Error("Unsupported portable CPU output preset.");
   if(typeof onProgress!=="function")throw new Error("Invalid CPU bundle progress callback.");
   const project=buildLocalVideoBoard({sources,shots,soundtrack});
-  const required=["render_video_timeline.py","assemble_video_storyboard.py","audit_video_render.py"];
+  const required=["render_video_timeline.py","assemble_video_storyboard.py",
+    "audit_video_render.py","launch_portable_video.py"];
   if(!rendererSources||typeof rendererSources!=="object"||
      required.some(name=>typeof rendererSources[name]!=="string"))
     throw new Error("The three reviewed offline Python renderer modules must be bundled.");
@@ -207,6 +238,7 @@ export async function buildPortableVideoBundle({
     "render_video_timeline.py":validateRendererSource(required[0],rendererSources[required[0]]),
     "assemble_video_storyboard.py":validateRendererSource(required[1],rendererSources[required[1]]),
     "audit_video_render.py":validateRendererSource(required[2],rendererSources[required[2]]),
+    "launch_portable_video.py":validateRendererSource(required[3],rendererSources[required[3]]),
   };
   const extras=[
     {path:"eternyx-video-v2.json",blob:new Blob([project.json])},
@@ -214,6 +246,8 @@ export async function buildPortableVideoBundle({
     {path:"bundle-manifest.json",blob:new Blob([JSON.stringify(manifest,null,2)+"\n"])},
     {path:"render-macos-linux.sh",blob:new Blob([shell(profile,quality)])},
     {path:"render-windows.cmd",blob:new Blob([windows(profile,quality)])},
+    {path:"launch-video-windows.cmd",blob:new Blob([guiWindows()])},
+    {path:"launch-video-macos-linux.sh",blob:new Blob([guiLinux()])},
     {path:"README.txt",blob:new Blob([readme(profile,quality,project.board.shots.length,project.seconds)])},
     ...Object.entries(scripts).map(([path,blob])=>({path,blob})),
   ];
@@ -244,6 +278,6 @@ export async function buildPortableVideoBundle({
   return {
     blob,filename:"eternyx-offline-video-project.zip",manifest,
     bytes:blob.size,entryCount:zipMembers.length,
-    explanation:"Includes actual unchanged private source clips and the reviewed Python/FFmpeg CPU renderer. Video.mp4 is rendered locally after extraction.",
+    explanation:"Includes actual private clips, Python/FFmpeg renderer, read-only preflight, cancellation-capable optional desktop GUI, and both CLI launchers. MP4 rendered locally after extraction.",
   };
 }

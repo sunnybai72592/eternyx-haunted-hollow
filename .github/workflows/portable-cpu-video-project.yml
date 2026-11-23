@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "src/lib/ai/portableVideoBundle.mjs"
+      - "gpu-worker/launch_portable_video.py"
+      - "gpu-worker/tests/test_launch_portable_video.py"
       - "tests/portable-video-bundle.test.mjs"
       - "src/components/LocalVideoEditor.tsx"
       - "gpu-worker/render_video_timeline.py"
@@ -14,6 +16,8 @@ on:
     branches: [main]
     paths:
       - "src/lib/ai/portableVideoBundle.mjs"
+      - "gpu-worker/launch_portable_video.py"
+      - "gpu-worker/tests/test_launch_portable_video.py"
       - "tests/portable-video-bundle.test.mjs"
       - "src/components/LocalVideoEditor.tsx"
       - "gpu-worker/render_video_timeline.py"
@@ -49,3 +53,9 @@ jobs:
           CUDA_VISIBLE_DEVICES: ""
           OMP_NUM_THREADS: "1"
         run: node --test tests/portable-video-bundle.test.mjs
+      - name: Verify real CPU launcher cancellation, malformed sources and atomic output integrity
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          CUDA_VISIBLE_DEVICES: ""
+          OMP_NUM_THREADS: "1"
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_launch_portable_video.py' -v

@@ -9,7 +9,8 @@ import {
   buildPortableVideoBundle,PORTABLE_BUNDLE_LIMITS,
 } from "../src/lib/ai/portableVideoBundle.mjs";
 const root=resolve(new URL("../",import.meta.url).pathname);
-const pythonFiles=["render_video_timeline.py","assemble_video_storyboard.py","audit_video_render.py"];
+const pythonFiles=["render_video_timeline.py","assemble_video_storyboard.py",
+  "audit_video_render.py","launch_portable_video.py"];
 const rendererSources=Object.fromEntries(pythonFiles.map(
   name=>[name,readFileSync(join(root,"gpu-worker",name),"utf8")]));
 const digest=value=>createHash("sha256").update(value).digest("hex");
@@ -58,7 +59,7 @@ test("produces the exact runnable project and real original media inside bounded
     onProgress:e=>updates.push(e),
   }));
   assert.equal(result.filename,"eternyx-offline-video-project.zip");
-  assert.equal(result.entryCount,10);
+  assert.equal(result.entryCount,13);
   assert.equal(result.manifest.format,"eternyx-portable-cpu-video");
   assert.equal(result.manifest.version,1);
   assert.equal(result.manifest.frames,8);
@@ -80,7 +81,8 @@ test("produces the exact runnable project and real original media inside bounded
   for(const name of [
     "media/demo.mp4","eternyx-video-v2.json","captions-preview.srt",
     "render_video_timeline.py","assemble_video_storyboard.py",
-    "audit_video_render.py","render-windows.cmd",
+    "audit_video_render.py","launch_portable_video.py",
+    "launch-video-windows.cmd","launch-video-macos-linux.sh","render-windows.cmd",
     "render-macos-linux.sh","README.txt","bundle-manifest.json",
   ])assert.ok(names.includes(name),name+" missing");
   assert.equal(readFileSync(join(unpack,"media","demo.mp4")).toString(),"real original bytes");
@@ -89,6 +91,10 @@ test("produces the exact runnable project and real original media inside bounded
   assert.match(readFileSync(join(unpack,"README.txt"),"utf8"),/No Python packages, GPU/);
   assert.match(readFileSync(join(unpack,"render-windows.cmd"),"utf8"),/py -3 render_video_timeline\.py/);
   assert.match(readFileSync(join(unpack,"render-macos-linux.sh"),"utf8"),/python3 render_video_timeline\.py/);
+  assert.match(readFileSync(join(unpack,"launch-video-windows.cmd"),"utf8"),
+    /py -3 launch_portable_video\.py --gui/);
+  assert.match(readFileSync(join(unpack,"launch-video-macos-linux.sh"),"utf8"),
+    /python3 launch_portable_video\.py --gui/);
 });
 
 test("never bundles unused private source clips after shot deletion",async()=>{
@@ -96,7 +102,7 @@ test("never bundles unused private source clips after shot deletion",async()=>{
         unused=media("secret.mp4",Buffer.from("never leak me"));
   const result=await buildPortableVideoBundle(settings([used,unused],[shot(used)]));
   assert.deepEqual(result.manifest.sources.map(x=>x.path),["media/shown.mp4"]);
-  assert.equal(result.entryCount,10);
+  assert.equal(result.entryCount,13);
   if(!toolsReady())return;
   const dir=fixtureDir(),zip=join(dir,"out.zip"),unpacked=join(dir,"extracted");
   mkdirSync(unpacked);
@@ -112,7 +118,7 @@ test("bundled soundtrack and captions preserve actual rights/bytes, not reconstr
           rightsRef:"owner music license",volumePercent:35});
   const result=await buildPortableVideoBundle(settings([video],
     [shot(video,{caption:"<hello> مرحبا & local",fadeInFrames:2})],{soundtrack:audio}));
-  assert.equal(result.entryCount,11);
+  assert.equal(result.entryCount,14);
   assert.deepEqual(result.manifest.sources.map(x=>x.kind),["video","audio"]);
   assert.equal(result.manifest.sources[1].sha256,audio.sha256);
   if(!toolsReady())return;
@@ -148,7 +154,7 @@ test("rejects source tampering, missing rights, bad content, and unsafe ZIP entr
   for(const input of invalid){
     await assert.rejects(buildPortableVideoBundle(input));
   }
-  assert.equal(PORTABLE_BUNDLE_LIMITS.maxFiles,18);
+  assert.equal(PORTABLE_BUNDLE_LIMITS.maxFiles,21);
 });
 
 test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output manifest",{
@@ -183,7 +189,18 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   const members=extractedZip(zip,unpacked);
   assert.ok(members.includes("media/real-original.mp4"));
   assert.ok(members.includes("media/real-song.wav"));
-  const runner=spawnSync("sh",["render-macos-linux.sh"],{
+  // The new local executable checks prerequisites, confirms media SHA-256,
+  // creates isolated temp output and publishes a fully verified MP4.
+  const check=spawnSync("python3",["launch_portable_video.py","--check"],{
+    cwd:unpacked,encoding:"utf8",timeout:60000,
+  });
+  assert.equal(check.status,0,check.stderr+"\n"+check.stdout);
+  const preflight=JSON.parse(check.stdout);
+  assert.equal(preflight.result,"ready");
+  assert.equal(preflight.frames,32);
+  assert.equal(preflight.source_count,2);
+  assert.equal(preflight.local_only,true);
+  const runner=spawnSync("python3",["launch_portable_video.py","--run"],{
     cwd:unpacked,encoding:"utf8",timeout:180000,
   });
   assert.equal(runner.status,0,runner.stderr+"\n"+runner.stdout);
@@ -208,7 +225,11 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   assert.equal(actual.height,144);
   assert.equal(Number(actual.nb_read_frames),32);
   assert.ok(streams.some(x=>x.codec_type==="audio"));
-  const second=spawnSync("sh",["render-macos-linux.sh"],{
+  const staged=readFileSync(join(unpacked,"media","real-original.mp4"));
+  assert.equal(digest(staged),source.sha256);
+  assert.deepEqual(JSON.parse(runner.stdout).result,"completed");
+  assert.equal(JSON.parse(runner.stdout).video_sha256,summary.video.sha256);
+  const second=spawnSync("python3",["launch_portable_video.py","--run"],{
     cwd:unpacked,encoding:"utf8",timeout:30000,
   });
   assert.notEqual(second.status,0,"The CPU renderer must refuse overwriting previous output");
