@@ -35,21 +35,14 @@ jobs:
     name: Real-JWT instructor, students and ledger-backed score acceptance
     runs-on: ubuntu-latest
     environment: rls-staging
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' }}
     timeout-minutes: 12
     env:
       ETERNYX_EDU_REVIEW_MODE: ${{ inputs.run_mode }}
       ETERNYX_EDU_REVIEW_WRITE_APPROVAL: ${{ inputs.run_mode == 'review' && inputs.approve_instructor_review_write && 'I_APPROVE_SYNTHETIC_INSTRUCTOR_REVIEW_WRITE' || '' }}
       ETERNYX_EDU_REVIEW_WRITE_ACK: ${{ inputs.run_mode == 'review' && inputs.acknowledge_review_persists && 'I_ACKNOWLEDGE_REVIEW_WILL_PERSIST_IN_STAGING' || '' }}
-      ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
       ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
       ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
-      ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
-      ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
-      ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
-      ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
-      ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
-      ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
-      ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
       ETERNYX_EDU_REVIEW_TEST_ID: ${{ vars.ETERNYX_EDU_REVIEW_TEST_ID }}
       ETERNYX_EDU_REVIEW_ATTEMPT_ID: ${{ vars.ETERNYX_EDU_REVIEW_ATTEMPT_ID }}
       ETERNYX_EDU_REVIEW_ANSWER_ID: ${{ vars.ETERNYX_EDU_REVIEW_ANSWER_ID }}
@@ -65,6 +58,15 @@ jobs:
           node-version: 22
           cache: npm
       - name: Fail closed on missing project isolation or review approval
+        env:
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
         run: |
           node --input-type=module -e '
             import {validateEducationHostedReviewConfig} from "./scripts/staging/educationHostedReviewConfig.mjs";
@@ -80,6 +82,15 @@ jobs:
         run: npm ci
       - name: Exercise protected real-JWT review or finalized result reads
         timeout-minutes: 8
+        env:
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
         run: node scripts/staging/verifyEducationHostedInstructorGrading.mjs
       - name: Independently verify sanitized, mode-specific staging-only evidence
         if: always()
