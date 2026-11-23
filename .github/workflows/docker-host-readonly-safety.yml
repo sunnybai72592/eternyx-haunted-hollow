@@ -1,0 +1,32 @@
+name: Docker real-host operator inspection policy (OFFLINE CI)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-host-readonly-safety.yml'
+      - 'src/lib/dockerHostReadOnlyAcceptance.mjs'
+      - 'scripts/docker-host-readonly-acceptance.mjs'
+      - 'tests/docker-host-readonly-acceptance.test.mjs'
+      - 'docs/DOCKER_HOST_READONLY_ACCEPTANCE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-host-policy:
+    name: Offline Docker host context/socket, rootless image, journal and drift safeguards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify actual operator CLI gate and mocked local Docker metadata reads
+        run: node --test tests/docker-host-readonly-acceptance.test.mjs
+      - name: Inspect syntax without connecting to a Docker Engine
+        run: |
+          node --check scripts/docker-host-readonly-acceptance.mjs
+          node --check src/lib/dockerHostReadOnlyAcceptance.mjs
