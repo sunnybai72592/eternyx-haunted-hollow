@@ -126,6 +126,21 @@ export default function Education() {
           </p>
         </header>
 
+        <section aria-label="Structured study paths" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-semibold text-foreground">Build and follow real study paths</h2>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+              Author lessons with objectives, reading, hands-on activities and reflection prompts,
+              or import a shared study path. Track completed lessons and resume from an explicit local file.
+            </p>
+          </div>
+          <Button asChild variant="outline" className="min-h-11 shrink-0">
+            <Link to="/education/study-paths">Open Study Paths
+              <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </section>
+
         <section aria-label="Local learner practice" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-card p-5 sm:flex-row sm:items-center">
           <div>
             <h2 className="font-semibold text-foreground">Practice with a real learner worksheet</h2>
