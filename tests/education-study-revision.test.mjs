@@ -4,7 +4,7 @@ import {readFileSync} from "node:fs";
 import ts from "typescript";
 import {
   authorStudyPath,emptyStudyRecords,changeStudyRecord,
-  buildStudySessionJson,buildStudyPathJson,
+  buildStudySessionJson,
 } from "../src/lib/educationStudyPaths.mjs";
 import {
   STUDY_REVISION_SESSION_VERSION,STUDY_REVISION_INTERVALS,
@@ -47,7 +47,7 @@ const denied=action=>assert.throws(action,
 
 test("existing v1 path and v1 sessions remain importable with empty manual review plan",()=>{
  const p=sample(),records=completedRecords(p);
- for(const file of [buildStudyPathJson(p),buildStudySessionJson(p,records)]){
+ for(const file of [buildStudySharePathJson(p),buildStudySessionJson(p,records)]){
   const parsed=parseStudyJourneyFile(file);
   assert.deepEqual(parsed.path,p);
   assert.deepEqual(parsed.revision,blankStudyRevision(p));
@@ -239,7 +239,7 @@ test("real Study Paths UI offers manual revision controls and distinct private v
   "recordStudyManualReview","setStudyRevisionInterval","reconcileStudyRevisions",
   "studyRevisionInsights","revisionStatus","buildStudyRevisionCalendarCsv",
   "buildStudySharePathJson","buildStudyShareOutline",
-  "Study revision and progress insights","Manual revision planner",
+  "Revision and progress insights","Manual revision planner",
   "Reviewed today — schedule next review","Share course only (.json)",
   "Share course outline (.txt)","Export private revision plan (.csv)",
   "Due for revision","Completed, needs schedule","Open next revision",
