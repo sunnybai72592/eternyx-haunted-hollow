@@ -14,6 +14,11 @@ const releaseObservations=()=>DEVELOPER_BROWSER_VIEWPORTS.flatMap(viewport=>["be
   viewport,phase,status:"source-matched",build_id:releaseId,source_sha:sha,
   html_matches:true,client_matches:true,matches_checkout:true,
 })));
+const headerObservations=()=>["390x844","1440x900"].flatMap(viewport=>["before","after"].map(phase=>({
+  viewport,phase,http_status:200,
+  content_security_policy:true,csp_no_unsafe_eval:true,frame_protection:true,
+  hsts_one_year:true,html_content_type:true,nosniff:true,referrer_restricted:true,
+})));
 const config={origin:"https://developer.staging.example.org",expectedHost:"developer.staging.example.org",confirmation:DEVELOPER_STAGING_CONFIRMATION};
 const report=(overrides={})=>({
   schema:"eternyx-developer-browser-acceptance-v1", environment:"operator-specified staging",
@@ -21,6 +26,7 @@ const report=(overrides={})=>({
   target_host:config.expectedHost, network_scope:"same-origin only",api_requests_executed:false,
   commit:sha, finished_at:"2026-11-23T19:00:00Z",
   release_observations:releaseObservations(),
+  header_observations:headerObservations(),
   runtime_errors:[],asset_failures:[],
   network_audit:{blocked_external_requests:0,blocked_write_attempts:0},
   cases:DEVELOPER_BROWSER_VIEWPORTS.flatMap(viewport=>DEVELOPER_BROWSER_CASES.map(name=>({case:name,viewport,result:"passed"}))),

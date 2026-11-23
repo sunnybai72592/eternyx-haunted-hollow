@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import net from "node:net";
 import { verifyHostedDeveloperReleaseObservations, verifyHostedDeveloperRuntimeSafety } from "./developer-staging-provenance.mjs";
+import { verifyDeveloperHostedHeaders, summarizeDeveloperReleaseDecision } from "./developer-staging-headers.mjs";
 
 export const DEVELOPER_STAGING_CONFIRMATION = "RUN_DEVELOPER_STAGING_READ_ONLY";
 export const DEVELOPER_BROWSER_CASES = Object.freeze([
@@ -74,6 +75,8 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
   if (observed.size !== expected.size) fail("incomplete staging case coverage.");
   const release = verifyHostedDeveloperReleaseObservations(value.release_observations, sourceCommit);
   const runtime = verifyHostedDeveloperRuntimeSafety(value);
+  const headers = verifyDeveloperHostedHeaders(value.header_observations);
+  const releaseDecision = summarizeDeveloperReleaseDecision({developer_case_count:observed.size},release,runtime,headers);
   return {
     result: "browser-acceptance-passed",
     environment: "operator-specified staging",
@@ -83,6 +86,8 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     viewports: DEVELOPER_BROWSER_VIEWPORTS,
     observed_release: release,
     runtime_safety: runtime,
+    hosting_https_headers: headers,
+    release_decision: releaseDecision,
     notes: "Observed hosted HTML, JavaScript and release manifest match the checkout revision. This is unsigned release provenance; protected backend and production readiness are unverified.",
     production_verified: false,
   };
@@ -126,8 +131,10 @@ function main() {
         "Manifest, HTML and JS match checkout SHA: YES",
         "Runtime exceptions / first-party asset failures / attempted writes: 0 / 0 / 0",
         "Blocked external requests: " + summary.runtime_safety.blocked_external_requests,
+        "Root document HTTPS security controls: " + summary.hosting_https_headers.required_controls.length + "/7 checked at 4 observations",
         "",
         "Staging UI acceptance: PASS (observed, unsigned release metadata)",
+        "Release decision: HOLD_PRODUCTION (backend/roles/providers not tested)",
         "Protected backend verification: NOT TESTED",
         "Production certification: NO",
         "",

@@ -22,6 +22,7 @@ API_KEY = "eternyx:developer-project-api-suites:v1"
 RELEASE_OBSERVATIONS = []
 RUNTIME_ERRORS = []
 ASSET_FAILURES = []
+HEADER_OBSERVATIONS = []
 NETWORK_AUDIT = {"blocked_external_requests": 0, "blocked_write_attempts": 0}
 
 def on_runtime_error(error):
@@ -49,10 +50,38 @@ def on_asset_response(response):
             resource in ("document", "script") and response.status >= 400):
         ASSET_FAILURES.append({"resource_type": resource, "status": response.status})
 
+
+def inspect_https_response_headers(response, viewport, phase):
+    """Classify public navigation headers. Never store raw header values."""
+    headers = response.all_headers() if response else {}
+    csp = headers.get("content-security-policy", "")
+    hsts = headers.get("strict-transport-security", "")
+    cache_referrer = headers.get("referrer-policy", "").lower()
+    xfo = headers.get("x-frame-options", "").strip().lower()
+    max_age = re.search(r"(?:^|;)\s*max-age\s*=\s*(\d+)(?:;|$)", hsts, re.I)
+    frame_match = re.search(r"(?:^|;)\s*frame-ancestors\s+([^;]+)", csp, re.I)
+    frame_policy = frame_match.group(1).strip().lower() if frame_match else ""
+    referrer_options = [value.strip() for value in cache_referrer.split(",")]
+    secure_referrer = {"no-referrer", "strict-origin", "same-origin",
+                       "strict-origin-when-cross-origin"}
+    HEADER_OBSERVATIONS.append({
+        "viewport": viewport,
+        "phase": phase,
+        "http_status": response.status if response else 0,
+        "html_content_type": "text/html" in headers.get("content-type", "").lower(),
+        "hsts_one_year": bool(max_age and int(max_age.group(1)) >= 31536000),
+        "nosniff": headers.get("x-content-type-options", "").strip().lower() == "nosniff",
+        "referrer_restricted": bool(referrer_options and referrer_options[-1] in secure_referrer),
+        "content_security_policy": bool(csp.strip()),
+        "csp_no_unsafe_eval": bool(csp.strip()) and not bool(re.search(r"'unsafe-eval'", csp, re.I)),
+        "frame_protection": (xfo in ("deny", "sameorigin") or frame_policy in ("'self'", "'none'")),
+    })
+
 def observe_hosted_release(page, viewport, phase, require_current):
     # Real GET to the exact same-origin public manifest. No credentials,
     # redirects or body snippets are added to CI artifacts.
-    page.goto(ORIGIN + "/", wait_until="domcontentloaded")
+    navigation = page.goto(ORIGIN + "/", wait_until="domcontentloaded")
+    inspect_https_response_headers(navigation, viewport, phase)
     observed = page.evaluate("""async () => {
       const value = {
         stamp: null,
@@ -367,6 +396,7 @@ if __name__ == "__main__":
             "target_host":urlsplit(ORIGIN).hostname,
             "network_scope":"same-origin only",
             "release_observations":RELEASE_OBSERVATIONS,
+            "header_observations":HEADER_OBSERVATIONS,
             "runtime_errors":RUNTIME_ERRORS,
             "asset_failures":ASSET_FAILURES,
             "network_audit":NETWORK_AUDIT,

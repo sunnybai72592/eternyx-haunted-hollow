@@ -66,6 +66,8 @@ jobs:
         run: |
           node --check scripts/developer-staging-gate.mjs
           node --check scripts/developer-staging-provenance.mjs
+          node --check scripts/developer-staging-headers.mjs
+          node --check tests/developer-hosted-headers.test.mjs
           node --check tests/developer-staging-provenance.test.mjs
           node scripts/developer-staging-gate.mjs --source-check
           python3 -m py_compile tests/browser/developer_project_lab_smoke.py
