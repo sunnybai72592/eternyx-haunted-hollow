@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, CalendarClock, CheckCircle2, ClipboardList, Link2, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Bell, CalendarClock, CheckCircle2, ClipboardList, Download, Link2, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/authStore';
 import { getServiceOffering, serviceRequestStatuses, type ServiceRequestStatus } from '@/lib/serviceOfferings';
@@ -15,6 +15,7 @@ import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments
 import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import ServiceActionPulse from '@/components/services/ServiceActionPulse';
 import ServiceDeskReadiness from '@/components/services/ServiceDeskReadiness';
+import { readQueuePreset, buildQueuePresetLink, downloadServiceQueueCsv, type AdminQueuePreset } from '@/lib/serviceQueueViews';
 import { Input } from '@/components/ui/input';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
@@ -291,6 +292,29 @@ export default function AdminServiceRequests() {
     setActiveSearch(selected);
   }, [location.search]);
 
+  // All shared queue links are narrow, allowlisted task categories.
+  // Private request UUID deep-links take precedence and are not changed.
+  useEffect(() => {
+    if (!authorized) return;
+    const preset = readQueuePreset(location.search, 'admin');
+    if (!preset) return;
+    setFilter('all');
+    setPriorityFilter('all');
+    setAssignmentFilter(preset === 'unassigned' ? 'unassigned' : 'all');
+    setAttentionOnly(preset === 'follow-up');
+    setMineCheckOnly(false);
+    setClarificationFilter(preset === 'clarifications' ? 'needs_review' : 'all');
+    setPendingAmendmentsOnly(preset === 'brief-reviews');
+    setReviewBucket('all');
+    setActionFilter('all');
+    setSortOrder('newest');
+    setSearch('');
+    setActiveSearch('');
+    setSearchField('title');
+    setActiveSearchField('title');
+    setPage(0);
+  }, [authorized, location.search]);
+
   const clearFilters = () => {
     setFilter('all');
     setPriorityFilter('all');
@@ -350,6 +374,73 @@ export default function AdminServiceRequests() {
   };
 
   const filtered = rows;
+  const currentAdminFocus = (): AdminQueuePreset | null => {
+    if (!authorized || !user?.id || new URLSearchParams(location.search).has('request')
+      || filter !== 'all' || activeSearch || priorityFilter !== 'all'
+      || reviewBucket !== 'all' || actionFilter !== 'all' || sortOrder !== 'newest'
+      || mineCheckOnly || assignmentFilter === 'mine'
+      || (clarificationFilter !== 'all' && clarificationFilter !== 'needs_review')) return null;
+    const selected = Number(attentionOnly) + Number(pendingAmendmentsOnly)
+      + Number(clarificationFilter === 'needs_review') + Number(assignmentFilter === 'unassigned');
+    if (selected > 1) return null;
+    if (attentionOnly) return 'follow-up';
+    if (pendingAmendmentsOnly) return 'brief-reviews';
+    if (clarificationFilter === 'needs_review') return 'clarifications';
+    if (assignmentFilter === 'unassigned') return 'unassigned';
+    return 'all';
+  };
+
+  const confirmAdminForLocalAction = async (): Promise<boolean> => {
+    if (!authorized || !user?.id) return false;
+    const { data: { user: verified }, error } = await supabase.auth.getUser();
+    if (error || verified?.id !== user.id || useAuthStore.getState().user?.id !== user.id) return false;
+    const { data: isAdmin, error: roleError } = await supabase.rpc('is_admin');
+    return !roleError && isAdmin === true && useAuthStore.getState().user?.id === user.id;
+  };
+
+  const copyFocusedAdminView = async () => {
+    const focus = currentAdminFocus();
+    if (!focus || !user?.id) return;
+    const actor = user.id;
+    try {
+      if (!await confirmAdminForLocalAction()) throw new Error('Admin account not verified');
+      await navigator.clipboard.writeText(buildQueuePresetLink(window.location.origin, 'admin', focus));
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Administrator queue focus link copied. It shares no request IDs, search terms, or customer contacts; a verified admin login is still required.');
+      }
+    } catch {
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Could not copy the focus link. Check clipboard access and administrator verification.');
+      }
+    }
+  };
+
+  const exportLoadedAdminQueue = async () => {
+    if (!authorized || !user?.id || loading || loadError || filtered.length === 0) return;
+    const actor = user.id;
+    try {
+      if (!await confirmAdminForLocalAction()) throw new Error('Admin account not verified');
+      downloadServiceQueueCsv(
+        'eternyx-admin-worklist-loaded.csv',
+        ['Request reference', 'Service', 'Title', 'Status', 'Priority', 'Assignment', 'Next internal review (UTC)', 'Next internal action', 'Pending brief changes', 'Answered clarifications to review'],
+        filtered.map((item) => [
+          item.id, getServiceOffering(item.service_key)?.title ?? item.service_key,
+          item.title, serviceRequestStatuses[item.status]?.label ?? item.status,
+          item.priority, item.assigned_admin_id ? 'Assigned' : 'Unassigned',
+          item.next_review_on ?? '', item.next_action_kind ?? '',
+          item.pending_amendment_count, item.awaiting_admin_review_count,
+        ]),
+      );
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Exported ' + filtered.length + ' loaded worklist row(s), not the entire database. This is an internal-only CSV; keep it private.');
+      }
+    } catch {
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Worklist export not completed. Reverify administrator access and try again.');
+      }
+    }
+  };
+
   const applySearch = () => {
     const trimmed = search.trim();
     if (searchField === 'id' && trimmed && !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(trimmed)) {
@@ -414,6 +505,20 @@ export default function AdminServiceRequests() {
         <div><p className="text-sm font-semibold text-primary">ETERNYX / Business operations</p><h1 className="mt-1 text-3xl font-bold sm:text-4xl">Service request desk</h1><p className="mt-2 text-sm text-muted-foreground">Review submitted briefs and publish factual, customer-visible status updates. No payment or fulfillment is triggered here.</p></div>
         <Button variant="outline" onClick={() => { void load(); void loadQueueCounts(); void loadActionCounts(); }} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
       </header>
+      <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Administrator queue sharing and export">
+        <Button type="button" variant="outline" size="sm" disabled={!currentAdminFocus()}
+          onClick={() => void copyFocusedAdminView()}>
+          <Link2 className="mr-2 h-4 w-4" />Copy focus link
+        </Button>
+        <Button type="button" variant="outline" size="sm"
+          disabled={loadError || loading || filtered.length === 0}
+          onClick={() => void exportLoadedAdminQueue()}>
+          <Download className="mr-2 h-4 w-4" />Export loaded worklist
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Links contain only an approved task focus. CSV exports just this page's loaded worklist metadata, not customer emails, private notes or full briefs.
+        </p>
+      </div>
       {authorized && <ServiceDeskReadiness mode="admin" />}
       {authorized && <ServiceActionPulse
         heading="Service operations action center"
