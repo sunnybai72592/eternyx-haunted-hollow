@@ -92,7 +92,7 @@ test("report includes explicit mechanical-scope and non-security warnings", () =
   const report = local.formatInspectionReport(local.inspectLocalCode("x", "plaintext"));
   assert.match(report, /Not a compiler, vulnerability scan, runtime test, or AI code review/);
   assert.match(page, /does not compile/);
-  assert.match(page, /Source code stays in this browser/);
+  assert.match(page, /Local inspection stays in your browser/);
 });
 
 test("editing inputs clears stale inspection and request previews", () => {
@@ -106,9 +106,10 @@ test("editing inputs clears stale inspection and request previews", () => {
   ]) assert.ok(page.includes(fragment), "Missing draft invalidation: " + fragment);
 });
 
-test("no provider invocation, code execution, billing, or AI results are claimed", () => {
+test("local tools never execute code while explicit AI Chat integration is opt-in", () => {
   assert.doesNotMatch(page + helper, /supabase\.functions\.invoke|ai-generation-job-enqueue|fetch\(|\beval\(/);
-  assert.match(page, /AI code review and generation are not enabled/);
+  assert.match(page, /Review with AI Chat/);
+  assert.match(page, /ai\.run\(request\.featureKey, formatCodingRequest\(request\)\)/);
   assert.match(page, /No AI output or credit charge is claimed/);
   assert.match(page, /navigator\.clipboard\.writeText\(text\)/);
   assert.match(page, /role="alert"/);
