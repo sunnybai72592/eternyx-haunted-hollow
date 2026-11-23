@@ -242,7 +242,7 @@ test("CLI requires external pin for verify and separate manual approval for seal
   ]);
   assert.match(cli,/ETERNYX_CASE_CHECKPOINT_ACK/);
   assert.match(review,/verifySignedReviewDisposition/);
-  assert.match(review,/O_EXCL/);
+  assert.match(review,/publishOfflineEvidence/);
   assert.match(workflow,/ctf-firecracker-review-checkpoint.test.mjs/);
   assert.doesNotMatch(cli,/createServer|fetch\(|startInstance|https?:\/\//);
 });
