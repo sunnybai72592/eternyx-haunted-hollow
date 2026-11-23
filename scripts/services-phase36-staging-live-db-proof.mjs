@@ -72,7 +72,7 @@ export function buildAuditSql(schemaSql,verdictSql){
   '\\set ON_ERROR_STOP on',
   'BEGIN TRANSACTION READ ONLY;',
   "SET LOCAL statement_timeout = '12000ms';",
-  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges, (SELECT row_to_json(s) FROM ("+exposedRoutineSql()+") s) AS routine_surface) i;"
+  "SELECT row_to_json(i)::text FROM (SELECT current_user AS role, current_database() AS db, pg_catalog.clock_timestamp() AS server_time, (SELECT row_to_json(p) FROM ("+auditorPrivilegeSelect()+") p) AS auditor_privileges, (SELECT row_to_json(s) FROM ("+exposedRoutineSql()+") s) AS routine_surface) i;",
   'SELECT row_to_json(h)::text FROM (',
   " SELECT COALESCE(json_agg(json_build_object('version',version::text,'name',COALESCE(name,'')) ORDER BY version), '[]'::json) AS managed_migrations",
   ' FROM supabase_migrations.schema_migrations',
