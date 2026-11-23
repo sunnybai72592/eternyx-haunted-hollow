@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - '.github/workflows/automation-staging-db-offline-contract.yml'
+      - 'scripts/automation-staging-core-release.mjs'
+      - 'scripts/automation-staging-functions-catalog.sh'
+      - 'scripts/sql/automation-staging-functions-catalog.sql'
+      - 'tests/automation-staging-core-release.test.mjs'
+      - '.github/workflows/automation-staging-core-release.yml'
       - 'scripts/automation-staging-db-readonly.mjs'
       - 'scripts/automation-staging-db-readonly.sh'
       - 'scripts/sql/automation-staging-db-readonly.sql'
@@ -105,6 +110,43 @@ jobs:
           actual="$(docker exec eternyx-readonly-probe-fixture psql -U postgres -d postgres -X -A -t -c "SELECT count(*) FROM supabase_migrations.schema_migrations")"
           test "$actual" = "2" || { echo "::error::Synthetic migration journal was unexpectedly modified"; exit 1; }
           echo "Read-only PostgreSQL setting rejected INSERT; journal remains unchanged"
+      - name: Prove staging core function schema/RPC and RLS catalog gate against real PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < scripts/sql/automation-staging-functions-catalog.sql > "$RUNNER_TEMP/automation-stage-catalog.txt"
+          node --input-type=module - "$RUNNER_TEMP/automation-stage-catalog.txt" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import assert from "node:assert/strict";
+          import {parseCatalog} from "./scripts/automation-staging-core-release.mjs";
+          const result=parseCatalog(readFileSync(process.argv[2],"utf8"));
+          assert.equal(result.automation_rpc_catalog_present,true);
+          assert.equal(result.automation_rls_enabled,true);
+          assert.equal(result.automation_schema_present,true);
+          assert.equal(result.releaseAuthorized,false);
+          console.log("Actual Automation RPC catalog and base-table RLS found in PostgreSQL 17.");
+          NODE
+      - name: Disable one tenant RLS policy in the disposable database and require catalog gate failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i eternyx-readonly-probe-fixture psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "ALTER TABLE public.automation_webhook_triggers DISABLE ROW LEVEL SECURITY" > /dev/null
+          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-readonly-probe-fixture \
+            psql -U postgres -d postgres -X -q -A -t -v ON_ERROR_STOP=1 \
+            < scripts/sql/automation-staging-functions-catalog.sql > "$RUNNER_TEMP/automation-stage-catalog-broken.txt"
+          if node --input-type=module - "$RUNNER_TEMP/automation-stage-catalog-broken.txt" <<'NODE'
+          import {readFileSync} from "node:fs";
+          import {parseCatalog} from "./scripts/automation-staging-core-release.mjs";
+          parseCatalog(readFileSync(process.argv[2],"utf8"));
+          NODE
+          then
+            echo "::error::Catalog incorrectly approved staging with tenant RLS disabled"
+            exit 1
+          fi
+          echo "Actual PostgreSQL tenant RLS failure blocked staged function release."
       - name: Always remove the disposable offline PostgreSQL fixture
         if: always()
         run: docker rm --force eternyx-readonly-probe-fixture || true

@@ -67,6 +67,8 @@ jobs:
           node --check scripts/developer-staging-gate.mjs
           node scripts/developer-staging-gate.mjs --source-check
           python3 -m py_compile tests/browser/developer_project_lab_smoke.py
+      - name: Verify three core Automation function sources and JWT modes (no remote deployment)
+        run: node scripts/automation-staging-core-release.mjs --check-source > "$RUNNER_TEMP/eternyx-core-staging-manifest.json"
       - name: Check utility JavaScript syntax
         run: |
           node --check src/lib/developerStudioUtils.mjs
