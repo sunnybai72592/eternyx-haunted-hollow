@@ -1,0 +1,41 @@
+name: Docker signed-agent durable fsync and lock identity (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-durable-journal-phase32.yml'
+      - 'src/lib/dockerLabRecovery.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'tests/docker-durable-journal-fsync.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_DURABLE_JOURNAL_PHASE32.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  durable-journal:
+    name: Prove fsynced reservation filenames and original agent lock release
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check recovery, live signed agent and crash test
+        run: |
+          node --check src/lib/dockerLabRecovery.mjs
+          node --check scripts/docker-lab-agent.mjs
+          node --check tests/docker-durable-journal-fsync.test.mjs
+      - name: Exercise crash-like process exit, inode guards and durable canonical journals
+        run: |
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-lab-recovery.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
