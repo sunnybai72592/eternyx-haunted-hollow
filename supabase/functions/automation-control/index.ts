@@ -148,7 +148,7 @@ serve(async (req: Request) => {
       });
       if(error)throw error;
       if(data?.ok!==true)return rpcResponse(data,"incident_audit_trace_failed");
-      return reply({...data,source:"authenticated_server",
+      return reply({...data,auditSource:data.source,source:"authenticated_server",
         externalExecutionTriggered:false});
     }
     if(request.action==="incidentClosurePreflight"){
