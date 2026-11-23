@@ -289,6 +289,23 @@ def actual_preflight(page):
     editor.fill(original + "\n// modified after test")
     expect(page.get_by_role("button", name="Export source-free test report")).to_be_disabled()
     editor.fill(original)
+    # One-click recommendations add six real static HTML checks, not mock passes.
+    page.get_by_role("button", name="Add HTML quality checks").click()
+    expect(page.get_by_role("group", name="Configured local tests").get_by_role("button", name="Remove test 9")).to_be_visible()
+    page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html", exact=True).click()
+    html_before=editor.input_value()
+    editor.fill(html_before + '\n<a href="#quality-missing-target">broken</a>')
+    page.get_by_role("button", name="Run project tests").click()
+    expect(page.get_by_text("unresolved-local-anchor", exact=False)).to_be_visible(timeout=20000)
+    page.get_by_role("button", name="Show failed only").click()
+    expect(page.get_by_role("button", name="Show all results")).to_be_visible()
+    with page.expect_download() as download:
+        page.get_by_role("button", name="Export source-free test report").click()
+    quality_report=json.loads(Path(download.value.path()).read_text(encoding="utf-8"))
+    assert quality_report["failed"] >= 2
+    assert "quality-missing-target" not in json.dumps(quality_report)
+    assert "index.html" not in json.dumps(quality_report)
+    editor.fill(html_before)
     page.get_by_role("button", name="Save browser copy").click()
 
 def preview_isolation(page):
