@@ -237,6 +237,9 @@ test("46 stale response after account switch is fenced from both navigation and 
  assert.match(ui,/submissionGenerationRef\.current \+= 1/);
  assert.match(ui,/if\(generation!==submissionGenerationRef\.current\)return/);
  assert.match(ui,/if\(generation===submissionGenerationRef\.current\)/);
+ assert.match(ui,/queryClient\.setQueryData<Attempt>\(/);
+ assert.match(ui,/existing => existing\?\.id===receipt\.id/);
+ assert.match(ui,/start_time:receipt\.startedAt/);
 });
 test("47 account change resets uncertain state and pending check",()=>{
  assert.match(ui,/setSubmissionUncertain\(false\)/);
