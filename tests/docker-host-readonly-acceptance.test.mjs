@@ -148,6 +148,7 @@ test("an unpinned daemon or non-rootless/active Swarm engine fails closed",async
   {ID:"different-daemon"},
   {SecurityOptions:["name=seccomp,profile=builtin"]},
   {Swarm:{LocalNodeState:"active"}},
+  {Swarm:undefined},
   {SecurityOptions:null}
  ]){
   const d=driver({daemon:{...info(),...changed}});
