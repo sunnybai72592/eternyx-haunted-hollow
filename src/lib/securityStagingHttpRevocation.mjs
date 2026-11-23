@@ -86,8 +86,10 @@ export function validateHttpRevocationReport(raw,phase=null) {
    "Missing HMAC-bound staging identities.");
  requireOk(Array.isArray(raw.checks)&&raw.checks.length===HTTP_REVOCATION_CHECKS.length&&
    HTTP_REVOCATION_CHECKS.every((name,i)=>{
-     const c=raw.checks[i];return obj(c)&&Object.keys(c).length===2&&
-       c.id===name&&c.status==="pass";
+     const c=raw.checks[i];
+     const deferred=raw.phase==="baseline"&&["revocation-audit","phase-linked-identities"].includes(name);
+     return obj(c)&&Object.keys(c).length===2&&c.id===name&&
+       c.status===(deferred?"deferred":"pass");
    }),"Report has missing or failed HTTP checks.");
  exact(raw.summary,["accounts","tables","remoteWrites","authMode","engagementState","independentApproval"],"Report summary");
  requireOk(raw.summary.accounts===2&&raw.summary.tables===REQUIRED_STAGING_TABLES.length&&
@@ -134,7 +136,9 @@ export async function runSecurityHttpRevocation(config,opts,fetchImpl=globalThis
   });
   requestCount++;
   const type=response.headers?.get?.("content-type")||"";
-  const isJson=response.ok&&type.includes("application/json");
+  // Never parse or hold actual private evidence JSON bytes; only status is inspected.
+  const isStorage=url.pathname.startsWith("/storage/v1/object/authenticated/");
+  const isJson=!isStorage&&response.ok&&type.includes("application/json");
   let data=null;
   if(isJson)data=await response.json();
   else if(response.body?.cancel)await response.body.cancel();
@@ -245,8 +249,13 @@ export async function runSecurityHttpRevocation(config,opts,fetchImpl=globalThis
     event.details.changed_fields.includes("authorization_attested")),
     "Missing post-baseline owner-scoped engagement authorization revocation audit event.");
  }
- passed(report.checks,"revocation-audit");
- passed(report.checks,"phase-linked-identities");
+ if(opts.phase==="baseline"){
+  report.checks.push({id:"revocation-audit",status:"deferred"});
+  report.checks.push({id:"phase-linked-identities",status:"deferred"});
+ }else{
+  passed(report.checks,"revocation-audit");
+  passed(report.checks,"phase-linked-identities");
+ }
  validateHttpRevocationReport(report);
  // Every request was GET and no raw user identifiers, paths or tokens are in the report.
  return {report,requestCount};
