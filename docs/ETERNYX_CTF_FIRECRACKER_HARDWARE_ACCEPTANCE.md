@@ -1045,3 +1045,104 @@ npm run build
 
 The tests use artificial records and in-memory keys. They cannot execute
 Firecracker, call cloud APIs, create paid instances, or authorize public labs.
+
+
+## Signed supplemental runtime addendum — offline reviewer
+
+After all original operator, reviewer and disposition signatures pass, a
+human reviewer may bind the **supplemental, operator-collected runtime JSON**
+to the previously sealed and **externally pinned** case checkpoint with a
+separate Ed25519 signature. This is a procedural signature of the reviewed
+metadata bytes, **not** independent authentication of the originating host,
+proof of Firecracker operation, or permission to enable public Labs.
+
+The reviewer must first inspect the actual physical-host journal, timeout,
+cgroup and guest evidence through independently trusted means. A consistent
+operator sidecar and transcript hash alone do not prove either was truthful.
+
+### Preconditions and immutable chain
+
+- The original private reviewer case is complete: the operator v2 signed
+  report, independent reviewer endorsement, human disposition, preflight and
+  image inventory all verify, with no unfinished import transaction.
+- The saved \`case-checkpoint.json\` is reverified against the **SHA-256
+  obtained independently of the case directory**. A hash copied from the
+  case itself is *not* an independent pin.
+- The read-only \`--audit-runtime\` passes for the original exact session
+  and signed mode (including any guest challenge or watchdog timeout files).
+- The reviewer independently controls the private Ed25519 signing key; no
+  operator private key is read, copied, exported or created.
+- The supplemental runtime sidecars are present as **separate, private,
+  manually staged files**. They are *not* retroactively inserted into the
+  earlier signed v1 reviewer record or sealed original checkpoint.
+
+The new signed record is saved exclusively at
+\`/var/lib/eternyx-reviewer/cases/<UUID>/review-runtime-addendum.json\`
+(mode 0600, root-owned, O_EXCL/O_NOFOLLOW, file and directory fsync).
+The record contains fixed metadata, hashes and lengths for all required
+sidecars, the externally pinned original case-checkpoint hash, session/mode,
+existing human decision, both externally pinned public signer identities,
+and a **reviewer Ed25519 signature**. It never contains raw host logs,
+private keys or guest memory.
+
+### Manual, one-time addendum signing
+
+On the isolated reviewer machine, with a *separately obtained* original
+checkpoint SHA-256:
+
+\`\`\`bash
+export ETERNYX_RUNTIME_ADDENDUM_ACK=I_APPROVE_SIGNED_OFFLINE_RUNTIME_ADDENDUM
+sudo --preserve-env=ETERNYX_RUNTIME_ADDENDUM_ACK \
+  node scripts/cyber-range-runtime-addendum.mjs \
+  --sign --confirm-offline-runtime-addendum \
+  --session UUID \
+  --operator-sha INDEPENDENT_OPERATOR_SPKI_SHA256 \
+  --reviewer-sha INDEPENDENT_REVIEWER_SPKI_SHA256 \
+  --checkpoint-sha INDEPENDENT_CASE_CHECKPOINT_SHA256
+\`\`\`
+
+Store the returned \`addendumSha256\` in an **independent, tamper-resistant
+register**, not solely on the same reviewer disk. An existing or interrupted
+addendum cannot be overwritten or silently repaired; investigate incomplete
+evidence and create a new approved case if needed.
+
+### Re-verify without reading private keys
+
+The operator's and reviewer's public Ed25519 keys and **both independent
+SHA-256 pins** are required:
+
+\`\`\`bash
+sudo node scripts/cyber-range-runtime-addendum.mjs \
+  --verify --session UUID \
+  --operator-sha INDEPENDENT_OPERATOR_SPKI_SHA256 \
+  --reviewer-sha INDEPENDENT_REVIEWER_SPKI_SHA256 \
+  --checkpoint-sha INDEPENDENT_CASE_CHECKPOINT_SHA256 \
+  --addendum-sha INDEPENDENT_ADDENDUM_SHA256
+\`\`\`
+
+The verifier recomputes the original verified checkpoint, verifies the three
+original evidence signatures, recomputes the runtime observation consistency,
+matches every sidecar's original byte length and digest, verifies the new
+reviewer Ed25519 signature, and checks the **external** addendum hash.
+Missing, altered, extra, foreign-session or misleadingly overclaiming files
+are refused without writing anything or starting a VM.
+
+**Trust boundary:** The addendum signer and original reviewer are the same
+reviewer identity. This is *not* a new independent person and not a TPM
+quote; a compromised signer or externally pinned records could still
+undermine the chain. All positive verification outputs explicitly retain
+\`sidecarsIndependentlyAuthenticated:false\`,
+\`physicalHostAttested:false\`, \`publicLabsEnabled:false\` and
+\`productionReady:false\`.
+
+### Free regression suite
+
+\`\`\`bash
+node --test tests/ctf-firecracker-runtime-addendum.test.mjs
+npm test
+npm run build
+\`\`\`
+
+Tests use only locally generated disposable Ed25519 keys and fixture bytes.
+They do **not** provide true KVM hardware attestation, execute real VMs,
+contact any cloud/AI provider, or enable billable hosted Labs.

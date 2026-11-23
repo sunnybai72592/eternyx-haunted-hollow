@@ -31,6 +31,11 @@ import {
 import {
   auditOfflineRuntimeObservations,requiredRuntimeObservationFiles,
 } from "./firecracker-runtime-observations.mjs";
+import {
+  RUNTIME_ADDENDUM_FILE,RUNTIME_ADDENDUM_ACK,
+  createSignedRuntimeAddendum,verifySignedRuntimeAddendum,
+  canonicalRuntimeAddendumBytes,
+} from "./firecracker-runtime-addendum.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -589,5 +594,108 @@ export async function auditIndependentRuntimeObservations({
   ));
   return auditOfflineRuntimeObservations({
     ...source,operatorFingerprint,sidecars:observations,
+  });
+}
+
+
+/**
+ * Supplemental addendum: re-verify externally pinned immutable checkpoint,
+ * original three signed records and the exact sidecars before signing.
+ * A sidecar addendum is never proof of the physical host's authenticity.
+ */
+async function loadedRuntimeAddendumContext({
+  sessionId,operatorFingerprint,reviewerFingerprint,
+  externallyPinnedCheckpointSha256,
+  caseBase=REVIEW_CASE_BASE,owner=0,privateRequired=false,
+}={}){
+  const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
+  const keys=await reviewerKeys({owner,privateRequired});
+  const [reviewBytes,dispositionBytes]=await Promise.all([
+    safeRead(join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT),
+    safeRead(join(source.folder,"review-disposition.json"),owner,MAX_RECEIPT),
+  ]);
+  const outcome=verifySignedReviewDisposition({
+    ...source,...keys,
+    reviewReport:JSON.parse(reviewBytes.toString("utf8")),
+    report:JSON.parse(dispositionBytes.toString("utf8")),
+    operatorFingerprint,reviewerFingerprint,
+  });
+  if(outcome.sessionId!==sessionId ||outcome.publicLabsEnabled!==false)
+    throw Error("Runtime addendum requires the matching signed human decision");
+  const checkpoint=await verifyIndependentCaseCheckpoint({
+    sessionId,operatorFingerprint,reviewerFingerprint,
+    externallyPinnedSha256:externallyPinnedCheckpointSha256,
+    caseBase,owner,
+  });
+  const required=requiredRuntimeObservationFiles(checkpoint.mode);
+  const sidecars=Object.fromEntries(await Promise.all(required.map(
+    async ({sidecar})=>[
+      sidecar,await safeRead(join(source.folder,sidecar),owner,4096),
+    ]
+  )));
+  const audit=auditOfflineRuntimeObservations({
+    ...source,operatorFingerprint,sidecars,
+  });
+  if(audit.sessionId!==sessionId ||audit.mode!==checkpoint.mode||
+     audit.productionReady!==false)
+    throw Error("Runtime sidecar audit contradicts sealed case identity");
+  return {
+    folder:source.folder,keys,checkpoint,audit,sidecars,
+    operatorFingerprint,reviewerFingerprint,
+  };
+}
+export async function signIndependentRuntimeAddendum({
+  acknowledgment,sessionId,operatorFingerprint,reviewerFingerprint,
+  externallyPinnedCheckpointSha256,
+  caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  if(acknowledgment!==RUNTIME_ADDENDUM_ACK)
+    throw Error("Separate human approval for runtime sidecar addendum required");
+  const data=await loadedRuntimeAddendumContext({
+    sessionId,operatorFingerprint,reviewerFingerprint,
+    externallyPinnedCheckpointSha256,caseBase,owner,privateRequired:true,
+  });
+  const addendum=createSignedRuntimeAddendum({
+    ...data,...data.keys,
+    acknowledgment,
+  });
+  const file=await open(join(data.folder,RUNTIME_ADDENDUM_FILE),
+    constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW|
+    constants.O_WRONLY,0o600);
+  try{
+    const before=await file.stat();
+    if(!before.isFile()||before.uid!==owner||before.nlink!==1||
+       (before.mode&0o077)!==0||before.size!==0)
+      throw Error("Untrusted new offline runtime addendum file");
+    await file.writeFile(addendum.bytes);
+    await file.sync();
+    if((await file.stat()).size!==addendum.bytes.length)
+      throw Error("Incomplete runtime addendum write");
+  }finally{await file.close();}
+  const directory=await open(data.folder,
+    constants.O_RDONLY|constants.O_DIRECTORY);
+  try{await directory.sync();}finally{await directory.close();}
+  return Object.freeze({
+    sessionId,addendumSha256:addendum.addendumSha256,
+    checkpointSha256:data.checkpoint.checkpointSha256,
+    privateAddendumRecorded:true,recordAddendumDigestIndependently:true,
+    sidecarsIndependentlyAuthenticated:false,
+    physicalHostAttested:false,publicLabsEnabled:false,productionReady:false,
+  });
+}
+export async function verifyIndependentRuntimeAddendum({
+  externallyPinnedAddendumSha256,...options
+}={}){
+  const data=await loadedRuntimeAddendumContext({
+    ...options,privateRequired:false,
+  });
+  const raw=await safeRead(join(data.folder,RUNTIME_ADDENDUM_FILE),
+    options.owner??0,4096);
+  const report=JSON.parse(raw.toString("utf8"));
+  if(!raw.equals(canonicalRuntimeAddendumBytes(report)))
+    throw Error("Noncanonical or tampered offline runtime addendum bytes");
+  return verifySignedRuntimeAddendum({
+    ...data,...data.keys,report,externallyPinnedAddendumSha256,
   });
 }
