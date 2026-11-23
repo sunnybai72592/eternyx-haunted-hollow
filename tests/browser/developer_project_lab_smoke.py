@@ -19,6 +19,7 @@ REPORT = Path("test-results/developer-project-browser-acceptance.json")
 PROJECT_KEY = "eternyx:developer-projects:v1"
 RECOVERY_KEY = "eternyx:developer-recovery:v1"
 API_KEY = "eternyx:developer-project-api-suites:v1"
+TEST_PLAN_KEY = "eternyx:developer-local-tests:v1"
 RELEASE_OBSERVATIONS = []
 RUNTIME_ERRORS = []
 ASSET_FAILURES = []
@@ -258,6 +259,36 @@ def actual_preflight(page):
     expect(page.get_by_role("button", name="Export metadata-only preflight")).to_be_disabled()
     page.get_by_role("button", name="Run project preflight").click()
     expect(page.get_by_text("No blocking issues found by these rules", exact=True)).to_be_visible(timeout=20000)
+    # Real local project assertions and parser preflight, never executed JS.
+    page.get_by_role("button", name="Run project tests").click()
+    expect(page.get_by_text("Local test suite passed", exact=True)).to_be_visible(timeout=20000)
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export source-free test report").click()
+    results=json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert results["schema"] == "eternyx-developer-local-test-results-v1"
+    assert results["passed"] == 2 and results["failed"] == 0
+    assert results["preflightPassed"] is True
+    assert "acceptance marker" not in json.dumps(results)
+    page.locator("#developer-test-kind").select_option("text-absent")
+    page.locator("#developer-test-file").fill("app.js")
+    page.locator("#developer-test-expected").fill("acceptance marker")
+    page.get_by_role("button", name="Add assertion").click()
+    expect(page.get_by_text("Project or test plan changed. Test results are stale.")).to_be_visible()
+    expect(page.get_by_role("button", name="Export source-free test report")).to_be_disabled()
+    page.get_by_role("button", name="Run project tests").click()
+    expect(page.get_by_text("Local tests require review or are stale", exact=True)).to_be_visible(timeout=20000)
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export source-free test report").click()
+    failed=json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert failed["passed"] == 2 and failed["failed"] == 1
+    assert "acceptance marker" not in json.dumps(failed)
+    page.get_by_role("button", name="Save test plan locally").click()
+    stored=store(page, TEST_PLAN_KEY)
+    assert len(stored) == 1 and len(stored[0]["tests"]) == 3
+    # Stale reports cannot be exported after editing the checked project.
+    editor.fill(original + "\n// modified after test")
+    expect(page.get_by_role("button", name="Export source-free test report")).to_be_disabled()
+    editor.fill(original)
     page.get_by_role("button", name="Save browser copy").click()
 
 def preview_isolation(page):
