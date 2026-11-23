@@ -84,6 +84,10 @@ jobs:
         run: |
           node --check src/lib/workspaceTeamTaskOperations.mjs
           node --check tests/workspace-team-task-operations.test.mjs
+      - name: Check Phase 33 live team board and guarded task transitions
+        run: |
+          node --check src/lib/workspaceTeamTaskBoard.mjs
+          node --check tests/workspace-team-task-board.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
