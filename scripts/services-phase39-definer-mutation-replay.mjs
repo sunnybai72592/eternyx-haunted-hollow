@@ -55,7 +55,7 @@ export function generatePhase39DisposableSql(){
   'CREATE FUNCTION '+BAD+' RETURNS integer',
   " LANGUAGE sql STABLE SECURITY DEFINER AS 'SELECT 1';",
   // Newly created PostgreSQL functions are EXECUTE-granted to PUBLIC by default.
-  check('default_public_execute_is_unsafe',{client_definer_unsafe_search_path_denied:false}),
+  check('default_public_execute_is_unsafe',{auditor_nonvolatile_definer_execute_denied:false,client_definer_unsafe_search_path_denied:false}),
   'REVOKE ALL ON FUNCTION '+BAD+' FROM PUBLIC;',
   check('public_execute_revoked'),
   'GRANT EXECUTE ON FUNCTION '+BAD+' TO authenticated;',
