@@ -1,0 +1,31 @@
+name: Docker isolated-host network gate policies (OFFLINE CI ONLY)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-host-network-gate-safety.yml'
+      - 'src/lib/dockerHostNetworkEvidence.mjs'
+      - 'scripts/docker-host-network-evidence.mjs'
+      - 'tests/docker-host-network-evidence.test.mjs'
+      - 'docs/DOCKER_REAL_HOST_NETWORK_GATE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-only-host-policy:
+    name: Validate source/route/forwarding/authorization refusals without Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run isolated-host network evidence policy regressions (no Docker Engine)
+        run: node --test tests/docker-host-network-evidence.test.mjs
+      - name: Static syntax check (no real host calls)
+        run: |
+          node --check src/lib/dockerHostNetworkEvidence.mjs
+          node --check scripts/docker-host-network-evidence.mjs
