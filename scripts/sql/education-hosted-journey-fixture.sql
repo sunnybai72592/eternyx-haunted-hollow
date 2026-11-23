@@ -44,7 +44,7 @@ SELECT pg_catalog.jsonb_build_object(
     ),
     'exam_not_password_locked', EXISTS(
       SELECT 1 FROM exam t
-      WHERE pg_catalog.nullif(pg_catalog.btrim(
+      WHERE NULLIF(pg_catalog.btrim(
         COALESCE(t.access_password_hash,'')), '') IS NULL
     ),
     'exam_has_safe_test_window', EXISTS(
