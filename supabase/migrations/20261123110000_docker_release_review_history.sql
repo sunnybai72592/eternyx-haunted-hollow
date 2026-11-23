@@ -66,9 +66,6 @@ BEGIN
    RETURN jsonb_build_object('ok',false,'reason','invalid_request');
  END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(20261124,pg_catalog.hashtext(p_owner_id::text));
- IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id=p_owner_id) THEN
-   RETURN jsonb_build_object('ok',false,'reason','not_found');
- END IF;
  SELECT * INTO v_existing FROM public.docker_release_reviews
    WHERE owner_id=p_owner_id AND request_key=p_request_key FOR UPDATE;
  IF FOUND THEN
