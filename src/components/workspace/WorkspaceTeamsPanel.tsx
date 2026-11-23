@@ -299,7 +299,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     return ()=>subscription.unsubscribe();
   },[owner]);
 
-  const run=async(action:()=>Promise<void>,success:string)=>{
+  const run=async(action:()=>Promise<void>,success:string,refreshAfter=true)=>{
     if(disabled||busy)return;
     setBusy(true);setError("");setNotice("");
     const initialOwner=owner;
@@ -309,7 +309,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(ownerRef.current!==initialOwner)return;
       // A server mutation is not a verified local UI update until the latest
       // membership and task snapshot has been reconciled.
-      await refresh();
+      if(refreshAfter)await refresh();
       if(ownerRef.current===initialOwner)setNotice(success);
     } catch(failure) {
       if(ownerRef.current===initialOwner)setError(errorMessage(failure));
@@ -327,7 +327,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(queryError||!data)throw new Error(queryError?.message??"Team creation was not confirmed");
       setTeamName("");setTeamDescription("");
       await refresh(data);
-    },"Team space created. Only explicitly invited members can access its tasks.");
+    },"Team space created. Only explicitly invited members can access its tasks.",false);
   };
   const acceptInvite=(event:FormEvent)=>{
     event.preventDefault();
@@ -339,7 +339,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(queryError||!data)throw new Error(queryError?.message??"Invitation was not accepted");
       setJoinToken("");
       await refresh(data);
-    },"Team invitation accepted. Your new membership is private to this account.");
+    },"Team invitation accepted. Your new membership is private to this account.",false);
   };
   const invite=()=>{
     if(!selected||!canInvite)return;
@@ -352,7 +352,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(!receipt.token||!receipt.role||!receipt.expires_at)
         throw new Error("Server did not return a one-time invitation code");
       setRevealedToken({token:receipt.token,role:receipt.role,expires:receipt.expires_at});
-    },"One-time invitation created. Share the code securely; it will not be shown again after leaving this team.");
+    },"One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",false);
   };
   const saveTask=(event:FormEvent)=>{
     event.preventDefault();
