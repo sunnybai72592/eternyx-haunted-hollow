@@ -103,10 +103,10 @@ test("export uses strictly fixed keys and strips all source, paths, lines and cr
   assert.equal(evidence.findingsCount, report.findings.length);
   assert.ok(evidence.checks.slice(6).every(item => item.status === "not-verified"));
   for (const text of ["PRIVATE_TOKEN_132", "SENSITIVE_VALUE_987", "PRIVATE_REFERENCE_356", "app.js",
-    "index.html", "files", "line", "reference-case-mismatch", "userId", "path"]) {
-    if (text === "files") continue; // 'filesChecked' is an intentional count-only field.
+    "index.html", "reference-case-mismatch", "userId", "path"]) {
     assert.ok(!raw.includes(text), "Unexpected evidence data: " + text);
   }
+  assert.ok(!raw.includes('"line":'));
   assert.ok(!Object.hasOwn(evidence, "findings"));
   assert.ok(!Object.hasOwn(evidence, "project"));
 });
