@@ -1,0 +1,43 @@
+name: Docker signed receipt replay forensic integrity (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-receipt-replay-phase33.yml'
+      - 'src/lib/dockerSignedReceiptReplayFence.mjs'
+      - 'src/lib/dockerStrictRecoveryInventory.mjs'
+      - 'src/lib/dockerLabRecovery.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'tests/docker-signed-receipt-replay-forensics.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_RECEIPT_REPLAY_PHASE33.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-replay:
+    name: Verify no Docker receipt is signed from ambiguous or drifting evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check actual agent and strict receipt forensic gate
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerSignedReceiptReplayFence.mjs
+          node --check tests/docker-signed-receipt-replay-forensics.test.mjs
+      - name: Prove original receipt replay, immutable evidence, and all prior Docker holds
+        run: |
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
