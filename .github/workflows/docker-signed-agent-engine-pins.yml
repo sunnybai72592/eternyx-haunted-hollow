@@ -1,0 +1,36 @@
+name: Docker signed agent rootless Engine and target pins (NO DOCKER IN CI)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-agent-engine-pins.yml'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'src/lib/dockerSignedAgentEngineGate.mjs'
+      - 'tests/docker-signed-agent-engine-gate.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_ROOTLESS_PINS.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-agent-pins:
+    name: Verify signed agent rootless daemon and hardened target pins offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check actual signed agent, pin validator and regression syntax
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerSignedAgentEngineGate.mjs
+          node --check tests/docker-signed-agent-engine-gate.test.mjs
+      - name: Verify Docker identity, state, network and permit/refusal boundaries with no Docker socket
+        run: |
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-lab-recovery.test.mjs
