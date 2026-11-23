@@ -1,0 +1,30 @@
+name: Docker dual-signed release evidence handoff
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-release-handoff.yml'
+      - 'src/lib/dockerReleaseHandoff.mjs'
+      - 'src/lib/dockerStagingDeploymentInventory.mjs'
+      - 'src/lib/dockerStagingParity.mjs'
+      - 'scripts/docker-release-handoff.mjs'
+      - 'tests/docker-release-handoff.test.mjs'
+      - 'docs/DOCKER_RELEASE_HANDOFF.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-handoff:
+    name: Pinned Docker source, deployed metadata and two-key signature integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify actual offline release evidence chain and adversarial cases
+        run: node --test tests/docker-release-handoff.test.mjs
