@@ -56,10 +56,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: rls-staging
     if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' }}
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       ETERNYX_EDU_RELEASE_MODE: ${{ inputs.run_mode }}
       ETERNYX_EDU_JOURNEY_APPROVAL: ${{ inputs.run_mode == 'journey' && inputs.approve_single_attempt_journey && 'I_APPROVE_SINGLE_STAGING_EXAM_FULL_JOURNEY' || '' }}
+      ETERNYX_EDU_JOURNEY_BROWSER_READ_APPROVAL: ${{ inputs.run_mode == 'journey' && inputs.approve_single_attempt_journey && inputs.approve_read_only && 'I_APPROVE_READ_ONLY_FRESH_STAGING_RESULT' || '' }}
       ETERNYX_EDU_RELEASE_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_RELEASE_CHECKS' || '' }}
       ETERNYX_EDU_RELEASE_IRREVERSIBLE_ACK: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && inputs.acknowledge_full_rehearsal && 'I_ACKNOWLEDGE_STAGING_EXAM_REVIEW_AND_GRADE_ARE_IRREVERSIBLE' || '' }}
       ETERNYX_EDU_STAGING_READ_APPROVAL: ${{ inputs.approve_read_only && 'I_APPROVE_EDUCATION_STAGING_READ_ONLY' || '' }}
@@ -183,6 +184,53 @@ jobs:
           ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
           ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
         run: node scripts/staging/runEducationHostedRelease.mjs
+      - name: Build disposable frontend against staging only for the newly finalized attempt
+        if: inputs.run_mode == 'journey'
+        timeout-minutes: 3
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          VITE_CBT_ATOMIC_RPC: "true"
+          VITE_EDUCATION_INSTRUCTOR_RPC: "true"
+          VITE_EDUCATION_PUBLICATION_RPC: "true"
+          VITE_EDUCATION_WRITTEN_REVIEW_RPC: "true"
+          VITE_EDUCATION_VERIFIED_RESULTS_RPC: "true"
+        run: npm run build
+      - name: Install isolated Chromium for fresh staging journey without credentials
+        if: inputs.run_mode == 'journey'
+        timeout-minutes: 5
+        run: |
+          python3 -m venv "$RUNNER_TEMP/edu-journey-browser"
+          "$RUNNER_TEMP/edu-journey-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
+          "$RUNNER_TEMP/edu-journey-browser/bin/python" -m playwright install --with-deps chromium
+      - name: Start local staging-targeted journey UI preview with no account credentials
+        if: inputs.run_mode == 'journey'
+        timeout-minutes: 2
+        run: |
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/edu-journey-preview.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "BLOCKED: local staged-journey preview unavailable"
+          exit 1
+      - name: Verify newly finalized owned attempt in real desktop and mobile browser
+        if: inputs.run_mode == 'journey'
+        timeout-minutes: 8
+        env:
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+        run: |
+          "$RUNNER_TEMP/edu-journey-browser/bin/python" tests/browser/education_fresh_journey_hosted.py
+      - name: Refuse a full staging journey verdict without fresh-attempt browser proof
+        if: inputs.run_mode == 'journey'
+        run: node scripts/staging/educationJourneyBrowserGate.mjs
+      - name: Erase protected fresh-attempt handoff before any artifact upload
+        if: always()
+        run: |
+          rm -f test-results/education-journey-ui-target-private.json
       - name: Upload sanitized same-run evidence for independent review
         if: always()
         uses: actions/upload-artifact@v4
@@ -198,5 +246,7 @@ jobs:
             test-results/education-trusted-finalization.json
             test-results/education-hosted-final-results.json
             test-results/education-hosted-release-readiness.json
+            test-results/education-hosted-fresh-journey-browser.json
+            test-results/education-hosted-fresh-journey-ui-backend.json
           if-no-files-found: warn
           retention-days: 7
