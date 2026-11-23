@@ -59,6 +59,10 @@ jobs:
         run: |
           node --check src/lib/workspaceTeamAccess.mjs
           node --check tests/workspace-team-access.test.mjs
+      - name: Verify Phase 27 Workspace resume and draft recovery guards
+        run: |
+          node --check src/lib/workspaceTeamAccess.mjs
+          node --check tests/workspace-team-resume.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
