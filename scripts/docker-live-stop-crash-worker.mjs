@@ -68,7 +68,10 @@ try{
  const hostEvidence=validateLiveStopHostEvidence(JSON.parse(hostOutput.stdout),{
   approvedSourceCommitSha:e.ETERNYX_DOCKER_APPROVED_COMMIT_SHA,
   containerId,daemonIdentitySha256:pins.expectedDaemonIdSha256,
-  imageSha256:pins.expectedImageSha256
+  imageSha256:pins.expectedImageSha256,
+  managedContainerPolicySha256:e.ETERNYX_DOCKER_LIVE_STOP_POLICY_SHA256,
+  socketEndpointSha256:e.ETERNYX_DOCKER_HOST_SOCKET_SHA256,
+  routeSnapshotSha256:e.ETERNYX_DOCKER_HOST_ROUTE_SHA256
  });
  if(hostEvidence.managedContainerPolicySha256!==e.ETERNYX_DOCKER_LIVE_STOP_POLICY_SHA256)
   throw Error("Pinned disposable container policy changed before mutation.");
