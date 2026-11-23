@@ -190,7 +190,7 @@ def result_case(browser, viewport, label, checks, grade, unauthorized=False):
             expect(page.get_by_text("7 / 10", exact=True)).to_be_visible()
             # Grade receipt and owner answer evidence are independent queries;
             # wait for the *graded* answer projection before inspecting select.
-            expect(page.get_by_text("Marked correct", exact=False)).to_be_visible(timeout=15000)
+            expect(page.locator("p").filter(has_text="Marked correct")).to_be_visible(timeout=15000)
             record("finalized_grade_requires_matching_ledger_receipt", label, checks,
                    lambda: (assert_equal(any(fixture.result_selects), True),
                             assert_equal(page.get_by_text("999 / 1000", exact=False).count(), 0)))
