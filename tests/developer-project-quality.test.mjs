@@ -120,7 +120,7 @@ test("HTML rules cannot inspect arbitrary files, and existing saved plans remain
     assert.doesNotThrow(()=>normalizeDeveloperTestCase(testCase("ok",kind,"index.html")));
   }
   assert.equal(DEVELOPER_CSS_QUALITY_KINDS.length,1);
-  assert.equal(TEST_KINDS.length,15);
+  assert.equal(TEST_KINDS.length,18);
   assert.deepEqual(defaultDeveloperTests().map(x=>x.kind),["file-exists","file-nonempty"]);
   assert.equal(recommendedDeveloperQualityTests(createDeveloperProject("blank","quality-review"),[]).length,6);
   assert.equal(recommendedDeveloperQualityTests({files:[{name:"main.html",content:"x"}]},[]).length,0);

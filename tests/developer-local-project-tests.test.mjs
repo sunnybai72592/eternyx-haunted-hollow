@@ -97,7 +97,7 @@ test("reject traversal, arbitrary execution kinds, unsafe JSON paths and duplica
   assert.throws(()=>normalizeDeveloperTestSuite([]),/1–16/);
   assert.throws(()=>normalizeDeveloperTestSuite(Array.from({length:17},(_,i)=>named("n-"+i,"file-exists","index.html"))),/1–16/);
   assert.throws(()=>normalizeDeveloperTestSuite([named("same","file-exists","index.html"),named("same","file-exists","styles.css")]),/Duplicate/);
-  assert.equal(TEST_KINDS.length,15);
+  assert.equal(TEST_KINDS.length,18);
 });
 
 test("portable plans and bounded browser suite persistence validate stored data",()=>{

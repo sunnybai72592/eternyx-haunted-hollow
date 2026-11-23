@@ -3,6 +3,7 @@ import { runDeveloperPreflight } from "./developerProjectPreflight.mjs";
 import { DEVELOPER_HTML_QUALITY_KINDS, DEVELOPER_CSS_QUALITY_KINDS,
   checkDeveloperHtmlQuality, checkDeveloperCssSelector, isSafeDeveloperCssSelector,
 } from "./developerProjectQuality.mjs";
+import { DEVELOPER_INTEGRATION_KINDS, checkDeveloperProjectIntegration, developerIntegrationKindForFile } from "./developerProjectIntegration.mjs";
 
 export const DEVELOPER_TEST_SUITE_SCHEMA = "eternyx-developer-local-tests-v1";
 export const DEVELOPER_TEST_REPORT_SCHEMA = "eternyx-developer-local-test-results-v1";
@@ -13,6 +14,7 @@ export const TEST_KINDS = Object.freeze([
   "file-exists", "file-nonempty", "text-contains", "text-absent",
   "json-valid", "json-path-equals", "json-array-length", "html-anchor-exists",
   ...DEVELOPER_HTML_QUALITY_KINDS, ...DEVELOPER_CSS_QUALITY_KINDS,
+  ...DEVELOPER_INTEGRATION_KINDS,
 ]);
 
 const PROJECT_ID = /^[a-z0-9-]{1,64}$/i;
@@ -67,6 +69,9 @@ export function normalizeDeveloperTestCase(testCase) {
       throw new Error("CSS selector checks require a .css file and safe literal selector.");
     }
   }
+  if (DEVELOPER_INTEGRATION_KINDS.includes(testCase.kind) && developerIntegrationKindForFile(file) !== testCase.kind) {
+    throw new Error("Integration checks require index.html, a .css source or a .js source, respectively.");
+  }
   if (testCase.kind === "html-anchor-exists") {
     if (file.toLowerCase() !== "index.html" || !SAFE_ANCHOR.test(expected)) {
       throw new Error("Anchor checks require index.html and a simple HTML id.");
@@ -92,7 +97,7 @@ function scalarEqual(actual, expected) {
   return actual === expected || (actual === null && expected === null);
 }
 
-function checkOne(file, testCase) {
+function checkOne(file, testCase, project) {
   if (testCase.kind === "file-exists") return { ok: !!file, reason: file ? "file-present" : "missing-file", line: file ? 1 : 0 };
   if (!file) return { ok: false, reason: "missing-file", line: 0 };
   if (testCase.kind === "file-nonempty") return {
@@ -130,6 +135,9 @@ function checkOne(file, testCase) {
   if (DEVELOPER_CSS_QUALITY_KINDS.includes(testCase.kind)) {
     return checkDeveloperCssSelector(file.content, testCase.expected);
   }
+  if (DEVELOPER_INTEGRATION_KINDS.includes(testCase.kind)) {
+    return checkDeveloperProjectIntegration(project, testCase.kind, testCase.file);
+  }
   if (testCase.kind === "html-anchor-exists") {
     const ids = /\bid\s*=\s*(["'])([^"']+)\1/gi;
     for (const match of file.content.matchAll(ids)) {
@@ -149,7 +157,7 @@ export async function runDeveloperLocalTests(project, tests) {
   const preflight = await runDeveloperPreflight(valid);
   const results = cases.map((item, index) => {
     const file = valid.files.find(candidate => candidate.name.toLowerCase() === item.file.toLowerCase()) || null;
-    const outcome = checkOne(file, item);
+    const outcome = checkOne(file, item, valid);
     return { index: index + 1, kind: item.kind, file: item.file, status: outcome.ok ? "passed" : "failed",
       reason: outcome.reason, line: outcome.line };
   });
@@ -162,7 +170,7 @@ export async function runDeveloperLocalTests(project, tests) {
     preflightPassed, preflightErrors: preflight.errors, preflightWarnings: preflight.warnings,
     preflightTruncated: preflight.truncated,
     status: failed === 0 && preflightPassed ? "passed" : "review-required",
-    scope: "Actual local file/text/JSON/anchor assertions plus static and parser preflight. No code execution, backend tests, or deployment approval.",
+    scope: "Actual local file/text/JSON/anchor and bounded cross-file reference assertions plus static/parser preflight. No code execution, resource loading, backend tests, or deployment approval.",
   };
   return report;
 }
