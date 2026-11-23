@@ -1,0 +1,62 @@
+name: Developer Studio staging Chrome acceptance (manual, read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Only proceed if the repository staging origin and host are approved and configured."
+        required: true
+        type: choice
+        options:
+          - NOT_APPROVED
+          - RUN_DEVELOPER_STAGING_READ_ONLY
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eternyx-developer-staging-public-browser
+  cancel-in-progress: false
+
+jobs:
+  developer-staging:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'RUN_DEVELOPER_STAGING_READ_ONLY' }}
+    name: Verify public Project Lab on pinned HTTPS staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEVELOPER_STAGING_ORIGIN: ${{ vars.DEVELOPER_STAGING_ORIGIN }}
+      DEVELOPER_STAGING_HOST: ${{ vars.DEVELOPER_STAGING_HOST }}
+      DEVELOPER_STAGING_CONFIRM: ${{ inputs.confirmation }}
+    steps:
+      - name: Checkout precisely the approved main revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 22 for strict staging evidence verification
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Refuse missing, noncanonical or non-staging target before network access
+        run: node scripts/developer-staging-gate.mjs --check-config
+      - name: Install standalone Chrome test tooling
+        run: |
+          python3 -m venv "$RUNNER_TEMP/eternyx-developer-staging"
+          "$RUNNER_TEMP/eternyx-developer-staging/bin/pip" install --disable-pip-version-check playwright==1.56.0
+      - name: Run authorized public staging journeys without backend credentials or external API calls
+        timeout-minutes: 9
+        run: |
+          "$RUNNER_TEMP/eternyx-developer-staging/bin/python" tests/browser/developer_project_lab_smoke.py \
+            --base-url "$DEVELOPER_STAGING_ORIGIN" --staging --confirmed-staging \
+            --expected-host "$DEVELOPER_STAGING_HOST"
+      - name: Reject partial, stale, misdirected or fabricated staging evidence
+        run: |
+          node scripts/developer-staging-gate.mjs --verify-report test-results/developer-project-browser-acceptance.json
+      - name: Preserve sanitized staging acceptance evidence even if a browser test failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-developer-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/developer-project-browser-acceptance.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -25,6 +25,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const [movieCutSeconds,setMovieCutSeconds]=useState(1);
   const [movieProfile,setMovieProfile]=useState<"landscape"|"portrait"|"square">("landscape");
   const [movieQuality,setMovieQuality]=useState<"standard"|"high">("standard");
+  const [movieDelivery,setMovieDelivery]=useState<"mp4"|"mp4_with_subtitles"|"mp4_webm"|"all">("mp4");
   const [bundling,setBundling]=useState(false);
   const [bundleStatus,setBundleStatus]=useState("");
   const bundleRequest=useRef(0);
@@ -71,7 +72,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
     setError("");setMessage("");
     try{
       const moviePlan=directMovie?{
-        profile:movieProfile,quality:movieQuality,
+        profile:movieProfile,quality:movieQuality,delivery:movieDelivery,
         shots:originals.map((file,index)=>({
           source_filename:file.name,frames:movieCutSeconds*16,
           caption:movieCaptions[index]??"",
@@ -226,10 +227,27 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
                 </select>
               </label>
             </div>
+            <label className="block space-y-1 text-xs">
+              Finished video files (created automatically by the same local launch)
+              <select value={movieDelivery} disabled={bundling}
+                onChange={event=>setMovieDelivery(event.target.value as "mp4"|"mp4_with_subtitles"|"mp4_webm"|"all")}
+                className="h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                <option value="mp4">H.264 MP4 + editable SRT (fastest)</option>
+                <option value="mp4_with_subtitles">MP4 + additional selectable-caption MP4</option>
+                <option value="mp4_webm">MP4 + VP9 WebM</option>
+                <option value="all">MP4 + selectable-caption MP4 + VP9 WebM</option>
+              </select>
+            </label>
+            <p className="text-xs text-slate-400">
+              High quality uses a larger 512px-class canvas, slower H.264 encoder,
+              CRF 19 and Lanczos scaling; source detail cannot be recovered by upscaling.
+              Optional VP9 WebM requires local FFmpeg with libvpx-vp9; subtitle MP4
+              requires mov_text. No additional manual export command.
+            </p>
             <p className="text-xs text-slate-400">
               Maximum {originals.length*movieCutSeconds} seconds for this selection.
               All original recordings must contain enough frames after the chosen start offset.
-              Captions become a separate SRT file, not burned into the MP4.
+              Editable SRT is always included; optional MP4 subtitle tracks are selectable, not burned into pixels.
             </p>
             <Button size="sm"
               disabled={bundling||!!commandError||movieCutSeconds<1||movieCutSeconds>3}

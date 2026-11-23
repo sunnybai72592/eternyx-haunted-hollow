@@ -284,3 +284,73 @@ test("real browser Studio exposes direct finished movie user-authored fields wit
   assert.match(ui,/phone-movie-output\/video\.mp4/);
   assert.doesNotMatch(ui,/fetch\(|supabase\.functions\.invoke|enqueueAIJob/);
 });
+
+test("delivery selector preserves old MP4 plans and rejects unsupported or injected options",()=>{
+  const f=[local("safe.MOV",Buffer.from("real private bytes"))];
+  const old=validatePhoneMoviePlan({files:f,moviePlan:plan(f),seconds:2});
+  assert.equal(Object.hasOwn(old,"delivery"),false);
+  for(const delivery of ["mp4","mp4_with_subtitles","mp4_webm","all"]){
+    const selected=validatePhoneMoviePlan({
+      files:f,moviePlan:plan(f,{delivery}),seconds:2,
+    });
+    assert.equal(selected.delivery,delivery);
+  }
+  assert.throws(()=>validatePhoneMoviePlan({
+    files:f,moviePlan:plan(f,{delivery:"mp4;rm -rf private"}),seconds:2,
+  }),/supported output presets/);
+});
+
+test("real CPU high-quality MP4, embedded mov_text subtitle MP4 and VP9 WebM are verified and published together",{
+  skip:!toolsReady()||!spawnSync("ffmpeg",["-hide_banner","-encoders"],{encoding:"utf8"}).stdout.includes("libvpx-vp9"),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-delivery-formats-"));
+  try{
+    const original=getFixture(dir,"delivery.mov",30,2);
+    const bundle=await buildPortablePhoneMovie({
+      files:[original],moviePlan:plan([original],{quality:"high",delivery:"all"}),
+      start:0,seconds:2,pythonSources,
+    });
+    const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
+    const ready=JSON.parse(run("python3",["finish_phone_movie.py","--check"],{
+      cwd:folder,timeout:30000,
+    }));
+    assert.equal(ready.delivery,"all");
+    run("python3",["finish_phone_movie.py","--run"],{cwd:folder,timeout:180000});
+    const out=join(folder,"phone-movie-output");
+    const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+    assert.equal(receipt.delivery,"all");
+    assert.deepEqual(Object.keys(receipt.deliverables).sort(),[
+      "captions.srt","video-subtitled.mp4","video.mp4","video.webm",
+    ]);
+    for(const [name,record] of Object.entries(receipt.deliverables)){
+      assert.equal(record.sha256,hash(readFileSync(join(out,name))));
+      assert.ok(record.file_bytes>0);
+      if(name!=="captions.srt"){
+        assert.equal(record.frame_count,16);
+        assert.equal(record.width,512);
+        assert.equal(record.height,288);
+      }
+    }
+    assert.equal(receipt.deliverables["video.webm"].codec,"vp9");
+    assert.equal(receipt.deliverables["video-subtitled.mp4"].codec,"h264");
+    assert.equal(receipt.deliverables["video-subtitled.mp4"].selectable_subtitles,true);
+    const probe=JSON.parse(run("ffprobe",[
+      "-v","error","-show_entries","stream=codec_name,codec_type",
+      "-of","json",join(out,"video-subtitled.mp4"),
+    ]));
+    assert.ok(probe.streams.some(s=>s.codec_type==="subtitle"&&s.codec_name==="mov_text"));
+    assert.ok(probe.streams.some(s=>s.codec_type==="video"&&s.codec_name==="h264"));
+  } finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("high preset uses actual quality settings; delivery UI exposes all real offline outputs",()=>{
+  const renderSource=readFileSync(join(root,"gpu-worker/render_video_timeline.py"),"utf8");
+  assert.match(renderSource,/flags=lanczos/);
+  assert.match(renderSource,/"medium" if quality == "high" else "veryfast"/);
+  assert.match(renderSource,/"19" if quality == "high" else "23"/);
+  const ui=readFileSync(new URL("../src/components/LocalVideoImportPrep.tsx",import.meta.url),"utf8");
+  assert.match(ui,/setMovieDelivery/);
+  assert.match(ui,/value="mp4_with_subtitles"/);
+  assert.match(ui,/value="mp4_webm"/);
+  assert.match(ui,/value="all"/);
+});

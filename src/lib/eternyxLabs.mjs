@@ -29,6 +29,11 @@ export const labCatalog = Object.freeze([
   { id: "spf", title: "SPF record linting", area: "Email security", level: "Intermediate", description: "Review simplified SPF TXT mechanisms and unsafe mail-policy choices without querying DNS." },
   { id: "ratelimit", title: "Rate-limit token bucket", area: "API reliability", level: "Intermediate", description: "Simulate actual local token bucket replenishment and allow/deny outcomes." },
   { id: "sri", title: "Subresource Integrity generator", area: "Web integrity", level: "Intermediate", description: "Compute real SHA-256, SHA-384 or SHA-512 SRI hashes of local text with Web Crypto." },
+  { id: "pkce", title: "OAuth PKCE S256 workbench", area: "Identity security", level: "Intermediate", description: "Derive genuine SHA-256 OAuth PKCE challenges and generate fresh secure verifiers locally." },
+  { id: "hmac", title: "HMAC message integrity lab", area: "Cryptographic integrity", level: "Intermediate", description: "Sign and verify synthetic messages with real Web Crypto HMAC-SHA256." },
+  { id: "cidrcheck", title: "IPv4 and IPv6 CIDR membership", area: "Network fundamentals", level: "Intermediate", description: "Check whether an address belongs to a CIDR block without network probes." },
+  { id: "hsts", title: "HSTS transport policy clinic", area: "Web hardening", level: "Intermediate", description: "Review HTTP Strict-Transport-Security directives without contacting a website." },
+  { id: "dmarc", title: "DMARC email defense clinic", area: "Email security", level: "Intermediate", description: "Inspect synthetic DMARC policy, alignment and enforcement coverage without DNS." },
 ]);
 
 export const sampleHeaders = [
