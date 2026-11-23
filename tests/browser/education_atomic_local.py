@@ -141,6 +141,9 @@ class Fixture:
                 route.fulfill(status=503, json={"message": "Synthetic response lost"})
             else:
                 route.fulfill(json={"id": ATTEMPT, "status": "submitted"})
+        elif path == "/rest/v1/rpc/is_admin" and method == "POST":
+            # Read-only role check, not a privileged operation.
+            route.fulfill(json=False)
         elif path == "/rest/v1/rpc/education_student_verified_result" and method == "POST":
             route.fulfill(json={"attempt_id": ATTEMPT, "grade_status": "pending_review",
                                 "score": None, "max_score": None, "finalized_at": None})
@@ -157,6 +160,9 @@ def signin(page, fixture, path):
     page.get_by_label("Password", exact=True).fill("local-only-fixture")
     page.get_by_role("button", name="Sign in to ETERNYX", exact=True).click()
     page.wait_for_url(BASE + path, timeout=20000)
+    # Ignore optional anonymous visitor traffic on the public sign-in page.
+    # From this point onward, private assessment routes must be silent.
+    fixture.unexpected_mutations.clear()
 
 def case(case_name, action, records, viewport):
     try:
