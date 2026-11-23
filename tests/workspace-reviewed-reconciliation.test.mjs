@@ -86,7 +86,8 @@ test("explicitly selected source and current tasks retain distinct text and chec
   assert.equal(result.excludedSourceFiles,1);
   assert.equal(result.excludedCurrentFiles,1);
   assert.match(result.projectName,/Reviewed recovery/);
-  assert.ok(!result.content.includes("private"));
+  assert.ok(!result.content.includes(owner), "Never export the authenticated owner ID");
+  assert.ok(!result.content.includes("secret"), "Never export private object keys");
   assert.ok(!result.content.includes("current-1"));
   assert.ok(!result.content.includes("source-step"));
   assert.ok(!result.content.includes('"storage_path"'));
