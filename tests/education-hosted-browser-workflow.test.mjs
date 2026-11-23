@@ -92,7 +92,9 @@ test("browser prevents third-party read exfiltration and refuses all unapproved 
  assert.match(script,/path\.startswith\("\/rest\/v1\/rpc\/"\)/);
  assert.match(script,/"is_admin",/);
  assert.match(script,/visitor_presence/);
- assert.match(script,/initiator_path != "\/auth"/);
+ assert.match(script,/if not public_auth:/);
+ assert.match(script,/initiator\.hostname == "127\.0\.0\.1"/);
+ assert.match(script,/initiator\.port == 4173 and initiator\.path == "\/auth"/);
  assert.match(script,/route\.abort\(\)/);
  assert.match(script,/unexpected_remote_write/);
  assert.doesNotMatch(script,/start_cbt_attempt|save_cbt_answer|submit_cbt_attempt|education_finalize_cbt_grade|\.screenshot\(/);
