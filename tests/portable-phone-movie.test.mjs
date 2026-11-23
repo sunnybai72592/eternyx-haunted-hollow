@@ -323,6 +323,11 @@ test("real CPU high-quality MP4, embedded mov_text subtitle MP4 and VP9 WebM are
     const out=join(folder,"phone-movie-output");
     const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
     assert.equal(receipt.delivery,"all");
+    const player=readFileSync(join(out,"watch.html"),"utf8");
+    assert.match(player,/<source src="video-subtitled\.mp4"[^>]*><source src="video\.webm"/);
+    for(const file of ["video.mp4","video.webm","video-subtitled.mp4","captions.srt","captions.vtt","poster.png"])
+      assert.ok(player.includes('href="'+file+'" download'));
+
     assert.deepEqual(Object.keys(receipt.deliverables).sort(),[
       "captions.srt","captions.vtt","poster.png","video-subtitled.mp4",
       "video.mp4","video.webm","watch.html",
@@ -391,6 +396,8 @@ test("real full-frame crop and automatic local video preview are verified on CPU
     assert.match(watch,/src="video.mp4"/);
     assert.match(watch,/src="captions.vtt"/);
     assert.match(watch,/poster="poster.png"/);
+    assert.doesNotMatch(watch,/video-subtitled\.mp4|video\.webm/);
+
     for(const name of ["poster.png","captions.vtt","watch.html"]){
       assert.equal(receipt.deliverables[name].sha256,hash(readFileSync(join(out,name))));
     }
@@ -426,7 +433,8 @@ test("REAL cinematic 24FPS keeps 1280x720 native source detail with exact frames
     const source=getFixture(dir,"cinema.mov",24,1,"1280x720");
     const bundle=await buildPortablePhoneMovie({
       files:[source],start:0,seconds:1,
-      moviePlan:plan([source],{quality:"cinematic",delivery:"mp4_with_subtitles"}),
+      moviePlan:plan([source],{quality:"cinematic",delivery:"mp4_with_subtitles",
+        shots:[{...plan([source]).shots[0],caption:"Light < dusk & dawn"}]}),
       pythonSources,
     });
     const {folder}=extract(await bundle.blob.arrayBuffer(),dir);
@@ -445,6 +453,10 @@ test("REAL cinematic 24FPS keeps 1280x720 native source detail with exact frames
     assert.equal(receipt.video.height,720);
     assert.equal(receipt.total_frames,24);
     assert.equal(receipt.video.duration_seconds,1);
+    const player=readFileSync(join(out,"watch.html"),"utf8");
+    assert.match(player,/1280 × 720 · 24 FPS · 1 s</);
+    assert.match(player,/<time>00:00:00\.000<\/time> – <time>00:00:01\.000<\/time><br>Light &lt; dusk &amp; dawn/);
+
     assert.equal(receipt.video.sha256,hash(readFileSync(join(out,"video.mp4"))));
     const sourceReport=JSON.parse(readFileSync(join(folder,"local-video-media/preparation-report.json"),"utf8"));
     assert.equal(sourceReport.clips[0].prepared_width,1280);
