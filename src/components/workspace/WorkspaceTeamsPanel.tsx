@@ -8,6 +8,7 @@ import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed"
 import { workspaceTeamTaskMatchesFilter } from "@/lib/workspaceTeamDiscussion.mjs";
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
+  assertWorkspaceTeamState,requireWorkspacePreferredTeam,
 } from "@/lib/workspaceTeamAccess.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -99,6 +100,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     await assureOwner(expectedOwner);
     if(ownerRef.current!==expectedOwner || spacesEpoch.current!==token)return null;
     const rows=(data??[]) as Space[];
+    // Treat this as one verified server snapshot. It MUST be passed through
+    // to details, not silently replaced by a stale React render closure.
+    rows.forEach(assertWorkspaceTeamState);
+    requireWorkspacePreferredTeam(rows,prefer);
     const chosen=chooseWorkspaceTeam(rows,selectedId,prefer);
     if(!rows.some(space=>space.id===selectedId)) {
       // Revocation or leave: drop all cached personal/team detail immediately.
@@ -108,15 +113,16 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setSpaces(rows);
     setSpaceListVerified(true);
     setSelectedId(chosen);
-    return chosen;
+    return {chosen,rows};
   };
   const loadDetails=async(id:string,expectedOwner:string,token:number,available:Space[]=spaces)=>{
     const target=available.find(space=>space.id===id);
     if(!target) {
       if(detailsEpoch.current===token){quarantineTeam();setSelectedId(null);}
-      return;
+      return false;
     }
-    const isOwner=target?.owner_id===expectedOwner;
+    assertWorkspaceTeamState(target);
+    const isOwner=target.owner_id===expectedOwner;
     const [m,t,e,i]=await Promise.all([
       supabase.from("workspace_team_members").select("*")
         .eq("space_id",id).order("joined_at",{ascending:true}).limit(20),
@@ -132,7 +138,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       m.error?.message??t.error?.message??e.error?.message??i.error?.message??"Team query failed");
     // Protect against a user switch while the four queries were in flight.
     await assureOwner(expectedOwner);
-    if(ownerRef.current!==expectedOwner || detailsEpoch.current!==token)return;
+    if(ownerRef.current!==expectedOwner || detailsEpoch.current!==token)return false;
     let verifiedRole:string;
     try {
       verifiedRole=verifyWorkspaceTeamDetails({
@@ -146,7 +152,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       setSpaces(previous=>previous.filter(space=>space.id!==id));
       setSelectedId(current=>current===id?null:current);
       setNotice("Access to this team could not be verified; cached details were cleared.");
-      return;
+      return false;
     }
     const verifiedTasks=(t.data??[]) as Task[];
     setDraft(previous=>retainWorkspaceTeamDraft(
@@ -156,6 +162,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setEvents((e.data??[]) as Event[]);
     setInvites((i.data??[]) as Invite[]);
     setVerifiedSpaceId(id);
+    return true;
   };
   useEffect(()=>{
     const token=++spacesEpoch.current;
@@ -211,10 +218,16 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     maskTeam(); // cached membership can never authorize a pending request
     try {
       await assureOwner(owner);
-      const chosen=await loadSpaces(owner,spaceToken,target??selectedId);
+      // Only an explicit create/join target is required; a revoked previous
+      // selection must be allowed to fall back to another authorized team.
+      const snapshot=await loadSpaces(owner,spaceToken,target);
+      if(!snapshot)return;
+      const {chosen,rows}=snapshot;
       if(chosen && chosen===selectedId) {
-        // A new selection gets its own guarded detail effect.
-        await loadDetails(chosen,owner,detailToken);
+        // Read status and owner from these freshly fetched rows: stale closure
+        // data must never preserve a draft after the team was archived.
+        const verified=await loadDetails(chosen,owner,detailToken,rows);
+        if(!verified)throw Error("Workspace team verification did not finish.");
       }
     }catch(failure){
       if(spacesEpoch.current===spaceToken && ownerRef.current===owner)
@@ -294,8 +307,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       await assureOwner(initialOwner);
       await action();
       if(ownerRef.current!==initialOwner)return;
-      setNotice(success);
+      // A server mutation is not a verified local UI update until the latest
+      // membership and task snapshot has been reconciled.
       await refresh();
+      if(ownerRef.current===initialOwner)setNotice(success);
     } catch(failure) {
       if(ownerRef.current===initialOwner)setError(errorMessage(failure));
     } finally {
