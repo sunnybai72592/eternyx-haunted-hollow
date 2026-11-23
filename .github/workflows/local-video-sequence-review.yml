@@ -1,0 +1,34 @@
+name: Local CPU video multi-shot preview and export readiness
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai/localVideoSequenceReview.mjs"
+      - "src/components/LocalVideoSequenceReview.tsx"
+      - "src/components/LocalVideoEditor.tsx"
+      - "tests/local-video-sequence-review.test.mjs"
+      - ".github/workflows/local-video-sequence-review.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai/localVideoSequenceReview.mjs"
+      - "src/components/LocalVideoSequenceReview.tsx"
+      - "src/components/LocalVideoEditor.tsx"
+      - "tests/local-video-sequence-review.test.mjs"
+      - ".github/workflows/local-video-sequence-review.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  original-source-preview:
+    name: Verify real cross-cut source playback math and actionable FFmpeg export audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate exact multi-source cut transitions, preview boundaries and v2 storyboard readiness
+        run: node --test tests/local-video-sequence-review.test.mjs
