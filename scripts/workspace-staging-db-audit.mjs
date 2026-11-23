@@ -5,7 +5,7 @@ import {inspectStagingConnection,classifyStagingPgFailure} from "./automation-st
 import {WORKSPACE_MIGRATION_PATHS} from "../src/lib/workspaceReleaseInventory.mjs";
 
 export const WORKSPACE_AUDIT_VERSIONS=Object.freeze(WORKSPACE_MIGRATION_PATHS
-  .map(p=>p.match(/\\/(\\d{14})_workspace/)[1]));
+  .map(p=>p.split("/").at(-1).slice(0,14)));
 export const WORKSPACE_AUDIT_TABLES=Object.freeze(["workspace_projects","workspace_tasks","workspace_items","workspace_activity","workspace_task_steps","workspace_import_sessions","workspace_reconciliation_receipts","workspace_team_spaces","workspace_team_members","workspace_team_invites","workspace_team_tasks","workspace_team_events","workspace_team_task_comments","workspace_team_task_steps","workspace_team_read_cursors"]);
 export const WORKSPACE_AUDIT_FUNCTIONS=Object.freeze(["workspace_team_role","workspace_team_create","workspace_team_invite","workspace_team_accept_invite","workspace_team_revoke_invite","workspace_team_member_change","workspace_team_leave","workspace_team_set_status","workspace_team_save_task","workspace_team_delete_task","workspace_team_post_comment","workspace_team_redact_comment","workspace_team_add_step","workspace_team_check_step","workspace_team_remove_step","workspace_team_mark_events_seen","workspace_team_notification_snapshot"]);
 const required=Object.freeze(["connection_ok","transaction_read_only","migration_history_present"]);
