@@ -11,6 +11,7 @@ import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
 import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklist";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
 import WorkspaceBackupAudit from "@/components/workspace/WorkspaceBackupAudit";
+import WorkspaceReadinessPanel from "@/components/workspace/WorkspaceReadinessPanel";
 import WorkspaceRecoveryCenter from "@/components/workspace/WorkspaceRecoveryCenter";
 import WorkspaceRecoveryForkPanel from "@/components/workspace/WorkspaceRecoveryForkPanel";
 import WorkspaceReconciliationJournal from "@/components/workspace/WorkspaceReconciliationJournal";
@@ -660,6 +661,7 @@ export default function DigitalWorkspace() {
                 });
               }} />
             <WorkspaceBackupAudit disabled={busy || loading} />
+            <WorkspaceReadinessPanel owner={owner} disabled={busy || loading} />
             {forkTarget && <WorkspaceRecoveryForkPanel key={owner + ":" + forkTarget.sessionId}
               target={forkTarget} owner={owner} disabled={busy || loading}
               onClose={(message) => {
