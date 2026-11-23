@@ -739,3 +739,95 @@ npm run build
 Test fixtures are fabricated local inputs only; no real KVM, 900-second
 watchdog test, paid service or independently sourced hardware evidence is
 collected by CI.
+
+
+## Explicit signed human review disposition (new milestone)
+
+Once an operator v2 signature, second-person file-review signature, private
+handoff journal and structured consistency audit have been verified, a human
+reviewer may separately record a **constrained disposition** in the same
+private review case. This is a signed procedural **decision about the file
+review**, not a finding that KVM, the guest, the raw host logs or
+internet-facing multi-tenant deployment are safe.
+
+### Three exact, non-operational categories
+
+- `reviewed-for-archival`: a human confirms the documented file
+  inspection was completed and the files may be retained as internal evidence.
+  **This is not approval for production or independent host attestation.**
+- `follow-up-required`: at least one approved gap must be recorded.
+- `evidence-rejected`: at least one approved reason is mandatory.
+
+The approved reason codes (choose in **alphabetical order**, comma-separated
+with no spaces) are:
+
+```text
+guest-identity-not-cryptographically-proven
+human-log-inspection-incomplete
+image-origin-not-independently-established
+independent-host-source-not-established
+other-documented-in-private-case
+source-timestamp-reconciliation-needed
+systemd-watchdog-proof-needs-review
+```
+
+These codes are human findings only. The code
+`other-documented-in-private-case` requires a separate private
+organization-controlled case note; free-form untrusted strings are never
+embedded in the signed or publicly presented record.
+
+### Root reviewer: deliberate one-time disposition signing
+
+For a complete internal file review without outstanding recorded gaps:
+
+```bash
+export ETERNYX_INDEPENDENT_DISPOSITION_ACK=I_APPROVE_OFFLINE_REVIEW_DISPOSITION
+sudo --preserve-env=ETERNYX_INDEPENDENT_DISPOSITION_ACK   node scripts/cyber-range-independent-review.mjs   --decide --confirm-independent-disposition   --session UUID   --operator-sha EXTERNALLY_PINNED_OPERATOR_SPKI_SHA256   --reviewer-sha EXTERNALLY_PINNED_REVIEWER_SPKI_SHA256   --decision reviewed-for-archival --reasons none
+```
+
+For a review requiring further evidence, choose
+`--decision follow-up-required` and one or more approved reason codes,
+for example:
+
+```bash
+export ETERNYX_INDEPENDENT_DISPOSITION_ACK=I_APPROVE_OFFLINE_REVIEW_DISPOSITION
+sudo --preserve-env=ETERNYX_INDEPENDENT_DISPOSITION_ACK   node scripts/cyber-range-independent-review.mjs   --decide --confirm-independent-disposition   --session UUID   --operator-sha EXTERNALLY_PINNED_OPERATOR_SPKI_SHA256   --reviewer-sha EXTERNALLY_PINNED_REVIEWER_SPKI_SHA256   --decision follow-up-required   --reasons guest-identity-not-cryptographically-proven,human-log-inspection-incomplete
+```
+
+The command refuses unsigned or altered prior reviews, inconsistent
+operator-collected metadata, unfinished imports, wrong independently pinned
+signer keys, invalid date order, duplicate or unlisted reasons, and attempts
+to replace an existing file. It writes exactly one root-owned 0600
+`review-disposition.json` under the fixed private case directory using
+exclusive creation, fsync and a final directory sync. A failed/interrupted
+write may require a new case under the organization's incident procedure;
+do not delete or silently overwrite evidence.
+
+### Read-only re-verification without a private signing key
+
+```bash
+sudo node scripts/cyber-range-independent-review.mjs   --verify-decision --session UUID   --operator-sha EXTERNALLY_PINNED_OPERATOR_SPKI_SHA256   --reviewer-sha EXTERNALLY_PINNED_REVIEWER_SPKI_SHA256
+```
+
+The verifier checks **three layers**: Ed25519-signed operator receipt;
+separately Ed25519-signed reviewer file endorsement; and the **new
+disposition signature bound to the exact earlier two JSON receipts and raw
+case-file digests**. The verifier returns the selected status and controlled
+reason codes; it explicitly returns
+`independentHostEvidenceVerified:false`,
+`physicalHostAttested:false`, `publicLabsEnabled:false` and
+`productionReady:false` regardless of the disposition.
+
+### Free CI and trust limits
+
+```bash
+node --test tests/ctf-firecracker-review-disposition.test.mjs
+npm test
+npm run build
+```
+
+The tests use disposable in-memory signing keys and fabricated source text;
+they do not launch KVM, request paid compute, contact cloud providers, enable
+public labs, sign a real human decision or prove a physical security boundary.
+Production readiness and independently authenticated hardware measurements
+remain a separate workstream.
