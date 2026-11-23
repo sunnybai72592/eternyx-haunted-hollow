@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+import adapt_neural_rollout as adaptation
 import train_spatiotemporal_neural_video as v2
 import train_tagged_neural_video as tag
 from render_video_timeline import sha256, probe, video_info
