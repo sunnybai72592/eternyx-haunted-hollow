@@ -7,7 +7,7 @@ const read = (path) => readFile(new URL('../' + path, import.meta.url), 'utf8');
 test('admin services queue queries page-scoped results with exact server counts', async () => {
   const src = await read('src/pages/AdminServiceRequests.tsx');
   assert.match(src, /count: 'exact'/);
-  assert.match(src, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE - 1\)/);
+  assert.match(src, /\.range\(page \* PAGE_SIZE, \(page \+ 1\) \* PAGE_SIZE\)/);
   assert.match(src, /\.order\('id', \{ ascending: false \}\)/);
   assert.match(src, /if \(filter !== 'all'\) query = query\.eq\('status', filter\)/);
   assert.match(src, /query\.ilike\(activeSearchField/);
@@ -22,7 +22,7 @@ test('customer requests are owner-filtered and paginated by Supabase', async () 
   const src = await read('src/pages/MyServiceRequests.tsx');
   assert.match(src, /\.eq\('user_id', userId\)/);
   assert.match(src, /count: 'exact'/);
-  assert.match(src, /\.range\(page \* 20, \(page \+ 1\) \* 20 - 1\)/);
+  assert.match(src, /\.range\(page \* 20, \(page \+ 1\) \* 20\)/);
   assert.match(src, /query\.ilike\('title'/);
   assert.match(src, /new URLSearchParams\(location\.search\)\.get\('request'\)/);
   assert.match(src, /\.eq\('user_id', userId\)/);
