@@ -24,6 +24,18 @@ Requires *every* separate opt-in: CBT write/no-retake acknowledgment; instructor
 
 The CBT write fixture is **different** from the instructor-review fixture, so this is a coordinated multi-fixture integration rehearsal, **not yet proof of a single newly created attempt passing through all stages automatically**. Never claim otherwise.
 
+### Single fresh-attempt journey — `journey` (new manual opt-in)
+
+The manually dispatched workflow now also supports `journey`. This requires the independent `approve_single_attempt_journey` checkbox **and every rehearsal approval**, including one-time CBT submission, persistent written-answer review and immutable final-grade acceptance. This is staging-only, never a production permission.
+
+Unlike the multi-fixture `rehearsal`, journey mode creates a new synthetic attempt, writes one MCQ plus one fixed written response, verifies direct-table forgery resistance, submits the exam, and passes the **actual attempt ID and written-answer ID** to the instructor-review stage. The finalizer and verified-result stage operate on that same submitted attempt. This tests the complete protected **backend** lifecycle, not the browser UI.
+
+The runner validates the handoff against the preapproved synthetic exam and exact GitHub SHA/run/attempt, passes the IDs only to its child processes, and removes the private local JSON handoff after use or failure. The workflow never uploads it. All existing sanitized evidence and the 31-check live database audit remain mandatory.
+
+**Operator prerequisites:** Student A must be enrolled in a *fresh* synthetic published exam owned by the dedicated approved instructor, with a valid MCQ and written-response question; Student B must be excluded. Expected final score and maximum must be independently reviewed in the protected staging variables. The instructor must own the new exam's review queue. Old read-only, grade-B, pending, running and legacy fixtures must remain available. The review-A/final-A fixtures supplied before the run are validated as existing references and overridden **only in-memory** once the new attempt is submitted. Failed runs can consume the single-use exam: do not reset or silently retry it.
+
+Even a complete `staging_single_attempt_journey_passed` report only confirms one controlled staging backend route. Production remains NO-GO until staging is independently provisioned, actually exercised, reviewed, browser tested, and formally approved.
+
 ### Fail-closed requirements
 Use an independently provisioned staging project with deployed, audited Education SQL/RPCs and a recent staging backup. Set the \`rls-staging\` GitHub environment secrets/vars already used by the five existing Education hosted workflows. The staging URL must exactly match its project ref; the ref must differ from production (including the repo's known production fingerprint). All accounts must use the dedicated synthetic \`rls-\` naming convention. Review A attempt must equal result A final attempt; expected grade marks must match. Keep separate in-progress, fresh CBT and finalized-result fixtures.
 

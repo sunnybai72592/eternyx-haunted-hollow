@@ -23,8 +23,8 @@ function artifact(s,mode) {
     writes_performed:false,staged_sql_deployed_by_test:false,
     distinct_authenticated_students:true,
     ...(s.id.startsWith("cbt-")?{
-      education_writes_attempted:mode==="rehearsal",
-      synthetic_attempt_confirmed:mode==="rehearsal",
+      education_writes_attempted:mode!=="preflight",
+      synthetic_attempt_confirmed:mode!=="preflight",
       hosted_sql_deployed_by_test:false,
     }:{}),
     ...(s.id==="instructor-review"?{
@@ -124,4 +124,68 @@ test("strict audit evidence rejects altered fields and missing run context",()=>
   assert.equal(assertEducationDbEvidence(dbEvidence(),p),true);
   assert.throws(()=>assertEducationDbEvidence(dbEvidence(),{...p,runId:"0"}));
   assert.throws(()=>assertEducationDbEvidence(dbEvidence(),{...p,attempt:"2"}));
+});
+
+import {HANDOFF_PATH,JOURNEY_APPROVAL,makeJourneyHandoff,
+  verifyJourneyHandoff,journeyStageEnv} from "../scripts/staging/educationJourneyHandoff.mjs";
+const journeyConfig=()=>({
+  GITHUB_SHA:"a".repeat(40),GITHUB_RUN_ID:"101",GITHUB_RUN_ATTEMPT:"1",
+  ETERNYX_EDU_RELEASE_MODE:"journey",ETERNYX_EDU_JOURNEY_APPROVAL:JOURNEY_APPROVAL,
+  ETERNYX_EDU_WRITE_TEST_ID:"10000000-0000-4000-8000-000000000001",
+  ETERNYX_EDU_REVIEW_ATTEMPT_ID:"10000000-0000-4000-8000-000000000002",
+  ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT:"10000000-0000-4000-8000-000000000002",
+  ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT:"10000000-0000-4000-8000-000000000003",
+  ETERNYX_EDU_RESULT_PENDING_A_ATTEMPT:"10000000-0000-4000-8000-000000000004",
+  ETERNYX_EDU_RESULT_RUNNING_A_ATTEMPT:"10000000-0000-4000-8000-000000000005",
+  ETERNYX_EDU_STAGING_ATTEMPT_ID:"10000000-0000-4000-8000-000000000006",
+});
+const newHandoff=()=>makeJourneyHandoff(journeyConfig(),
+  "10000000-0000-4000-8000-000000000007",
+  "10000000-0000-4000-8000-000000000008");
+test("journey requires five real hosted stages, with no production authorization",()=>{
+ assert.deepEqual(EDUCATION_RELEASE_STAGES.journey,EDUCATION_RELEASE_STAGES.rehearsal);
+ const result=summarizeEducationReleaseEvidence("journey",evidence("journey"),p,dbEvidence(),true);
+ assert.equal(result.outcome,"staging_single_attempt_journey_passed");
+ assert.equal(result.single_new_attempt_lifecycle_verified,true);
+ assert.equal(result.production_release_approved,false);
+ assert.throws(()=>summarizeEducationReleaseEvidence("journey",evidence("journey"),p,dbEvidence()));
+});
+test("private handoff requires same exact source run and fresh fixture IDs",()=>{
+ const env=journeyConfig(),valid=newHandoff();
+ assert.equal(verifyJourneyHandoff(env,valid),true);
+ for(const change of [
+  x=>{x.sha="b".repeat(40);},
+  x=>{x.run="102";},
+  x=>{x.iteration="2";},
+  x=>{x.testId="10000000-0000-4000-8000-000000000009";},
+  x=>{x.attemptId=env.ETERNYX_EDU_REVIEW_ATTEMPT_ID;},
+  x=>{x.attemptId=env.ETERNYX_EDU_RESULT_FINAL_B_ATTEMPT;},
+  x=>{x.answerId=x.attemptId;},
+  x=>{x.attemptId="invalid";},
+  x=>{x.extra="not-allowed";},
+ ]){
+  const altered={...valid};change(altered);
+  assert.throws(()=>verifyJourneyHandoff(env,altered));
+ }
+ assert.throws(()=>verifyJourneyHandoff({...env,ETERNYX_EDU_JOURNEY_APPROVAL:""},valid));
+});
+test("same newly submitted attempt links instructor review and final results",()=>{
+ const env=journeyConfig(),h=newHandoff(),linked=journeyStageEnv(env,h);
+ assert.equal(linked.ETERNYX_EDU_REVIEW_TEST_ID,h.testId);
+ assert.equal(linked.ETERNYX_EDU_REVIEW_ATTEMPT_ID,h.attemptId);
+ assert.equal(linked.ETERNYX_EDU_REVIEW_ANSWER_ID,h.answerId);
+ assert.equal(linked.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT,h.attemptId);
+ assert.equal(env.ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT,
+ "10000000-0000-4000-8000-000000000002");
+});
+test("private journey data is never uploaded in hosted release workflow",()=>{
+ const runner=readFileSync(new URL("../scripts/staging/runEducationHostedRelease.mjs",import.meta.url),"utf8");
+ const cbt=readFileSync(new URL("../scripts/staging/verifyEducationHostedCbtWrite.mjs",import.meta.url),"utf8");
+ const wf=readFileSync(new URL("../.github/workflows/education-hosted-release-readiness.yml",import.meta.url),"utf8");
+ assert.match(runner,/verifyJourneyHandoff/);
+ assert.match(runner,/rmSync\(HANDOFF_PATH,\{force:true\}\)/);
+ assert.match(cbt,/mode:0o600,flag:"wx"/);
+ assert.match(wf,/approve_single_attempt_journey/);
+ assert.match(wf,/- journey/);
+ assert.equal(wf.includes(HANDOFF_PATH),false);
 });

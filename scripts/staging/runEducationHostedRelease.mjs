@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertEducationDbEvidence } from "./educationHostedDbMetadata.mjs";
+import {HANDOFF_PATH,verifyJourneyHandoff,journeyStageEnv} from "./educationJourneyHandoff.mjs";
 import { validateEducationReleaseConfig, EDUCATION_RELEASE_STAGES,
   summarizeEducationReleaseEvidence } from "./educationReleaseGate.mjs";
 
@@ -44,14 +45,16 @@ try {
   // irreversible stage, including reports from earlier manual runs.
   for(const s of EDUCATION_RELEASE_STAGES.rehearsal)
     rmSync(join(reports,s.filename),{force:true});
+  rmSync(HANDOFF_PATH,{force:true});
   const completed=[];
+  let linkedEnv=null;
   for(const stage of stages){
     const evidenceFile=join(reports,stage.filename);
     rmSync(evidenceFile,{force:true});
     const [execute,verify]=plans[stage.id];
     // Do not expose the privileged key to read-only or student/instructor
     // processes, even when the whole rehearsal is authorized to finalize.
-    const env={...process.env,
+    const env={...process.env,...(linkedEnv||{}),
       // PostgreSQL connection credential belongs ONLY to the audit step,
       // never to public-key student/instructor/finalizer child processes.
       ETERNYX_EDU_STAGING_DB_PASSWORD:"",
@@ -61,9 +64,16 @@ try {
     if (!existsSync(evidenceFile)) throw new Error("Missing hosted evidence");
     run(verify,env);
     completed.push(JSON.parse(readFileSync(evidenceFile,"utf8")));
+    if(config.mode==="journey" && stage.id==="cbt-write"){
+      const handoff=JSON.parse(readFileSync(HANDOFF_PATH,"utf8"));
+      verifyJourneyHandoff(process.env,handoff);
+      linkedEnv=journeyStageEnv(process.env,handoff);
+      rmSync(HANDOFF_PATH,{force:true});
+    }
   }
   const report=summarizeEducationReleaseEvidence(
-    config.mode,completed,provenance,dbEvidence);
+    config.mode,completed,provenance,dbEvidence,
+    config.mode==="journey" && linkedEnv!==null);
   writeFileSync(releaseFile,JSON.stringify(report,null,2)+"\n");
   process.stdout.write("Education "+report.outcome+
     "; staging-only evidence recorded; production launch NOT approved.\n");
@@ -72,4 +82,6 @@ try {
   rmSync(releaseFile,{force:true});
   process.stderr.write("Education release readiness BLOCKED. Do not enable production CBT.\n");
   process.exitCode=1;
+}finally{
+  rmSync(HANDOFF_PATH,{force:true});
 }
