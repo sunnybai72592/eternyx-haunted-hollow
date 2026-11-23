@@ -10,6 +10,8 @@ import { assertEducationDbEvidence } from "./educationHostedDbMetadata.mjs";
 import {FIXTURE_EVIDENCE,assertJourneyFixtureEvidence}
   from "./educationJourneyFixturePreflight.mjs";
 import {HANDOFF_PATH,verifyJourneyHandoff,journeyStageEnv} from "./educationJourneyHandoff.mjs";
+import {PRIVATE_FRESH_JOURNEY_TARGET,saveFreshJourneyTarget}
+  from "./educationJourneyBrowserGate.mjs";
 import { validateEducationReleaseConfig, EDUCATION_RELEASE_STAGES,
   summarizeEducationReleaseEvidence } from "./educationReleaseGate.mjs";
 
@@ -54,8 +56,10 @@ try {
   for(const s of EDUCATION_RELEASE_STAGES.rehearsal)
     rmSync(join(reports,s.filename),{force:true});
   rmSync(HANDOFF_PATH,{force:true});
+  rmSync(PRIVATE_FRESH_JOURNEY_TARGET,{force:true});
   const completed=[];
   let linkedEnv=null;
+  let journeyHandoff=null;
   for(const stage of stages){
     const evidenceFile=join(reports,stage.filename);
     rmSync(evidenceFile,{force:true});
@@ -75,6 +79,7 @@ try {
     if(config.mode==="journey" && stage.id==="cbt-write"){
       const handoff=JSON.parse(readFileSync(HANDOFF_PATH,"utf8"));
       verifyJourneyHandoff(process.env,handoff);
+      journeyHandoff=handoff;
       linkedEnv=journeyStageEnv(process.env,handoff);
       rmSync(HANDOFF_PATH,{force:true});
     }
@@ -82,12 +87,19 @@ try {
   const report=summarizeEducationReleaseEvidence(
     config.mode,completed,provenance,dbEvidence,
     config.mode==="journey" && linkedEnv!==null,fixtureEvidence);
+  // Only a FULLY PASSING backend journey can hand its actual fresh attempt
+  // to the later browser. It is never copied into the public release report.
+  if(config.mode==="journey"){
+    if(!journeyHandoff)throw new Error("Missing verified private journey handoff");
+    saveFreshJourneyTarget(process.env,journeyHandoff);
+  }
   writeFileSync(releaseFile,JSON.stringify(report,null,2)+"\n");
   process.stdout.write("Education "+report.outcome+
     "; staging-only evidence recorded; production launch NOT approved.\n");
 }catch{
   // A missing or partial report is a hard failure, never a partial pass.
   rmSync(releaseFile,{force:true});
+  rmSync(PRIVATE_FRESH_JOURNEY_TARGET,{force:true});
   process.stderr.write("Education release readiness BLOCKED. Do not enable production CBT.\n");
   process.exitCode=1;
 }finally{
