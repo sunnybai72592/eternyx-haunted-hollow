@@ -627,3 +627,115 @@ npm run build
 No actual physical KVM hardware, live 900-second expiry, cloud deployment,
 production hosting bill, or independently authentic host logs are asserted
 by these tests.
+
+
+## Offline signed-evidence metadata consistency audit
+
+The reviewer can now compare **operator-collected host preflight metadata and
+image digest inventory** with the cryptographically pinned v2 operator receipt
+before signing or verifying a reviewer endorsement. These checks are mandatory
+in the reviewer workstation's `--inspect`, `--endorse` and
+`--verify` file-backed commands. Older manually staged review cases
+without the structured metadata formats must be migrated after retaining the
+original files; the tool intentionally fails closed rather than silently
+signing inconsistent sources. This does **not** replace human review of host
+journals, cgroup teardown, guest transcripts or systemd timeout evidence.
+
+### Operator-collected JSON schemas
+
+Use the signed operator v2 receipt as the reference. The operator manually
+collects the two JSON records from the **same specifically approved offline
+KVM test**, without modifying an existing reviewer's signed verdict. They
+must be written as canonical compact JSON produced with
+`JSON.stringify(object) + '\n'` (one UTF-8 JSON object plus one
+newline, no duplicate JSON keys). Both files are root-owned 0600 and placed
+in the private fixed reviewer case directory using a human-approved offline
+process. The independent reviewer must obtain the real underlying evidence
+using a separate channel and assess its authenticity.
+
+`host-preflight.json` example shape, with the UUID, unit and capture
+time taken from the **actual** run:
+
+```json
+{
+  "schemaVersion": 1,
+  "classification": "operator-collected-offline-preflight",
+  "sessionId": "123e4567-e89b-42d3-a456-426614174001",
+  "unit": "REAL_SESSION_SYSTEMD_UNIT",
+  "capturedAt": "2026-11-23T10:30:00.000Z",
+  "offlineOnly": true,
+  "loopbackOnly": true,
+  "pinnedHostExecutables": true,
+  "pinnedGuestImages": true,
+  "readyForPublicHostedLabs": false,
+  "publicLabsEnabled": false,
+  "cloudProvisioningAllowed": false
+}
+```
+
+`image-provenance.json` (these digests are illustrative and must be
+replaced by the exact signed baseline's four real SHA-256 values):
+
+```json
+{
+  "schemaVersion": 1,
+  "classification": "operator-collected-image-digest-inventory",
+  "sessionId": "123e4567-e89b-42d3-a456-426614174001",
+  "capturedAt": "2026-11-23T10:00:00.000Z",
+  "pins": {
+    "kernelSha256": "REPLACE_WITH_REAL_SHA256",
+    "rootfsSha256": "REPLACE_WITH_REAL_SHA256",
+    "jailerSha256": "REPLACE_WITH_REAL_SHA256",
+    "firecrackerSha256": "REPLACE_WITH_REAL_SHA256"
+  },
+  "imageDigestProvenanceIndependentlyVerified": false,
+  "rootfsReadOnly": true,
+  "publicLabsEnabled": false,
+  "cloudProvisioningAllowed": false
+}
+```
+
+These are **schema illustrations, not valid evidence**. Never copy the
+example values as though they came from real hardware. The image inventory
+time must be at or before the host preflight time, and both must be at or
+before the signed operator receipt time, no more than 24 hours earlier.
+The host's exact unit and session and all four pinned hashes must match the
+existing Ed25519-signed baseline. Unsupported fields, claims of public
+readiness, noncanonical JSON, timestamp contradictions and wrong pins fail.
+
+One way to canonicalize operator-collected metadata from a reviewed local
+JSON file (never an example pasted as evidence) is:
+
+```bash
+node -e 'const fs=require("node:fs"); const p=process.argv[1]; const x=JSON.parse(fs.readFileSync(p)); process.stdout.write(JSON.stringify(x)+"
+")' /path/to/validated-source.json
+```
+
+The reviewer must re-check file provenance and must not transform a
+preexisting signed file in place.
+
+### Read-only reviewer command
+
+```bash
+sudo node scripts/cyber-range-independent-review.mjs --audit-consistency   --session SESSION_UUID   --operator-sha INDEPENDENTLY_PINNED_OPERATOR_SPKI_SHA256   --reviewer-sha INDEPENDENTLY_PINNED_REVIEWER_SPKI_SHA256
+```
+
+The audit reports whether the signed identities, four pinned image/binary
+digests, offline-policy fields and metadata time windows agree. It **never**
+prints raw log content, starts Firecracker, connects to a cloud endpoint,
+signs a new verdict or enables hosted labs. A passing audit explicitly
+reports **false** for independent source authenticity, physical host
+attestation, full semantic verification of the supervisor log and production
+readiness. These remain separate manual assurance tasks.
+
+### Free and no-KVM regression
+
+```bash
+node --test tests/ctf-firecracker-evidence-consistency.test.mjs
+npm test
+npm run build
+```
+
+Test fixtures are fabricated local inputs only; no real KVM, 900-second
+watchdog test, paid service or independently sourced hardware evidence is
+collected by CI.
