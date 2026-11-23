@@ -61,9 +61,9 @@ export default function LabsPracticeChallenges(){
         <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.17em] text-primary">
           <BookOpen className="h-4 w-4"/> Practice and check
         </p>
-        <h2 id="labs-practice-title" className="text-2xl font-bold sm:text-3xl">Security foundations challenge lab</h2>
+        <h2 id="labs-practice-title" className="text-2xl font-bold sm:text-3xl">Security and defensive operations challenge lab</h2>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Fifteen hands-on questions across five tracks. Answers are checked against the
+          Thirty hands-on questions across ten tracks. Answers are checked against the
           actual offline Labs calculators, with explanations and retries. This is open-book,
           client-side practice—not a trusted exam, credential, or account-linked achievement.
         </p>
@@ -121,7 +121,7 @@ export default function LabsPracticeChallenges(){
           <form className="space-y-3" onSubmit={event=>{event.preventDefault();grade();}}>
             <label htmlFor="labs-practice-answer" className="block text-sm font-semibold">
               {active.kind==="ipv4"?"Your IPv4 address":active.kind==="integer"?"Your whole-number answer":
-                active.kind==="octal"?"Your octal mode":"Would the simplified check allow it?"}
+                active.kind==="octal"?"Your octal mode":active.kind==="boolean"?"Choose Yes or No":"Your whole-number answer"}
             </label>
             {active.kind==="boolean"
               ?<select id="labs-practice-answer" required value={answer}
