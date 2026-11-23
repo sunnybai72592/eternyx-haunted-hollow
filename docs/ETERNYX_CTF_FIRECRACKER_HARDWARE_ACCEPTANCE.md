@@ -1272,3 +1272,66 @@ integrity, symlinks, hardlinks, wrong ownership/permissions, empty and
 oversized data, and non-regular devices. CI also checks that import recovery
 and all reviewer paths actually use the shared hardening. All test inputs
 are disposable fixtures, not genuine hardware evidence.
+
+
+## Two-pass offline case snapshot revalidation before signed publication
+
+Each individual original reviewer file was already read through a private,
+no-follow, ownership-checked descriptor. That did not guarantee a coherent
+**set of files**: the operator report could be read before a different
+operator PEM or host transcript was exchanged. This milestone adds a
+**second read of the complete case** after collecting the originals and
+additional rechecks immediately before each human-approved signed output
+or checkpoint is atomically published.
+
+### Coverage and refusal behavior
+
+- All modes: raw operator report, pinned operator PEM, structured host and
+  image metadata, systemd journal, and cgroup teardown transcript.
+- Guest-vsock mode: additional guest challenge transcript.
+- 900-second watchdog mode: additional timeout transcript.
+- Committed imported cases: both raw pending and committed journal markers.
+  Legacy manually staged cases remain eligible but **cannot claim imported
+  transaction verification**.
+- Later signature stages: the existing reviewer verdict and signed disposition,
+  checkpoint where applicable, and mode-specific supplemental runtime JSON.
+- Reviewer private/public keys are re-read before using the human signer
+  to publish a new record.
+
+The second pass re-opens each file with the existing race-resistant reader,
+requires **exact raw-byte equality** (including same-length substitutions),
+and re-checks the private directory against unfinished atomic-publisher
+staging names before and after the pass. Any unexpected directory change
+during the pass is refused. No unsigned or corrupted file gets quietly
+reclassified as a missing journal marker.
+
+The guard is integrated before writing
+\`review-verdict.json\`, \`review-disposition.json\`,
+\`case-checkpoint.json\`, and \`review-runtime-addendum.json\`.
+The underlying publication continues to be an exclusive, crash-resistant
+no-overwrite operation.
+
+### Trust limitation
+
+This is a **repeat-read consistency guard, not a filesystem transaction or
+lock**. A sufficiently privileged malicious local actor could alter files
+between final revalidation and atomic publication, especially if the
+operating system, filesystem or reviewer signing key is compromised.
+For stronger assurance, use an independently controlled offline reviewer
+machine, immutable source capture, independent hardware provenance and
+externally retained checkpoint hashes. This change does not authorize
+production or public Labs, run a VM, or contact the cloud.
+
+### Offline regression command
+
+\`\`\`bash
+node --test tests/ctf-firecracker-case-snapshot.test.mjs
+npm test
+npm run build
+\`\`\`
+
+Tests include three exact proof modes, committed journal records,
+reviewer/addendum data, same-length modifications, missing files, unsafe
+symlinks/hardlinks, wrong-owner/private-mode cases, stage remnants, and
+integrations for the pre-sign recheck. All fixtures are simulated and
+**not independent KVM acceptance evidence**.
