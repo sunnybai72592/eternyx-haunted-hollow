@@ -7,6 +7,7 @@ import {
   inspectIndependentReviewCase,signIndependentReviewCase,
   verifyIndependentReviewCase,auditIndependentReviewConsistency,
   signIndependentReviewDisposition,verifyIndependentReviewDisposition,
+  auditIndependentRuntimeObservations,
 } from "../infrastructure/cyber-range/provider/firecracker-independent-review.mjs";
 import {validSessionId} from "../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 
@@ -28,6 +29,7 @@ const REASONS=new Set([
 const usage=[
   "ETERNYX offline second-person Firecracker evidence review",
   "node scripts/cyber-range-independent-review.mjs --audit-consistency --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
+  "node scripts/cyber-range-independent-review.mjs --audit-runtime --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
   "node scripts/cyber-range-independent-review.mjs --inspect --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
   "node scripts/cyber-range-independent-review.mjs --endorse --confirm-independent-review --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
   "node scripts/cyber-range-independent-review.mjs --verify --session UUID --operator-sha SHA256 --reviewer-sha SHA256",
@@ -44,8 +46,8 @@ try{
     console.log(usage);
   }else{
     const mode=args[0];
-    if(!["--audit-consistency","--inspect","--endorse","--verify",
-      "--decide","--verify-decision"].includes(mode))
+    if(!["--audit-consistency","--audit-runtime","--inspect",
+      "--endorse","--verify","--decide","--verify-decision"].includes(mode))
       throw Error("Unknown review action");
     const endorsed=mode==="--endorse",deciding=mode==="--decide";
     const manual=endorsed||deciding;
@@ -95,6 +97,8 @@ try{
       }
     }else if(mode==="--audit-consistency"){
       console.log(JSON.stringify(await auditIndependentReviewConsistency(shared)));
+    }else if(mode==="--audit-runtime"){
+      console.log(JSON.stringify(await auditIndependentRuntimeObservations(shared)));
     }else if(mode==="--inspect"){
       console.log(JSON.stringify(await inspectIndependentReviewCase(shared)));
     }else if(mode==="--verify-decision"){
