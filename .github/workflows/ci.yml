@@ -55,6 +55,10 @@ jobs:
           node --check scripts/workspace-team-staging-revocation.mjs
           node --check src/lib/workspaceRevocationAcceptance.mjs
           node --check tests/workspace-staging-revocation.test.mjs
+      - name: Verify Phase 26 Workspace team access guards offline
+        run: |
+          node --check src/lib/workspaceTeamAccess.mjs
+          node --check tests/workspace-team-access.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
