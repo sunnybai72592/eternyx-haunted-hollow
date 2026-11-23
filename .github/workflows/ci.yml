@@ -29,6 +29,8 @@ jobs:
         run: npm ci
       - name: Run utility tests
         run: npm test
+      - name: Validate Automation runtime source and JWT policy inventory (offline only)
+        run: node scripts/automation-runtime-readiness.mjs --source-check
       - name: Check utility JavaScript syntax
         run: |
           node --check src/lib/developerStudioUtils.mjs
