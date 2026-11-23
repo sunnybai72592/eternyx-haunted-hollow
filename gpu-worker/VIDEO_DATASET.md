@@ -639,3 +639,32 @@ Important distinctions:
 6. **No hidden paid services:** The code uses Python standard library and existing locally installed FFmpeg/FFprobe/libx264; there is no paid GPU, model download, remote AI API, media upload or subscription.
 
 Dedicated CPU integration tests independently train both models on real FFmpeg-created clips, recompute per-step MSE on the common 48×28 target, verify exact video hashes/decoded frames, check real elapsed timings and full-batch rollback, and test the offline CLI. Browser regressions reject malformed evidence and mismatched MP4 hashes before playback.
+
+
+
+## Causal neural v2 rollout adaptation (CPU): train on synthetic history, measure drift honestly
+
+After training the ETERNYX 48×28 two-frame neural v2 model and optionally running the v1/v2 matched benchmark, you can now test whether *causal training-prefix adaptation* reduces accumulated prediction drift. This **does not create a new paid AI service**, require pretrained models, or promise improved visual quality.
+
+The new **Neural v2 · Causal rollout adaptation and 8-step drift review** panel in AI Video Studio prepares this offline command:
+
+```sh
+python gpu-worker/adapt_neural_rollout.py \
+  --model ./eternyx-neural-v2-model/model.json \
+  --input ./local-video-media \
+  --output ./eternyx-neural-causal-adaptation \
+  --epochs 1 --mix-percent 50 --seed 42 \
+  --seconds 1 --stability 45 --variation 6
+```
+
+**Seven concrete upgrades:**
+
+1. **Adapt the real existing v2 neural weights, without replacing v1 or v2 originals.** The adapter reads a valid v2 24→16→3 checkpoint, verifies its original local MP4 source names, content SHA-256 and exact decoded frame counts, and refuses source changes. It supports 1–3 approved local clips, each with at least 32 decoded frames and eight held-out frames.
+2. **Causal free-running training-prefix examples.** From up to three anchor positions within each clip's original first-75%-of-frames training prefix, the model predicts 1–3 successive complete 48×28 frames. Its later inputs include **its own predictions**, not the hidden held-out targets. Those synthetic inputs are paired with real *training-prefix* target pixels for actual CPU SGD weight updates. Held-out frames are excluded from adaptation inputs and labels.
+3. **Optional teacher-forced replay (0–100%).** Mix a bounded number of original supervised prefix examples with causal rollouts to study catastrophic forgetting versus exposure to model-generated states. The integer proportion, 1–3 adaptation epochs, seeded anchor/sample positions and SGD learning rate are recorded. This is an actual adaptation experiment and may perform worse than the original checkpoint.
+4. **Independent matched before/after holdout evaluation.** Record real **1-, 4-, and 8-step autoregressive MSE** on the same held-out frames before and after adaptation. The static-last-training-frame baseline must be identical before and after; a separate one-step teacher-forced metric is also included. The held-out data is used to *evaluate* weights but not to train or select a winner. Errors are reported unchanged when adaptation makes them worse.
+5. **Two genuine sampled v2 videos plus a real H.264 comparison.** Generate a baseline `baseline/render/video.mp4` and an adapted `adapted/render/video.mp4` with the same seed, seconds, stability and variation. Their neural-origin receipts are verified. A real 512×144 `comparison.mp4` places original on the **left** and adapted on the **right**, validated by FFprobe decoded frame count.
+6. **Create-only atomic provenance.** A new output directory holds `adapted-model/model.json` (compatible with existing neural v2 inference), `adaptation-report.json`, actual MP4s and their per-model rendering receipts. Report includes source SHA-256, original/adapted checkpoint SHA-256, causal anchor positions and depths, example counts, mix percentage, measured training time and real video hashes/bytes. Original checkpoint and source MP4s are not modified; a failed batch leaves no published partial output.
+7. **Real Studio evidence and regression gates.** The Studio allows safe CPU command customization, imported JSON interpretation of unchanged held-out metrics, local WebCrypto SHA-256 verification of the actual adapted model and MP4s, and independent on-device playback. Dedicated real-FFmpeg CI tests ensure source identity, true train-prefix-only inputs, adaptation updates, measured 1/4/8-step errors, no-overwrite behavior, atomic recovery, unsafe-input rejection and real MP4/CLI operation.
+
+**Scientific and privacy limits:** The adapted model remains a tiny, low-resolution, non-diffusion neural video texture generator. The experiment cannot understand text instructions or create photorealistic cinematic footage. Better MSE does not automatically imply better motion or aesthetics; stronger temporal blending may collapse all dynamics. Prefer visual inspection of real MP4s and multiple licensed footage sources before any claim of progress. The self-reported SHA-256 check is a local consistency control, not cryptographic identity proof. Trained model weights/statistics can reveal information about original recordings; keep them private. No GPU charges, external AI APIs, cloud uploads or subscription enforcement are activated.
