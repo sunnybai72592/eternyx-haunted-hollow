@@ -668,3 +668,54 @@ python gpu-worker/adapt_neural_rollout.py \
 7. **Real Studio evidence and regression gates.** The Studio allows safe CPU command customization, imported JSON interpretation of unchanged held-out metrics, local WebCrypto SHA-256 verification of the actual adapted model and MP4s, and independent on-device playback. Dedicated real-FFmpeg CI tests ensure source identity, true train-prefix-only inputs, adaptation updates, measured 1/4/8-step errors, no-overwrite behavior, atomic recovery, unsafe-input rejection and real MP4/CLI operation.
 
 **Scientific and privacy limits:** The adapted model remains a tiny, low-resolution, non-diffusion neural video texture generator. The experiment cannot understand text instructions or create photorealistic cinematic footage. Better MSE does not automatically imply better motion or aesthetics; stronger temporal blending may collapse all dynamics. Prefer visual inspection of real MP4s and multiple licensed footage sources before any claim of progress. The self-reported SHA-256 check is a local consistency control, not cryptographic identity proof. Trained model weights/statistics can reveal information about original recordings; keep them private. No GPU charges, external AI APIs, cloud uploads or subscription enforcement are activated.
+
+
+
+## CPU neural v2: choose replay schedules without using the final test set
+
+The **Neural v2 · Leak-free replay schedule selection on CPU** workspace makes a scientifically important distinction that the previous single-schedule adapter did not automate. It can compare **up to three real causal training strategies** and retain the original model when none passes **inner validation**, while keeping the original last-quarter held-out footage completely separate from selection and fitting.
+
+Training and testing an adaptation against the same 8 final held-out frames, then selecting whichever scores best on those frames, would leak information from the final test set into model selection. This tool instead uses *nested temporal windows*.
+
+### Example: train 0%, 50% and 100% teacher replay schedules
+
+Use an existing 48×28 two-frame neural v2 `model.json` with the **unchanged original MP4s** used to train it:
+
+```sh
+python gpu-worker/select_neural_schedule.py \
+  --model ./eternyx-neural-v2-model/model.json \
+  --input ./local-video-media \
+  --output ./eternyx-neural-schedule \
+  --mix 0 --mix 50 --mix 100 \
+  --seed 42 --epochs 1 --seconds 1 \
+  --stability 45 --variation 6
+```
+
+Choices must be 1–3 **distinct** percentages from 0, 25, 50, 75, 100. The existing model's original training sources are reverified with SHA-256, and each must have at least 32 decoded 16FPS frames. The first 64 frames at most are used, with the original 75% train / 25% outer test split preserved. Python standard library and local FFmpeg/FFprobe/libx264 are the only dependencies.
+
+### Exactly which frames are used?
+
+For a 32-frame source, the original v2 training prefix is frames **0–23** and the untouched final holdout is **24–31**. During selection, the *inner* training window ends after frame **17** (the first 18 original prefix frames), and the following inner validation targets are **18–21**. That inner validation window is safely **inside the original training prefix**, with a two-frame gap before the final held-out section.
+
+1. Begin every candidate with a copy of the same original neural v2 weights.
+2. Generate 1–3 causal next-frame synthetic states and optimize them against **inner training-prefix labels only**, optionally replaying teacher-forced prefix labels at the candidate percentage.
+3. Evaluate 4-step **free-running** prediction MSE on those four *inner validation* targets only. These targets do not appear as candidate optimizer labels.
+4. Include the **unchanged original checkpoint** as an explicit baseline. Choose only a candidate with inner MSE strictly smaller than the best-so-far value by at least 0.00000001; deterministic candidates are ordered by increasing mix percentage. When none improves on the original, **retain original neural weights**.
+5. If a candidate is selected, start **again from the original weights** and refit only the chosen schedule, using the full original training prefix (but not outer heldout). Do **not** carry over inner candidate-trained weights.
+6. Now, **after the selection is locked in**, evaluate the original and resulting weights on identical outer heldout frames using real causal 1-, 4-, and 8-step pixel MSE and the same static-last-training-frame baseline.
+7. Generate both model versions with the same seed/stability/variation into separate actual H.264 MP4s, create a verified **512×144** v2 comparison with unchanged left and selected right, and save complete receipts and model/source SHA-256. New outputs are create-only and atomic.
+
+A passing inner MSE **does not guarantee** that the chosen version improves final holdout MSE or perceived output quality. The final outer audit reports increases in loss without hiding them. Lower MSE may reward dull/blurry/static color fields. There is **no automated photorealism score, text-to-video alignment, or guarantee that a larger/harder-trained model is better**.
+
+### File outputs and real Studio review
+
+The new directory `eternyx-neural-schedule` contains:
+
+- `selected-model/model.json`: an independently saved, validated v2-compatible checkpoint with the selected strategy metadata, base weight identity, and a flag saying whether any optimizer weights changed. The original trained v2 model is never overwritten.
+- `schedule-report.json`: the original source SHA-256, exact inner/outer temporal boundaries, each inner candidate's measured loss and optimizer examples, the deterministic chosen mix or `null` when no candidate beats the original, full-prefix refit count, measured training/selection CPU time, original/selected outer test errors, and actual model, MP4 hashes/bytes.
+- `base-sample/render/video.mp4` and `selected-sample/render/video.mp4`: two independently sampled neural v2 H.264 clips with original encoding receipts and model-origin reports.
+- `comparison.mp4`: left=unchanged original v2 and right=selected schedule (or identical base weights in the explicit fallback case). Actual H.264 decoded frame counts, resolution and SHA-256 are verified.
+
+The Studio imports the local `schedule-report.json` to display both the inner validation candidate table and the **independent** final unseen-frame 1/4/8-step audit table. For integrity inspection, import the selected `model.json` and actual video files; the browser computes SHA-256 from their bytes, matches each candidate against the report and plays the videos locally. No source or generated media is uploaded.
+
+This remains a *tiny 48×28 neural video texture experiment*, not finished commercial text-to-video AI, pretrained diffusion inference or photorealistic scene generation. Trained model weights and aggregate appearance statistics can leak traits of training footage; keep checkpoints private. Self-reported hashes prove only local internal consistency, not digitally signed identities or licensing rights. No GPU, paid inference API or subscription changes.
