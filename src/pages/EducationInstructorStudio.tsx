@@ -554,6 +554,9 @@ export default function EducationInstructorStudio() {
                 onClick={() => downloadLearnerWorksheet("txt")}>
                 <Download aria-hidden="true" className="mr-1 h-4 w-4" />Learner worksheet TXT
               </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/education/practice">Open learner practice workspace</Link>
+              </Button>
             </div>
           </div>
           {qualityAudit.items.some(item => item.warnings.length > 0) && (
