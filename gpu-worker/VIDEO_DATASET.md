@@ -776,3 +776,61 @@ python gpu-worker/train_tagged_neural_video.py compare \
 Creates a real MP4 for each style at `candidate-01/render/video.mp4` and `candidate-02/render/video.mp4`, plus a 512×144 `comparison.mp4` and `comparison-report.json`. Matching SHA-256 only confirms locally self-attested file identity, not digital signature or license ownership.
 
 **Critical limitation:** A tiny per-tag output adapter can learn source-specific colors and texture priors, **not language semantics, novel objects, prompt adherence, photorealism, or scene structure**. Calling a training clip `sunrise` does not give the network a human understanding of sunrise. Do not describe this as a full text-to-video AI model. It remains low-resolution abstract experimentation despite finished MP4 exports. Trained adapters might encode statistics from original footage: keep them private. No paid GPU, external AI inference API, cloud media upload, model download or new subscription integration is required.
+
+
+
+## Neural v2: learned local 4×3 spatial motion from actual tagged footage
+
+**AI Video Studio → Neural v2 · Real learned spatial motion per trained style** is the next optional CPU-only milestone after trained label-conditioned color/texture. Unlike the previous whole-frame 3×3 shift histograms, it learns a separate spatially varying motion predictor for **12 regions of the frame**.
+
+### 1. Learn per-region displacements, not fixed motion presets
+
+First train the normal neural v2 base on 2–3 owned/licensed source MP4s, then train at least two tagged appearance adapters from those **same** clips. The new learner refuses changed source SHA-256, frame counts, rights/split provenance and tag assignments.
+
+```sh
+python gpu-worker/learn_tagged_spatial_motion.py train \
+  --base ./eternyx-neural-v2-model/model.json \
+  --tag-model ./eternyx-neural-style-tags/tag-model.json \
+  --input ./local-video-media \
+  --output ./eternyx-neural-spatial-motion \
+  --epochs 2 --seed 42
+```
+
+For each tag, the trainer decodes the original 16FPS clips into the existing 48×28 four-level RGB format. For each pair of frames, each region searches the nine local displacements (dx/dy from −1 to +1 pixel) and selects the displacement minimizing real patch RGB mismatch, preferring small motion on ties. A **real supervised softmax classifier** is trained separately per tag and per tile: nine motion logits, conditioned on previous known tile-motion x/y, normalized time, and bias, updated with Python-standard-library SGD cross-entropy. These are **actual trainable numeric weights**, not a lookup table or a UI-only animation preset.
+
+The final quarter of each clip **never updates those weights**. Its observed displacements are evaluated against the classifier using autoregressively fed *predicted* prior tile motion, with genuine cross-entropy, predicted-shift accuracy, block-matched color MAE for predicted shifts, and **zero-shift** frame mismatch MAE. The latter is a practical baseline: the learner might worsen it, which the report shows without hiding the regression. Because block matching is low-resolution and the motion is limited to one pixel, do **not** call these scores physically accurate optical flow or video quality.
+
+The create-only `eternyx-neural-spatial-motion` directory contains `motion-model.json` (all 12×9×4 trainable weights per learned tag), `training-report.json`, source/base/tag SHA-256 links, metrics and measured CPU training duration. Model files may encode private appearance/motion statistics; keep them private.
+
+### 2. Autoregressive tagged video with spatially varying motion
+
+```sh
+python gpu-worker/learn_tagged_spatial_motion.py generate \
+  --base ./eternyx-neural-v2-model/model.json \
+  --tag-model ./eternyx-neural-style-tags/tag-model.json \
+  --motion-model ./eternyx-neural-spatial-motion/motion-model.json \
+  --output ./eternyx-spatial-motion-video \
+  --tag warm --seconds 2 --seed 42 --strength 75 \
+  --stability 45 --variation 6 \
+  --profile landscape --quality standard
+```
+
+At every frame, the **motion classifier** uses its own previous chosen displacement state and time fraction to predict a move for each tag-specific tile. By default it chooses the most likely trained shift; add `--seeded-motion` for deterministic-seed probabilistic motion decisions. Neighboring tile vectors are blended by bilinear interpolation across the 48×28 grid to minimize region-boundary seams. The resulting fractional displacement field bilinearly warps two previous quantized frames *before* the existing, frozen-base **tag-conditioned genuine neural color/texture decoder** predicts the next RGB frame. `--strength` controls how strongly (0–100%) tile motion affects warped frame pixels. Color stability/variation use the already-trained neural generator's bounded controls; do not interpret lower raw RGB delta as necessarily better motion.
+
+The program creates actual 48×28 H.264 `clip-01.mp4` video, a v2 storyboard, real FFmpeg-upscaled profile-specific `render/video.mp4`, renderer preview/captions and `generation-report.json`. The report includes base/tag/motion model hashes, tag name, motion mode, selected strength, real decoded frame count, raw frame SHA-256, clip SHA-256 and finished MP4 SHA-256/byte size. Rendered video is **not** source MP4 playback, and a receipt hash match is self-attested local consistency rather than a signature.
+
+### 3. Two-label real side-by-side output
+
+```sh
+python gpu-worker/learn_tagged_spatial_motion.py compare \
+  --base ./eternyx-neural-v2-model/model.json \
+  --tag-model ./eternyx-neural-style-tags/tag-model.json \
+  --motion-model ./eternyx-neural-spatial-motion/motion-model.json \
+  --output ./eternyx-spatial-motion-compare \
+  --first warm --second cool \
+  --seconds 1 --seed 42 --strength 75
+```
+
+The compare command samples two distinct actually-trained tags under identical seeds/duration/motion strength and renders real `candidate-01/render/video.mp4`, `candidate-02/render/video.mp4`, and a **512×144 H.264 `comparison.mp4`** (first tag left, second right). The final `comparison-report.json` records actual decoded frame counts, byte sizes, source-model chain SHA-256 and raw RGB hashes. A failure removes incomplete outputs rather than publishing partial batches. The Studio accepts the real motion model/report and independently checks its SHA-256, displays real held-out block-shift MAE versus zero motion, and previews the selected MP4s after verifying local file bytes using WebCrypto.
+
+**Constraints and evidence:** Up to 3 labels/approved clips, at most 64 frames per source, 1–4 CPU training epochs and 1–3 seconds of generated 16FPS motion video. No external model downloads, GPU, AI APIs, subscription requirements, cloud media transfer or paid infrastructure. The 4×3 motion field plus 48×28 texture decoder remains **a low-resolution research prototype**, not dense optical flow, semantic language-conditioned video, accurate physical simulation, realistic scenes, diffusion, or a cinematic T2V flagship. Visual inspection and further research are necessary. Dedicated real-FFmpeg CI tests genuine learned weights, prefix-only optimizer isolation, known pixel shifts, 0–100% warp behavior, deterministic seeds, real H.264 dimensions/hashes, corrupted-model refusal, source provenance, CLI operation and output rollback.
