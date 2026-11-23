@@ -100,6 +100,6 @@ test("protected provenance page uses real private Supabase storage and account R
  assert.match(page,/reviewToken\.current/);
  assert.match(page,/loadToken\.current/);
  assert.match(page,/createProvenanceManifest/);
- assert.match(page,/\\.range\(start, start \+ PAGE_SIZE - 1\)/);
+ assert.match(page,/\.range\(start, start \+ PAGE_SIZE - 1\)/);
  assert.doesNotMatch(page,/service_role|SERVICE_ROLE_KEY|VITE_SUPABASE_SECRET/);
 });
