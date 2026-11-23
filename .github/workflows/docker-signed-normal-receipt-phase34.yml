@@ -1,0 +1,42 @@
+name: Docker signed normal receipt durable evidence (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-normal-receipt-phase34.yml'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'src/lib/dockerSignedReceiptAcknowledgedFence.mjs'
+      - 'tests/docker-signed-normal-receipt-evidence.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_NORMAL_RECEIPT_PHASE34.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  normal-receipt:
+    name: Prove normal/replay signed receipts require equal forensic admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check real signed agent and acknowledgement evidence gate
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerSignedReceiptAcknowledgedFence.mjs
+          node --check tests/docker-signed-normal-receipt-evidence.test.mjs
+      - name: Run actual fsynced local receipt tests and all earlier Docker safety regressions
+        run: |
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs

@@ -13,6 +13,8 @@ import {requireSignedContainerHistoryClear}
   from "../src/lib/dockerSignedContainerHistoryFence.mjs";
 import {requireSignedReceiptReplayClear}
   from "../src/lib/dockerSignedReceiptReplayFence.mjs";
+import {requireSignedReceiptAcknowledgedEvidence}
+  from "../src/lib/dockerSignedReceiptAcknowledgedFence.mjs";
 import { verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
 import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   validateSignedAgentEngineObserved,validateSignedAgentTarget}
@@ -120,7 +122,17 @@ async function main(){
     const journal=readLabClaim(process.argv[6]);
     if(journal.agentId!==agentId||!journal.outcome)throw Error("No finished receipt exists for this agent; inspect the local journal.");
     if(journal.acknowledged){
-      process.stdout.write(JSON.stringify({claimId:journal.claimId,alreadyAcknowledged:true})+"\n");
+      // Even the no-network already-acknowledged shortcut must not report a
+      // corrupt or conflicting recovered receipt as safely accepted.
+      const evidence=requireSignedReceiptAcknowledgedEvidence(
+        auditSignedAgentRecoveryDirectory(),{
+          agentId,claimId:journal.claimId,
+          containerId:journal.containerId,outcome:journal.outcome
+        });
+      if(evidence.outcome!==journal.outcome)
+        throw Error("Already-acknowledged journal and local history disagree.");
+      process.stdout.write(JSON.stringify({claimId:journal.claimId,alreadyAcknowledged:true,
+        independentlyVerified:false,executedAgain:false})+"\n");
       return;
     }
     // Receipt-only mode cannot treat a legacy UNKNOWN/failed marker or a
@@ -147,7 +159,13 @@ async function main(){
        afterReplay.containerId!==replay.containerId)
       throw Error("Receipt replay evidence changed after server acknowledgement.");
     appendLabEvent(journal.claimId,"receipt_accepted");
-    process.stdout.write(JSON.stringify({claimId:journal.claimId,receiptAcknowledged:true,executedAgain:false})+"\n");
+    requireSignedReceiptAcknowledgedEvidence(
+      auditSignedAgentRecoveryDirectory(),{
+        agentId,claimId:journal.claimId,
+        containerId:journal.containerId,outcome:journal.outcome
+      });
+    process.stdout.write(JSON.stringify({claimId:journal.claimId,receiptAcknowledged:true,
+      independentlyVerified:false,executedAgain:false})+"\n");
     return;
   }
   const polled=await send("claim");
@@ -251,18 +269,62 @@ async function main(){
   // check and tamper guard. Keep BOTH agent and container holds on failure.
   unlockContainer();
   unlockContainer=null;
-  // Release only AFTER the journal's definitive outcome has been fsynced,
-  // read back, and the per-container hold was safely released.
-  retainRecoveryLock=false;
-  audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:outcome});
+  // The normal signed dispatch must observe the SAME strict inventory
+  // admission as the separate --resend-receipt path. Keep the original
+  // agent lock until the terminal and recovered history are inspected.
+  // A pre-send forensic mismatch requires manual review, never a receipt.
+  let originalReceiptEvidence=null;
   try{
+    const ready=requireSignedReceiptReplayClear(
+      auditSignedAgentRecoveryDirectory(),{
+        agentId,claimId:permit.claimId,phase:"before_send"
+      });
+    if(ready.outcome!==outcome||ready.containerId!==permit.containerId)
+      throw Error("Normal signed receipt outcome and forensic history disagree.");
+    requireDurableTerminalBeforeReceipt(readLabClaim(permit.claimId),outcome);
+    originalReceiptEvidence=ready;
+    audit({claimId:permit.claimId,containerId:permit.containerId,
+      operation:permit.operation,result:outcome});
     const receipt=await send("receipt",permit.claimId,outcome);
     validateDockerReceiptAcknowledgement(receipt,permit.claimId,outcome);
+    // A valid server reply alone cannot prove the local journal survived
+    // transport unchanged. Repeat complete history before recording ack.
+    const checked=requireSignedReceiptReplayClear(
+      auditSignedAgentRecoveryDirectory(),{
+        agentId,claimId:permit.claimId,phase:"before_ack",
+        originalFileSha256:ready.fileSha256
+      });
+    if(checked.outcome!==outcome||checked.containerId!==permit.containerId)
+      throw Error("Signed receipt evidence drifted during delivery.");
     appendLabEvent(permit.claimId,"receipt_accepted");
+    // Require the *new* canonical acknowledged transition to persist.
+    requireSignedReceiptAcknowledgedEvidence(
+      auditSignedAgentRecoveryDirectory(),{
+        agentId,claimId:permit.claimId,
+        containerId:permit.containerId,outcome
+      });
+    retainRecoveryLock=false;
     process.stdout.write(JSON.stringify({claimId:permit.claimId,
       agentReportedStatus:"reported_"+outcome,independentlyVerified:false})+"\n");
   }catch{
-    process.stderr.write("Receipt delivery uncertain. Use --resend-receipt with exact claim ID, never rerun Docker.\n");
+    // An interrupted HTTPS request is not a Docker failure. If the original
+    // exact terminal file and recovery inventory are still unchanged, only
+    // release the per-agent lock so the operator can explicitly invoke the
+    // existing Docker-free --resend-receipt path. Otherwise retain the lock.
+    if(originalReceiptEvidence){
+      try{
+        const checked=requireSignedReceiptReplayClear(
+          auditSignedAgentRecoveryDirectory(),{
+            agentId,claimId:permit.claimId,phase:"before_ack",
+            originalFileSha256:originalReceiptEvidence.fileSha256
+          });
+        if(checked.outcome===outcome&&checked.containerId===permit.containerId)
+          retainRecoveryLock=false;
+      }catch{
+        process.stderr.write("Receipt forensic evidence changed; retain the original agent lock for manual review.\n");
+      }
+    }
+    process.stderr.write("Receipt delivery or local acknowledgement uncertain. Never rerun Docker; independently review the original journal before explicit receipt-only recovery.\n");
     process.exitCode=1;
   }
   } finally {if(!retainRecoveryLock)unlock();}
