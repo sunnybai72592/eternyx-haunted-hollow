@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {spawnSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 
 const workflow=readFileSync(new URL("../.github/workflows/education-hosted-browser-readonly.yml",import.meta.url),"utf8");
 const script=readFileSync(new URL("./browser/education_hosted_readonly.py",import.meta.url),"utf8");
@@ -86,4 +88,11 @@ test("evidence is source-run bound, sanitized, and never claims production accep
  assert.match(workflow,/if: always\(\)/);
  assert.match(workflow,/test-results\/education-hosted-browser-readonly\.json/);
  assert.doesNotMatch(workflow,/screenshots|traces|video\.webm|dist\//);
+});
+
+test("new hosted browser Python runner compiles without using staging credentials",()=>{
+ const file=fileURLToPath(new URL("./browser/education_hosted_readonly.py",import.meta.url));
+ const result=spawnSync("python3",["-m","py_compile",file],{encoding:"utf8",timeout:15000});
+ if(result.error?.code==="ENOENT")return; // Windows contributors may lack Python
+ assert.equal(result.status,0,"Education browser runner Python source must compile");
 });
