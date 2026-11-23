@@ -130,8 +130,10 @@ async function main(){
   },pinned);
   // Permanent per-claim exclusive reservation is made BEFORE the first Docker operation.
   // A crash or duplicate claim MUST NOT execute a previously reserved claim again.
-  reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
+  // Retain the exclusive lock even if creating/fsyncing a claim journal fails
+  // midway: O_EXCL may have created an incomplete file before throwing.
   retainRecoveryLock=true; // Never auto-unlock a newly reserved, unresolved claim.
+  reserveLabClaim({agentId,claimId:permit.claimId,operation:permit.operation,containerId:permit.containerId});
   let attempted=false,postconditionConfirmed=false;
   try{
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
