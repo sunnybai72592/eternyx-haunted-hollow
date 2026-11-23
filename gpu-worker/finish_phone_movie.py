@@ -50,6 +50,62 @@ def verified_variant(path, expected_codec, frames, size, subtitles=False, fps=re
 
 
 
+# Kept inline so the extracted watch page works directly from a local file.
+PLAYER_SCRIPT = """
+const movie = document.querySelector("video");
+const controls = document.querySelector("#review-controls");
+const shots = Array.from(document.querySelectorAll("[data-start-frame]"));
+const fps = Number(movie.dataset.fps);
+const previous = document.querySelector("#previous-shot");
+const next = document.querySelector("#next-shot");
+const starts = shots.map(shot => Number(shot.dataset.startFrame) / fps);
+function currentShot() {
+    return Math.max(0, starts.filter(start => start <= movie.currentTime).length - 1);
+}
+function seekShot(index) {
+    movie.currentTime = starts[index];
+    update();
+}
+function update() {
+    const current = currentShot();
+    shots.forEach((shot, index) => {
+        if (index === current) shot.setAttribute("aria-current", "time");
+        else shot.removeAttribute("aria-current");
+    });
+    previous.disabled = current === 0;
+    next.disabled = current === shots.length - 1;
+}
+function enableReview() {
+    if (!controls.hidden) return;
+    shots.forEach((shot, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Go to shot " + (index + 1);
+        button.addEventListener("click", () => seekShot(index));
+        shot.append(" ", button);
+    });
+    previous.onclick = () => seekShot(Math.max(0, currentShot() - 1));
+    next.onclick = () => seekShot(Math.min(shots.length - 1, currentShot() + 1));
+    document.querySelectorAll("[data-step]").forEach(button => {
+        button.onclick = () => {
+            movie.pause();
+            const lastFrame = Math.round(movie.duration * fps) - 1;
+            const frame = Math.round(movie.currentTime * fps) + Number(button.dataset.step);
+            movie.currentTime = Math.max(0, Math.min(lastFrame, frame)) / fps;
+        };
+    });
+    document.querySelector("#speed").onchange = event => {
+        movie.playbackRate = Number(event.target.value);
+    };
+    controls.hidden = false;
+    update();
+}
+movie.addEventListener("loadedmetadata", enableReview);
+for (const event of ["seeked", "timeupdate", "ended"]) movie.addEventListener(event, update);
+if (movie.readyState >= 1) enableReview();
+"""
+
+
 def make_preview_assets(folder, receipt, outputs):
     """Generate real image and human captions, no server or remote scripts."""
     video = folder / "video.mp4"
@@ -72,7 +128,7 @@ def make_preview_assets(folder, receipt, outputs):
         end = renderer.timeline_stamp(shot["timeline_start_frame"] + shot["frames"], receipt["fps"]).replace(",", ".")
         caption = escape(shot["caption"])
         captions.extend([start + " --> " + end, caption, ""])
-        transcript.append(f"<li><time>{start}</time> – <time>{end}</time><br>{caption}</li>")
+        transcript.append(f'<li data-start-frame="{shot["timeline_start_frame"]}"><time>{start}</time> – <time>{end}</time><br>{caption}</li>')
     vtt = folder / "captions.vtt"
     vtt.write_text("\n".join(captions) + "\n", encoding="utf8")
     watch = folder / "watch.html"
@@ -97,15 +153,25 @@ def make_preview_assets(folder, receipt, outputs):
 :root{{color-scheme:light dark}}body{{font:1rem/1.5 system-ui;max-width:52rem;margin:auto;padding:1rem}}
 video{{display:block;width:100%;height:auto;max-height:75vh;background:#000}}
 li{{margin-block:.4rem;overflow-wrap:anywhere}}time{{font-variant-numeric:tabular-nums}}
+li[aria-current="time"]{{border-inline-start:.24rem solid currentColor;padding-inline-start:.6rem}}
+button,select{{font:inherit;min-height:2.75rem}}
 </style>
 <main><h1>Finished movie</h1>
 <p>{width} × {height} · {receipt["fps"]} FPS · {receipt["video"]["duration_seconds"]:g} s</p>
-<video controls playsinline preload="metadata" poster="poster.png" width="{width}" height="{height}">
+<video controls playsinline data-fps="{receipt['fps']}" preload="metadata" poster="poster.png" width="{width}" height="{height}">
 {"".join(sources)}{track}
 <a href="{primary}">Open the movie</a></video>
+<div id="review-controls" hidden>
+<button type="button" id="previous-shot">Previous shot</button>
+<button type="button" id="next-shot">Next shot</button>
+<button type="button" data-step="-1">Previous frame</button>
+<button type="button" data-step="1">Next frame</button>
+<label>Playback speed <select id="speed"><option value="0.5">0.5×</option>
+<option value="1" selected>1×</option><option value="1.5">1.5×</option>
+<option value="2">2×</option></select></label></div>
 <details><summary>Timed transcript</summary><ol>{"".join(transcript)}</ol></details>
 <h2>Download files</h2><ul>{"".join(downloads)}</ul>
-<p><a href="manifest.json">Local SHA-256 receipt</a></p></main></html>
+<p><a href="manifest.json">Local SHA-256 receipt</a></p></main><script>{PLAYER_SCRIPT}</script></html>
 """, encoding="utf8")
     result = {}
     for asset in (poster, vtt, watch):
