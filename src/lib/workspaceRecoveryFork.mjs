@@ -46,14 +46,19 @@ export async function parsePortableWorkspaceArchive(raw) {
   return { doc, parsed, version: doc.format_version, forkMarker: marker };
 }
 
-export async function createWorkspaceRecoveryFork(raw, sourceSha256, forkId, createdAt) {
+export async function createWorkspaceRecoveryFork(raw, sourceSha256, forkId, createdAt, sourceBytes = null) {
   if (typeof sourceSha256 !== "string" || !HASH.test(sourceSha256) ||
       typeof forkId !== "string" || !UUID.test(forkId) ||
       typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt)) ||
       new Date(createdAt).toISOString() !== createdAt) {
     throw new Error("Cannot create a recovery copy without valid source identity and UTC timestamp");
   }
-  if (await sha256Hex(raw) !== sourceSha256) {
+  // If the source had an optional UTF-8 BOM, preserve its exact original
+  // byte identity from the selected File instead of re-encoding text.
+  if (sourceBytes !== null && !(sourceBytes instanceof Uint8Array)) {
+    throw new Error("Invalid original archive bytes");
+  }
+  if (await sha256Hex(sourceBytes ?? raw) !== sourceSha256) {
     throw new Error("Recovery source has changed since it was selected; no copy was created");
   }
   const { doc, parsed, version, forkMarker } = await parsePortableWorkspaceArchive(raw);
