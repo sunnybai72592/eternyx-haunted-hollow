@@ -172,4 +172,4 @@ test("source order is full inventory before network, stable recheck after acknow
  assert.match(s,/originalFileSha256:replay.fileSha256/);
  assert.match(s,/const context=executeLab\?localContext\(\):null/);
  assert.doesNotMatch(s,/shell:true/);
-}));
+});
