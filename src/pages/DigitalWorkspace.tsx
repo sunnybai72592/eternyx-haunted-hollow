@@ -10,6 +10,7 @@ import WorkspaceItemEditor from "@/components/workspace/WorkspaceItemEditor";
 import WorkspaceTaskEditor from "@/components/workspace/WorkspaceTaskEditor";
 import WorkspaceTaskChecklist from "@/components/workspace/WorkspaceTaskChecklist";
 import WorkspaceImportPanel from "@/components/workspace/WorkspaceImportPanel";
+import WorkspaceBackupAudit from "@/components/workspace/WorkspaceBackupAudit";
 import WorkspaceRecoveryCenter from "@/components/workspace/WorkspaceRecoveryCenter";
 import WorkspaceRecoveryForkPanel from "@/components/workspace/WorkspaceRecoveryForkPanel";
 import WorkspaceReconciliationJournal from "@/components/workspace/WorkspaceReconciliationJournal";
@@ -29,6 +30,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { buildWorkspaceExport, filterWorkspaceItems, filterWorkspaceTasks, workspaceExportFileName } from "@/lib/workspaceLibrary.mjs";
 import { createWorkspaceArchiveV3 } from "@/lib/workspaceChecklistArchive.mjs";
 import { fetchWorkspaceChecklistSnapshot } from "@/lib/workspaceChecklistPaging.mjs";
+import { fetchWorkspaceExportSnapshot } from "@/lib/workspaceProjectSnapshot.mjs";
 import { filterScheduledTasks, localCalendarDate, scheduleLabel } from "@/lib/workspaceRestore.mjs";
 import { fetchWorkspaceRows } from "@/lib/workspacePaging.mjs";
 import { buildWorkspaceTasksCsv, workspaceTaskProgress, copyWorkspaceTask } from "@/lib/workspaceTaskOps.mjs";
@@ -514,35 +516,9 @@ export default function DigitalWorkspace() {
     void mutate(async () => {
       // Fetch ALL rows for this project, not just the dashboard's initial 1000.
       // An incomplete export is an error, never represented as a full backup.
-      const pullTasks = async (): Promise<Task[]> => {
-        const result: Task[] = [];
-        for (let start = 0; start <= 10000; start += 500) {
-          const { data, error: queryError } = await supabase.from("workspace_tasks").select("*")
-            .eq("owner_id", owner).eq("project_id", selected.id)
-            .order("id", { ascending: true }).range(start, start + 499);
-          if (queryError) throw new Error(queryError.message);
-          const batch = (data ?? []) as Task[];
-          if (start >= 10000 && batch.length) throw new Error("Export limit reached (10,000 tasks). Contact support for a larger backup.");
-          result.push(...batch);
-          if (batch.length < 500) break;
-        }
-        return result;
-      };
-      const pullItems = async (): Promise<Item[]> => {
-        const result: Item[] = [];
-        for (let start = 0; start <= 10000; start += 500) {
-          const { data, error: queryError } = await supabase.from("workspace_items").select("*")
-            .eq("owner_id", owner).eq("project_id", selected.id)
-            .order("id", { ascending: true }).range(start, start + 499);
-          if (queryError) throw new Error(queryError.message);
-          const batch = (data ?? []) as Item[];
-          if (start >= 10000 && batch.length) throw new Error("Export limit reached (10,000 items). Contact support for a larger backup.");
-          result.push(...batch);
-          if (batch.length < 500) break;
-        }
-        return result;
-      };
-      const [allTasks, allItems] = await Promise.all([pullTasks(), pullItems()]);
+      const snapshot = await fetchWorkspaceExportSnapshot(supabase, owner, selected.id);
+      const allTasks = snapshot.tasks as Task[];
+      const allItems = snapshot.items as Item[];
       // An incomplete step list must reject the entire archive. V1 remains
       // separately available when the account exceeds v3 bounded limits.
       const steps = includeSteps
@@ -683,6 +659,7 @@ export default function DigitalWorkspace() {
                   else setNotice(message);
                 });
               }} />
+            <WorkspaceBackupAudit disabled={busy || loading} />
             {forkTarget && <WorkspaceRecoveryForkPanel key={owner + ":" + forkTarget.sessionId}
               target={forkTarget} owner={owner} disabled={busy || loading}
               onClose={(message) => {

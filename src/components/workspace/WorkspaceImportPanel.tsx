@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { FileUp, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,8 +8,8 @@ import { parseWorkspaceArchiveV3 } from "@/lib/workspaceChecklistArchive.mjs";
 import { validateWorkspaceRecoveryForkHeader } from "@/lib/workspaceRecoveryFork.mjs";
 import { WORKSPACE_BUCKET } from "@/lib/workspaceRules.mjs";
 import {
-  importManifest, itemRestoreBatches, sha256Hex, taskRestoreBatches,
-  verifyExistingImportFile,
+  assertWorkspaceImportOwner, importManifest, itemRestoreBatches, sha256Hex,
+  storeAndVerifyWorkspaceImportFile, taskRestoreBatches, verifyCompletedWorkspaceImport,
 } from "@/lib/workspaceImportRecovery.mjs";
 
 type Parsed = ReturnType<typeof parseWorkspaceRestore> & {
@@ -43,9 +43,35 @@ export default function WorkspaceImportPanel({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const activeOwner = useRef(owner);
+  activeOwner.current = owner;
+  const pickerGeneration = useRef(0);
+  useEffect(() => {
+    pickerGeneration.current++;
+    setPreview(null);
+    setSource("");
+    setSourceHash("");
+    setIsRecoveryFork(false);
+    setProgress("");
+    setImportNotice("");
+    setError("");
+    if (input.current) input.current.value = "";
+  }, [owner]);
+
+  const guardOwner = async () => {
+    if (activeOwner.current !== owner) {
+      throw new Error("Workspace account changed during restore; stop and reselect the original archive.");
+    }
+    await assertWorkspaceImportOwner(supabase, owner);
+    if (activeOwner.current !== owner) {
+      throw new Error("Workspace account changed during restore; stop and reselect the original archive.");
+    }
+  };
 
   const choose = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    const pickerToken = ++pickerGeneration.current;
+    const pickerOwner = owner;
     setPreview(null);
     setSource("");
     setSourceHash("");
@@ -75,6 +101,7 @@ export default function WorkspaceImportPanel({
         throw new Error("This file is not the exact archive selected for recovery. " +
           "Choose the original byte-for-byte file or cancel the recovery target.");
       }
+      if (pickerToken !== pickerGeneration.current || activeOwner.current !== pickerOwner) return;
       setPreview(validated);
       setSourceHash(fingerprint);
       setSourceVersion(header.format_version);
@@ -82,12 +109,17 @@ export default function WorkspaceImportPanel({
       setSource(file.name);
       if (resumeFingerprint) onResumeConsumed?.();
     } catch (failure) {
-      setError(textError(failure));
+      if (pickerToken === pickerGeneration.current && activeOwner.current === pickerOwner)
+        setError(textError(failure));
     }
   };
 
   const run = async () => {
     if (!preview || !sourceHash || inFlight.current || busy || disabled) return;
+    if (resumeFingerprint && sourceHash !== resumeFingerprint) {
+      setError("A different recovery session is selected. Choose its exact original archive before restoring.");
+      return;
+    }
     if (!window.confirm(
       "Restore or RESUME this verified archive into its account-owned project? " +
       preview.tasks.length + " tasks, " + (preview.stepCount ?? 0) + " checklist steps, " +
@@ -105,6 +137,7 @@ export default function WorkspaceImportPanel({
     let projectId: string | null = null;
     let sessionId: string | null = null;
     try {
+      await guardOwner();
       const manifest = importManifest(preview, sourceHash, sourceVersion);
       const { data: beginData, error: beginError } = await supabase.rpc(
         "workspace_import_begin", manifest);
@@ -130,9 +163,12 @@ export default function WorkspaceImportPanel({
           "Inspect its empty project in Recovery Center before final removal.");
       }
       if (begin.status === "complete") {
+        setProgress("Re-verifying completed project records and included private files…");
+        await verifyCompletedWorkspaceImport(supabase, owner, sessionId, preview.files ?? []);
+        if (activeOwner.current !== owner) return;
         setProgress("");
-        setImportNotice("This exact archive was already restored to a private project. No new records were created.");
-        onImported(projectId, "Previously completed restore opened; duplicate project creation prevented.", false);
+        setImportNotice("Completed private project and included file bytes verified. No new records were created.");
+        onImported(projectId, "Existing completed project verified against its server checkpoint and included private files; no duplicate import.", false);
         return;
       }
       if (begin.reused) {
@@ -147,6 +183,7 @@ export default function WorkspaceImportPanel({
       let fileCount = 0;
 
       for (let index = 0; index < taskBatches.length; index++) {
+        if (index % 5 === 0) await guardOwner();
         const batch = taskBatches[index];
         setProgress("Verifying task and checklist batch " + (index + 1) + "/" + taskBatches.length);
         const { data, error } = await supabase.rpc("workspace_import_apply_batch", {
@@ -163,6 +200,7 @@ export default function WorkspaceImportPanel({
       }
 
       for (let index = 0; index < itemBatches.length; index++) {
+        if (index % 5 === 0) await guardOwner();
         const batch = itemBatches[index];
         setProgress("Verifying saved item batch " + (index + 1) + "/" + itemBatches.length);
         const { data, error } = await supabase.rpc("workspace_import_apply_batch", {
@@ -177,6 +215,7 @@ export default function WorkspaceImportPanel({
       }
 
       for (const [index, file] of (preview.files ?? []).entries()) {
+        await guardOwner();
         setProgress("Verifying private file " + (index + 1) + "/" + preview.files!.length);
         const hash = await sha256Hex(file.bytes);
         const { data: claimData, error: claimError } = await supabase.rpc(
@@ -187,16 +226,11 @@ export default function WorkspaceImportPanel({
         if (claimError) throw new Error("Private file claim failed: " + claimError.message);
         const claim = claimData as { storage_path?: string; registered?: boolean } | null;
         if (!claim?.storage_path) throw new Error("Private file claim returned no Storage key");
+        const storage = supabase.storage.from(WORKSPACE_BUCKET);
+        await storeAndVerifyWorkspaceImportFile(storage, claim.storage_path, file,
+          claim.registered === true);
         if (!claim.registered) {
-          const storage = supabase.storage.from(WORKSPACE_BUCKET);
-          const { error: uploadError } = await storage.upload(
-            claim.storage_path, file.bytes, { upsert: false, contentType: file.mime_type });
-          if (uploadError) {
-            // A prior request may have uploaded then lost network access.
-            // Never blindly replace an existing private object: download and
-            // verify it byte-for-byte against the validated archive hash.
-            await verifyExistingImportFile(storage, claim.storage_path, file.bytes, hash);
-          }
+          await guardOwner();
           const { data: registered, error: registerError } = await supabase.rpc(
             "workspace_import_register_file", {
               p_session_id: sessionId, p_file_index: index,
@@ -209,6 +243,7 @@ export default function WorkspaceImportPanel({
         fileCount++;
       }
 
+      await guardOwner();
       const { data: finished, error: finishError } = await supabase.rpc(
         "workspace_import_finish", { p_session_id: sessionId });
       if (finishError || finished !== true) {
@@ -230,6 +265,7 @@ export default function WorkspaceImportPanel({
         throw new Error("Final restored counts do not match the server receipt. Review this project.");
       }
 
+      if (activeOwner.current !== owner) return;
       setProgress("");
       setPreview(null);
       setSource("");
@@ -240,11 +276,12 @@ export default function WorkspaceImportPanel({
         " checklist steps, " + itemCount + " notes/links, " + fileCount +
         " private file(s). " + preview.filesSkipped + " metadata-only file manifest(s) were skipped.", false);
     } catch (failure) {
+      if (activeOwner.current !== owner) return;
       setProgress("");
       const message = textError(failure);
       setError(message);
       if (sessionId && projectId) {
-        let committed = "The exact archive can be selected again to resume safely.";
+        let committed = "Inspect the Recovery Center first. The exact archive can resume only when its server checkpoint still matches.";
         try {
           const { data } = await supabase.rpc("workspace_import_status",
             { p_session_id: sessionId });
@@ -254,7 +291,7 @@ export default function WorkspaceImportPanel({
           if (status) committed = "Committed on server: " +
             (status.tasks ?? 0) + " tasks, " + (status.steps ?? 0) +
             " steps, " + (status.items ?? 0) + " saved items, " +
-            (status.files ?? 0) + " files. Select the same archive and retry.";
+            (status.files ?? 0) + " files. The exact archive may resume only after the server validates the saved project.";
         } catch {
           // The source archive remains selected for a safe manual retry.
         }

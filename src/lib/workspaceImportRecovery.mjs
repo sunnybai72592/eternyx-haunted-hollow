@@ -84,3 +84,87 @@ export async function verifyExistingImportFile(storage, path, expectedBytes, exp
   }
   return true;
 }
+
+
+// A client-side freshness check, not an authorization substitute: every
+// sensitive DB/Storage operation still depends on server-side owner RLS.
+export async function assertWorkspaceImportOwner(client, expectedOwner) {
+  if (!client?.auth?.getUser || typeof expectedOwner !== "string" || !expectedOwner) {
+    throw new Error("A signed-in account is required for a private restore");
+  }
+  const { data, error } = await client.auth.getUser();
+  if (error || !data?.user?.id || data.user.id !== expectedOwner) {
+    throw new Error("The signed-in account changed or its session expired. " +
+      "Restore stopped before the next private operation; sign in and reselect your archive.");
+  }
+  return true;
+}
+
+
+// A successful upload response alone is not sufficient. Read the private
+// object back and compare its REAL bytes with the validated archive. Never
+// overwrite a pre-existing key, including after an ambiguous network error.
+export async function storeAndVerifyWorkspaceImportFile(storage, path, file, registered=false) {
+  if (!file || !(file.bytes instanceof Uint8Array) ||
+      !Number.isSafeInteger(file.size_bytes) ||
+      file.bytes.length !== file.size_bytes ||
+      typeof file.mime_type !== "string" || !file.mime_type) {
+    throw new Error("Invalid private file bytes or manifest");
+  }
+  const hash = await sha256Hex(file.bytes);
+  if (!registered) {
+    const { error } = await storage.upload(path, file.bytes, {
+      upsert: false, contentType: file.mime_type,
+    });
+    if (error) {
+      // May have uploaded before the network reply was lost: only accept it
+      // when a complete byte-for-byte retrieval matches.
+      await verifyExistingImportFile(storage, path, file.bytes, hash);
+      return true;
+    }
+  }
+  await verifyExistingImportFile(storage, path, file.bytes, hash);
+  return true;
+}
+
+// Reopening a completed archive must not falsely claim the current project
+// still equals the original backup. Recheck the server DB checkpoint and every
+// included private file; detect missing, tampered or extra registered claims.
+export async function verifyCompletedWorkspaceImport(client, owner, sessionId, files = []) {
+  await assertWorkspaceImportOwner(client, owner);
+  if (typeof sessionId !== "string" || !sessionId || !Array.isArray(files) || files.length > 8) {
+    throw new Error("Invalid completed import verification request");
+  }
+  const { data: integrity, error: integrityError } = await client.rpc(
+    "workspace_import_integrity", { p_session_id: sessionId });
+  if (integrityError || integrity?.session_id !== sessionId ||
+      integrity?.status !== "complete" || integrity?.content_matches !== true) {
+    throw new Error("The completed project's contents differ from its last import checkpoint, " +
+      "or integrity could not be verified. The original archive was NOT re-applied.");
+  }
+  const { data: claims, error: claimsError } = await client
+    .from("workspace_import_files")
+    .select("file_index,storage_path,sha256,title,size_bytes,mime_type,registered")
+    .eq("session_id", sessionId);
+  if (claimsError || !Array.isArray(claims) || claims.length !== files.length) {
+    throw new Error("Completed import's private file claims could not be verified");
+  }
+  const storage = client.storage.from("workspace-private");
+  const positions = new Set();
+  for (const claim of claims) {
+    if (!Number.isInteger(claim.file_index) || claim.file_index < 0 ||
+        claim.file_index >= files.length || positions.has(claim.file_index) ||
+        claim.registered !== true) {
+      throw new Error("Completed import has unexpected or unregistered private file claims");
+    }
+    positions.add(claim.file_index);
+    const file = files[claim.file_index];
+    if (claim.title !== file.title || claim.size_bytes !== file.size_bytes ||
+        claim.mime_type !== file.mime_type ||
+        claim.sha256 !== await sha256Hex(file.bytes)) {
+      throw new Error("Completed import private file manifest does not match its source");
+    }
+    await verifyExistingImportFile(storage, claim.storage_path, file.bytes, claim.sha256);
+  }
+  return true;
+}
