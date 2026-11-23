@@ -121,6 +121,17 @@ serve(async (req: Request) => {
       return reply({...data,integritySource:data.source,
         source:"authenticated_server",externalExecutionTriggered:false});
     }
+    if(request.action==="incidentCoveragePage"){
+      const {data,error}=await supabase.rpc("automation_incident_coverage_page",{
+        p_user_id:user.id,p_page_size:request.pageSize,
+        p_before_created_at:request.beforeCreatedAt,
+        p_before_id:request.beforeId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"case_coverage_unavailable");
+      return reply({...data,coverageSource:data.source,
+        source:"authenticated_server",externalExecutionTriggered:false});
+    }
     if(request.action==="incidentReadinessReport"){
       const {data,error}=await supabase.rpc("automation_incident_readiness_report",{
         p_user_id:user.id,
