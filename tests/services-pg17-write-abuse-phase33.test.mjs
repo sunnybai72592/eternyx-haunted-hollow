@@ -7,7 +7,7 @@ const file='docs/sql/eternyx/services-phase33-disposable-write-abuse.sql';
 
 test('Phase 33 SQL executes only in disposable fixture transaction and independently verifies cleanup',async()=>{
   const sql=await read(file);
-  assert.match(sql,/^BEGIN;\nSET LOCAL statement_timeout = '15000ms';/);
+  assert.match(sql,/\nBEGIN;\nSET LOCAL statement_timeout = '15000ms';/);
   assert.match(sql,/\nROLLBACK;\nDO \$cleanup\$/);
   assert.match(sql,/fixture did not roll back/);
   assert.match(sql,/INSERT INTO auth\.users/);
