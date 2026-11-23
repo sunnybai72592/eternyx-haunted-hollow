@@ -121,6 +121,42 @@ serve(async (req: Request) => {
       return reply({...data,integritySource:data.source,
         source:"authenticated_server",externalExecutionTriggered:false});
     }
+    if(request.action==="incidentAuditPackageInbox"){
+      const {data,error}=await supabase.rpc("automation_case_audit_package_inbox",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"audit_package_inbox_unavailable");
+      return reply({...data,packageSource:data.source,
+        source:"authenticated_server",releaseVerified:false,
+        externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentAuditPackageCreate"){
+      const {data,error}=await supabase.rpc("automation_create_case_audit_package",{
+        p_user_id:user.id,p_incident_id:request.incidentId,
+        p_incident_revision:request.incidentRevision,
+        p_evidence_id:request.evidenceId,p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"audit_package_creation_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticRelease:false,externalExecutionTriggered:false});
+    }
+    if(request.action==="incidentAuditPackageReview"){
+      const {data,error}=await supabase.rpc("automation_review_case_audit_package",{
+        p_user_id:user.id,p_package_id:request.packageId,
+        p_decision:request.decision,p_note:request.note,
+        p_acknowledged_source:request.acknowledgedSource,
+        p_acknowledged_no_deployment:request.acknowledgedNoDeployment,
+        p_acknowledged_no_crypto_proof:request.acknowledgedNoCryptoProof,
+        p_request_key:request.requestKey,
+      });
+      if(error)throw error;
+      if(data?.ok!==true)return rpcResponse(data,"audit_package_review_failed");
+      return reply({...data,source:"authenticated_server",
+        automaticRelease:false,externalExecutionTriggered:false,
+        manualAttestationOnly:true});
+    }
     if(request.action==="incidentCoveragePage"){
       const {data,error}=await supabase.rpc("automation_incident_coverage_page",{
         p_user_id:user.id,p_page_size:request.pageSize,
