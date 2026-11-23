@@ -12,6 +12,7 @@ import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceTriagePanel from '@/components/services/ServiceTriagePanel';
 import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
+import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 import { Input } from '@/components/ui/input';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { serviceNextActionLabels, serviceReviewBucketLabels, type ServiceNextAction, type ServiceReviewBucket } from '@/lib/serviceReviewPlanner';
@@ -71,6 +72,7 @@ export default function AdminServiceRequests() {
   const [openTriage, setOpenTriage] = useState<string | null>(null);
   const [openClarifications, setOpenClarifications] = useState<string | null>(null);
   const [openAmendments, setOpenAmendments] = useState<string | null>(null);
+  const [openJournal, setOpenJournal] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export default function AdminServiceRequests() {
     setOpenTriage(null);
     setOpenClarifications(null);
     setOpenAmendments(null);
+    setOpenJournal(null);
     if (authLoading) {
       setChecking(true);
       return () => { active = false; };
@@ -445,6 +448,10 @@ export default function AdminServiceRequests() {
               <Button type="button" variant="outline" aria-expanded={openTriage === item.id} onClick={() => setOpenTriage((id) => id === item.id ? null : item.id)}>
                 {openTriage === item.id ? 'Close private triage' : 'Private triage'}
               </Button>
+              <Button type="button" variant="outline" aria-expanded={openJournal === item.id}
+                onClick={() => setOpenJournal((id) => id === item.id ? null : item.id)}>
+                <ClipboardList className="mr-2 h-4 w-4" />{openJournal === item.id ? 'Close journal' : 'Activity journal'}
+              </Button>
               <Button type="button" variant="outline" aria-expanded={openAmendments === item.id} onClick={() => setOpenAmendments((id) => id === item.id ? null : item.id)}>
                 <ClipboardList className="mr-2 h-4 w-4" />{openAmendments === item.id ? 'Close brief changes' : 'Brief changes (' + item.amendment_count + ')'}
               </Button>
@@ -460,6 +467,7 @@ export default function AdminServiceRequests() {
             {openScope === item.id && <ServiceScopeReview requestId={item.id} ownerId={item.user_id} isAdmin />}
             {openClarifications === item.id && <ServiceClarifications requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
             {openAmendments === item.id && <ServiceBriefAmendments requestId={item.id} ownerId={item.user_id} isAdmin onChanged={() => void load()} />}
+            {openJournal === item.id && <ServiceRequestJournal requestId={item.id} ownerId={item.user_id} />}
           </Card>;
         })}</div>}
       {!loadError && total > 0 && (

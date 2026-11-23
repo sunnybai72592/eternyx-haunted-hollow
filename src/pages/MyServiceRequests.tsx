@@ -11,6 +11,7 @@ import ServiceRequestTimeline from '@/components/services/ServiceRequestTimeline
 import ServiceScopeReview from '@/components/services/ServiceScopeReview';
 import ServiceClarifications from '@/components/services/ServiceClarifications';
 import ServiceBriefAmendments from '@/components/services/ServiceBriefAmendments';
+import ServiceRequestJournal from '@/components/services/ServiceRequestJournal';
 
 type RequestRow = {
   id: string; service_key: string; title: string; description: string;
@@ -54,6 +55,7 @@ export default function MyServiceRequests() {
   const [openScope, setOpenScope] = useState<string | null>(null);
   const [openClarifications, setOpenClarifications] = useState<string | null>(null);
   const [openAmendments, setOpenAmendments] = useState<string | null>(null);
+  const [openJournal, setOpenJournal] = useState<string | null>(null);
   const load = useCallback(async () => {
     if (!userId) return;
     const generation = ++requestGeneration.current;
@@ -104,6 +106,7 @@ export default function MyServiceRequests() {
     setOpenScope(null);
     setOpenClarifications(null);
     setOpenAmendments(null);
+    setOpenJournal(null);
     setLinkedRequest(null);
     setLinkedOwner(null);
     setLinkedLoading(false);
@@ -264,6 +267,7 @@ export default function MyServiceRequests() {
           <ServiceScopeReview requestId={visibleLinkedRequest.id} ownerId={user.id} />
           <ServiceClarifications requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />
           <ServiceBriefAmendments requestId={visibleLinkedRequest.id} ownerId={user.id} onChanged={() => void load()} />
+          <ServiceRequestJournal requestId={visibleLinkedRequest.id} ownerId={user.id} />
         </Card>
       )}
       {loadError ? <Card className="p-8 text-center"><h2 className="font-semibold">Unable to load requests</h2><p className="mt-2 text-sm text-muted-foreground">The service desk may require its database migration to be deployed. No results are being simulated.</p><Button className="mt-4" onClick={() => void load()}>Try again</Button></Card>
@@ -316,6 +320,11 @@ export default function MyServiceRequests() {
               <ClipboardList className="mr-2 h-4 w-4" />{openAmendments === item.id ? 'Close brief changes' : 'Brief changes (' + item.amendment_count + ')'}
             </Button>
             {openAmendments === item.id && user && <ServiceBriefAmendments requestId={item.id} ownerId={user.id} onChanged={() => void load()} />}
+            <Button type="button" variant="outline" className="mt-4 mr-2" aria-expanded={openJournal === item.id}
+              onClick={() => setOpenJournal((current) => current === item.id ? null : item.id)}>
+              <ClipboardList className="mr-2 h-4 w-4" />{openJournal === item.id ? 'Close activity journal' : 'Activity journal'}
+            </Button>
+            {openJournal === item.id && user && <ServiceRequestJournal requestId={item.id} ownerId={user.id} />}
             <Button
               type="button"
               variant="outline"
