@@ -1,0 +1,60 @@
+name: Automation Lifecycle Integrity and Readiness SQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261123140000_automation_lifecycle_integrity.sql'
+      - 'tests/sql/automation-lifecycle-integrity-db-smoke.sql'
+      - '.github/workflows/automation-lifecycle-integrity-sql.yml'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    name: Verify owner case lifecycle ledger consistency, real drift detection and bounded readiness on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable networkless PostgreSQL 17
+        run: |
+          docker run --detach --rm --network none --name eternyx-readiness-ci -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-readiness-ci pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else
+              stable=0
+            fi
+            sleep 1
+          done
+          docker exec eternyx-readiness-ci pg_isready -U postgres || { docker logs eternyx-readiness-ci; exit 1; }
+      - name: Bootstrap two isolated owner records
+        run: docker exec --interactive eternyx-readiness-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply previous Automation migrations through Phase 2R
+        run: |
+          for file in \
+            supabase/migrations/20261122220000_automation_manual_control_plane.sql \
+            supabase/migrations/20261122230000_automation_signed_webhook_triggers.sql \
+            supabase/migrations/20261122234500_automation_scheduled_runs.sql \
+            supabase/migrations/20261123000000_automation_webhook_approvals.sql \
+            supabase/migrations/20261123060000_automation_workflow_policies.sql \
+            supabase/migrations/20261123070000_automation_operations.sql \
+            supabase/migrations/20261123080000_automation_observability_recovery.sql \
+            supabase/migrations/20261123090000_automation_incident_management.sql \
+            supabase/migrations/20261123100000_automation_incident_evidence_reporting.sql \
+            supabase/migrations/20261123110000_automation_investigation_plans.sql \
+            supabase/migrations/20261123120000_automation_governed_incident_closure.sql \
+            supabase/migrations/20261123130000_automation_governed_reopen_trace.sql \
+            supabase/migrations/20261123140000_automation_lifecycle_integrity.sql; do
+            docker exec --interactive eternyx-readiness-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+          done
+      - name: Prove owner-only ledger invariants, actual drift detection and no workflows executed
+        run: docker exec --interactive eternyx-readiness-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/automation-lifecycle-integrity-db-smoke.sql
+      - name: Remove disposable PostgreSQL
+        if: always()
+        run: docker rm --force eternyx-readiness-ci || true
