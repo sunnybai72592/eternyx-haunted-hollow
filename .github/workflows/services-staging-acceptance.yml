@@ -1,0 +1,58 @@
+name: Services staging acceptance (manual, real accounts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledgment:
+        description: "Uses staging accounts and existing records. No Service business rows will be changed."
+        required: true
+        type: choice
+        options:
+          - "NOT_APPROVED"
+          - "READ_ONLY_STAGING_ACCEPTANCE"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-staging-acceptance
+  cancel-in-progress: false
+
+jobs:
+  services-readiness:
+    if: ${{ inputs.acknowledgment == 'READ_ONLY_STAGING_ACCEPTANCE' }}
+    name: Verify A/B/Admin staging RLS and live Services features
+    environment: services-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run strict authenticated staging acceptance
+        env:
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_PUBLISHABLE_KEY: ${{ secrets.SERVICES_PREFLIGHT_PUBLISHABLE_KEY }}
+          SERVICES_PREFLIGHT_CUSTOMER_A_EMAIL: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_A_EMAIL }}
+          SERVICES_PREFLIGHT_CUSTOMER_A_PASSWORD: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_A_PASSWORD }}
+          SERVICES_PREFLIGHT_CUSTOMER_A_REQUEST_ID: ${{ vars.SERVICES_PREFLIGHT_CUSTOMER_A_REQUEST_ID }}
+          SERVICES_PREFLIGHT_CUSTOMER_B_EMAIL: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_B_EMAIL }}
+          SERVICES_PREFLIGHT_CUSTOMER_B_PASSWORD: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_B_PASSWORD }}
+          SERVICES_PREFLIGHT_CUSTOMER_B_REQUEST_ID: ${{ vars.SERVICES_PREFLIGHT_CUSTOMER_B_REQUEST_ID }}
+          SERVICES_PREFLIGHT_ADMIN_EMAIL: ${{ secrets.SERVICES_PREFLIGHT_ADMIN_EMAIL }}
+          SERVICES_PREFLIGHT_ADMIN_PASSWORD: ${{ secrets.SERVICES_PREFLIGHT_ADMIN_PASSWORD }}
+          SERVICES_PREFLIGHT_CONFIRM: ${{ inputs.acknowledgment }}
+        run: npm run services:staging:acceptance
+
+      # No artifacts containing tokens, emails, request data or fixtures.
+      # Action logs contain only named assertion outcomes.
