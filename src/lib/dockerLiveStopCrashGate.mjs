@@ -17,6 +17,9 @@ export function validateLiveStopHostEvidence(r,pins){
     r.containerId!==pins.containerId||
     r.daemonIdentitySha256!==pins.daemonIdentitySha256||
     r.imageSha256!==pins.imageSha256||
+    r.managedContainerPolicySha256!==pins.managedContainerPolicySha256||
+    r.socketEndpointSha256!==pins.socketEndpointSha256||
+    r.routeSnapshotSha256!==pins.routeSnapshotSha256||
     r.rootlessEngineObserved!==true||r.stableRouteSnapshots!==true||
     r.noDefaultRoutesObserved!==true||r.kernelForwardingDisabledObserved!==true||
     r.containerPolicyStableObserved!==true||r.realDockerEngineReadOnlyContacted!==true||
