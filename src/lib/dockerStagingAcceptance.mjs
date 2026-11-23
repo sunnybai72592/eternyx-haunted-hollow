@@ -5,10 +5,10 @@ import {createHash} from "node:crypto";
 import {validateDockerDeploymentManifest,
  createDockerDeploymentManifestPin,inspectDockerStagingDeployment}
  from "./dockerStagingDeploymentInventory.mjs";
-import {validateDockerHostedProbeConfig,runDockerHostedAuthProbe}
+import {validateDockerHostedProbeConfig,validateDockerHostedProbeContext,runDockerHostedAuthProbe}
  from "./dockerHostedAuthProbe.mjs";
 const REF=/^[a-z0-9]{20}$/,SHA=/^[a-f0-9]{40}$/,HEX=/^[a-f0-9]{64}$/;
-export function validateDockerStagingAcceptanceConfig(raw){
+export function validateDockerStagingAcceptanceContext(raw){
  if(!raw||typeof raw!=="object"||Array.isArray(raw))
   throw Error("Staging acceptance configuration required.");
  const {manifest,pinnedManifestSha256,stagingRef,productionRef,
@@ -25,7 +25,7 @@ export function validateDockerStagingAcceptanceConfig(raw){
    throw Error("Independent project, checkout, manifest and release pins differ.");
  if(!approved.expected.every(entry=>HEX.test(entry.bundleSha256||"")))
    throw Error("Four independently pinned function bundle digests are required.");
- const staging=validateDockerHostedProbeConfig(probe);
+ const staging=validateDockerHostedProbeContext(probe);
  if(staging.host!==stagingRef+".supabase.co"||
     probe.productionHost!==productionRef+".supabase.co")
    throw Error("Two-account staging host disagrees with independently pinned projects.");
@@ -35,11 +35,20 @@ export function validateDockerStagingAcceptanceConfig(raw){
  return {manifest:approved,pinnedManifestSha256,stagingRef,productionRef,
   releaseCommitSha,probe,managementToken};
 }
+export function validateDockerStagingAcceptanceConfig(raw){
+ const base=validateDockerStagingAcceptanceContext(raw);
+ validateDockerHostedProbeConfig(raw.probe);
+ return base;
+}
 export async function runDockerStagingAcceptance(raw,{
  managementFetch=globalThis.fetch,hostedFetch=globalThis.fetch,
- observedAt=()=>new Date().toISOString()
+ observedAt=()=>new Date().toISOString(),freshSessionProvider=null
 }={}){
- const config=validateDockerStagingAcceptanceConfig(raw);
+ const fresh=typeof freshSessionProvider==="function";
+ if(freshSessionProvider!==null&&!fresh)
+  throw Error("Invalid opt-in staging Auth session provider.");
+ const config=fresh?validateDockerStagingAcceptanceContext(raw):
+  validateDockerStagingAcceptanceConfig(raw);
  if(typeof managementFetch!=="function"||typeof hostedFetch!=="function")
   throw Error("Staging HTTP transports unavailable.");
  // Sequential and fail-closed: never send user JWTs if deployed function versions
@@ -54,7 +63,11 @@ export async function runDockerStagingAcceptance(raw,{
     !inventory.checks.every(c=>c.passed&&c.bundleDigestPinned&&
       c.bundleDigestAvailable&&c.pinnedBundleDigestMatches))
   throw Error("Staging deployed-version/JWT/bundle metadata gate rejected.");
- const authentication=await runDockerHostedAuthProbe(config.probe,{
+ // Only after all four deployed functions match the independently pinned
+ // manifest may the optional Auth password grant create fresh test sessions.
+ const probe=fresh?await freshSessionProvider(config.probe):config.probe;
+ validateDockerHostedProbeConfig(probe);
+ const authentication=await runDockerHostedAuthProbe(probe,{
   fetcher:hostedFetch,now:observedAt
  });
  if(!authentication.passed||authentication.checks.length!==10||
@@ -62,7 +75,8 @@ export async function runDockerStagingAcceptance(raw,{
   throw Error("Staging two-owner JWT/isolated-workspace checks failed.");
  const metadata={
   schema:"eternyx-docker-staging-readonly-acceptance-v1",
-  scope:"operator_initiated_staging_read_only",
+  scope:fresh?"operator_initiated_staging_auth_sessions_then_read_only_lists":
+   "operator_initiated_staging_read_only",
   releaseCommitSha:config.releaseCommitSha,
   stagingProjectRef:config.stagingRef,
   pinnedManifestSha256:config.pinnedManifestSha256,
@@ -85,7 +99,8 @@ export async function runDockerStagingAcceptance(raw,{
  return {...metadata,acceptanceDigest,passed:true,
   actualStagingManagementCalled:true,
   actualStagingTwoAccountProbeCalled:true,
-  accountTokensStored:false,mutationRequestsSent:false,
+  accountTokensStored:false,mutationRequestsSent:fresh,
+  stagingAuthSessionsCreated:fresh,stagingDataMutationRequestsSent:false,
   productionEndpointCalled:false,
   independentDeployedSourceBytesVerified:false,
   fullStagingRlsAuditPerformed:false,

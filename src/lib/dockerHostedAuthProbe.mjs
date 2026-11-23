@@ -8,10 +8,10 @@ const ROUTES=Object.freeze(["docker-control","docker-enrollment"]);
 function validHost(value){
  return typeof value==="string"&&HOST.test(value)&&value===value.toLowerCase();
 }
-export function validateDockerHostedProbeConfig(raw){
+export function validateDockerHostedProbeContext(raw){
  if(!raw||typeof raw!=="object"||Array.isArray(raw))throw Error("Missing staging probe settings.");
  const {stagingUrl,pinnedStagingHost,productionHost,publishableKey,
-   ownerAJwt,ownerBJwt,ownerAWorkspaceId,ownerBWorkspaceId}=raw;
+   ownerAWorkspaceId,ownerBWorkspaceId}=raw;
  if(typeof stagingUrl!=="string")throw Error("Staging URL is required.");
  let u;
  try{u=new URL(stagingUrl);}catch{throw Error("Invalid staging URL.");}
@@ -24,15 +24,20 @@ export function validateDockerHostedProbeConfig(raw){
  if(typeof publishableKey!=="string"||
     !/^sb_publishable_[A-Za-z0-9_-]{16,}$/.test(publishableKey))
    throw Error("A publishable (never secret/service_role) API key is required.");
- if(typeof ownerAJwt!=="string"||typeof ownerBJwt!=="string"||
-    ownerAJwt.length>8192||ownerBJwt.length>8192||
-    !JWT.test(ownerAJwt)||!JWT.test(ownerBJwt)||ownerAJwt===ownerBJwt)
-   throw Error("Two distinct staging user access JWTs are required.");
  if(!UUID.test(ownerAWorkspaceId||"")||!UUID.test(ownerBWorkspaceId||"")||
     ownerAWorkspaceId===ownerBWorkspaceId)
    throw Error("Two distinct pre-seeded staging owner workspace UUIDs are required.");
- return {origin:u.origin,host:u.hostname,publishableKey,ownerAJwt,ownerBJwt,
+ return {origin:u.origin,host:u.hostname,publishableKey,
    ownerAWorkspaceId,ownerBWorkspaceId};
+}
+export function validateDockerHostedProbeConfig(raw){
+ const context=validateDockerHostedProbeContext(raw);
+ const {ownerAJwt,ownerBJwt}=raw;
+ if(typeof ownerAJwt!=="string"||typeof ownerBJwt!=="string"||
+    ownerAJwt.length>8192||ownerBJwt.length>8192||
+    !JWT.test(ownerAJwt)||!JWT.test(ownerBJwt)||ownerAJwt===ownerBJwt)
+  throw Error("Two distinct staging user access JWTs are required.");
+ return {...context,ownerAJwt,ownerBJwt};
 }
 async function jsonBounded(response){
  if(response.headers.get("content-type")?.toLowerCase().includes("application/json")!==true)
