@@ -20,6 +20,7 @@ import { readDnsExplanation, clearDnsExplanation } from "@/lib/dnsExplanation";
 interface ChatDocumentEvidence {
   segment: number;
   excerpt: string;
+  page?: number;
 }
 
 interface Message {
@@ -30,6 +31,7 @@ interface Message {
   /** Returned by the current AI response only; not persisted in chat_history. */
   evidence?: ChatDocumentEvidence[];
   documentContextUsed?: boolean;
+  documentSearchMode?: 'indexed-lexical' | 'bounded-lexical';
 }
 
 interface Document {
@@ -326,8 +328,10 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
               if (typeof value !== 'object' || value === null) return false;
               const entry = value as Record<string, unknown>;
               return Number.isSafeInteger(entry.segment) &&
-                (entry.segment as number) >= 1 && (entry.segment as number) <= 605 &&
-                typeof entry.excerpt === 'string' && entry.excerpt.length <= 700;
+                (entry.segment as number) >= 1 && (entry.segment as number) <= 750 &&
+                typeof entry.excerpt === 'string' && entry.excerpt.length <= 700 &&
+                (entry.page === undefined || (Number.isSafeInteger(entry.page) &&
+                  (entry.page as number) >= 1 && (entry.page as number) <= 60));
             }).slice(0, 5)
           : [];
       const aiMsg: Message = {
@@ -338,6 +342,8 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
         ...(selectedDocument ? {
           evidence: returnedEvidence,
           documentContextUsed: data.contextUsed === true,
+          documentSearchMode: data.searchMode === 'indexed-lexical'
+            ? 'indexed-lexical' : 'bounded-lexical',
         } : {}),
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -368,7 +374,8 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
     const transcript = messages.map(message => {
       const evidence = message.evidence?.length
         ? '\n\nRetrieved document segments (not independent citation checks):\n' +
-          message.evidence.map(item => '[Segment ' + item.segment + ']\n' + item.excerpt).join('\n\n')
+          message.evidence.map(item => '[Segment ' + item.segment +
+            (item.page ? ', PDF page ' + item.page : '') + ']\n' + item.excerpt).join('\n\n')
         : '';
       return (message.role === 'user' ? 'You' : 'Eternyx AI') + '\n' + message.content + evidence;
     }).join('\n\n');
@@ -607,13 +614,15 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
                               </summary>
                               <p className="mt-2 text-muted-foreground">
                                 These excerpts come from the selected document, not from model-generated citations.
-                                Segment numbers are chunk indices, not verified PDF page numbers.
+                                Segment numbers are chunk indexes. PDF page labels are shown only when the PDF
+                                text parser recorded them. This is lexical retrieval, not independent citation verification.
+                                {msg.documentSearchMode === 'indexed-lexical' ? ' Indexed full-text search.' : ' Bounded lexical search.'}
                                 Evidence for previous conversations is not currently retained in chat history.
                               </p>
                               <div className="mt-2 max-h-72 space-y-2 overflow-auto">
                                 {msg.evidence.map(item => (
                                   <div key={item.segment} className="rounded border border-border/40 p-2">
-                                    <p className="font-semibold">Document segment {item.segment}</p>
+                                    <p className="font-semibold">Document segment {item.segment}{item.page ? ` · PDF page ${item.page}` : ''}</p>
                                     <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.excerpt}</p>
                                   </div>
                                 ))}

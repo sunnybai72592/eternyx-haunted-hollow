@@ -78,7 +78,7 @@ test("processing only downloads owned objects and returns sanitized scanned-PDF 
   assert.match(handler, /fileData\.size !== document\.file_size/);
   assert.match(handler, /matchesDeclaredImageBytes\(bytes, mimeType\)/);
   assert.match(handler, /extractTextFromPDF\(bytes\)/);
-  assert.match(handler, /chunks\.length > 605/);
+  assert.match(handler, /chunks\.length > 750/);
   assert.match(handler, /Scanned PDFs require OCR/);
   assert.match(handler, /error_message: responseMessage/);
   assert.match(ui, /const maxBytes = isPDF \? 12 \* 1024 \* 1024/);

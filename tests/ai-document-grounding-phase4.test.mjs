@@ -72,7 +72,7 @@ test("visible chat response labels document evidence accurately and exports it",
   assert.ok(ui.includes("interface ChatDocumentEvidence"));
   assert.ok(ui.includes("Array.isArray(data.evidence)"));
   assert.ok(ui.includes("View retrieved document evidence"));
-  assert.ok(ui.includes("Segment numbers are chunk indices, not verified PDF page numbers"));
+  assert.ok(ui.includes("Segment numbers are chunk indexes"));
   assert.ok(ui.includes("Evidence for previous conversations is not currently retained"));
   assert.ok(ui.includes("Retrieved document segments (not independent citation checks)"));
   assert.ok(ui.includes("No matching document text was retrieved"));
