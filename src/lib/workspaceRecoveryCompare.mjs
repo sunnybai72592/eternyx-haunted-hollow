@@ -65,16 +65,33 @@ export async function fetchWorkspaceRecoveryComparison(client, owner, projectId,
   }
   const read = async (table, fields) => {
     const all=[];
+    const seenIds=new Set();
+    let expectedTotal=null;
     for(let start=0;start<=WORKSPACE_RECOVERY_COMPARE_MAX_ROWS;start+=pageSize) {
-      const { data, error } = await client.from(table).select(fields)
+      const { data, error, count } = await client.from(table)
+        .select("id,"+fields,{count:"exact"})
         .eq("owner_id",owner).eq("project_id",projectId)
         .order("id",{ ascending:true }).range(start,start+pageSize-1);
       if(error) throw new Error("Recovery comparison failed to read all " + table + ": " + error.message);
-      if(!Array.isArray(data)) throw new Error("Recovery comparison returned invalid rows");
-      if(start+data.length > WORKSPACE_RECOVERY_COMPARE_MAX_ROWS)
+      if(!Array.isArray(data) || !Number.isSafeInteger(count) || count<0)
+        throw new Error("Recovery comparison could not verify exact server row totals");
+      if(count>WORKSPACE_RECOVERY_COMPARE_MAX_ROWS)
         throw new Error("Recovery project exceeds safe comparison limits");
-      all.push(...data);
-      if(data.length<pageSize) return all;
+      if(expectedTotal===null) expectedTotal=count;
+      else if(expectedTotal!==count)
+        throw new Error("Recovery project changed while reading; inspect again before comparing");
+      if(start+data.length>count || data.length>pageSize)
+        throw new Error("Recovery comparison returned unexpected page boundaries");
+      for(const row of data) {
+        if(!row || typeof row.id!=="string" || !row.id || seenIds.has(row.id))
+          throw new Error("Recovery comparison found repeated or invalid record identities");
+        seenIds.add(row.id);
+        const {id,...portable}=row;
+        all.push(portable); // Never emit database identity in the comparison.
+      }
+      if(start+data.length===count) return all;
+      if(data.length<pageSize)
+        throw new Error("Recovery comparison page was truncated; retry without modifying project");
     }
     throw new Error("Recovery comparison may be truncated");
   };
