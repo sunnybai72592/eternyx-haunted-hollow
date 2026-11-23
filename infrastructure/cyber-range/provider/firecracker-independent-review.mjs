@@ -21,6 +21,9 @@ import {assertNoUnfinishedHandoff} from
   "./firecracker-handoff-import-journal.mjs";
 import {auditOperatorEvidenceConsistency} from
   "./firecracker-evidence-consistency.mjs";
+import {
+  createSignedReviewDisposition,verifySignedReviewDisposition,
+} from "./firecracker-review-disposition.mjs";
 
 export const REVIEW_CASE_BASE="/var/lib/eternyx-reviewer/cases";
 export const REVIEWER_PRIVATE_KEY="/etc/eternyx-reviewer/reviewer-ed25519-private.pem";
@@ -373,4 +376,70 @@ export async function auditIndependentReviewConsistency({
   if(result.sessionId!==sessionId)
     throw Error("Offline consistency audit session does not match case");
   return result;
+}
+
+
+/**
+ * Record a separate, explicit human category after the existing signed file
+ * review and structured metadata check. Never overwrites an earlier decision.
+ */
+export async function signIndependentReviewDisposition({
+  sessionId,operatorFingerprint,reviewerFingerprint,decision,reasons,
+  acknowledgment,caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
+  const keys=await reviewerKeys({owner,privateRequired:true});
+  const reviewReport=JSON.parse((await safeRead(
+    join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT)).toString("utf8"));
+  const report=createSignedReviewDisposition({
+    ...source,...keys,reviewReport,operatorFingerprint,
+    reviewerFingerprint,decision,reasons,acknowledgment,
+  });
+  const serialized=Buffer.from(JSON.stringify(report)+"\n","utf8");
+  if(serialized.length>MAX_RECEIPT)
+    throw Error("Offline reviewer disposition unexpectedly oversized");
+  const file=await open(join(source.folder,"review-disposition.json"),
+    constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|
+    constants.O_NOFOLLOW,0o600);
+  try{
+    const created=await file.stat();
+    if(!created.isFile()||created.uid!==owner||created.nlink!==1||
+       (created.mode&0o077)!==0||created.size!==0)
+      throw Error("Unsafe independently signed disposition file");
+    await file.writeFile(serialized);
+    await file.sync();
+    if((await file.stat()).size!==serialized.length)
+      throw Error("Incomplete disposition write");
+  }finally{await file.close();}
+  const folder=await open(source.folder,
+    constants.O_RDONLY|constants.O_DIRECTORY);
+  try{await folder.sync();}finally{await folder.close();}
+  return Object.freeze({
+    sessionId,decision,recordedOffline:true,productionReady:false,
+    publicLabsEnabled:false,
+  });
+}
+
+/** Fully read-only, independent key-pinned re-verification of both records. */
+export async function verifyIndependentReviewDisposition({
+  sessionId,operatorFingerprint,reviewerFingerprint,
+  caseBase=REVIEW_CASE_BASE,owner=0,
+}={}){
+  const source=await loadCase(sessionId,{caseBase,owner});
+  auditOperatorEvidenceConsistency({...source,operatorFingerprint});
+  const keys=await reviewerKeys({owner});
+  const [reviewBytes,dispositionBytes]=await Promise.all([
+    safeRead(join(source.folder,"review-verdict.json"),owner,MAX_RECEIPT),
+    safeRead(join(source.folder,"review-disposition.json"),owner,MAX_RECEIPT),
+  ]);
+  const status=verifySignedReviewDisposition({
+    ...source,...keys,
+    reviewReport:JSON.parse(reviewBytes.toString("utf8")),
+    report:JSON.parse(dispositionBytes.toString("utf8")),
+    operatorFingerprint,reviewerFingerprint,
+  });
+  if(status.sessionId!==sessionId)
+    throw Error("Offline disposition belongs to an unrelated review case");
+  return status;
 }
