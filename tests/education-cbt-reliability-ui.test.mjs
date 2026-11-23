@@ -82,8 +82,9 @@ test("12. Autosave uses a single serial latest-write queue, not the obsolete bat
 });
 test("13. Submission confirms saved answers and refreshes owned catalog status",()=>{
  assert.match(exam,/await flushPendingAnswers\(\)/);
- assert.match(exam,/restoredAnswersQuery\.isSuccess \|\| !saveQueueRef\.current/);
- assert.match(exam,/invalidateQueries\(\{ queryKey: \["education-owned-attempt-list", user\.id\] \}\)/);
+ assert.match(exam,/if \(atomicCbtEnabled && !restoreReady && !deadlinePassed\)/);
+ assert.match(exam,/educationExamAffectedQueryKeys\(ownerId\)/);
+ assert.match(exam,/refreshOwnedExamViews\(user\.id\)/);
  assert.match(exam,/status\)\)/);
 });
 test("14. Failed saves remain explicitly visible and can be retried by learner",()=>{
