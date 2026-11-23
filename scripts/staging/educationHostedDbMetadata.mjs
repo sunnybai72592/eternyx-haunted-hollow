@@ -31,6 +31,13 @@ export const DATABASE_CHECKS=Object.freeze([
   "atomic_save_rpc",
   "atomic_submit_rpc",
   "trusted_final_grade_rpc",
+  "no_student_attempt_score_insert",
+  "no_student_attempt_max_insert",
+  "no_student_attempt_time_update",
+  "no_student_attempt_time_insert",
+  "no_student_answer_correct_insert",
+  "no_student_answer_text_insert",
+  "no_student_answer_option_update",
   "finalized_review_lock_enabled"
 ]);
 const APPROVAL="I_APPROVE_EDUCATION_STAGING_DB_METADATA_READ_ONLY";

@@ -8,7 +8,7 @@ import { DATABASE_CHECKS, validateEducationDbSnapshot, assertEducationDbEvidence
 import {readFileSync} from "node:fs";
 const dbEvidence=()=>validateEducationDbSnapshot({
   schema:1,checks:Object.fromEntries(DATABASE_CHECKS.map(k=>[k,true])),
-},p,dbEvidence());
+},p);
 const releaseRunner=readFileSync(new URL("../scripts/staging/runEducationHostedRelease.mjs",import.meta.url),"utf8");
 const releaseFlow=readFileSync(new URL("../.github/workflows/education-hosted-release-readiness.yml",import.meta.url),"utf8");
 
