@@ -116,6 +116,10 @@ export default function LocalVideoEditor() {
     const current=++draftVersion.current;
     ++videoVersion.current;
     ++audioVersion.current;
+    // The pending download is superseded; its async completion is ignored.
+    // Reset in-flight indicators because stale requests no longer own them.
+    setWorking(false);
+    setAudioWorking(false);
     setDraftWorking(false);
     setDraftProgress("");
     setMessage("");
