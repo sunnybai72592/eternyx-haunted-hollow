@@ -9,7 +9,7 @@ import {
 } from "./localVideoEditor.mjs";
 
 export const PORTABLE_BUNDLE_LIMITS=Object.freeze({
-  maxFiles:16,maxEntryBytes:64*1024*1024,maxTotalBytes:8*64*1024*1024+16*1024*1024+512*1024,
+  maxFiles:18,maxEntryBytes:64*1024*1024,maxTotalBytes:8*64*1024*1024+16*1024*1024+512*1024,
   maxRendererBytes:128*1024,maxZipBytes:0xffffffff,
 });
 const SHA=/^[0-9a-f]{64}$/;
