@@ -1,5 +1,5 @@
 /**
- * ETERNYX Labs practice: 60 real, browser-only challenges (six crypto-checked asynchronously).
+ * ETERNYX Labs practice: 75 real, browser-only challenges (15 crypto-checked asynchronously).
  * Exercises derive answer keys from the same pure calculation utilities as
  * the learner's workstations. Nothing is saved, uploaded or server-graded.
  * Client-side grading is NOT exam security, accreditation or trusted progress.
@@ -20,6 +20,10 @@ import {
   derivePkceChallengeLocally,signHmacLocally,verifyHmacLocally,
   checkCidrMembershipLocally,inspectHstsLocally,inspectDmarcLocally,
 } from "./eternyxLabsIdentity.mjs";
+import {
+  CRYPTO_PRACTICE_TRACKS,CRYPTO_PRACTICE_DEFINITIONS,
+  answerForCryptoPractice,answerForDataPractice,
+} from "./eternyxLabsCryptoPractice.mjs";
 
 export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"subnet",title:"IPv4 subnetting",description:"Calculate address ranges and hosts."}),
@@ -42,6 +46,7 @@ export const PRACTICE_TRACKS=Object.freeze([
   Object.freeze({id:"cidrcheck",title:"CIDR membership",description:"Check addresses against IPv4 and IPv6 ranges."}),
   Object.freeze({id:"hsts",title:"HTTPS transport policy",description:"Reason about HSTS max-age and subdomain requirements."}),
   Object.freeze({id:"dmarc",title:"DMARC mail defense",description:"Count policy fields and warning signals without contacting DNS."}),
+  ...CRYPTO_PRACTICE_TRACKS,
 ]);
 const definitions=[
   ["subnet-network","subnet","Network address · /24",
@@ -401,6 +406,7 @@ const definitions=[
     "integer",{record:"v=DMARC1; p=reject; rua=mailto:first@example.test,mailto:second@example.test",field:"aggregateReportCount"},
     "Count the comma-separated mailto report endpoints without displaying them in results.",
     "The analysis exposes only the number of report destinations and does not contact any address."],
+  ...CRYPTO_PRACTICE_DEFINITIONS,
 ];
 export const PRACTICE_CASES=Object.freeze(definitions.map((
   [id,track,title,prompt,scenario,kind,config,hint,explanation]
@@ -484,8 +490,13 @@ function answerFor(challenge){
       const result=inspectDmarcLocally(c.record);
       return String(result[c.field]);
     }
+    case "origins":
+    case "csvsafe":return answerForDataPractice(challenge);
     case "pkce":
-    case "hmac":throw Error("Cryptographic challenges require asynchronous Web Crypto grading.");
+    case "hmac":
+    case "pbkdf2":
+    case "aesgcm":
+    case "totp":throw Error("Cryptographic challenges require asynchronous Web Crypto grading.");
     default:throw Error("Unsupported practice grading track.");
   }
 }
@@ -497,6 +508,12 @@ function normalize(answer,kind){
   if(kind==="base64url"){
     if(!/^[A-Za-z0-9_-]{43}$/.test(trimmed))
       throw Error("Enter exactly 43 unpadded Base64url characters.");
+    return trimmed;
+  }
+  if(kind==="otp8"||kind==="otp6"){
+    const digits=kind==="otp8"?8:6;
+    if(!new RegExp("^[0-9]{"+digits+"}$").test(trimmed))
+      throw Error("Enter exactly "+digits+" decimal OTP digits, including any leading zeroes.");
     return trimmed;
   }
   if(kind==="hex64"){
@@ -551,15 +568,17 @@ export function gradePracticeAnswer(id,answer){
     externalSystemsAccessed:false,
   });
 }
-/** Async wrapper keeps all historic 45 synchronous answer contracts intact. */
+/** Async wrapper preserves all prior synchronous answer contracts. */
 export async function gradePracticeAnswerAsync(id,answer,cryptoApi=globalThis.crypto){
   const challenge=getPracticeCase(id);
-  if(!["pkce","hmac"].includes(challenge.track))
+  if(!["pkce","hmac","pbkdf2","aesgcm","totp"].includes(challenge.track))
     return gradePracticeAnswer(id,answer);
   const normalized=normalize(answer,challenge.kind);
   const c=challenge.config;
   let expected;
-  if(challenge.track==="pkce"){
+  if(["pbkdf2","aesgcm","totp"].includes(challenge.track)){
+    expected=await answerForCryptoPractice(challenge,cryptoApi);
+  }else if(challenge.track==="pkce"){
     const result=await derivePkceChallengeLocally(c.verifier,cryptoApi);
     expected=String(result[c.field]);
   }else if(c.mode==="signature"){
