@@ -184,14 +184,33 @@ export function simulateTokenBucketLocally({capacity=5,refillPerSecond=1,timesta
   });
 }
 
-export async function generateSriLocally(value,{algorithm="sha384",cryptoApi=globalThis.crypto}={}){
+const SRI_HASH_ALGORITHMS=Object.freeze({
+  sha256:Object.freeze({webCrypto:"SHA-256",digestBits:256}),
+  sha384:Object.freeze({webCrypto:"SHA-384",digestBits:384}),
+  sha512:Object.freeze({webCrypto:"SHA-512",digestBits:512}),
+});
+/** Static SRI format mathematics; does NOT compute or certify a hash. */
+export function inspectSriFormatLocally(value,{algorithm="sha384"}={}){
   const bytes=new TextEncoder().encode(bounded(value,"Resource content"));
-  const algs={sha256:"SHA-256",sha384:"SHA-384",sha512:"SHA-512"};
-  if(!Object.prototype.hasOwnProperty.call(algs,algorithm))
+  if(!Object.prototype.hasOwnProperty.call(SRI_HASH_ALGORITHMS,algorithm))
     throw Error("Choose a supported SRI digest algorithm.");
+  const digestBits=SRI_HASH_ALGORITHMS[algorithm].digestBits;
+  return Object.freeze({
+    algorithm,inputBytes:bytes.length,
+    digestBits,digestBytes:digestBits/8,
+    base64Length:4*Math.ceil((digestBits/8)/3),
+    hashComputed:false,requestsSent:0,
+    caveat:"Format and length calculation only. A hash must be computed with trusted bytes and a real cryptographic digest.",
+  });
+}
+export async function generateSriLocally(value,{algorithm="sha384",cryptoApi=globalThis.crypto}={}){
+  const format=inspectSriFormatLocally(value,{algorithm});
+  const bytes=new TextEncoder().encode(value);
   if(!cryptoApi?.subtle?.digest)
     throw Error("Subresource Integrity requires Web Crypto in a secure browser context.");
-  const digest=new Uint8Array(await cryptoApi.subtle.digest(algs[algorithm],bytes));
+  const digest=new Uint8Array(await cryptoApi.subtle.digest(SRI_HASH_ALGORITHMS[algorithm].webCrypto,bytes));
+  if(digest.length!==format.digestBytes)
+    throw Error("Unexpected Subresource Integrity digest length.");
   const base64=btoa(Array.from(digest,byte=>String.fromCharCode(byte)).join(""));
   return Object.freeze({
     integrity:algorithm+"-"+base64,
