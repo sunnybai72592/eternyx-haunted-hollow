@@ -186,7 +186,8 @@ test("file-backed review paths enforce rechecks before each immutable signature 
   assert.match(source,/verifyStableOfflineCaseSnapshot/);
   assert.match(source,/recheckCaseSourceFiles\(source,owner\)/);
   assert.match(source,/recheckReviewerKeys\(keys,\{owner,privateRequired:true\}\)/);
-  assert.match(source,/review-disposition\.json":reviewBytes/);
+  assert.match(source,/review-verdict\.json":reviewBytes/);
+  assert.match(source,/review-disposition\.json":dispositionRaw/);
   assert.match(source,/caseSnapshot/);
   assert.match(source,/await recheckCaseSourceFiles/);
   assert.match(source,/await recheckReviewerKeys\(data\.keys/);
