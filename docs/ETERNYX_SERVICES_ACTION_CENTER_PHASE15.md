@@ -31,8 +31,7 @@ all prior service-delivery boundaries.
    filters, sorting by the real number of pending amendments or saved
    clarification answers awaiting review.
 8. **Failure-safe account-scoped counters:** all counts use
-   count='exact', head=true and source RLS; errors produce a dash rather
-   than zero. Generation guards discard old-account results, and rendered
+   count='exact', head=true and source RLS; errors show a dash rather than zero, never a fabricated count. Generation guards discard old-account results, and rendered
    data remains tied to the current account.
 9. **Refresh after actual saves, plus regression coverage:** counts
    refresh after customer check-ins, clarification/amendment changes,
