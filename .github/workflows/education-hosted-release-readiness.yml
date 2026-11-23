@@ -114,6 +114,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Inventory protected staging settings and fixture contracts before any remote checks
+        timeout-minutes: 1
+        env:
+          ETERNYX_EDU_INVENTORY_MODE: ${{ inputs.run_mode }}
+          ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
+        run: node scripts/staging/educationStagingConfigurationInventory.mjs
       - name: Reject production, unapproved modes, malformed fixtures and unsafe grant configuration
         run: |
           node --input-type=module -e '
@@ -148,6 +154,7 @@ jobs:
         with:
           name: education-hosted-release-${{ inputs.run_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            test-results/education-hosted-configuration-inventory.json
             test-results/education-hosted-db-metadata.json
             test-results/education-journey-fixture-readiness.json
             test-results/education-hosted-readonly.json
