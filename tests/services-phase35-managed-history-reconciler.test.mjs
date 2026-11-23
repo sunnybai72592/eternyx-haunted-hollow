@@ -143,10 +143,10 @@ test('Phase35 accepts real legacy UUID-style migration names and unnamed history
 
 test('Phase35 six-marker SQL stays strictly SELECT-only and touches no business rows',async()=>{
  const sql=await readFile(new URL('../docs/sql/eternyx/services-phase35-readonly-schema-markers.sql',import.meta.url),'utf8');
- const active=sql.replace(/--[^\\r\\n]*/g,'');
- assert.match(active,/^\\s*SELECT\\s+/i);
- assert.doesNotMatch(active,/\\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|GRANT|REVOKE|COPY|EXECUTE|DO|CALL)\\b/i);
- assert.doesNotMatch(active,/\\b(?:FROM|JOIN)\\s+(?:public|auth)\\./i);
+ const active=sql.replace(/--[^\r\n]*/g,'');
+ assert.match(active,/^\s*SELECT\s+/i);
+ assert.doesNotMatch(active,/\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|GRANT|REVOKE|COPY|EXECUTE|DO|CALL)\b/i);
+ assert.doesNotMatch(active,/\b(?:FROM|JOIN)\s+(?:public|auth)\./i);
  for(const key of ['phase1_requests','phase12_customer_followup_queue','phase13_amendments','phase13_customer_queue','phase13_admin_queue','phase14_journal']) assert.ok(sql.includes(key));
 });
 
