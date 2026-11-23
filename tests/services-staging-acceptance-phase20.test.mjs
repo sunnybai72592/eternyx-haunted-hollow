@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  validateStagingConfig, runStagingReadiness, assertAnonymousIsolation,
+  validateStagingConfig, runStagingReadiness, assertAnonymousIsolation, assertAdminQueueIsolated,
 } from '../scripts/services-live-readonly-preflight.mjs';
 
 const read = (path) => readFile(new URL('../' + path, import.meta.url), 'utf8');
@@ -80,9 +80,15 @@ function fakeFactory(options = {}) {
     service_clarification_answers: [{id:'answer-1',question_id:'question-1',owner:'user-A'}],
     service_brief_amendments: [{id:'amendment-1',request_id:A_ID,owner:'user-A'}],
     service_request_journal: [
-      {event_key:'activity:1',request_id:A_ID,owner:'user-A'},
-      {event_key:'activity:2',request_id:B_ID,owner:'user-B'},
-    ],
+      {event_key:'activity:activity-A',event_kind:'request_created',stream:'conversation',request_id:A_ID,owner:'user-A'},
+      {event_key:'scope-review:scope-1',event_kind:'scope_published',stream:'scope',request_id:A_ID,owner:'user-A'},
+      {event_key:'scope-response:scope-response-1',event_kind:'scope_response',stream:'scope',request_id:A_ID,owner:'user-A'},
+      {event_key:'question:question-1',event_kind:'question_published',stream:'clarifications',request_id:A_ID,owner:'user-A'},
+      {event_key:'answer:answer-1',event_kind:'answer_submitted',stream:'clarifications',request_id:A_ID,owner:'user-A'},
+      {event_key:'amendment:amendment-1',event_kind:'amendment_submitted',stream:'brief_changes',request_id:A_ID,owner:'user-A'},
+      {event_key:'activity:activity-B',event_kind:'request_created',stream:'conversation',request_id:B_ID,owner:'user-B'},
+      ...(options.leakInternalJournal ? [{event_key:'triage:private',event_kind:'internal',stream:'internal',request_id:A_ID,owner:'user-A'}] : []),
+    ].filter((r)=>!options.missingJournalSource || r.event_key !== 'amendment:amendment-1'),
     service_request_triage: [{request_id:A_ID,owner:'admin'}],
   };
   let index = 0;
@@ -112,6 +118,8 @@ function fakeFactory(options = {}) {
               if (actor === 'anonymous' && options.anonResult) return typeof options.anonResult === 'function' ? options.anonResult(table) : options.anonResult;
               if (actor === 'user-A' && table === 'service_requests' && options.nullOwnerResponse)
                 return {data:null,error:null,status:200};
+              if (actor === 'user-A' && table === 'service_admin_amendment_queue' && options.nullAdminQueue)
+                return {data:null,error:null,status:200};
               if (options.missingJournal && table === 'service_request_journal')
                 return {data:null,error:{code:'PGRST205'}};
               let input = records[table] ?? [];
@@ -119,7 +127,8 @@ function fakeFactory(options = {}) {
               else if (actor !== 'admin-1') {
                 input = input.filter((r)=>
                   r.owner === actor
-                    || (options.leakCustomerB && actor === 'user-B' && table === 'service_requests' && r.owner === 'user-A'));
+                    || (options.leakCustomerB && actor === 'user-B' && table === 'service_requests' && r.owner === 'user-A')
+                    || (options.leakAdminQueue && actor === 'user-A' && table === 'service_admin_amendment_queue' && r.owner === 'admin'));
               }
               return {data:input.filter((r)=>this.conditions.every((check)=>check(r))).slice(0,size),error:null,status:200};
             },
@@ -263,4 +272,58 @@ test('operator notes keep migration history and production sign-off independentl
   assert.match(notes,/connection timeout/i);
   assert.match(notes,/permission denial/i);
   assert.match(notes,/does not restore database connectivity/i);
+});
+
+test('authenticated customers have no readable admin queue even when their own request exists', () => {
+  assert.doesNotThrow(() => assertAdminQueueIsolated({data:[],error:null,status:200}));
+  assert.doesNotThrow(() => assertAdminQueueIsolated({data:null,error:{code:'42501'},status:403}));
+  for (const bad of [
+    {data:[{id:A_ID}],error:null,status:200},
+    {data:null,error:null,status:200},
+    {data:null,error:{code:'PGRST205'},status:404},
+    {data:null,error:{code:'42501'},status:503},
+  ]) assert.throws(()=>assertAdminQueueIsolated(bad),/Acceptance failed/);
+});
+
+test('actual admin queue visibility to a regular customer blocks the release', async () => {
+  const factory=fakeFactory({leakAdminQueue:true});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Admin queue: customer data boundary is not proven/);
+});
+
+test('a null-success admin queue is not misclassified as no admin data', async () => {
+  const factory=fakeFactory({nullAdminQueue:true});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Admin queue: customer data boundary is not proven/);
+});
+
+test('the unified journal must trace saved amendments and related events, not merely be nonempty', async () => {
+  const factory=fakeFactory({missingJournalSource:true});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Phase 14 journal is missing a verified persisted workflow event/);
+});
+
+test('internal triage entries in the customer journal are release blockers', async () => {
+  const factory=fakeFactory({leakInternalJournal:true});
+  await assert.rejects(runStagingReadiness(validateStagingConfig(config()),factory.client),
+    /Phase 14 journal exposed or failed to exclude an internal stream/);
+});
+
+test('journal matching uses actual saved event keys and never queries narrative data', async () => {
+  const factory=fakeFactory();
+  assert.equal(await runStagingReadiness(validateStagingConfig(config()),factory.client),true);
+  const metadataCalls=factory.calls.filter((r)=>r.table==='service_request_journal' && r.columns === 'request_id,event_key,event_kind');
+  assert.equal(metadataCalls.length,6);
+  assert.ok(factory.calls.some((r)=>r.actor==='user-A' && r.table==='service_admin_amendment_queue'));
+  assert.ok(factory.calls.some((r)=>r.actor==='user-B' && r.table==='service_admin_amendment_queue'));
+  assert.equal(factory.calls.some((r)=>typeof r.columns === 'string' && r.columns.includes('detail')),false);
+});
+
+test('phase 25 release notes demand real evidence and never assert deployment', async () => {
+  const notes=await read('docs/ETERNYX_SERVICES_EVENT_PROVENANCE_PHASE25.md');
+  assert.match(notes,/no new migration/i);
+  assert.match(notes,/Phase 13 before Phase 14/);
+  assert.match(notes,/connection timeout/i);
+  assert.match(notes,/not restored/i);
+  assert.match(notes,/real-account staging/i);
 });
