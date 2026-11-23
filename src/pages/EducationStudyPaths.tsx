@@ -20,6 +20,7 @@ import {
   buildStudySharePathJson,buildStudyShareOutline,
   STUDY_REVISION_INTERVALS,
 } from "@/lib/educationStudyRevision.mjs";
+import {buildStudyRevisionAgenda,buildStudyRevisionWeek,buildStudyRevisionCalendarIcs} from "@/lib/educationRevisionAgenda.mjs";
 
 type Lesson={
   number:number;title:string;objective:string;reading:string;
@@ -60,7 +61,7 @@ export default function EducationStudyPaths(){
   const record=records[current-1]??null;
   const revisionRow=revision[current-1]??null;
   // Local UTC date is a transparent snapshot, not a timer or background reminder.
-  const [asOfUtc]=useState(()=>new Date().toISOString().slice(0,10));
+  const [asOfUtc,setAsOfUtc]=useState(()=>new Date().toISOString().slice(0,10));
   const authorLesson=draft.lessons[draftIndex]??null;
   const authorValid=useMemo(()=>{
     try{return !!authorStudyPath(draft);}catch{return false;}
@@ -69,6 +70,8 @@ export default function EducationStudyPaths(){
   const insights=useMemo(()=>path?
     studyRevisionInsights(path,records,revision,asOfUtc):null,
     [path,records,revision,asOfUtc]);
+  const agenda=useMemo(()=>path?buildStudyRevisionAgenda(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
+  const week=useMemo(()=>path?buildStudyRevisionWeek(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
   const shownLessons=useMemo(()=>{
     if(!path)return [];
     return path.lessons.filter(l=>{
@@ -218,6 +221,14 @@ export default function EducationStudyPaths(){
       setMessage("Your private revision-plan CSV was exported; it includes self-reported confidence.");
       setError("");
     }catch{setError("Revision calendar export could not be validated.");}
+  };
+  const exportCalendarIcs=()=>{
+    if(!path)return;
+    try{
+      saveFile(buildStudyRevisionCalendarIcs(path,records,revision,asOfUtc),
+        "eternyx-study-revisions.ics","text/calendar;charset=utf-8");
+      setError("");setMessage("Calendar exported with scheduled lesson titles and dates only. Import it manually into your calendar; no reminders are sent.");
+    }catch{setError("Could not export the validated revision calendar.");}
   };
   const exportOutline=()=>{
     try{
@@ -396,6 +407,8 @@ export default function EducationStudyPaths(){
               <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Save study resume (.json)</Button>
             <Button variant="outline" onClick={()=>exportSession("csv")}>
               <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Export private notes (.csv)</Button>
+            <Button variant="outline" onClick={exportCalendarIcs}>
+              <CalendarDays aria-hidden="true" className="mr-2 h-4 w-4"/>Calendar events (.ics)</Button>
             <Button variant="outline" onClick={()=>exportRevisionCalendar()}>
               <CalendarDays aria-hidden="true" className="mr-2 h-4 w-4"/>Export private revision plan (.csv)</Button>
             {progress.nextLesson!==null&&<Button variant="ghost" onClick={()=>{
@@ -420,6 +433,13 @@ export default function EducationStudyPaths(){
                 setCurrent(insights.nextReviewLesson!);setFilter("all");
               }}>Open next revision</Button>}
           </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="study-agenda-asof" className="text-sm font-medium">Review snapshot (UTC)</label>
+            <input id="study-agenda-asof" type="date" min="2000-01-01" max="9998-12-24"
+              value={asOfUtc} onChange={e=>{if(e.target.validity.valid&&e.target.value)setAsOfUtc(e.target.value);}}
+              className="min-h-11 rounded-lg border border-input bg-background px-3 text-sm"/>
+            <Button variant="ghost" size="sm" onClick={()=>setAsOfUtc(new Date().toISOString().slice(0,10))}>Use today UTC</Button>
+          </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {([
               ["Due now",insights.due],["Overdue",insights.overdue],
@@ -431,6 +451,29 @@ export default function EducationStudyPaths(){
               <p className="text-xs text-muted-foreground">{name}</p>
               <p className="mt-1 text-lg font-bold">{value}</p>
             </div>)}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <h3 className="font-semibold">Priority revision agenda</h3>
+              {agenda.length===0?<p className="text-sm text-muted-foreground">No completed lessons to schedule.</p>:
+                <ol className="space-y-2">{agenda.slice(0,12).map(item=><li key={item.number}>
+                  <button type="button" onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                    className="w-full rounded-lg border border-border p-3 text-left text-sm hover:bg-muted/50">
+                    <span className="font-medium">{item.number}. {item.title}</span>
+                    <span className="block text-xs text-muted-foreground">{item.status}{item.due_on?" · "+item.due_on+" UTC":""}</span>
+                  </button>
+                </li>)}</ol>}
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-semibold">Next seven UTC calendar days</h3>
+              {week.map(day=><div key={day.date} className="rounded-lg border border-border p-3 text-sm">
+                <strong>{day.date}</strong> · {day.lessons.length} scheduled
+                {day.lessons.map(item=><button type="button" key={item.number}
+                  onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                  className="mt-1 block w-full text-left text-primary hover:underline">
+                  {item.number}. {item.title}</button>)}
+              </div>)}
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             You choose the revision interval and confidence yourself. No algorithm measures mastery,
