@@ -1146,3 +1146,75 @@ npm run build
 Tests use only locally generated disposable Ed25519 keys and fixture bytes.
 They do **not** provide true KVM hardware attestation, execute real VMs,
 contact any cloud/AI provider, or enable billable hosted Labs.
+
+
+## Crash-safe private evidence publication (atomic/no-overwrite)
+
+All fixed-name reviewer records and handoff-import files are now created
+through a shared **offline-only atomic publisher**. This addresses the case
+where power loss or process death while writing an \`O_EXCL\`-created output
+might otherwise leave a visibly truncated pending marker, signed verdict,
+checkpoint or runtime addendum that prevents clean recovery.
+
+### Publication order
+
+1. Check the root-owned 0700 case folder has no symlink redirection, that
+   the destination is one of the **eight fixed approved basenames**, and that
+   no old \`.eternyx-stage-*\` remnants are present.
+2. Create a fresh cryptographically random **private 0600 temporary inode**
+   in that same directory (never in a world-readable temporary area).
+3. Write the complete bounded payload, check ownership/inode/link count and
+   **fsync** the temporary file before making it visible under the final name.
+4. Atomically create a **hard link** to the fixed final filename. This
+   fails if the final filename already exists—even when it is a symlink.
+   Existing reports are never overwritten or unlinked.
+5. Unlink only the transient name from this invocation, fsync the containing
+   directory, then confirm that the final file is private, single-link and
+   exactly the expected length. Only then return success.
+
+The checked outputs include the two receipt-import journal markers, both
+signed operator transfer inputs, reviewer endorsement, reviewer disposition,
+signed case checkpoint and independently signed runtime addendum. Original
+operator keys, raw journals and newly generated signed content are **not**
+rewritten. The shared writer does not create folders, execute guests,
+contact networks, mutate environment approval flags or enable public labs.
+
+### Crash and power-failure response
+
+An interrupted write **before the hard link** may leave a private
+\`.eternyx-stage-<random>.tmp\` inode. An interruption **after the link but
+before the temporary unlink** can temporarily leave the final inode with
+two hard-link names. Both situations are intentionally treated as requiring
+manual review. The import-journal verifier and all reviewer commands refuse
+leftover staging names rather than silently considering the case a legacy
+hand-staged receipt.
+
+**Never automatically delete, rename, repair or replace suspicious
+evidence.** Preserve the exact private directory, stage inode and filesystem
+metadata for your incident procedure. A qualified root operator can
+reconcile the case with an independently retained original receipt and
+checkpoints, then document an approved recovery plan. It may be safer to
+start a new distinct case after preserving originals.
+
+An exception in a live (not crash-stopped) publication call only cleans
+up that call's own randomly generated temporary inode; it **never**
+unlinks an existing final output or another producer's temporary file.
+
+This is local-filesystem atomicity, not an assertion about physical
+storage-device firmware or the original provenance of any receipt.
+A filesystem/hardware that lies about \`fsync\` cannot be covered by this
+software-only guarantee. These safety improvements have no effect on the
+separate requirement for genuine manually approved hardware tests.
+
+### Free offline tests
+
+\`\`\`bash
+node --test tests/ctf-firecracker-offline-atomic-publish.test.mjs
+npm test
+npm run build
+\`\`\`
+
+The tests verify atomic complete output, uniqueness under concurrent
+writers, refusal of symlink/hardlink/existing outputs, protected file
+permissions, strict file allowlists, simulated crash leftovers, review and
+import fail-closed behavior, and zero network/VM interaction.
