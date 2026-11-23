@@ -233,3 +233,53 @@ test("actual worker refuses missing encryption key before any database claim",as
   assert.equal(r.status,503);
   assert.equal(db.calls.length,0);
 });
+
+test("malformed Content-Length headers fail closed even for otherwise valid tick",async()=>{
+  for(const headerValue of ["-1","NaN","8e1","999","0x10","81","1.5"," 10","001000"]){
+    const db=makeDb();
+    const r=await tick(db,{
+      body:'{"action":"tick"}',
+      headers:{
+        "x-eternyx-scheduler-key":key,
+        "content-type":"application/json",
+        "content-length":headerValue,
+      },
+    });
+    assert.equal(r.status,413,headerValue);
+    assert.equal(db.calls.length,0);
+  }
+});
+test("two claimed runs can defer first and process second without losing numeric counters",async()=>{
+  const c1=await claim();
+  const c2=await claim({
+    schedule_id:"66666666-6666-4666-8666-666666666666",
+    lease_token:"77777777-7777-4777-8777-777777777777",
+  });
+  let checked=0;
+  const db=makeDb({claims:[c1,c2]});
+  const orig=db.rpc.bind(db);
+  db.rpc=async(name,args)=>{
+    if(name==="automation_workflow_preflight"){
+      checked++;
+      return result(checked===1?
+        {ok:true,allowed:false,reason:"policy_daily_limit"}:
+        {ok:true,allowed:true});
+    }
+    return orig(name,args);
+  };
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.processed,1);
+  assert.equal(r.body.failed,0);
+  assert.equal(r.body.deferred,1);
+  assert.equal(count(db,"automation_claim_due_schedule"),2);
+  assert.equal(count(db,"automation_defer_scheduled_run"),1);
+  assert.equal(count(db,"automation_complete_scheduled_run"),1);
+  assert.equal(count(db,"automation_fail_scheduled_run"),0);
+});
+test("valid authorized worker rejects oversized streamed body before any schedule database calls",async()=>{
+  const db=makeDb();
+  const r=await tick(db,{body:" ".repeat(81)});
+  assert.equal(r.status,413);
+  assert.equal(db.calls.length,0);
+});
