@@ -411,3 +411,62 @@ and mobile verification is required before shipping.
 
 No hosted Labs, Firecracker/VM activation, paid GPU/cloud/API, real rate
 limit, live target scan, certification, billing, or new backend is enabled.
+
+
+## Phase 7 — 45 calculator-checked practice cases across fifteen tracks
+
+The existing 25 browser workstations now pair with **45 local practice
+questions**. The original thirty cases remain in their same positions;
+five new tracks each add three real, checked exercises:
+
+- **IPv6:** normalized /64 network address, exactly 256 addresses in a
+  /120, and the exact 2^128 decimal address count for /0. Expanded IPv6
+  spellings are normalized via the same 128-bit parser used by the tool.
+  Decimal answers use BigInt, avoiding JavaScript Number precision loss.
+- **HTTP caching:** static warning counts for private/no-store and
+  sensitive public caching; a Yes/No check for no-cache revalidation.
+  This tests the actual local Cache-Control heuristics, not HTTP traffic.
+- **SPF:** lookup-producing term count, permissive +all warning count,
+  and mechanism count using the real simplified SPF analyzer. No DNS
+  queries, sender validation, or mail delivery is attempted.
+- **Token-bucket rate limits:** allowed requests, denied requests and
+  remaining capacity after refill, all computed from bounded real
+  simulator input. It neither contacts nor throttles an API server.
+- **Subresource Integrity:** SHA-384 digest bits, SHA-512 Base64 digest
+  character count, and exact UTF-8 byte length. A shared, pure
+  inspectSriFormatLocally() helper encodes the digest/format mathematics;
+  the actual generateSriLocally() still computes the digest via Web Crypto.
+  Format questions NEVER claim that a cryptographic digest was
+  calculated for the checked answer.
+
+All 45 answer keys are calculated at grading time from the same pure
+engines as the relevant workstations. New cases have inline hints, actual
+calculated feedback, retries and keyboard-accessible input. The UI
+derives its summary from the live case/track arrays to avoid stale counts.
+
+The 45-case, 15-track in-memory progress counter records unique correct
+cases in this page session only. Wrong attempts do not count. No
+certification, server-verified grade, course completion, localStorage,
+Supabase write, billing, fake XP, leaderboard or externally verifiable
+exam achievement is introduced. The answer keys are discoverable in
+browser code, as intentionally open-book practice.
+
+### Acceptance gate
+
+    node --test tests/eternyx-labs-five-advanced-practice.test.mjs
+    node --test tests/eternyx-labs-practice.test.mjs
+    node --test tests/eternyx-labs-advanced-practice.test.mjs
+    node --test tests/eternyx-labs-advanced.test.mjs
+    npm test
+    npm run build
+
+Regressions check all fifteen new correct answers and wrong answers,
+BigInt precision and IPv6 normalization, data source agreement for the
+five previous tools, real Web Crypto digest compatibility, untrusted
+answer refusal and accurate unique progress totals. Test suites also
+preserve earlier 30 challenges, 25 workstations, iframe isolation and
+offline-only frontend behavior. Manual mobile/desktop UI review is
+still required.
+
+Public hosted Labs and paid cloud/GPU/AI services remain disabled. No
+remote scanning, host penetration testing, or external traffic is added.
