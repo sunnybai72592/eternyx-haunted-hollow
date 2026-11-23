@@ -4,7 +4,7 @@
 
 Route: /labs (public, browser-only). Navigation entry is visible on desktop and mobile. The Cybersecurity Hub and Developer Studio link to the same route, not separate duplicate labs.
 
-Ten **working**, local exercises (five original and five additional offline utilities):
+Fifteen **working**, browser-only exercises (ten existing and five additional network/security fundamentals):
 1. Web developer playground — edit HTML, CSS and JavaScript, explicitly run a restricted iframe preview.
 2. DOM XSS practice — inspect the difference between an HTML sink and a text sink with controlled, local input.
 3. HTTP header clinic — deterministic checks against pasted header text; no outgoing HTTP requests.
@@ -15,8 +15,13 @@ Ten **working**, local exercises (five original and five additional offline util
 8. JWT structure — inspect header and claim names from a synthetic JWT; does NOT validate signatures, authorization or trust.
 9. Sensitive-log redaction — training patterns for common token/cookie/key values; not an exhaustive secret scrubber.
 10. SHA-256 — real local Web Crypto digest (secure browser context), not encryption or a source authentication claim.
+11. IPv4 CIDR/subnet calculator — canonical IPv4 network, mask, broadcast and host ranges including /0, /31 and /32; no connectivity checks.
+12. UNIX permissions trainer — octal mode/umask simulation for ordinary read/write/execute bits; no filesystem change.
+13. CSP policy lint — static warning checks for repeated and missing directives or unsafe source tokens; not a full CSP parser.
+14. CORS response trainer — simplified local origin/credentialed sharing logic using pasted headers; no requests or authorization.
+15. Cookie attribute clinic — synthetic Set-Cookie inspection for Secure, HttpOnly, SameSite and name prefix rules; never echoes values.
 
-**Truthful limits:** The ten browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
+**Truthful limits:** The fifteen browser-only workstations do not provide a Kali Linux VM, an exploitable remote backend, isolated Linux commands, live scanners, real lab credentials, graded certification, or authenticated learner progress. Separate CTF and local Docker range routes have their own capabilities, prerequisites, and safety contracts. Do not imply otherwise in the UI. Labs never request a target domain or IP and never execute remote tests.
 
 ## Boundary and threat model
 
@@ -63,7 +68,7 @@ Phase 2 introduces unavoidable compute and isolation costs. It should not launch
 
 ## Additional browser toolkit — privacy and acceptance
 
-The five newest exercises use a separate, tested local utility module and a
+The first five supplementary exercises use a separate, tested local utility module and a
 dedicated React component. No network operation, Supabase call, backend job,
 persistent browser storage, new API key or hosted lab is required.
 
@@ -116,3 +121,53 @@ schemes, JWT signature non-verification, credential redaction and real SHA-256.
 Firecracker, start Docker, enable public Labs instances, modify billing,
 weaken production identity checks or change the independently reviewed
 hardware-acceptance boundaries.
+
+
+## Phase 3 — offline network and browser security foundations
+
+Five additional workstations use a separate deterministic
+eternyxLabsFoundations.mjs engine and a dedicated React component.
+They perform bounded local calculations only: no HTTP/DNS calls, scanning,
+cookies stored, filesystem permission changes, shell, backend credentials,
+persistent storage or hosted cyber-range launch.
+
+- **IPv4 subnetting:** unsigned 32-bit bitwise calculation, including the
+  valid /0 size of 2^32, RFC 3021 /31 point-to-point behavior, and /32
+  host addresses. It does not test reachability.
+- **UNIX permissions/umask:** calculate owner/group/other r/w/x output and
+  octal mode after umask. Does not model ACLs, special bits or chmod effects
+  on existing files.
+- **CSP lint:** highlight a bounded set of unsafe-inline, unsafe-eval,
+  wildcard, duplicate and omitted directives. Not a browser policy
+  interpreter, a live deployment check or a vulnerability certification.
+- **CORS:** illustrate exact origins, wildcard and credential flags against
+  pasted response headers. Does not check preflights, redirect behavior,
+  full Fetch Standard, or whether a server authorizes the request.
+- **Cookie attributes:** static analysis of synthetic Set-Cookie attributes;
+  masks values in output, warns about special prefixes and missing
+  Secure/HttpOnly/SameSite where applicable. Not a browser cookie-setting
+  API, and not verification of origin security.
+
+The Labs picker now searches across **15 real workstations** on mobile and
+desktop. The original three restricted opaque-origin iframes are unchanged.
+All new workstations provide accessible input labels, instructional caveats,
+bounded input, deterministic results, and explicit refusal messages.
+
+### Verify before merge
+
+Run these commands locally or in CI:
+
+    node --test tests/eternyx-labs.test.mjs
+    node --test tests/eternyx-labs-utilities.test.mjs
+    node --test tests/eternyx-labs-foundations.test.mjs
+    npm test
+    npm run build
+
+The new tests cover CIDR network boundaries, invalid octets/prefixes,
+permission masks, unsafe CSP examples, CORS origins and credentials,
+cookie value non-disclosure, malformed headers and network-free UI wiring.
+CI is not a substitute for manual desktop and mobile interaction testing.
+
+This work does **not** activate hosted Labs, paid GPU/cloud services,
+public customer execution, subscriptions or live external target testing.
+The earlier Firecracker hardware/approval requirements remain separate.
