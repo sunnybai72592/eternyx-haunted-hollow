@@ -51,6 +51,9 @@ const fields = {
   incidentAuditPackageInbox: ["action","incidentId"],
   incidentAuditPackageCreate: ["action","incidentId","incidentRevision","evidenceId","requestKey"],
   incidentAuditPackageReview: ["action","packageId","decision","note","acknowledgedSource","acknowledgedNoDeployment","acknowledgedNoCryptoProof","requestKey"],
+  incidentAuditHandoffAssessment: ["action","incidentId"],
+  incidentAuditHandoffHistory: ["action","packageId"],
+  incidentAuditHandoffAttest: ["action","packageId","reviewId","incidentRevision","note","ackOwnerReview","ackCiUnverified","ackDeploymentUnverified","ackWorkerUnverified","requestKey"],
   save: ["action", "workflowId", "name", "steps"],
   run: ["action", "workflowId", "input", "requestKey"],
   toggle: ["action", "workflowId", "active"],
@@ -125,6 +128,31 @@ export function parseAutomationControlRequest(value) {
       ...(["previewApproval","approveWebhook","rejectWebhook"].includes(action)
         ? { approvalId: value.approvalId } : {}),
     };
+  }
+  if(action==="incidentAuditHandoffAssessment"||action==="incidentAuditHandoffHistory"){
+    const field=action==="incidentAuditHandoffAssessment"?"incidentId":"packageId";
+    if(typeof value[field]!=="string"||!UUID_RE.test(value[field])){
+      return {ok:false,reason:"invalid_handoff_reference"};
+    }
+    return {ok:true,action,[field]:value[field]};
+  }
+  if(action==="incidentAuditHandoffAttest"){
+    if(typeof value.packageId!=="string"||!UUID_RE.test(value.packageId)||
+      typeof value.reviewId!=="string"||!UUID_RE.test(value.reviewId)||
+      !Number.isInteger(value.incidentRevision)||value.incidentRevision<1||
+      value.incidentRevision>2147483647||
+      typeof value.note!=="string"||value.note.trim().length<12||
+      value.note.trim().length>500||
+      value.ackOwnerReview!==true||value.ackCiUnverified!==true||
+      value.ackDeploymentUnverified!==true||value.ackWorkerUnverified!==true||
+      typeof value.requestKey!=="string"||!UUID_RE.test(value.requestKey)){
+      return {ok:false,reason:"invalid_handoff_attestation"};
+    }
+    return {ok:true,action,packageId:value.packageId,reviewId:value.reviewId,
+      incidentRevision:value.incidentRevision,note:value.note.trim(),
+      ackOwnerReview:true,ackCiUnverified:true,
+      ackDeploymentUnverified:true,ackWorkerUnverified:true,
+      requestKey:value.requestKey};
   }
   if(action==="incidentAuditPackageInbox"){
     if(typeof value.incidentId!=="string"||!UUID_RE.test(value.incidentId)){
