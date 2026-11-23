@@ -78,8 +78,13 @@ function makeDb(options={}){
           return result(options.completion??{ok:true});
         case "automation_fail_scheduled_run":
           failedCalls++;
+          if(options.recoveryThrows)throw Error("synthetic network loss");
+          if(options.recoveryError)return result(null,{code:"synthetic_rpc_failure"});
+          if(options.recoveryStale)return result({ok:false,reason:"stale_lease"});
           return result({ok:true});
         case "automation_prune_schedule_outputs":
+          if(options.pruneThrows)throw Error("synthetic cleanup disconnection");
+          if(options.pruneError)return result(null,{code:"synthetic_prune_failure"});
           return result({ok:true});
         default: throw Error("Unexpected RPC "+name);
       }
@@ -282,4 +287,163 @@ test("valid authorized worker rejects oversized streamed body before any schedul
   const r=await tick(db,{body:" ".repeat(81)});
   assert.equal(r.status,413);
   assert.equal(db.calls.length,0);
+});
+
+
+test("acknowledged failure releases one claimed lease without claiming pending recovery",async()=>{
+  const db=makeDb({claims:[await claim()],
+    policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+  assert.equal(r.body.retentionCleanupFailed,false);
+  const failure=db.calls.find(x=>x.name==="automation_fail_scheduled_run").args;
+  assert.equal(failure.p_schedule_id,ids.schedule_id);
+  assert.equal(failure.p_lease_token,ids.lease_token);
+  assert.equal(failure.p_schedule_revision,1);
+});
+
+test("stale lease receipt fails closed: worker does not falsely claim database recovery",async()=>{
+  const db=makeDb({claims:[await claim()],recoveryStale:true,
+    policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(r.body.processed,0);
+  assert.equal(count(db,"automation_fail_scheduled_run"),1);
+  assert.equal(count(db,"automation_complete_scheduled_run"),0);
+  assert.equal(r.body.schedulerEnabled,true);
+});
+
+test("database returned error from recovery RPC is not mistaken for a released lease",async()=>{
+  const db=makeDb({claims:[await claim()],recoveryError:true,
+    policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(count(db,"automation_fail_scheduled_run"),1);
+});
+
+test("thrown transport recovery error is counted once without raw database details",async()=>{
+  const db=makeDb({claims:[await claim()],recoveryThrows:true,
+    policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.failed,1);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.doesNotMatch(JSON.stringify(r.body),/synthetic|network|token|lease_token|schedule_id/);
+});
+
+test("two failed claims with one unconfirmed lease recovery preserve batch counters",async()=>{
+  const c1=await claim();
+  const c2=await claim({
+    schedule_id:"66666666-6666-4666-8666-666666666666",
+    lease_token:"77777777-7777-4777-8777-777777777777",
+  });
+  const db=makeDb({claims:[c1,c2],policy:{
+    ok:true,allowed:false,reason:"policy_scheduled_disabled",
+  }});
+  const old=db.rpc.bind(db);
+  let failures=0;
+  db.rpc=async(name,args)=>{
+    if(name==="automation_fail_scheduled_run"){
+      failures++;
+      if(failures===1)return result({ok:false,reason:"stale_lease"});
+    }
+    return old(name,args);
+  };
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.failed,2);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(r.body.processed,0);
+  assert.equal(r.body.deferred,0);
+  assert.equal(failures,2);
+});
+
+test("age-based ciphertext prune returning an RPC error is explicitly observable",async()=>{
+  const db=makeDb({pruneError:true});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.processed,0);
+  assert.equal(r.body.retentionCleanupFailed,true);
+  assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+  assert.equal(count(db,"automation_prune_schedule_outputs"),1);
+});
+
+test("age-based ciphertext prune throwing transport error is explicitly observable",async()=>{
+  const db=makeDb({pruneThrows:true});
+  const r=await tick(db);
+  assert.equal(r.status,200);
+  assert.equal(r.body.retentionCleanupFailed,true);
+  assert.doesNotMatch(JSON.stringify(r.body),/synthetic|disconnection/);
+});
+
+test("claimed workflow row must match owner, workflow id and bounded revision before decrypt or preflight",async()=>{
+  const valid={
+    id:ids.workflow_id,user_id:ids.user_id,steps,
+    revision:1,active:true,trigger_kind:"manual",
+  };
+  const tampered=[
+    {...valid,id:"88888888-8888-4888-8888-888888888888"},
+    {...valid,user_id:"99999999-9999-4999-8999-999999999999"},
+    {...valid,revision:0},
+    {...valid,revision:1.5},
+    {...valid,revision:Number.MAX_SAFE_INTEGER+1},
+    {...valid,steps:"not_an_array"},
+    {...valid,active:false},
+    {...valid,trigger_kind:"external"},
+  ];
+  for(const workflow of tampered){
+    const db=makeDb({claims:[await claim()],workflow});
+    const r=await tick(db);
+    assert.equal(r.status,200,JSON.stringify(workflow));
+    assert.equal(r.body.processed,0);
+    assert.equal(r.body.failed,1);
+    assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+    assert.equal(count(db,"automation_workflow_preflight"),0);
+    assert.equal(count(db,"automation_complete_scheduled_run"),0);
+    assert.equal(count(db,"automation_fail_scheduled_run"),1);
+  }
+});
+
+test("malformed, oversized or truncated encrypted claims fail before workflow access or any failure-RPC mutation",async()=>{
+  const originals=await claim();
+  const variants=[
+    {ciphertext:"F".repeat(2*(SCHEDULE_INPUT_BYTES+17))},
+    {ciphertext:"a".repeat(31)},
+    {ciphertext:"zz".repeat(200)},
+    {ciphertext:"1".repeat(35)},
+    {nonce:"g".repeat(24)},
+    {nonce:"f".repeat(22)},
+    {nonce:"f".repeat(26)},
+    {revision:1.2},
+  ];
+  for(const changes of variants){
+    const db=makeDb({claims:[{...originals,...changes}]});
+    const r=await tick(db);
+    assert.equal(r.status,503,JSON.stringify(changes).slice(0,90));
+    assert.match(r.body.error,/Invalid schedule claim/);
+    assert.equal(r.body.failed,0);
+    assert.equal(r.body.leaseRecoveryUnconfirmed,0);
+    assert.equal(count(db,"automation_workflow_preflight"),0);
+    assert.equal(count(db,"automation_fail_scheduled_run"),0);
+  }
+});
+
+test("the worker never leaks raw failures, tenant ids or ciphertext in its observable recovery metrics",async()=>{
+  const db=makeDb({claims:[await claim()],recoveryError:true,pruneError:true,
+    policy:{ok:true,allowed:false,reason:"policy_scheduled_disabled"}});
+  const r=await tick(db);
+  assert.deepEqual(Object.keys(r.body).sort(),[
+    "deferred","failed","leaseRecoveryUnconfirmed","processed",
+    "retentionCleanupFailed","schedulerEnabled","source",
+  ].sort());
+  assert.equal(r.body.leaseRecoveryUnconfirmed,1);
+  assert.equal(r.body.retentionCleanupFailed,true);
+  const payload=JSON.stringify(r.body);
+  assert.doesNotMatch(payload,/user_id|lease_token|schedule_id|workflow_id|ciphertext|nonce|offline|a{32}|b{32}/);
 });
