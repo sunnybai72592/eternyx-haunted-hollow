@@ -12,7 +12,7 @@ export const MAX_CORPUS_AI_EVIDENCE = 6;
 export const MAX_CORPUS_AI_PROMPT = 3600;
 export const CORPUS_KINDS = ["txt", "md", "csv", "json", "log"] as const;
 export type CorpusKind = (typeof CORPUS_KINDS)[number];
-export type CorpusMatchMode = "all" | "any";
+export type CorpusMatchMode = "all" | "any" | "phrase" | "near";
 
 export interface CorpusDocument {
   readonly id: string;
@@ -33,6 +33,8 @@ export interface CorpusHit {
   readonly snippetStartColumn: number;
   readonly sourceLineLength: number;
   readonly partial: boolean;
+  /** Exact span of a phrase or near-window in the original source line. */
+  readonly matchSpan?: { readonly startColumn: number; readonly endColumn: number };
 }
 export interface CorpusSearch {
   readonly query: string;
@@ -93,7 +95,7 @@ export function addCorpusDocuments(
 }
 function tokenize(value: string): string[] {
   // Unicode-aware literal word tokens; no executable query grammar/regex.
-  return (value.normalize("NFKC").toLocaleLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []);
+  return (value.normalize("NFKC").toLocaleLowerCase().match(/[\p{L}\p{M}\p{N}_]+/gu) ?? []);
 }
 function prepareQuery(query: string): string[] {
   if (typeof query !== "string" || !query.trim() || query.length > 120 ||
@@ -122,9 +124,12 @@ export function searchCorpus(
   mode: CorpusMatchMode = "all",
   sourceFilter: string | null = null,
 ): CorpusSearch {
-  if (mode !== "all" && mode !== "any") throw new CorpusSearchError("invalid_query");
+  if (!["all", "any", "phrase", "near"].includes(mode)) throw new CorpusSearchError("invalid_query");
   const validated = addCorpusDocuments([], docs);
   const terms = prepareQuery(query);
+  const queryWords = tokenize(query);
+  // Phrase matching preserves repeated words. Search terms are otherwise de-duplicated.
+  if (mode === "phrase" && queryWords.length > 8) throw new CorpusSearchError("invalid_query");
   if (sourceFilter !== null && !validated.some(doc => doc.id === sourceFilter)) {
     throw new CorpusSearchError("invalid_query");
   }
@@ -137,20 +142,63 @@ export function searchCorpus(
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index];
       if (!line.trim()) continue;
-      const matches = [...line.matchAll(/[\p{L}\p{N}_]+/gu)];
+      // Preserve physical UTF-16 columns even while normalizing the matching tokens.
+      const words = [...line.matchAll(/[\p{L}\p{M}\p{N}_]+/gu)];
+      const normalizedWords = words.map(match => match[0].normalize("NFKC").toLocaleLowerCase());
       const frequencies = new Map<string, number>();
       const offsets = new Map<string, number>();
       const termSet = new Set(terms);
-      for (const match of matches) {
-        const normalized = match[0].normalize("NFKC").toLocaleLowerCase();
+      for (let position = 0; position < words.length; position++) {
+        const normalized = normalizedWords[position];
         if (!termSet.has(normalized)) continue;
         frequencies.set(normalized, (frequencies.get(normalized) ?? 0) + 1);
-        if (!offsets.has(normalized)) offsets.set(normalized, match.index ?? 0);
+        if (!offsets.has(normalized)) offsets.set(normalized, words[position].index ?? 0);
       }
-      if (!frequencies.size || (mode === "all" && frequencies.size !== terms.length)) continue;
+      if (!frequencies.size || (mode !== "any" && frequencies.size !== terms.length)) continue;
+      let matchSpan: CorpusHit["matchSpan"];
+      let bonus = 0;
+      if (mode === "phrase") {
+        let phraseStart = -1;
+        for (let i = 0; i + queryWords.length <= words.length; i++) {
+          if (queryWords.every((term, j) => normalizedWords[i + j] === term)) {
+            phraseStart = i;
+            break;
+          }
+        }
+        if (phraseStart < 0) continue;
+        const first = words[phraseStart];
+        const last = words[phraseStart + queryWords.length - 1];
+        matchSpan = {
+          startColumn: (first.index ?? 0) + 1,
+          endColumn: (last.index ?? 0) + last[0].length,
+        };
+        bonus = 300;
+      } else if (mode === "near") {
+        // All DISTINCT terms within a span of at most three intervening words.
+        // This is lexical proximity, not semantic similarity or a phrase match.
+        let best: { start: number; end: number } | null = null;
+        for (let i = 0; i < words.length; i++) {
+          const seen = new Set<string>();
+          for (let j = i; j < Math.min(words.length, i + terms.length + 3); j++) {
+            if (termSet.has(normalizedWords[j])) seen.add(normalizedWords[j]);
+            if (seen.size === terms.length) {
+              if (!best || j - i < best.end - best.start) best = { start: i, end: j };
+              break;
+            }
+          }
+        }
+        if (!best) continue;
+        const first = words[best.start];
+        const last = words[best.end];
+        matchSpan = {
+          startColumn: (first.index ?? 0) + 1,
+          endColumn: (last.index ?? 0) + last[0].length,
+        };
+        bonus = 150 + Math.max(0, 10 - (best.end - best.start));
+      }
       const matchedTerms = terms.filter(term => frequencies.has(term));
       const frequency = [...frequencies.values()].reduce((sum, count) => sum + count, 0);
-      const firstMatchOffset = Math.min(...offsets.values());
+      const firstMatchOffset = matchSpan ? matchSpan.startColumn - 1 : Math.min(...offsets.values());
       const excerpt = lineSnippet(line, firstMatchOffset);
       hits.push({
         id: doc.id + ":" + (index + 1),
@@ -160,11 +208,12 @@ export function searchCorpus(
         line: index + 1,
         matchedTerms,
         frequency,
-        score: matchedTerms.length * 100 + Math.min(50, frequency),
+        score: matchedTerms.length * 100 + Math.min(50, frequency) + bonus,
         snippet: excerpt.snippet,
         snippetStartColumn: excerpt.snippetStartColumn,
         sourceLineLength: line.length,
         partial: excerpt.partial,
+        ...(matchSpan ? { matchSpan } : {}),
       });
       if (hits.length > MAX_CORPUS_MATCHES) {
         // Refuse a partial report, rather than silently omitting search hits.
@@ -178,7 +227,11 @@ export function searchCorpus(
   return {
     query: query.trim(), terms, mode, sourceFilter,
     searchedFiles: searched.length, hits, totalHits: hits.length,
-    caveat: "Exact local Unicode keyword matching with a simple term-coverage/frequency score. Results and excerpts are source-derived, not semantic search or verified citations. Long source lines show explicitly marked partial excerpts.",
+    caveat: mode === "phrase"
+      ? "Exact consecutive normalized Unicode tokens on one source line. Repeated words and order matter; whitespace/punctuation between words is not compared literally. Bonus score 300. These are not verified citations."
+      : mode === "near"
+        ? "All distinct query words must appear within at most three intervening words on one source line, in any order. Bonus score 150 plus lexical closeness; not semantic similarity or verified citations."
+        : "Exact local Unicode keyword matching with a simple term-coverage/frequency score. Results and excerpts are source-derived, not semantic search or verified citations. Long source lines show explicitly marked partial excerpts.",
   };
 }
 export function formatCorpusSearch(results: CorpusSearch): string {
@@ -198,7 +251,9 @@ export function formatCorpusSearch(results: CorpusSearch): string {
         " | Original line length: " + hit.sourceLineLength +
         " | Partial excerpt: " + (hit.partial ? "yes" : "no"),
       "Matched terms: " + hit.matchedTerms.join(", ") + " | Frequency: " + hit.frequency +
-        " | Coverage score: " + hit.score,
+        " | Coverage score: " + hit.score +
+        (hit.matchSpan ? " | Match span columns: " + hit.matchSpan.startColumn +
+          "–" + hit.matchSpan.endColumn : ""),
       hit.snippet,
       "",
     );

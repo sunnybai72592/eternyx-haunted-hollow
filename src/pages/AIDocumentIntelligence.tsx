@@ -30,6 +30,13 @@ import {
   type CorpusDocument, type CorpusMatchMode, type CorpusSearch,
 } from "@/lib/ai/document-corpus-tools";
 import {
+  CorpusReviewError,
+  getCorpusSourceContext, verifyCurrentCorpusHit,
+  summarizeCorpusCoverage, formatCorpusCoverage, formatSelectedCorpusContext,
+  fingerprintCorpusDecodedText, formatCorpusFingerprints,
+  type CorpusContext, type CorpusTextFingerprint,
+} from "@/lib/ai/document-corpus-review";
+import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_CHARACTERS,
@@ -96,11 +103,22 @@ const AIDocumentIntelligence = () => {
   const [corpusNotice, setCorpusNotice] = useState<string | null>(null);
   const corpusAI = useAIStudioChat();
   const corpusCharacters = corpusFiles.reduce((sum, doc) => sum + doc.text.length, 0);
+  const corpusCoverage = corpusResults ? summarizeCorpusCoverage(corpusFiles, corpusResults) : null;
+  const corpusHashVersion = useRef(0);
+  const [corpusFingerprints, setCorpusFingerprints] = useState<readonly CorpusTextFingerprint[] | null>(null);
+  const [corpusHashBusy, setCorpusHashBusy] = useState(false);
+  const [corpusContext, setCorpusContext] = useState<CorpusContext | null>(null);
+  const invalidateCorpusFingerprints = () => {
+    corpusHashVersion.current += 1;
+    setCorpusFingerprints(null);
+    setCorpusHashBusy(false);
+  };
 
   const invalidateCorpus = () => {
     corpusAI.invalidate();
     setCorpusResults(null);
     setCorpusSelectedIds([]);
+    setCorpusContext(null);
     setCorpusError(null);
     setCorpusNotice(null);
   };
@@ -116,6 +134,13 @@ const AIDocumentIntelligence = () => {
         invalid_evidence: "A selected evidence reference is stale or missing. Search again before submitting.",
         invalid_question: "Evidence question must be at most 250 characters.",
         too_many_evidence: "Select 1–6 distinct evidence excerpts for an opt-in AI explanation.",
+      }[reason.code]);
+    }
+    if (reason instanceof CorpusReviewError) {
+      return ({
+        stale_source: "The selected excerpt no longer matches the current loaded source text. Search again before quoting or sending it.",
+        invalid_selection: "Choose 1–6 distinct current source lines for the reviewed evidence export.",
+        crypto_unavailable: "This browser does not expose Web Crypto SHA-256 in this context. No fingerprint was created.",
       }[reason.code]);
     }
     return reason instanceof LocalDocumentError ? explainError(reason)
@@ -137,7 +162,9 @@ const AIDocumentIntelligence = () => {
       const additions: CorpusDocument[] = loaded.map(item => ({
         id: crypto.randomUUID(), name: item.name, kind: item.kind, text: item.text,
       }));
-      setCorpusFiles(addCorpusDocuments(corpusFiles, additions));
+      const nextFiles = addCorpusDocuments(corpusFiles, additions);
+      invalidateCorpusFingerprints();
+      setCorpusFiles(nextFiles);
       setCorpusNotice(loaded.length + " local file(s) loaded. Nothing uploaded or persisted.");
     } catch (reason) {
       if (version === corpusReadVersion.current) setCorpusError(corpusErrorText(reason));
@@ -148,6 +175,7 @@ const AIDocumentIntelligence = () => {
   const removeCorpusFile = (id: string) => {
     ++corpusReadVersion.current;
     setCorpusBusy(false);
+    invalidateCorpusFingerprints();
     setCorpusFiles(existing => existing.filter(file => file.id !== id));
     if (corpusFilter === id) setCorpusFilter("");
     invalidateCorpus();
@@ -157,6 +185,7 @@ const AIDocumentIntelligence = () => {
       "Clear all local multi-document evidence files and their search results? This cannot be undone.",
     )) return;
     ++corpusReadVersion.current;
+    invalidateCorpusFingerprints();
     setCorpusFiles([]);
     setCorpusBusy(false);
     setCorpusFilter("");
@@ -194,9 +223,74 @@ const AIDocumentIntelligence = () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     setCorpusNotice("Complete local result export requested. Nothing was sent to AI.");
   };
+  const reviewCorpusHit = (id: string) => {
+    if (!corpusResults) return;
+    try {
+      const hit = corpusResults.hits.find(candidate => candidate.id === id);
+      if (!hit) throw new CorpusReviewError("invalid_selection");
+      setCorpusContext(getCorpusSourceContext(corpusFiles, hit, 2));
+      setCorpusError(null);
+    } catch (reason) {
+      setCorpusContext(null);
+      setCorpusError(corpusErrorText(reason));
+    }
+  };
+  const reviewSelectedCorpus = async (download: boolean) => {
+    if (!corpusResults) return;
+    try {
+      const report = formatSelectedCorpusContext(corpusFiles, corpusResults, corpusSelectedIds);
+      if (download) {
+        const url = URL.createObjectURL(new Blob([report], { type: "text/plain;charset=utf-8" }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "eternyx-reviewed-local-evidence.txt";
+        anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setCorpusNotice("Reviewed source context exported locally; no AI provider was contacted.");
+      } else {
+        await copy(report, "Reviewed local evidence");
+      }
+      setCorpusError(null);
+    } catch (reason) {
+      setCorpusError(corpusErrorText(reason));
+    }
+  };
+  const generateCorpusFingerprints = async () => {
+    const generation = ++corpusHashVersion.current;
+    setCorpusFingerprints(null);
+    setCorpusHashBusy(true);
+    setCorpusError(null);
+    try {
+      const fingerprints = await fingerprintCorpusDecodedText(corpusFiles);
+      if (generation !== corpusHashVersion.current) return;
+      setCorpusFingerprints(fingerprints);
+      setCorpusNotice("SHA-256 of the current decoded text calculated in your browser. This is not source authentication.");
+    } catch (reason) {
+      if (generation === corpusHashVersion.current) setCorpusError(corpusErrorText(reason));
+    } finally {
+      if (generation === corpusHashVersion.current) setCorpusHashBusy(false);
+    }
+  };
+  const downloadCorpusFingerprints = () => {
+    if (!corpusFingerprints) return;
+    const text = formatCorpusFingerprints(corpusFingerprints);
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "eternyx-local-source-sha256.txt";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setCorpusNotice("Local fingerprint manifest downloaded; no files or hashes were uploaded.");
+  };
   const submitCorpusAI = () => {
     if (!corpusResults) return;
     try {
+      // Re-check exact source text before sending any selected evidence.
+      for (const id of corpusSelectedIds) {
+        const hit = corpusResults.hits.find(candidate => candidate.id === id);
+        if (!hit) throw new CorpusReviewError("invalid_selection");
+        verifyCurrentCorpusHit(corpusFiles, hit);
+      }
       const prompt = prepareCorpusAIRequest(corpusResults, corpusSelectedIds, corpusQuestion);
       const detected = inspectDocumentPrivacy(prompt).findings.length;
       if (detected > 0 && !window.confirm(
@@ -1047,7 +1141,8 @@ const AIDocumentIntelligence = () => {
             <CardTitle className="text-white">Multi-document keyword evidence search</CardTitle>
             <CardDescription className="text-slate-400">
               Search up to {MAX_CORPUS_FILES} local text documents together, with source filenames,
-              original line numbers, explicit keyword-coverage scoring and selectable evidence.
+              original line numbers, explicit keyword-coverage scoring, exact phrase/proximity modes,
+              surrounding source context, local SHA-256 text fingerprints and selectable evidence.
               No embeddings, online search, OCR or generated findings.
             </CardDescription>
           </CardHeader>
@@ -1103,6 +1198,8 @@ const AIDocumentIntelligence = () => {
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                   <option value="all">All query words on the same line</option>
                   <option value="any">Any query word on the line</option>
+                  <option value="phrase">Exact consecutive words in query order</option>
+                  <option value="near">All words within three intervening words</option>
                 </select>
               </label>
             </div>
@@ -1124,15 +1221,60 @@ const AIDocumentIntelligence = () => {
                 disabled={!corpusFiles.length && !corpusResults}>
                 Clear local evidence collection
               </Button>
+              <Button type="button" variant="outline" onClick={() => void generateCorpusFingerprints()}
+                disabled={!corpusFiles.length || corpusBusy || corpusHashBusy}>
+                <ShieldCheck className="mr-2 h-4 w-4"/>
+                {corpusHashBusy ? "Hashing local decoded text…" : "Calculate local SHA-256 fingerprints"}
+              </Button>
             </div>
+            {corpusFingerprints && (
+              <section aria-label="Local decoded text fingerprints" className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
+                <p className="text-xs text-amber-200">
+                  These are SHA-256 hashes of UTF-8 encoding of the decoded in-memory text,
+                  NOT necessarily the original uploaded file bytes. They do not authenticate
+                  the author, the uploaded source, or the claims inside it.
+                </p>
+                <ul className="space-y-1 text-xs text-slate-300">
+                  {corpusFingerprints.map(item => (
+                    <li key={item.id} className="break-all">
+                      {item.fileName} · <code>{item.sha256OfDecodedTextUtf8}</code>
+                    </li>
+                  ))}
+                </ul>
+                <Button type="button" variant="outline" onClick={downloadCorpusFingerprints}>
+                  Download complete local SHA-256 manifest (.txt)
+                </Button>
+              </section>
+            )}
             {corpusResults && (
               <section aria-label="Local multi-document evidence results" className="space-y-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-4">
                 <Badge variant="outline">Source-derived keyword matches · not AI</Badge>
                 <p role="status" className="text-sm text-slate-300">
                   {corpusResults.totalHits} matching source lines from {corpusResults.searchedFiles} file(s).
-                  {" "}Sorted by explicit keyword coverage and frequency.
+                  {" "}Sorted by explicitly defined lexical matching and frequency scores.
                 </p>
                 <p className="text-xs text-slate-400">{corpusResults.caveat}</p>
+                {corpusCoverage && (
+                  <section aria-label="Per-source keyword evidence coverage"
+                    className="space-y-2 rounded-lg border border-slate-800 p-3">
+                    <p className="text-sm text-slate-200">
+                      {corpusCoverage.filesWithMatches} of {corpusCoverage.totalFiles} searched files have matching lines.
+                      This is not evidence that those sources agree or are trustworthy.
+                    </p>
+                    <ul className="max-h-40 space-y-1 overflow-auto text-xs text-slate-300">
+                      {corpusCoverage.rows.map(row => (
+                        <li key={row.fileId} className="break-words">
+                          {row.fileName}: {row.matchingLines} matching lines ·
+                          {" "}{row.matchedTerms.length ? row.matchedTerms.join(", ") : "no matching query terms"}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button type="button" variant="outline"
+                      onClick={() => void copy(formatCorpusCoverage(corpusCoverage), "Local source coverage")}>
+                      Copy full source coverage report
+                    </Button>
+                  </section>
+                )}
                 {corpusResults.hits.length > MAX_CORPUS_PREVIEW && <p className="text-xs text-amber-200">
                   Previewing the first {MAX_CORPUS_PREVIEW} of {corpusResults.totalHits} source lines.
                   The full local TXT/JSON downloads include every matched line and location.
@@ -1167,11 +1309,41 @@ const AIDocumentIntelligence = () => {
                       </p>}
                       <p className="mt-1 text-xs text-slate-400">
                         Exact matching words: {hit.matchedTerms.join(", ")} · occurrences {hit.frequency}
+                        {hit.matchSpan && (
+                          <> · matched span columns {hit.matchSpan.startColumn}–{hit.matchSpan.endColumn}</>
+                        )}
                       </p>
                       <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-slate-200">{hit.snippet}</pre>
+                      <Button type="button" variant="outline" size="sm"
+                        onClick={() => reviewCorpusHit(hit.id)}>
+                        Review original source ±2 lines
+                      </Button>
                     </li>
                   ))}
                 </ul>
+                {corpusContext && (
+                  <section aria-label="Verified current source context" className="space-y-2 rounded-lg border border-cyan-400/20 p-3">
+                    <p className="text-sm font-semibold text-white">
+                      {corpusContext.fileName} · selected line {corpusContext.centerLine}
+                    </p>
+                    <p className="text-xs text-amber-200">{corpusContext.caveat}</p>
+                    <ul className="max-h-56 space-y-2 overflow-auto">
+                      {corpusContext.lines.map(line => (
+                        <li key={line.line}
+                          className={line.selected ? "rounded border border-cyan-400/40 p-2" : "rounded border border-slate-700 p-2"}>
+                          <p className="text-xs text-slate-400">
+                            Source line {line.line}, column {line.startColumn}
+                            {line.partial && <> · PARTIAL · original line length {line.sourceLength}</>}
+                          </p>
+                          <pre className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-200">{line.snippet}</pre>
+                        </li>
+                      ))}
+                    </ul>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCorpusContext(null)}>
+                      Close source context
+                    </Button>
+                  </section>
+                )}
                 <section aria-label="Optional AI local evidence explanation" className="space-y-3 rounded-lg border border-violet-400/20 p-4">
                   <h3 className="font-semibold text-white">Explain selected evidence with AI Chat · optional</h3>
                   <p className="text-sm text-slate-400">
@@ -1189,6 +1361,21 @@ const AIDocumentIntelligence = () => {
                       className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white"/>
                   </label>
                   <p className="text-xs text-slate-400">{corpusSelectedIds.length} / {MAX_CORPUS_AI_EVIDENCE} excerpts selected.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" disabled={!corpusSelectedIds.length}
+                      onClick={() => void reviewSelectedCorpus(false)}>
+                      Copy selected evidence with nearby source context
+                    </Button>
+                    <Button type="button" variant="outline" disabled={!corpusSelectedIds.length}
+                      onClick={() => void reviewSelectedCorpus(true)}>
+                      Download selected review (.txt)
+                    </Button>
+                  </div>
+                  <p className="text-xs text-amber-200">
+                    Before AI submission, selected lines are checked against the currently loaded source text.
+                    The AI prompt still contains only the originally selected bounded excerpts, not hidden
+                    surrounding context. A matching local quote does not authenticate the file.
+                  </p>
                   <Button type="button" onClick={submitCorpusAI}
                     disabled={!corpusSelectedIds.length || corpusAI.loading}>
                     {corpusAI.loading ? "Explaining evidence…" : "Explain selected evidence with AI Chat"}
