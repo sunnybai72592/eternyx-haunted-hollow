@@ -8,6 +8,9 @@ export const STUDIO_CHAT_FEATURES = [
   "ai.writing.translate",
   "ai.coding.assist",
   "ai.coding.review",
+  "ai.documents.analyze",
+  "ai.documents.extract",
+  "ai.research.summarize",
 ] as const;
 export type StudioChatFeature = (typeof STUDIO_CHAT_FEATURES)[number];
 

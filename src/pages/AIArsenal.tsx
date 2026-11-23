@@ -43,12 +43,12 @@ const plannedStudios = [
   },
   {
     name: "AI Document Intelligence",
-    description: "Local text document inspection, keyword search, Markdown headings and structured CSV/JSON previews; AI analysis is disabled.",
+    description: "Local text inspection plus opt-in document Q&A and field extraction via AI Chat; PDF/OCR still pending.",
     icon: FileSearch,
   },
   {
     name: "AI Research Studio",
-    description: "Manual source links, evidence notes, competing viewpoints and copyable research briefs. No live search or AI calls.",
+    description: "Manual source-linked evidence notebook with opt-in AI Chat synthesis; no live search or verified citations.",
     icon: Search,
   },
   {
@@ -187,7 +187,7 @@ const AIArsenal = () => {
                       <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-primary">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Coding Studio"].includes(studio.name) ? "Local tools + opt-in AI Chat" : ["AI Audio Studio", "AI Document Intelligence", "AI Research Studio", "AI Agents Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">{["AI Writing Studio", "AI Coding Studio", "AI Document Intelligence", "AI Research Studio"].includes(studio.name) ? "Local tools + opt-in AI Chat" : ["AI Audio Studio", "AI Document Intelligence", "AI Research Studio", "AI Agents Studio"].includes(studio.name) ? "Local workspace ready · AI disabled" : "Planned · not available"}</Badge>
                     </div>
                     <CardTitle className="pt-3 text-xl text-white">{studio.name}</CardTitle>
                     <CardDescription className="leading-6 text-slate-400">{studio.description}</CardDescription>

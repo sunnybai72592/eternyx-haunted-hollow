@@ -16,9 +16,10 @@ const compiled = ts.transpileModule(requestSource, {
 }).outputText;
 const request = await import("data:text/javascript;base64," + Buffer.from(compiled).toString("base64"));
 
-test("the studio chat bridge supports exactly the agreed writing and coding feature keys", () => {
+test("the studio chat bridge supports only explicitly reviewed text-capable feature keys", () => {
   assert.deepEqual([...request.STUDIO_CHAT_FEATURES], [
     "ai.writing.generate", "ai.writing.translate", "ai.coding.assist", "ai.coding.review",
+    "ai.documents.analyze", "ai.documents.extract", "ai.research.summarize",
   ]);
   for (const key of request.STUDIO_CHAT_FEATURES) {
     const message = request.prepareStudioChatMessage(key, "  Sample source  ");

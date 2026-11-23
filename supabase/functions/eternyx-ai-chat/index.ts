@@ -3,6 +3,7 @@ import { authenticateUser } from "../_shared/user-auth.ts";
 import { consumeToolCredits, refundToolCredits, CreditOperationError } from "../_shared/entitlements.ts";
 import { recordAuthorizationEvent } from "../_shared/security-events.ts";
 import { generateChatCompletion, AIProviderError } from "../_shared/ai-provider.ts";
+import { rankDocumentContext } from "../_shared/document-context-ranking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,17 +31,21 @@ const isUuid = (value: unknown): value is string =>
 async function retrieveRelevantChunks(
   supabase: any,
   documentId: string,
+  question: string,
   limit = 5,
 ): Promise<string[]> {
+  // Owner identity is verified in the authenticated handler before this lookup.
+  // Bound the scan to prevent unbounded CPU or DB reads. This remains lexical,
+  // and does not pretend to be embedding-based semantic retrieval.
   const { data, error } = await supabase
     .from("document_chunks")
-    .select("content")
+    .select("content, chunk_index")
     .eq("document_id", documentId)
     .order("chunk_index", { ascending: true })
-    .limit(limit);
+    .limit(200);
 
   if (error) throw new Error("Unable to retrieve document context");
-  return (data ?? []).map((chunk: { content: string }) => chunk.content);
+  return rankDocumentContext(question, data ?? [], limit).map(item => item.content);
 }
 
 
@@ -116,7 +121,7 @@ serve(async (req) => {
     }
 
     const contextChunks = documentId
-      ? await retrieveRelevantChunks(supabase, documentId, 5)
+      ? await retrieveRelevantChunks(supabase, documentId, message, 5)
       : [];
 
     let chatHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
