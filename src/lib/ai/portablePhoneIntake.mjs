@@ -68,8 +68,79 @@ const readme=[
   "Your ORIGINAL phone files remain unchanged. No output directory overwritten.",
   "If FFmpeg fails, no completed or partial output is published.","",
 ].join("\n");
+export const PHONE_MOVIE_PROFILES=Object.freeze(["landscape","portrait","square"]);
+export const PHONE_MOVIE_QUALITIES=Object.freeze(["standard","high"]);
+export function validatePhoneMoviePlan({files,moviePlan,seconds}){
+  if(!Array.isArray(files)||!files.length||files.length>8||
+     !moviePlan||typeof moviePlan!=="object"||Array.isArray(moviePlan)||
+     Object.keys(moviePlan).sort().join(",")!=="profile,quality,shots"||
+     !PHONE_MOVIE_PROFILES.includes(moviePlan.profile)||
+     !PHONE_MOVIE_QUALITIES.includes(moviePlan.quality)||
+     !Array.isArray(moviePlan.shots)||
+     moviePlan.shots.length!==files.length)
+    throw new Error("Each original phone source needs one authored movie shot and supported output presets.");
+  let total=0;
+  const shots=moviePlan.shots.map((shot,index)=>{
+    if(!shot||typeof shot!=="object"||Array.isArray(shot)||
+       Object.keys(shot).sort().join(",")!=="caption,frames,rights_ref,source_filename"||
+       shot.source_filename!==files[index].name||
+       !Number.isSafeInteger(shot.frames)||shot.frames<16||
+       shot.frames>48||shot.frames%16||
+       !Number.isSafeInteger(seconds)||shot.frames>seconds*16)
+      throw new Error("Choose a valid 1–3 second movie cut for every original file, in order.");
+    for(const [key,label] of [["caption","Human-written caption"],["rights_ref","Recording/usage rights reference"]]){
+      const value=shot[key];
+      if(typeof value!=="string"||!value.trim()||value.length>180||
+         /[\u0000-\u001f\u007f]/.test(value))
+        throw new Error(label+" is required for every original movie shot (1–180 printable characters).");
+    }
+    total+=shot.frames;
+    return {source_filename:shot.source_filename,frames:shot.frames,
+            caption:shot.caption,rights_ref:shot.rights_ref};
+  });
+  if(total>480)throw new Error("Direct movie exceeds 30 seconds / 480 frames.");
+  return {kind:"eternyx_offline_phone_movie",version:1,
+          profile:moviePlan.profile,quality:moviePlan.quality,shots};
+}
+const movieWindows=[
+  "@echo off","setlocal",'pushd "%~dp0" || exit /b 1',
+  "py -3 finish_phone_movie.py --run",
+  "set EXITCODE=%ERRORLEVEL%","popd","exit /b %EXITCODE%","",
+].join("\r\n");
+const moviePosix=[
+  "#!/bin/sh","set -eu",
+  'cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"',
+  "python3 finish_phone_movie.py --run","",
+].join("\n");
+const movieGuide=[
+  "ETERNYX — ONE-PROJECT OFFLINE PHONE MOVIE","",
+  "This private archive contains your exact original phone recordings.",
+  "Keep it private and run extracted scripts only when trusted.","",
+  "Requirements: local Python 3.11+ and FFmpeg/FFprobe with libx264.",
+  "No pip package, paid GPU, external AI service or source upload.","",
+  "Extract this ZIP into a new folder and keep phone-clips/ intact.",
+  "Windows: double-click finish-phone-movie-windows.cmd",
+  "macOS/Linux: sh finish-phone-movie-macos-linux.sh",
+  "Or run python3 finish_phone_movie.py --check, then --run.","",
+  "The launcher verifies original SHA256, decoded media, all human-written",
+  "captions and real permission/recording references before processing.",
+  "It normalizes the original footage into genuine 16FPS H264 in",
+  "local-video-media/, then renders verified final phone-movie-output/",
+  "containing video.mp4, captions.srt, preview.html and manifest.json.",
+  "local-video-media/ retains prepared clips and an editable project draft.",
+  "No original is overwritten; output folders must be new.",
+  "If conversion succeeds but final render fails, prepared clips remain",
+  "available for recovery. No partial final movie is published.","",
+  "Final captions are provided as SRT, NOT burned into the MP4.",
+  "This is real offline CPU editing, NOT AI-generated text-to-video.","",
+].join("\n");
+export async function buildPortablePhoneMovie(input){
+  if(!input||typeof input!=="object")
+    throw new Error("Choose original footage and real shot descriptions.");
+  return buildPortablePhoneIntake({...input,moviePlan:input.moviePlan});
+}
 export async function buildPortablePhoneIntake({
-  files,start=0,seconds=30,pythonSources,onProgress=()=>{},
+  files,start=0,seconds=30,pythonSources,onProgress=()=>{},moviePlan=null,
 }={}){
   bounded(start,0,299,"Start offset");
   bounded(seconds,1,60,"Output duration");
@@ -81,6 +152,10 @@ export async function buildPortablePhoneIntake({
   if(typeof onProgress!=="function")throw new Error("Invalid offline ZIP progress listener.");
   if(!globalThis.crypto?.subtle?.digest)
     throw new Error("A secure browser is required for private SHA-256 verification.");
+  const checkedMovie=moviePlan===null?null:
+    validatePhoneMoviePlan({files,moviePlan,seconds});
+  if(checkedMovie&&typeof pythonSources["finish_phone_movie.py"]!=="string")
+    throw new Error("The reviewed offline final H264 renderer must be included in the direct movie ZIP.");
   const names=new Set(),originals=[],members=[];
   let total=0;
   for(const file of files){
@@ -111,12 +186,29 @@ export async function buildPortablePhoneIntake({
     {path:"prepare-phone-macos-linux.sh",blob:new Blob([posix])},
     {path:"prepare-phone-windows.cmd",blob:new Blob([windows])},
     ...scriptNames.map(name=>({path:name,blob:script(name,pythonSources[name])})),
+    ...(checkedMovie?[
+      {path:"phone-movie-plan.json",
+       blob:new Blob([JSON.stringify(checkedMovie,null,2)+"\n"])},
+      {path:"finish_phone_movie.py",
+       blob:script("finish_phone_movie.py",pythonSources["finish_phone_movie.py"])},
+      {path:"finish-phone-movie-windows.cmd",blob:new Blob([movieWindows])},
+      {path:"finish-phone-movie-macos-linux.sh",blob:new Blob([moviePosix])},
+    ]:[]),
   ];
+  if(checkedMovie){
+    // Distinguish actual direct-to-movie workflow from the previous
+    // standalone conversion-only ZIP's README and launcher.
+    const i=meta.findIndex(x=>x.path==="README.txt");
+    meta[i]={path:"README.txt",blob:new Blob([movieGuide])};
+  }
   const archive=await packPortableArchive([...meta,...members],onProgress);
   return {
-    blob:archive,filename:"eternyx-private-phone-intake.zip",
+    blob:archive,filename:checkedMovie?
+      "eternyx-private-phone-movie.zip":"eternyx-private-phone-intake.zip",
     manifest,entryCount:meta.length+members.length,
     bytes:archive.size,sourceCount:originals.length,
-    message:"Private original footage is inside this ZIP. Conversion executes only on your own computer after extraction.",
+    message:checkedMovie?
+      "Original private footage and real human-written captions/rights are included. Offline launcher converts and renders final H264.":
+      "Private original footage is inside this ZIP. Conversion executes only on your own computer after extraction.",
   };
 }
