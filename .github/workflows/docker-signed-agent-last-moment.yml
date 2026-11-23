@@ -1,0 +1,38 @@
+name: Docker signed agent last-moment drift protection (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-agent-last-moment.yml'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'src/lib/dockerSignedAgentLastMomentGate.mjs'
+      - 'src/lib/dockerSignedAgentEngineGate.mjs'
+      - 'tests/docker-signed-agent-last-moment-gate.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_LAST_MOMENT_DRIFT.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-final-inspect:
+    name: Verify signed target double-inspection and terminal evidence offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check original signed agent and pure safety gates
+        run: |
+          node --check scripts/docker-lab-agent.mjs
+          node --check src/lib/dockerSignedAgentLastMomentGate.mjs
+          node --check src/lib/dockerSignedAgentEngineGate.mjs
+          node --check tests/docker-signed-agent-last-moment-gate.test.mjs
+      - name: Test actual agent ordering, target drift and false-completion refusal
+        run: |
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs

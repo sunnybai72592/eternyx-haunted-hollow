@@ -54,12 +54,14 @@ export function validateSignedAgentEngineObserved({pins,context,endpoint:found,i
 }
 function networkAbsent(inspect){
  const nets=inspect?.NetworkSettings?.Networks;
- if(nets!==undefined&&nets!==null&&
-    (typeof nets!=="object"||Array.isArray(nets)||
-      Object.keys(nets).some(name=>name!=="none")))
-  throw Error("Signed-agent container network metadata is unsafe.");
- const ports=inspect?.NetworkSettings?.Ports;
- if(ports!==undefined&&ports!==null&&
+ // Missing Engine metadata is not proof that network access is disabled.
+ if(!nets||typeof nets!=="object"||Array.isArray(nets)||
+    Object.keys(nets).some(name=>name!=="none"))
+  throw Error("Signed-agent container network-none metadata is missing or unsafe.");
+ if(!Object.hasOwn(inspect?.NetworkSettings||{},"Ports"))
+  throw Error("Signed-agent container port metadata is missing.");
+ const ports=inspect.NetworkSettings.Ports;
+ if(ports!==null&&
     (typeof ports!=="object"||Array.isArray(ports)||
       Object.values(ports).some(v=>v!==null&&!(Array.isArray(v)&&v.length===0))))
   throw Error("Signed-agent container published ports are forbidden.");
@@ -76,6 +78,9 @@ export function validateSignedAgentTarget(inspect,containerId,operation,pins,{st
   throw Error("Signed-agent target security policy differs from approved fingerprint.");
  networkAbsent(inspect);
  const status=inspect?.State?.Status, running=inspect?.State?.Running;
+ if(inspect?.State?.Paused===true||inspect?.State?.Restarting===true||
+    inspect?.State?.Dead===true)
+  throw Error("Paused, restarting or dead signed-agent target is unsafe.");
  if(stage==="before"){
   if(operation==="start"&&!(running===false&&["created","exited"].includes(status)))
    throw Error("Start requires an already stopped, pinned target.");
