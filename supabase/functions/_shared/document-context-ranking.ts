@@ -9,6 +9,7 @@ export interface RankedDocumentChunk {
 export interface DocumentEvidence {
   readonly segment: number; // one-based index in the owner's document_chunks table
   readonly excerpt: string; // exact substring of a retrieved chunk, not model-generated
+  readonly page?: number; // only when the PDF parser provided a page marker
 }
 const STOP_WORDS = new Set([
   "the", "and", "for", "with", "from", "that", "this", "what", "when",
@@ -24,6 +25,18 @@ export function getDocumentQueryTerms(question: string): string[] {
   const words = typeof question === "string"
     ? question.toLocaleLowerCase().match(WORDS) ?? [] : [];
   return [...new Set(words.filter(word => word.length >= 2 && !STOP_WORDS.has(word)))].slice(0, 20);
+}
+
+/**
+ * Structured OR query for the optional database GIN index.
+ * Only Unicode letters/numbers are emitted; operators are authored here.
+ */
+export function buildIndexedDocumentSearchQuery(question: string): string {
+  return getDocumentQueryTerms(question)
+    .filter(term => term.length <= 32 && /^[\p{L}\p{N}]+$/u.test(term))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 8)
+    .join(" | ");
 }
 
 function scoreContext(questionTerms: readonly string[], content: string): number {
@@ -68,20 +81,41 @@ export function rankDocumentContext(
 }
 
 /** Source excerpts are sliced from actual returned chunks, never fabricated by AI. */
+function excerptNearQuery(content: string, question: string): string {
+  if (content.length <= MAX_EVIDENCE_EXCERPT) return content;
+  const terms = new Set(getDocumentQueryTerms(question));
+  let offset = 0;
+  for (const match of content.toLocaleLowerCase().matchAll(WORDS)) {
+    if (terms.has(match[0])) {
+      offset = Math.max(0, Math.min(match.index! - 130, content.length - MAX_EVIDENCE_EXCERPT));
+      break;
+    }
+  }
+  return content.slice(offset, offset + MAX_EVIDENCE_EXCERPT);
+}
+
+/** Each excerpt is a literal substring from retrieved DB content. */
 export function buildDocumentEvidence(
   ranked: readonly RankedDocumentChunk[],
+  question = "",
 ): DocumentEvidence[] {
   return ranked.slice(0, 5)
     .filter(item => item && Number.isSafeInteger(item.chunk_index) &&
       item.chunk_index >= 0 && typeof item.content === "string")
-    .map(item => ({
-      segment: item.chunk_index + 1,
-      excerpt: item.content.slice(0, MAX_EVIDENCE_EXCERPT),
-    }));
+    .map(item => {
+      const marker = /^\[PDF page ([1-9]\d*)\]\n/.exec(item.content);
+      const page = marker ? Number(marker[1]) : null;
+      return {
+        segment: item.chunk_index + 1,
+        excerpt: excerptNearQuery(item.content, question),
+        ...(page && Number.isSafeInteger(page) && page <= 60 ? { page } : {}),
+      };
+    });
 }
 
 export function formatDocumentEvidenceForPrompt(evidence: readonly DocumentEvidence[]): string {
   return evidence.map(item =>
-    "[Document segment " + item.segment + "]\n" + item.excerpt,
+    "[Document segment " + item.segment +
+      (item.page ? ", PDF page " + item.page : "") + "]\n" + item.excerpt,
   ).join("\n\n");
 }

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
 import { recordAuthorizationEvent } from "../_shared/security-events.ts";
 import { extractTextFromPDF } from "../_shared/pdf-text-extract.ts";
+import { chunkExtractedPDFByPage } from "../_shared/pdf-page-chunks.ts";
 import {
   PDFIngestError, MAX_PDF_BYTES, MAX_IMAGE_OCR_BYTES, MAX_PDF_EXTRACTED_CHARACTERS,
   validOwnedDocumentPath, matchesDeclaredImageBytes,
@@ -213,8 +214,12 @@ serve(async (req) => {
       throw new Error("Extracted document text exceeds the processing limit");
     }
 
-    const chunks = chunkText(extractedText, 500, 100);
-    if (chunks.length > 605) throw new Error("Document exceeds the maximum indexable text length");
+    // Every PDF chunk retains a genuine parsed PDF page marker so the chat
+    // evidence UI can identify pages instead of guessing from chunk order.
+    const chunks = fileType === "pdf"
+      ? chunkExtractedPDFByPage(extractedText).map(item => item.content)
+      : chunkText(extractedText, 500, 100);
+    if (chunks.length > 750) throw new Error("Document exceeds the maximum indexable text length");
     const chunkRecords = chunks.map((content, index) => ({
       document_id: document.id,
       content,
