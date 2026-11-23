@@ -61,7 +61,7 @@ export function isolatedFixtureTransaction(source,change){
  if(!NEGATIVE_FIXTURE_CASES.some(p=>p.sql===change)||
     source.split("BEGIN TRANSACTION READ ONLY;").length!==2||
     source.split("ROLLBACK;").length!==2)fail();
- const body=source.replace("BEGIN TRANSACTION READ ONLY;","").replace(/ROLLBACK;\s*$/,"").trim();
+ const body=source.slice(source.indexOf("BEGIN TRANSACTION READ ONLY;")+"BEGIN TRANSACTION READ ONLY;".length).replace(/ROLLBACK;\s*$/,"").trim();
  if(!body.startsWith("WITH\n")||!body.endsWith("::text;"))fail();
  return "BEGIN;\n"+change+";\n"+body+"\nROLLBACK;\n";
 }

@@ -10,6 +10,11 @@ on:
       - 'scripts/staging/verifyEducationRealPostgresAudit.mjs'
       - 'scripts/staging/educationHostedDbMetadata.mjs'
       - 'scripts/sql/education-hosted-db-metadata.sql'
+      - 'scripts/sql/education-hosted-journey-fixture.sql'
+      - 'scripts/staging/educationJourneyFixturePreflight.mjs'
+      - 'scripts/staging/verifyEducationRealFixtureSql.mjs'
+      - 'tests/sql/education-hosted-journey-fixture-ci.sql'
+      - 'tests/education-real-fixture-sql.test.mjs'
       - 'tests/education-real-postgres-audit.test.mjs'
       - 'supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql'
       - '.github/workflows/education-postgres-security.yml'
@@ -81,6 +86,10 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/staging-education-immutable-final-grade-records.sql
       - name: Execute actual 31-check hosted SQL and five rollback-restored authorization tamper tests in disposable PostgreSQL
         run: node scripts/staging/verifyEducationRealPostgresAudit.mjs --run
+      - name: Seed synthetic two-question journey preflight fixtures in disposable PostgreSQL
+        run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-hosted-journey-fixture-ci.sql
+      - name: Execute real 21-check journey SQL and six rollback-isolated invalid fixture scenarios
+        run: node scripts/staging/verifyEducationRealFixtureSql.mjs --run
       - name: Rehearse the complete instructor-to-student exam and grading journey
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-full-journey.sql
       - name: Assert 23 finalized-grade owner-tamper and safe-learner-read boundaries
