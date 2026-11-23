@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertEducationDbEvidence } from "./educationHostedDbMetadata.mjs";
+import {FIXTURE_EVIDENCE,assertJourneyFixtureEvidence}
+  from "./educationJourneyFixturePreflight.mjs";
 import {HANDOFF_PATH,verifyJourneyHandoff,journeyStageEnv} from "./educationJourneyHandoff.mjs";
 import { validateEducationReleaseConfig, EDUCATION_RELEASE_STAGES,
   summarizeEducationReleaseEvidence } from "./educationReleaseGate.mjs";
@@ -39,6 +41,12 @@ try {
   const dbEvidence=JSON.parse(readFileSync(
     join(reports,"education-hosted-db-metadata.json"),"utf8"));
   assertEducationDbEvidence(dbEvidence,provenance);
+  // Distinct fixed-grading and teacher ownership proof is required before
+  // the first irreversible exam start; no stale or other-run report accepted.
+  const fixtureEvidence=config.mode==="journey" ?
+    JSON.parse(readFileSync(FIXTURE_EVIDENCE,"utf8")) : undefined;
+  if(config.mode==="journey")
+    assertJourneyFixtureEvidence(fixtureEvidence,process.env);
   mkdirSync(reports,{recursive:true});
   rmSync(releaseFile,{force:true});
   // Remove ALL stale source reports before initiating any potentially
@@ -73,7 +81,7 @@ try {
   }
   const report=summarizeEducationReleaseEvidence(
     config.mode,completed,provenance,dbEvidence,
-    config.mode==="journey" && linkedEnv!==null);
+    config.mode==="journey" && linkedEnv!==null,fixtureEvidence);
   writeFileSync(releaseFile,JSON.stringify(report,null,2)+"\n");
   process.stdout.write("Education "+report.outcome+
     "; staging-only evidence recorded; production launch NOT approved.\n");
