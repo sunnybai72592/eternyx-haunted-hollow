@@ -46,7 +46,29 @@ function psql(input){
   return result.stdout;
 }
 export function runRealPostgresAudit(){
-  parseAuditOutput(psql(auditSql));
+  try {
+    parseAuditOutput(psql(auditSql));
+  } catch(error) {
+    if(String(error?.message)==="check:atomic_start_rpc"){
+      // Only emit fixed boolean security attributes from disposable PostgreSQL.
+      // No function sources, UUIDs, credentials or data rows leave the container.
+      const result=psql(`SELECT pg_catalog.jsonb_build_object(
+        'definer',p.prosecdef,
+        'search_empty_unquoted','search_path='=ANY(COALESCE(p.proconfig,ARRAY[]::text[])),
+        'search_empty_quoted','search_path=""'=ANY(COALESCE(p.proconfig,ARRAY[]::text[])),
+        'authenticated_exec',pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE'),
+        'anon_exec',pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE')
+      )::text FROM pg_catalog.pg_proc p
+      WHERE p.oid=pg_catalog.to_regprocedure('public.start_cbt_attempt(uuid)');`);
+      let diag;
+      try {diag=JSON.parse(result.trim());}catch{diag=null;}
+      const keys=['definer','search_empty_unquoted','search_empty_quoted','authenticated_exec','anon_exec'];
+      if(diag && keys.every(k=>typeof diag[k]==='boolean'))
+        process.stderr.write('Offline RPC metadata flags: '+
+          keys.map(k=>k+'='+diag[k]).join(',')+'\n');
+    }
+    throw error;
+  }
   for(const probe of NEGATIVE_AUDITS){
     parseAuditOutput(psql(rollbackSabotageSql(auditSql,probe.sql)),
       {deniedCheck:probe.rejected});
