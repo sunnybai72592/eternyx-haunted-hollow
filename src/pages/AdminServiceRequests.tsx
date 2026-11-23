@@ -370,16 +370,24 @@ export default function AdminServiceRequests() {
       console.error('Admin check-in failed', reason);
       if (useAuthStore.getState().user?.id === user.id) setFeedback('Check-in not saved. Verify access and your connection before retrying.');
     } finally {
-      setCheckingId(null);
+      if (useAuthStore.getState().user?.id === user.id) setCheckingId(null);
     }
   };
 
   const copyAdminLink = async (id: string) => {
+    if (!authorized || !user?.id || !rows.some((row) => row.id === id)) return;
+    const actor = user.id;
     try {
+      if (!await confirmAdminForLocalAction()) throw new Error('Administrator access not verified');
+      if (useAuthStore.getState().user?.id !== actor) return;
       await navigator.clipboard.writeText(window.location.origin + '/admin/service-requests?request=' + encodeURIComponent(id));
-      setFeedback('Private administrator link copied. Access still requires a verified administrator session.');
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Private administrator link copied. Access still requires a verified administrator session.');
+      }
     } catch {
-      setFeedback('Could not copy the link. Use the request reference instead.');
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Could not copy the private link. Verify administrator access and clipboard permission.');
+      }
     }
   };
 
@@ -468,28 +476,53 @@ export default function AdminServiceRequests() {
   };
 
   const save = async (item: ServiceRow) => {
+    const actor = user?.id;
     const draft = drafts[item.id];
-    if (!draft || saving) return;
-    if ((draft.status === 'in_progress' || draft.status === 'completed') && draft.status !== item.status) { setFeedback('Delivery statuses require a separately verified agreement. They are not enabled by this desk.'); return; }
-    if (draft.client_update.length > 1000) { setFeedback('Client update must be at most 1,000 characters.'); return; }
+    if (!authorized || !actor || !draft || saving || !rows.some((row) => row.id === item.id)) return;
+    if ((draft.status === 'in_progress' || draft.status === 'completed') && draft.status !== item.status) {
+      setFeedback('Delivery statuses require a separately verified agreement. They are not enabled by this desk.');
+      return;
+    }
+    if (draft.client_update.length > 1000) {
+      setFeedback('Client update must be at most 1,000 characters.');
+      return;
+    }
     setSaving(item.id);
     setFeedback(null);
-    const { data, error } = await supabase.from('service_requests')
-      .update({ status: draft.status, client_update: draft.client_update.trim() || null })
-      .eq('id', item.id)
-      .eq('updated_at', item.updated_at)
-      .select('id,status,client_update,updated_at').maybeSingle();
-    if (error || !data) {
-      console.error('Admin service request update failed:', error);
-      setFeedback('Update not saved. The request may have changed or the service desk migration is unavailable. Refresh before retrying.');
-    } else {
-      setRows((items) => items.map((row) => row.id === item.id ? { ...row, status: data.status as ServiceRequestStatus, client_update: data.client_update, updated_at: data.updated_at } : row));
-      setFeedback('Request ' + item.id + ' updated in the database.');
-      void load();
-      void loadQueueCounts();
-      void loadActionCounts();
+    try {
+      // Verify the current session and administrator role immediately
+      // before this customer-visible write. SQL RLS remains authoritative.
+      if (!await confirmAdminForLocalAction()) {
+        throw new Error('Administrator verification failed before saving');
+      }
+      if (useAuthStore.getState().user?.id !== actor) return;
+      const { data, error } = await supabase.from('service_requests')
+        .update({ status: draft.status, client_update: draft.client_update.trim() || null })
+        .eq('id', item.id)
+        .eq('updated_at', item.updated_at)
+        .select('id,status,client_update,updated_at').maybeSingle();
+      if (useAuthStore.getState().user?.id !== actor) return;
+      if (error || !data) {
+        console.error('Admin service request update failed:', error);
+        setFeedback('Update not saved. The request may have changed or the database is unavailable. Refresh before retrying.');
+      } else {
+        setRows((items) => items.map((row) => row.id === item.id ? {
+          ...row, status: data.status as ServiceRequestStatus,
+          client_update: data.client_update, updated_at: data.updated_at,
+        } : row));
+        setFeedback('Request ' + item.id + ' updated in the database.');
+        void load();
+        void loadQueueCounts();
+        void loadActionCounts();
+      }
+    } catch (reason) {
+      console.error('Admin service request verification or write failed', reason);
+      if (useAuthStore.getState().user?.id === actor) {
+        setFeedback('Update not saved. Verify administrator access and your database connection before retrying.');
+      }
+    } finally {
+      if (useAuthStore.getState().user?.id === actor) setSaving(null);
     }
-    setSaving(null);
   };
 
   if (checking || authLoading) return <main className="mx-auto max-w-5xl px-4 py-20 text-center text-muted-foreground">Verifying administrator access…</main>;
