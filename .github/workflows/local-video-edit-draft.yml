@@ -1,0 +1,32 @@
+name: Local video editable draft roundtrip
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai/localVideoDraft.mjs"
+      - "tests/local-video-draft.test.mjs"
+      - "src/components/LocalVideoEditor.tsx"
+      - ".github/workflows/local-video-edit-draft.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai/localVideoDraft.mjs"
+      - "tests/local-video-draft.test.mjs"
+      - "src/components/LocalVideoEditor.tsx"
+      - ".github/workflows/local-video-edit-draft.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-draft-recovery:
+    name: Verify local editable drafts and SHA256 originals without media upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify actual WIP draft roundtrip, complete source-byte checks, and Studio mounting
+        run: node --test tests/local-video-draft.test.mjs
