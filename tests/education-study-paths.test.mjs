@@ -176,8 +176,8 @@ test("study path route is a functioning public Education page, discoverable from
 });
 test("lesson authoring and learning controls are wired to actual data transformations",()=>{
  for(const token of [
-  "authorStudyPath","buildStudyPathJson","parseStudyFile","changeStudyRecord",
-  "summarizeStudyPath","buildStudySessionJson","buildStudyProgressCsv",
+  "authorStudyPath","buildStudyPathJson","parseStudyJourneyFile","changeStudyRecord",
+  "summarizeStudyPath","buildStudyJourneySessionJson","buildStudyProgressCsv",
   "emptyStudyDraft","emptyStudyLesson","Add lesson","Move lesson up",
   "Move lesson down","Delete lesson","Export validated path",
   "Open this path for study","Lesson reading","Practical activity",
