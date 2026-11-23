@@ -37,6 +37,11 @@ import {
   type CorpusContext, type CorpusTextFingerprint,
 } from "@/lib/ai/document-corpus-review";
 import {
+  MAX_CORPUS_WORKSPACE_BYTES, CorpusWorkspaceError,
+  exportCorpusWorkspace, readCorpusWorkspaceFile,
+  formatCorpusWorkspaceInventory, type CorpusWorkspace,
+} from "@/lib/ai/document-corpus-workspace";
+import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_CHARACTERS,
@@ -108,6 +113,33 @@ const AIDocumentIntelligence = () => {
   const [corpusFingerprints, setCorpusFingerprints] = useState<readonly CorpusTextFingerprint[] | null>(null);
   const [corpusHashBusy, setCorpusHashBusy] = useState(false);
   const [corpusContext, setCorpusContext] = useState<CorpusContext | null>(null);
+  const corpusWorkspaceEpoch = useRef(0);
+  const [corpusWorkspaceLoading, setCorpusWorkspaceLoading] = useState(false);
+  const [corpusWorkspaceExporting, setCorpusWorkspaceExporting] = useState(false);
+  const [pendingCorpusWorkspace, setPendingCorpusWorkspace] = useState<CorpusWorkspace | null>(null);
+  const [corpusWorkspaceError, setCorpusWorkspaceError] = useState<string | null>(null);
+  const [corpusWorkspaceNotice, setCorpusWorkspaceNotice] = useState<string | null>(null);
+  const invalidateCorpusWorkspace = () => {
+    corpusWorkspaceEpoch.current += 1;
+    setPendingCorpusWorkspace(null);
+    setCorpusWorkspaceLoading(false);
+    setCorpusWorkspaceExporting(false);
+    setCorpusWorkspaceError(null);
+    setCorpusWorkspaceNotice(null);
+  };
+  const workspaceErrorText = (reason: unknown) => {
+    if (!(reason instanceof CorpusWorkspaceError)) return "Could not validate the local evidence workspace.";
+    return ({
+      invalid_file: "Choose a nonempty .json ETERNYX evidence backup (maximum 3 MiB).",
+      too_large: "Workspace backup exceeds 3 MiB; nothing was imported or exported.",
+      invalid_json: "Backup does not contain valid JSON; the current workspace was not changed.",
+      invalid_schema: "Backup format/version or allowed fields are invalid; no data was imported.",
+      invalid_document: "File labels, formats, IDs, or decoded text exceed corpus safety limits.",
+      invalid_search: "Stored query, mode, filter or question is invalid.",
+      hash_mismatch: "The backed-up text does not match its stored SHA-256. Nothing was imported.",
+      crypto_unavailable: "Secure browser SHA-256 is unavailable; import/export is disabled rather than skipping verification.",
+    }[reason.code]);
+  };
   const invalidateCorpusFingerprints = () => {
     corpusHashVersion.current += 1;
     setCorpusFingerprints(null);
@@ -150,6 +182,7 @@ const AIDocumentIntelligence = () => {
   };
   const loadCorpusFiles = async (files: readonly File[]) => {
     const version = ++corpusReadVersion.current;
+    invalidateCorpusWorkspace();
     invalidateCorpus();
     setCorpusBusy(files.length > 0);
     if (!files.length) return;
@@ -173,6 +206,7 @@ const AIDocumentIntelligence = () => {
     }
   };
   const removeCorpusFile = (id: string) => {
+    invalidateCorpusWorkspace();
     ++corpusReadVersion.current;
     setCorpusBusy(false);
     invalidateCorpusFingerprints();
@@ -184,6 +218,7 @@ const AIDocumentIntelligence = () => {
     if (corpusFiles.length && !window.confirm(
       "Clear all local multi-document evidence files and their search results? This cannot be undone.",
     )) return;
+    invalidateCorpusWorkspace();
     ++corpusReadVersion.current;
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
@@ -208,6 +243,75 @@ const AIDocumentIntelligence = () => {
     setCorpusSelectedIds(existing => checked
       ? existing.includes(id) || existing.length >= MAX_CORPUS_AI_EVIDENCE ? existing : [...existing, id]
       : existing.filter(item => item !== id));
+  };
+  const exportLocalCorpusWorkspace = async () => {
+    const operation = ++corpusWorkspaceEpoch.current;
+    setCorpusWorkspaceError(null);
+    setCorpusWorkspaceNotice(null);
+    setPendingCorpusWorkspace(null);
+    setCorpusWorkspaceExporting(true);
+    try {
+      const serialized = await exportCorpusWorkspace({
+        documents: corpusFiles,
+        query: corpusQuery, mode: corpusMode,
+        sourceFilter: corpusFilter || null, question: corpusQuestion,
+      });
+      if (operation !== corpusWorkspaceEpoch.current) return;
+      const link = URL.createObjectURL(new Blob([serialized], {type: "application/json"}));
+      const anchor = document.createElement("a");
+      anchor.href = link;
+      anchor.download = "eternyx-local-evidence-workspace-v1.json";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(link), 1000);
+      setCorpusWorkspaceNotice("Full decoded-text backup exported locally. Store this unencrypted JSON privately; nothing was uploaded.");
+    } catch (reason) {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceError(workspaceErrorText(reason));
+    } finally {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceExporting(false);
+    }
+  };
+  const previewCorpusWorkspace = async (file: File | null) => {
+    const operation = ++corpusWorkspaceEpoch.current;
+    setPendingCorpusWorkspace(null);
+    setCorpusWorkspaceError(null);
+    setCorpusWorkspaceNotice(null);
+    setCorpusWorkspaceLoading(!!file);
+    if (!file) return;
+    try {
+      const verified = await readCorpusWorkspaceFile(file);
+      if (operation !== corpusWorkspaceEpoch.current) return;
+      setPendingCorpusWorkspace(verified);
+      setCorpusWorkspaceNotice(
+        "Backup schema and all decoded-text SHA-256 values verified locally. No replacement or AI request has occurred.",
+      );
+    } catch (reason) {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceError(workspaceErrorText(reason));
+    } finally {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceLoading(false);
+    }
+  };
+  const restoreCorpusWorkspace = () => {
+    if (!pendingCorpusWorkspace || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+    if (!window.confirm(
+      "REPLACE every current local evidence file and search setting with this validated backup? " +
+      "The existing in-memory documents, selected excerpts and AI results will be discarded. " +
+      "Save your existing workspace first if you need to keep it. No automatic merge or upload.",
+    )) return;
+    const imported = pendingCorpusWorkspace;
+    // Stop pending user file reads and fingerprint generation before replacing.
+    ++corpusReadVersion.current;
+    setCorpusBusy(false);
+    invalidateCorpusWorkspace();
+    invalidateCorpusFingerprints();
+    invalidateCorpus();
+    setCorpusFiles(imported.documents.map(({ id, name, kind, text }) => ({ id, name, kind, text })));
+    setCorpusQuery(imported.query);
+    setCorpusMode(imported.mode);
+    setCorpusFilter(imported.sourceFilter ?? "");
+    setCorpusQuestion(imported.question);
+    setCorpusWorkspaceNotice(
+      "Validated local workspace restored. Search again to recompute fresh evidence; no cached hits or AI interpretation were imported.",
+    );
   };
   const downloadCorpusResults = (format: "txt" | "json") => {
     if (!corpusResults) return;
@@ -1167,6 +1271,82 @@ const AIDocumentIntelligence = () => {
             <p role="status" className="text-xs text-slate-400">
               {corpusFiles.length} / {MAX_CORPUS_FILES} files · {corpusCharacters.toLocaleString()} / 400,000 characters
             </p>
+            <section aria-label="Portable local evidence workspace backup and restore"
+              className="space-y-3 rounded-xl border border-cyan-500/20 bg-slate-950 p-4">
+              <h3 className="font-semibold text-white">Portable evidence workspace · local verified backup</h3>
+              <p className="text-xs text-amber-200">
+                Backups contain COMPLETE ORIGINAL DECODED DOCUMENT TEXT, filenames, searches and questions
+                as unencrypted JSON. Keep downloads private. Browser SHA-256 protects against accidental
+                changes to the saved text but does NOT prove its author or authenticity.
+                The backup does not automatically sync or recover after refresh.
+              </p>
+              <p className="text-xs text-slate-400">
+                Version 1 JSON · maximum {(MAX_CORPUS_WORKSPACE_BYTES / 1024 / 1024).toLocaleString()} MiB.
+                Imports do not trust cached search hits, selected evidence, or AI responses:
+                run a fresh search after restoration.
+              </p>
+              <Button type="button" variant="outline"
+                disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}
+                onClick={() => void exportLocalCorpusWorkspace()}>
+                {corpusWorkspaceExporting ? "Creating local SHA-256 backup…" : "Export full local evidence workspace (.json)"}
+              </Button>
+              <label htmlFor="document-corpus-workspace-file" className="block space-y-2 text-sm text-slate-300">
+                <span>Choose ETERNYX local workspace backup JSON · review before replacement</span>
+                <input id="document-corpus-workspace-file" type="file" accept=".json,application/json"
+                  disabled={corpusBusy || corpusWorkspaceExporting || corpusWorkspaceLoading}
+                  onChange={e => {
+                    void previewCorpusWorkspace(e.target.files?.[0] ?? null);
+                    e.currentTarget.value = "";
+                  }}
+                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-700 file:px-3 file:py-1 file:text-white"
+                />
+              </label>
+              {corpusWorkspaceLoading && <p role="status" className="text-xs text-cyan-200">
+                Checking format, document caps and every SHA-256 locally… The current files are unchanged.
+              </p>}
+              {pendingCorpusWorkspace && (
+                <section aria-label="Verified import preview, not yet applied"
+                  className="space-y-2 rounded-lg border border-cyan-400/30 p-3">
+                  <Badge variant="outline">Version {pendingCorpusWorkspace.version} · SHA-256 checked · not restored</Badge>
+                  <p className="text-sm text-slate-200">
+                    Backup: {pendingCorpusWorkspace.documents.length} files,
+                    {" "}{pendingCorpusWorkspace.documents.reduce((sum, doc) => sum + doc.text.length, 0).toLocaleString()} decoded characters.
+                    {" "}Current workspace: {corpusFiles.length} files.
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Restored mode: {pendingCorpusWorkspace.mode}; saved query:
+                    {" "}{pendingCorpusWorkspace.query || "(empty)"}. Matching excerpts and AI results are NOT restored.
+                  </p>
+                  <ul className="max-h-36 space-y-1 overflow-auto text-xs text-slate-300">
+                    {pendingCorpusWorkspace.documents.map(doc => (
+                      <li key={doc.id} className="break-all">
+                        {doc.name} · {doc.kind.toUpperCase()} · {doc.text.length.toLocaleString()} characters
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" onClick={restoreCorpusWorkspace}
+                      disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}>
+                      Confirm replacement with validated backup
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => {
+                      invalidateCorpusWorkspace();
+                      setCorpusWorkspaceNotice("Import cancelled. Existing local documents remain unchanged.");
+                    }}>Cancel backup import</Button>
+                  </div>
+                  <Button type="button" variant="outline"
+                    onClick={() => void copy(formatCorpusWorkspaceInventory(pendingCorpusWorkspace), "Verified backup inventory")}>
+                    Copy manifest without full document contents
+                  </Button>
+                </section>
+              )}
+              {corpusWorkspaceError && <Alert role="alert" variant="destructive">
+                <XCircle className="h-4 w-4"/><AlertDescription>{corpusWorkspaceError}</AlertDescription>
+              </Alert>}
+              {corpusWorkspaceNotice && <Alert role="status" aria-live="polite">
+                <ShieldCheck className="h-4 w-4"/><AlertDescription>{corpusWorkspaceNotice}</AlertDescription>
+              </Alert>}
+            </section>
             {corpusBusy && <p role="status" className="text-xs text-cyan-200">
               Reading and validating text files locally… No partial batch will be added.
             </p>}
@@ -1187,14 +1367,14 @@ const AIDocumentIntelligence = () => {
                   onKeyDown={e => {
                     if (e.key === "Enter" && !e.nativeEvent.isComposing && corpusFiles.length && !corpusBusy) runCorpusSearch();
                   }}
-                  onChange={e => { setCorpusQuery(e.target.value); invalidateCorpus(); }}
+                  onChange={e => { invalidateCorpusWorkspace(); setCorpusQuery(e.target.value); invalidateCorpus(); }}
                   placeholder="e.g. coating inspection"
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
               </label>
               <label htmlFor="document-corpus-mode" className="block space-y-2 text-sm text-slate-300">
                 <span>Keyword matching</span>
                 <select id="document-corpus-mode" value={corpusMode}
-                  onChange={e => { setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
+                  onChange={e => { invalidateCorpusWorkspace(); setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                   <option value="all">All query words on the same line</option>
                   <option value="any">Any query word on the line</option>
@@ -1206,7 +1386,7 @@ const AIDocumentIntelligence = () => {
             <label htmlFor="document-corpus-filter" className="block space-y-2 text-sm text-slate-300">
               <span>Optional local file filter</span>
               <select id="document-corpus-filter" value={corpusFilter}
-                onChange={e => { setCorpusFilter(e.target.value); invalidateCorpus(); }}
+                onChange={e => { invalidateCorpusWorkspace(); setCorpusFilter(e.target.value); invalidateCorpus(); }}
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                 <option value="">Search all loaded files</option>
                 {corpusFiles.map(file => <option key={file.id} value={file.id}>{file.name}</option>)}
@@ -1356,7 +1536,7 @@ const AIDocumentIntelligence = () => {
                   <label htmlFor="document-corpus-ai-question" className="block space-y-2 text-sm text-slate-300">
                     <span>Optional evidence question · maximum 250 characters</span>
                     <input id="document-corpus-ai-question" value={corpusQuestion} maxLength={250}
-                      onChange={e => { setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
+                      onChange={e => { invalidateCorpusWorkspace(); setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
                       placeholder="Which lines support this conclusion?"
                       className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white"/>
                   </label>
