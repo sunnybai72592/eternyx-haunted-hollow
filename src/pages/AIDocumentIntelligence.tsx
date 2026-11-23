@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, XCircle } from "lucide-react";
+import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,12 @@ import {
   DocumentPrivacyError, redactDocumentPrivacy, inspectDocumentPrivacy,
   formatDocumentPrivacyAudit, type PrivacyRedaction,
 } from "@/lib/ai/document-privacy-tools";
+import {
+  MAX_CORPUS_FILES, MAX_CORPUS_PREVIEW, MAX_CORPUS_AI_EVIDENCE,
+  CorpusSearchError, addCorpusDocuments, searchCorpus,
+  formatCorpusSearch, prepareCorpusAIRequest,
+  type CorpusDocument, type CorpusMatchMode, type CorpusSearch,
+} from "@/lib/ai/document-corpus-tools";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -77,6 +83,133 @@ const AIDocumentIntelligence = () => {
   const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
   const privacyTarget = aiPassage ?? source;
   const privacyCurrent = privacyCopy?.sourceText === privacyTarget ? privacyCopy : null;
+  const corpusReadVersion = useRef(0);
+  const [corpusFiles, setCorpusFiles] = useState<CorpusDocument[]>([]);
+  const [corpusBusy, setCorpusBusy] = useState(false);
+  const [corpusQuery, setCorpusQuery] = useState("");
+  const [corpusMode, setCorpusMode] = useState<CorpusMatchMode>("all");
+  const [corpusFilter, setCorpusFilter] = useState("");
+  const [corpusResults, setCorpusResults] = useState<CorpusSearch | null>(null);
+  const [corpusSelectedIds, setCorpusSelectedIds] = useState<string[]>([]);
+  const [corpusQuestion, setCorpusQuestion] = useState("");
+  const [corpusError, setCorpusError] = useState<string | null>(null);
+  const [corpusNotice, setCorpusNotice] = useState<string | null>(null);
+  const corpusAI = useAIStudioChat();
+  const corpusCharacters = corpusFiles.reduce((sum, doc) => sum + doc.text.length, 0);
+
+  const invalidateCorpus = () => {
+    corpusAI.invalidate();
+    setCorpusResults(null);
+    setCorpusSelectedIds([]);
+    setCorpusError(null);
+    setCorpusNotice(null);
+  };
+  const corpusErrorText = (reason: unknown): string => {
+    if (reason instanceof CorpusSearchError) {
+      return ({
+        invalid_file: "Use only nonempty TXT, Markdown, CSV, JSON or LOG text files (at most 100,000 characters each).",
+        duplicate_file: "File names or IDs must be distinct. Remove the existing file before adding another with the same name.",
+        file_limit: "The local evidence collection allows at most eight text documents.",
+        too_large: "Input or selected evidence exceeds a safe local or AI request size limit; no partial operation was performed.",
+        invalid_query: "Enter 1–8 Unicode search words (maximum 120 characters), and select a valid source filter.",
+        too_many_matches: "More than 2,000 matching lines. Narrow the search; no partial results were returned.",
+        invalid_evidence: "A selected evidence reference is stale or missing. Search again before submitting.",
+        invalid_question: "Evidence question must be at most 250 characters.",
+        too_many_evidence: "Select 1–6 distinct evidence excerpts for an opt-in AI explanation.",
+      }[reason.code]);
+    }
+    return reason instanceof LocalDocumentError ? explainError(reason)
+      : reason instanceof DocumentPrivacyError
+        ? "Too many sensitive-looking strings in the selected evidence; no AI request was made."
+        : "Local multi-document search failed.";
+  };
+  const loadCorpusFiles = async (files: readonly File[]) => {
+    const version = ++corpusReadVersion.current;
+    invalidateCorpus();
+    setCorpusBusy(files.length > 0);
+    if (!files.length) return;
+    try {
+      if (corpusFiles.length + files.length > MAX_CORPUS_FILES) {
+        throw new CorpusSearchError("file_limit");
+      }
+      const loaded = await Promise.all(files.map(file => readLocalDocument(file)));
+      if (version !== corpusReadVersion.current) return;
+      const additions: CorpusDocument[] = loaded.map(item => ({
+        id: crypto.randomUUID(), name: item.name, kind: item.kind, text: item.text,
+      }));
+      setCorpusFiles(addCorpusDocuments(corpusFiles, additions));
+      setCorpusNotice(loaded.length + " local file(s) loaded. Nothing uploaded or persisted.");
+    } catch (reason) {
+      if (version === corpusReadVersion.current) setCorpusError(corpusErrorText(reason));
+    } finally {
+      if (version === corpusReadVersion.current) setCorpusBusy(false);
+    }
+  };
+  const removeCorpusFile = (id: string) => {
+    ++corpusReadVersion.current;
+    setCorpusBusy(false);
+    setCorpusFiles(existing => existing.filter(file => file.id !== id));
+    if (corpusFilter === id) setCorpusFilter("");
+    invalidateCorpus();
+  };
+  const clearCorpus = () => {
+    if (corpusFiles.length && !window.confirm(
+      "Clear all local multi-document evidence files and their search results? This cannot be undone.",
+    )) return;
+    ++corpusReadVersion.current;
+    setCorpusFiles([]);
+    setCorpusBusy(false);
+    setCorpusFilter("");
+    setCorpusQuery("");
+    setCorpusMode("all");
+    setCorpusQuestion("");
+    invalidateCorpus();
+  };
+  const runCorpusSearch = () => {
+    invalidateCorpus();
+    try {
+      setCorpusResults(searchCorpus(corpusFiles, corpusQuery, corpusMode, corpusFilter || null));
+    } catch (reason) {
+      setCorpusError(corpusErrorText(reason));
+    }
+  };
+  const toggleCorpusHit = (id: string, checked: boolean) => {
+    corpusAI.invalidate();
+    setCorpusError(null);
+    setCorpusSelectedIds(existing => checked
+      ? existing.includes(id) || existing.length >= MAX_CORPUS_AI_EVIDENCE ? existing : [...existing, id]
+      : existing.filter(item => item !== id));
+  };
+  const downloadCorpusResults = (format: "txt" | "json") => {
+    if (!corpusResults) return;
+    const text = format === "txt"
+      ? formatCorpusSearch(corpusResults) : JSON.stringify(corpusResults, null, 2);
+    const url = URL.createObjectURL(new Blob([text], {
+      type: format === "txt" ? "text/plain;charset=utf-8" : "application/json",
+    }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "eternyx-local-evidence." + format;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setCorpusNotice("Complete local result export requested. Nothing was sent to AI.");
+  };
+  const submitCorpusAI = () => {
+    if (!corpusResults) return;
+    try {
+      const prompt = prepareCorpusAIRequest(corpusResults, corpusSelectedIds, corpusQuestion);
+      const detected = inspectDocumentPrivacy(prompt).findings.length;
+      if (detected > 0 && !window.confirm(
+        "Selected excerpts contain " + detected +
+        " sensitive-looking pattern(s). This sends the ORIGINAL selected text and source names to the external AI Chat provider, consumes ai.chat credits and saves chat history. Continue?",
+      )) return;
+      setCorpusError(null);
+      setCorpusNotice(null);
+      void corpusAI.run("ai.documents.analyze", prompt);
+    } catch (reason) {
+      setCorpusError(corpusErrorText(reason));
+    }
+  };
 
   const invalidatePrivacy = () => {
     setPrivacyCopy(null);
@@ -905,6 +1038,182 @@ const AIDocumentIntelligence = () => {
             </section>
             {comparisonError && <Alert role="alert" variant="destructive">
               <XCircle className="h-4 w-4" /><AlertDescription>{comparisonError}</AlertDescription>
+            </Alert>}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/60 text-slate-100">
+          <CardHeader>
+            <CardTitle className="text-white">Multi-document keyword evidence search</CardTitle>
+            <CardDescription className="text-slate-400">
+              Search up to {MAX_CORPUS_FILES} local text documents together, with source filenames,
+              original line numbers, explicit keyword-coverage scoring and selectable evidence.
+              No embeddings, online search, OCR or generated findings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-amber-200">
+              Completely local until you explicitly send selected excerpts to AI Chat.
+              Files are held only in memory (not uploaded or saved).
+              100,000 characters per file; 400,000 characters total.
+              Matches are exact Unicode word tokens, not semantic similarity.
+            </p>
+            <label htmlFor="document-corpus-files" className="block space-y-2 text-sm text-slate-300">
+              <span>Choose independent TXT, Markdown, CSV, JSON or LOG documents (multiple selection)</span>
+              <input id="document-corpus-files" type="file" multiple
+                accept=".txt,.md,.markdown,.csv,.json,.log" disabled={corpusBusy || corpusFiles.length >= MAX_CORPUS_FILES}
+                onChange={e => {
+                  void loadCorpusFiles(Array.from(e.target.files ?? []));
+                  e.currentTarget.value = "";
+                }}
+                className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-700 file:px-3 file:py-1 file:text-white"
+              />
+            </label>
+            <p role="status" className="text-xs text-slate-400">
+              {corpusFiles.length} / {MAX_CORPUS_FILES} files · {corpusCharacters.toLocaleString()} / 400,000 characters
+            </p>
+            {corpusBusy && <p role="status" className="text-xs text-cyan-200">
+              Reading and validating text files locally… No partial batch will be added.
+            </p>}
+            <ul className="space-y-2">
+              {corpusFiles.map(file => (
+                <li key={file.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+                  <span className="break-all">{file.name} · {file.kind.toUpperCase()} · {file.text.length.toLocaleString()} characters</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => removeCorpusFile(file.id)}>
+                    <Trash2 className="mr-1 h-3 w-3" />Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label htmlFor="document-corpus-query" className="block space-y-2 text-sm text-slate-300">
+                <span>Keyword query · up to eight words, 120 characters</span>
+                <input id="document-corpus-query" value={corpusQuery} maxLength={120}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing && corpusFiles.length && !corpusBusy) runCorpusSearch();
+                  }}
+                  onChange={e => { setCorpusQuery(e.target.value); invalidateCorpus(); }}
+                  placeholder="e.g. coating inspection"
+                  className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
+              </label>
+              <label htmlFor="document-corpus-mode" className="block space-y-2 text-sm text-slate-300">
+                <span>Keyword matching</span>
+                <select id="document-corpus-mode" value={corpusMode}
+                  onChange={e => { setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
+                  className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
+                  <option value="all">All query words on the same line</option>
+                  <option value="any">Any query word on the line</option>
+                </select>
+              </label>
+            </div>
+            <label htmlFor="document-corpus-filter" className="block space-y-2 text-sm text-slate-300">
+              <span>Optional local file filter</span>
+              <select id="document-corpus-filter" value={corpusFilter}
+                onChange={e => { setCorpusFilter(e.target.value); invalidateCorpus(); }}
+                className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
+                <option value="">Search all loaded files</option>
+                {corpusFiles.map(file => <option key={file.id} value={file.id}>{file.name}</option>)}
+              </select>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={runCorpusSearch}
+                disabled={!corpusFiles.length || !corpusQuery.trim() || corpusBusy}>
+                <ScanSearch className="mr-2 h-4 w-4"/>Search loaded files locally
+              </Button>
+              <Button type="button" variant="outline" onClick={clearCorpus}
+                disabled={!corpusFiles.length && !corpusResults}>
+                Clear local evidence collection
+              </Button>
+            </div>
+            {corpusResults && (
+              <section aria-label="Local multi-document evidence results" className="space-y-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-4">
+                <Badge variant="outline">Source-derived keyword matches · not AI</Badge>
+                <p role="status" className="text-sm text-slate-300">
+                  {corpusResults.totalHits} matching source lines from {corpusResults.searchedFiles} file(s).
+                  {" "}Sorted by explicit keyword coverage and frequency.
+                </p>
+                <p className="text-xs text-slate-400">{corpusResults.caveat}</p>
+                {corpusResults.hits.length > MAX_CORPUS_PREVIEW && <p className="text-xs text-amber-200">
+                  Previewing the first {MAX_CORPUS_PREVIEW} of {corpusResults.totalHits} source lines.
+                  The full local TXT/JSON downloads include every matched line and location.
+                </p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => void copy(formatCorpusSearch(corpusResults), "Complete local evidence")}>
+                    <ClipboardCopy className="mr-2 h-4 w-4"/>Copy full result report
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadCorpusResults("txt")}>
+                    Download all evidence (.txt)
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => downloadCorpusResults("json")}>
+                    Download all evidence (.json)
+                  </Button>
+                </div>
+                <ul className="max-h-96 space-y-3 overflow-y-auto">
+                  {corpusResults.hits.slice(0, MAX_CORPUS_PREVIEW).map(hit => (
+                    <li key={hit.id} className="rounded-lg border border-slate-800 p-3 text-sm text-slate-200">
+                      <label className="flex items-start gap-2 text-xs text-slate-300">
+                        <input type="checkbox" checked={corpusSelectedIds.includes(hit.id)}
+                          disabled={!corpusSelectedIds.includes(hit.id) &&
+                            corpusSelectedIds.length >= MAX_CORPUS_AI_EVIDENCE}
+                          onChange={e => toggleCorpusHit(hit.id, e.target.checked)} className="mt-1"/>
+                        <span>Use this exact excerpt for optional AI explanation</span>
+                      </label>
+                      <p className="mt-2 break-all text-xs font-semibold text-cyan-200">
+                        {hit.documentName} · line {hit.line} · column {hit.snippetStartColumn}
+                        {" "}· keyword score {hit.score}
+                      </p>
+                      {hit.partial && <p className="mt-1 text-xs text-amber-200">
+                        Partial line excerpt · original source line contains {hit.sourceLineLength} characters.
+                      </p>}
+                      <p className="mt-1 text-xs text-slate-400">
+                        Exact matching words: {hit.matchedTerms.join(", ")} · occurrences {hit.frequency}
+                      </p>
+                      <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-slate-200">{hit.snippet}</pre>
+                    </li>
+                  ))}
+                </ul>
+                <section aria-label="Optional AI local evidence explanation" className="space-y-3 rounded-lg border border-violet-400/20 p-4">
+                  <h3 className="font-semibold text-white">Explain selected evidence with AI Chat · optional</h3>
+                  <p className="text-sm text-slate-400">
+                    Select 1–{MAX_CORPUS_AI_EVIDENCE} excerpts from the visible results.
+                    Only an explicit click sends the full selected excerpts with source labels and line numbers
+                    to the existing authenticated AI Chat provider. It may use ai.chat credits,
+                    save history, and process data externally. No source verification or independent web search is performed.
+                    Oversized requests fail without silent truncation. Check privacy carefully before submission.
+                  </p>
+                  <label htmlFor="document-corpus-ai-question" className="block space-y-2 text-sm text-slate-300">
+                    <span>Optional evidence question · maximum 250 characters</span>
+                    <input id="document-corpus-ai-question" value={corpusQuestion} maxLength={250}
+                      onChange={e => { setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
+                      placeholder="Which lines support this conclusion?"
+                      className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white"/>
+                  </label>
+                  <p className="text-xs text-slate-400">{corpusSelectedIds.length} / {MAX_CORPUS_AI_EVIDENCE} excerpts selected.</p>
+                  <Button type="button" onClick={submitCorpusAI}
+                    disabled={!corpusSelectedIds.length || corpusAI.loading}>
+                    {corpusAI.loading ? "Explaining evidence…" : "Explain selected evidence with AI Chat"}
+                  </Button>
+                  {corpusAI.loading && <p role="status" className="text-xs text-cyan-200">
+                    AI request in progress. Editing search inputs hides stale results but cannot cancel a submitted credit charge.
+                  </p>}
+                  {corpusAI.error && <Alert role="alert" variant="destructive">
+                    <XCircle className="h-4 w-4"/><AlertDescription>{corpusAI.error}</AlertDescription>
+                  </Alert>}
+                  {corpusAI.result && <div className="space-y-2">
+                    <Badge variant="outline">AI-generated interpretation · source lines unverified</Badge>
+                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 p-3 text-sm text-slate-200">{corpusAI.result}</pre>
+                    <Button type="button" variant="outline" onClick={() => void copy(corpusAI.result!, "AI evidence interpretation")}>
+                      <ClipboardCopy className="mr-2 h-4 w-4"/>Copy AI interpretation
+                    </Button>
+                  </div>}
+                </section>
+              </section>
+            )}
+            {corpusError && <Alert role="alert" variant="destructive">
+              <XCircle className="h-4 w-4"/><AlertDescription>{corpusError}</AlertDescription>
+            </Alert>}
+            {corpusNotice && <Alert role="status" aria-live="polite">
+              <ShieldCheck className="h-4 w-4"/><AlertDescription>{corpusNotice}</AlertDescription>
             </Alert>}
           </CardContent>
         </Card>
