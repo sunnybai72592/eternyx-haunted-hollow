@@ -68,3 +68,24 @@ export function workspaceResumeAction(visibility,inFlight,disabled=false) {
   if(visibility!=="visible")return "ignore";
   return inFlight?"queue":"revalidate";
 }
+
+
+// Phase 30: metadata and identity come from the SAME just-fetched list
+// snapshot that governs subsequent detail reads. Never trust stale closures.
+export function assertWorkspaceTeamState(space){
+  if(!space||typeof space.id!=="string"||!space.id||
+     typeof space.owner_id!=="string"||!space.owner_id||
+     !["active","archived"].includes(space.status)){
+    throw Error("Workspace team status or identity could not be verified");
+  }
+  return space;
+}
+
+export function requireWorkspacePreferredTeam(rows,preferred=null){
+  if(preferred===null||preferred===undefined||preferred==="")return true;
+  if(typeof preferred!=="string"||!Array.isArray(rows)||
+     !rows.some(space=>space&&space.id===preferred)){
+    throw Error("The newly created or joined Workspace team is not visible to this account");
+  }
+  return true;
+}
