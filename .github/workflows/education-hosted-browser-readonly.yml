@@ -95,7 +95,7 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/education-browser"
           "$RUNNER_TEMP/education-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
-          "$RUNNER_TEMP/education-browser/bin/python" -m playwright install chromium
+          "$RUNNER_TEMP/education-browser/bin/python" -m playwright install --with-deps chromium
       - name: Start local staging-targeted preview with no account credentials
         run: |
           nohup npm run preview -- --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/education-preview.log" 2>&1 &

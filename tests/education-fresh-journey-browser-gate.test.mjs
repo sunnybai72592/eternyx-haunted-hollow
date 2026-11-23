@@ -247,8 +247,8 @@ test("new Chrome frontend uses staging public key but neither service role nor D
 });
 
 test("both real hosted Chromium workflows actually install browser binary, not just Python package",()=>{
- assert.match(standalone,/python" -m playwright install chromium/);
- assert.match(workflow,/python" -m playwright install chromium/);
+ assert.match(standalone,/python" -m playwright install --with-deps chromium/);
+ assert.match(workflow,/python" -m playwright install --with-deps chromium/);
 });
 
 test("private student browser exercises EXACT fresh receipt and denies B in both viewports",()=>{

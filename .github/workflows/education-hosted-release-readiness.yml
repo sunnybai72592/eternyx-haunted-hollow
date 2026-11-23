@@ -202,7 +202,7 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/edu-journey-browser"
           "$RUNNER_TEMP/edu-journey-browser/bin/pip" install --disable-pip-version-check playwright==1.56.0
-          "$RUNNER_TEMP/edu-journey-browser/bin/python" -m playwright install chromium
+          "$RUNNER_TEMP/edu-journey-browser/bin/python" -m playwright install --with-deps chromium
       - name: Start local staging-targeted journey UI preview with no account credentials
         if: inputs.run_mode == 'journey'
         timeout-minutes: 2
