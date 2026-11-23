@@ -366,6 +366,37 @@ def actual_preflight(page):
     assert "RELEASE_PRIVATE_MARKER_BROKEN" not in json.dumps(failed_handoff)
     editor.fill(before_broken)
     page.get_by_role("button", name="Save browser copy").click()
+    # 3.8: use the *actually saved* project test plan (three assertions).
+    # A deliberately failing text-absent assertion cannot be passed off as a
+    # successful release just because the two default assertions passed.
+    saved_before = page.evaluate("() => localStorage.getItem('eternyx:developer-local-tests:v1')")
+    page.get_by_role("button", name="Run with saved test plan").click()
+    saved_panel = page.get_by_label("Saved test plan release review")
+    expect(saved_panel.get_by_text("Saved plan requires review", exact=False)).to_be_visible(timeout=20000)
+    with page.expect_download() as file:
+        page.get_by_role("button", name="Export combined local evidence").click()
+    combined=json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
+    assert combined["schema"] == "eternyx-developer-release-evidence-pack-v1"
+    assert combined["savedPlanReview"]["assertionCount"] == 3
+    assert combined["savedPlanReview"]["failedAssertions"] >= 1
+    assert combined["localVerdict"] == "local-review-required"
+    assert combined["releaseDecision"] == "HOLD_HOSTED_RELEASE"
+    assert combined["hostedStagingVerified"] is False
+    assert combined["protectedBackendVerified"] is False
+    assert combined["productionVerified"] is False
+    assert "acceptance marker" not in json.dumps(combined)
+    assert "app.js" not in json.dumps(combined)
+    # Same-tab plan saves must invalidate the previously exported snapshot.
+    page.locator("#developer-test-kind").select_option("file-exists")
+    page.locator("#developer-test-file").fill("app.js")
+    page.get_by_role("button", name="Add assertion").click()
+    page.get_by_role("button", name="Save test plan locally").click()
+    expect(page.get_by_text("Saved test plan changed. Combined evidence is stale; rerun required.")).to_be_visible()
+    expect(page.get_by_role("button", name="Export combined local evidence")).to_be_disabled()
+    page.evaluate("""value => {
+      localStorage.setItem('eternyx:developer-local-tests:v1', value);
+      window.dispatchEvent(new Event('eternyx:developer-tests-saved'));
+    }""", saved_before)
 
 def preview_isolation(page):
     assert page.locator('iframe[title="Isolated project preview"]').count() == 0
