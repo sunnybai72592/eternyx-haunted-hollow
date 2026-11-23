@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { normalizeWorkflowSteps } from "@/lib/automationWorkflow.mjs";
-import { automationControlFailure, shouldInvalidateAutomationCloud } from "@/lib/automationCloudStatus.mjs";
+import { automationControlFailure, shouldInvalidateAutomationCloud, verifyAutomationRunHistory } from "@/lib/automationCloudStatus.mjs";
 
 type Step = {
   id: string; kind: string; value?: string; replacement?: string; caseSensitive?: boolean;
@@ -77,11 +77,8 @@ function readWorkflows(raw: unknown): SavedWorkflow[] {
   });
 }
 function readHistory(raw: unknown): SavedRun[] {
-  if (!Array.isArray(raw)) throw new Error("Invalid execution history.");
-  return raw.filter((value: unknown): value is SavedRun =>
-    isRecord(value) && typeof value.id === "string" &&
-    typeof value.created_at === "string" && value.status === "completed" &&
-    typeof value.output_lines === "number" && Array.isArray(value.trace));
+  // Reject instead of silently hiding malformed or privacy-unsafe records.
+  return verifyAutomationRunHistory(raw) as SavedRun[];
 }
 
 export default function AutomationCloudPanel({
