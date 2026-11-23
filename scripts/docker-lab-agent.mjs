@@ -11,6 +11,8 @@ import { verifyManagedTarget } from "../src/lib/dockerOperatorUtils.mjs";
 import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   validateSignedAgentEngineObserved,validateSignedAgentTarget}
   from "../src/lib/dockerSignedAgentEngineGate.mjs";
+import {assertSignedAgentPreMutationUnchanged,validateSignedAgentLifecycleEvidence}
+  from "../src/lib/dockerSignedAgentLastMomentGate.mjs";
 import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
 import { verifyPinnedDockerLabPermit } from "../src/lib/dockerLabPermitGuard.mjs";
@@ -131,6 +133,7 @@ async function main(){
   // A second signed round trip verifies policy, active approval, signature and
   // short expiry *again*, right before the guarded local action.
   const authorized=await send("authorize",job.claimId);
+  const approvedPins=validateSignedAgentEnginePins(process.env);
   const permit=verifyPinnedDockerLabPermit(authorized,{
     agentId,claimId:job.claimId,requestId:job.requestId,
     operation:job.operation,containerId:job.containerId,
@@ -148,7 +151,7 @@ async function main(){
     const before=JSON.parse(raw);
     verifyManagedTarget(before,permit.containerId);
     validateSignedAgentTarget(before,permit.containerId,permit.operation,
-      validateSignedAgentEnginePins(process.env));
+      approvedPins);
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired.");
     // Set uncertainty BEFORE fsync. Even an interrupted/partially written
     // attempted event must never be downgraded into a guard_denied receipt.
@@ -157,11 +160,21 @@ async function main(){
     audit({claimId:permit.claimId,containerId:permit.containerId,operation:permit.operation,result:"attempted"});
     if(Date.parse(permit.expiresAt)<=Date.now())throw Error("Permit expired after attempt reservation.");
     if(localContext()!==context)throw Error("Signed-agent Docker context changed before mutation.");
+    // Recheck the exact target AFTER the independent daemon/context gate and
+    // immediately before mutation. Stable image/policy alone is insufficient:
+    // another process could have changed a lifecycle epoch or network state.
+    const justBefore=JSON.parse(docker(["--context",context,"container","inspect",
+      "--format","{{json .}}",permit.containerId]));
+    assertSignedAgentPreMutationUnchanged(
+      before,justBefore,permit.containerId,permit.operation,approvedPins);
+    if(Date.parse(permit.expiresAt)<=Date.now())
+      throw Error("Signed permit expired during last-moment container reinspection.");
     docker(["--context",context,"container",permit.operation,permit.containerId],20000);
     const after=JSON.parse(docker(["--context",context,"container","inspect","--format","{{json .}}",permit.containerId]));
     validateSignedAgentTarget(after,permit.containerId,permit.operation,
-      validateSignedAgentEnginePins(process.env),{stage:"after"});
+      approvedPins,{stage:"after"});
     if(!labPostcondition(permit.operation,before,after))throw Error("Docker postcondition unconfirmed.");
+    validateSignedAgentLifecycleEvidence(before,after,permit.operation);
     postconditionConfirmed=true;
   }catch{
     process.stderr.write("Lab guard, mutation or postcondition not confirmed. Inspect journal; never auto-retry.\n");
