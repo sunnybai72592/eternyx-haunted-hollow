@@ -27,7 +27,7 @@ test("offline Chromium integration covers eight real UI transitions on both view
  assert.match(script,/page\.wait_for_url\(/);
  assert.match(script,/browser\.new_context\(/);
  assert.match(script,/context\.close\(\)/);
- assert.match(script,/self\.fail_next_written_save = True/);
+ assert.match(script,/fixture\.fail_next_written_save = True/);
 });
 
 test("browser exercises actual student save and verified receipt HTTP contract",()=>{
