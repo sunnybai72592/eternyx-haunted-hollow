@@ -7,6 +7,8 @@ on:
       - "src/lib/ai/portableVideoBundle.mjs"
       - "src/components/LocalVideoImportPrep.tsx"
       - "gpu-worker/launch_phone_intake.py"
+      - "gpu-worker/finish_phone_movie.py"
+      - "tests/portable-phone-movie.test.mjs"
       - "gpu-worker/prepare_video_sources.py"
       - "tests/portable-phone-intake.test.mjs"
       - ".github/workflows/portable-phone-intake.yml"
@@ -17,6 +19,8 @@ on:
       - "src/lib/ai/portableVideoBundle.mjs"
       - "src/components/LocalVideoImportPrep.tsx"
       - "gpu-worker/launch_phone_intake.py"
+      - "gpu-worker/finish_phone_movie.py"
+      - "tests/portable-phone-movie.test.mjs"
       - "gpu-worker/prepare_video_sources.py"
       - "tests/portable-phone-intake.test.mjs"
       - ".github/workflows/portable-phone-intake.yml"
@@ -49,3 +53,9 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           OMP_NUM_THREADS: "1"
         run: node --test tests/portable-phone-intake.test.mjs
+      - name: Create verified finished H264 movie directly from real original phone clips
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          PYTHONDONTWRITEBYTECODE: "1"
+          OMP_NUM_THREADS: "1"
+        run: node --test tests/portable-phone-movie.test.mjs
