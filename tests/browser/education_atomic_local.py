@@ -141,6 +141,12 @@ class Fixture:
                 route.fulfill(status=503, json={"message": "Synthetic response lost"})
             else:
                 route.fulfill(json={"id": ATTEMPT, "status": "submitted"})
+        elif path == "/rest/v1/rpc/visitor_presence" and method == "POST":
+            # A public sign-in page may have started an optional analytics
+            # request just before navigation. It is blocked entirely by
+            # this offline fixture; the private-route provider guard is
+            # asserted separately by source regression tests.
+            route.fulfill(status=403, json={"message": "Local analytics disabled"})
         elif path == "/rest/v1/rpc/is_admin" and method == "POST":
             # Read-only role check, not a privileged operation.
             route.fulfill(json=False)
