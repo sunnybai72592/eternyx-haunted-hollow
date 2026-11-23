@@ -1,6 +1,8 @@
 // Workspace Phase 28: an OPERATOR-ONLY, metadata-only PostgreSQL audit.
 // No network activity occurs when importing this module or checking config.
 // Config validation reuses the strict, proven Automation isolated-target guard.
+import {fileURLToPath} from "node:url";
+import path from "node:path";
 import {inspectStagingConnection,classifyStagingPgFailure} from "./automation-staging-db-readonly.mjs";
 import {WORKSPACE_MIGRATION_PATHS} from "../src/lib/workspaceReleaseInventory.mjs";
 
@@ -84,3 +86,18 @@ export function parseWorkspaceStagingAudit(stdout){
   };
 }
 export {classifyStagingPgFailure};
+
+export function main(argv=process.argv.slice(2),env=process.env){
+  if(argv.length!==1||argv[0]!=="--check-config")
+    fail("invalid_arguments");
+  process.stdout.write(JSON.stringify(inspectWorkspaceAuditConfig(env),null,2)+"\n");
+}
+const invoked=process.argv[1]&&
+  path.resolve(process.argv[1])===fileURLToPath(import.meta.url);
+if(invoked){
+  try{main();}
+  catch{
+    process.stderr.write("workspace_staging_audit_config_rejected\n");
+    process.exitCode=2;
+  }
+}
