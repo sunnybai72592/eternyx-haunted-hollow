@@ -26,7 +26,7 @@ export function requireDurableTerminalBeforeReceipt(journal,expectedOutcome){
     journal.outcome!==expectedOutcome||journal.acknowledged===true||
     journal.attentionRequired!==true||
     (expectedOutcome==="guard_denied"&&journal.attempted!==false)||
-    (expectedOutcome==="completed"&&journal.attempted!==true))
+    (["completed","failed"].includes(expectedOutcome)&&journal.attempted!==true))
   throw Error("Signed receipt forbidden without exact durable terminal journal.");
  return true;
 }
