@@ -128,6 +128,15 @@ def preview_isolation(page):
     doc=frame.get_attribute("srcdoc")
     assert "connect-src 'none'" in doc and "form-action 'none'" in doc
     assert "worker-src 'none'" in doc
+    # A visible srcdoc element is not yet proof its inline JavaScript has run.
+    # Wait for the actual opaque-origin iframe load event before clicking the
+    # starter button; otherwise a fast desktop CI runner can click before its
+    # addEventListener executes, leaving the initial text unchanged.
+    frame_handle = frame.element_handle()
+    assert frame_handle is not None, "Explicit preview iframe was not mounted"
+    isolated_frame = frame_handle.content_frame()
+    assert isolated_frame is not None, "Explicit preview iframe has no document"
+    isolated_frame.wait_for_load_state("load", timeout=15000)
     preview=page.frame_locator('iframe[title="Isolated project preview"]')
     expect(preview.locator("#message")).to_have_text("Try editing these files.")
     # The iframe HTML can become visible before its inline JS has registered
