@@ -93,7 +93,6 @@ test("strict root field names, version, unknown permissions, and document fields
   for (const changed of [
     {...valid,version:2}, {...valid,format:"other"},
     {...valid,permission:"admin"}, {...valid, documents:null},
-    {...valid,question:123},
   ]) await assert.rejects(() => workspace.parseCorpusWorkspace(JSON.stringify(changed)), {code:"invalid_schema"});
   for (const changed of [
     {...valid,documents:[{...valid.documents[0],executable:"yes"}]},
@@ -110,6 +109,7 @@ test("malformed JSON, excessive bytes and unsafe search settings reject entire s
   await assert.rejects(() => workspace.parseCorpusWorkspace("{bad"), {code:"invalid_json"});
   await assert.rejects(() => workspace.parseCorpusWorkspace("x".repeat(workspace.MAX_CORPUS_WORKSPACE_BYTES+1)), {code:"too_large"});
   for (const changed of [
+    {...valid,question:123},
     {...valid,mode:"semantic"}, {...valid,sourceFilter:"missing"},
     {...valid,query:"a ".repeat(125)}, {...valid,question:"x".repeat(251)},
     {...valid,query:"one two three four five six seven eight nine"},
