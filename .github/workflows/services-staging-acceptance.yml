@@ -35,6 +35,16 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Require fresh operator-confirmed schema and collision evidence
+        env:
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_CONFIRM: ${{ inputs.acknowledgment }}
+          SERVICES_STAGING_RELEASE_EVIDENCE: ${{ vars.SERVICES_STAGING_RELEASE_EVIDENCE }}
+        run: |
+          node scripts/services-migration-source-guard.mjs > /dev/null
+          node scripts/services-staging-release-evidence.mjs
+
       - name: Install dependencies
         run: npm ci
 
