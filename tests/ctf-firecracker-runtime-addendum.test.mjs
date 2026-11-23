@@ -196,7 +196,7 @@ test("the file-backed path verifies case checkpoint and uses exclusive local wri
   assert.match(review,/verifyIndependentCaseCheckpoint/);
   assert.match(review,/auditOfflineRuntimeObservations/);
   assert.match(review,/verifySignedReviewDisposition/);
-  assert.match(review,/O_EXCL/);
+  assert.match(review,/publishOfflineEvidence/);
   assert.match(review,/RUNTIME_ADDENDUM_FILE/);
   assert.match(cli,/--sign/);
   assert.match(cli,/--verify/);
