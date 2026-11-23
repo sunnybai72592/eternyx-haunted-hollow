@@ -33,6 +33,8 @@ jobs:
         run: node scripts/automation-runtime-readiness.mjs --source-check
       - name: Inventory Workspace release-critical SQL, smoke tests, and CI wiring (offline only)
         run: node scripts/workspace-release-readiness.mjs --source-check
+      - name: Verify Phase 21 staging acceptance runner syntax without remote credentials
+        run: node --check scripts/workspace-team-staging-acceptance.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
