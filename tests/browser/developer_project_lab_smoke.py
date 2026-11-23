@@ -316,7 +316,7 @@ def actual_preflight(page):
     page.get_by_role("button", name="Run project tests").click()
     results_panel = page.get_by_label("Local test results")
     expect(results_panel.get_by_text("missing-local-reference", exact=False)).to_be_visible(timeout=20000)
-    expect(results_panel.get_by_text("Next step:", exact=False)).to_be_visible()
+    expect(results_panel.get_by_text("Next step:", exact=False).first).to_be_visible()
     with page.expect_download() as file:
         page.get_by_role("button", name="Export source-free test report").click()
     integration_report = json.loads(Path(file.value.path()).read_text(encoding="utf-8"))
