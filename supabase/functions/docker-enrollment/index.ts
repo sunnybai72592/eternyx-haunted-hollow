@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { authenticateUser } from "../_shared/user-auth.ts";
+import { verifiedDockerOwnerId } from "../_shared/docker-owner-guard.mjs";
 import { parseDockerEnrollmentRequest, makeEnrollmentMessage, decodeBase64url } from "../_shared/docker-enrollment-contract.mjs";
 
 const headers = {
@@ -26,8 +27,9 @@ serve(async (req:Request)=>{
   }catch{return reply({error:"Invalid JSON"},400);}
   if(!request)return reply({error:"Invalid Docker enrollment request"},400);
   const {user,supabase}=await authenticateUser(req);
-  if(!user||!supabase||user.is_anonymous)return reply({error:"Sign in to manage Docker identity"},401);
-  const owner=user.id;
+  const verifiedOwner=verifiedDockerOwnerId(user,supabase);
+  if(!user||!supabase||user.is_anonymous||!verifiedOwner)return reply({error:"Sign in to manage Docker identity"},401);
+  const owner=verifiedOwner;
   try{
     if(request.action==="list"){
       const [a,b,c]=await Promise.all([

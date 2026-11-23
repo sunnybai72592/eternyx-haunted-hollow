@@ -400,6 +400,10 @@ verify_jwt = true
 verify_jwt = true
 
 # Agent-initiated Ed25519-authenticated Docker heartbeat (no user JWT)
+# Signed-in owner enrollment explicitly requires a JWT at the Edge gateway.
+[functions.docker-enrollment]
+verify_jwt = true
+
 [functions.docker-heartbeat]
 verify_jwt = false
 
