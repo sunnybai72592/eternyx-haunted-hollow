@@ -34,6 +34,8 @@ type Props = {
   onOpen: (projectId: string) => void;
   onCheckpoint: (projectId: string) => void;
   onResume: (fingerprint: string) => void;
+  onFork: (target: { sessionId: string; sourceHash: string;
+    projectId: string; projectName: string }) => void;
   onDiscarded: () => void;
 };
 
@@ -47,7 +49,7 @@ const rowsQuery = (owner: string, start: number) =>
     .range(start, start + WORKSPACE_RECOVERY_PAGE_SIZE - 1);
 
 export default function WorkspaceRecoveryCenter({
-  owner, disabled, projects, refreshKey, onOpen, onCheckpoint, onResume, onDiscarded,
+  owner, disabled, projects, refreshKey, onOpen, onCheckpoint, onResume, onFork, onDiscarded,
 }: Props) {
   const currentOwner = useRef(owner);
   currentOwner.current = owner;
@@ -352,6 +354,28 @@ export default function WorkspaceRecoveryCenter({
       </p>}
       {integrityWarnings.map((warning, index) => <p key={"integrity-"+index}
         className="text-amber-400" role="status">{warning}</p>)}
+      {integrity && (integrity.status === "held" ||
+        (integrity.status === "active" && !integrity.content_matches)) && <div className="space-y-2 rounded-lg border border-border p-2">
+        <p className="text-amber-400">
+          This import has protected or diverged work. A separate recovery archive
+          preserves the existing project and restores the original source into a NEW project.
+          It does not merge or replace manual edits.
+        </p>
+        <Button size="sm" variant="outline" type="button" disabled={disabled || busy || loading}
+          onClick={() => {
+            if (!window.confirm(
+              "Create a side-by-side recovery COPY instead of overwriting this project? " +
+              "First preserve your edited project with Backup files + checklists. " +
+              "Then select the exact original archive and download a separate recovery archive."
+            )) return;
+            onFork({ sessionId: inspection.session_id,
+              sourceHash: selected.source_sha256, projectId: inspection.project_id,
+              projectName: inspection.project_name });
+          }}>
+          <FileSearch className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+          Prepare separate recovery copy
+        </Button>
+      </div>}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" type="button" disabled={disabled || busy}
           onClick={() => onCheckpoint(inspection.project_id)}>
