@@ -1,0 +1,43 @@
+name: Services migration source integrity (offline only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/services-migration-source-guard.mjs"
+      - "scripts/automation-migration-collision-forensics.mjs"
+      - "scripts/automation-migration-collision-baseline.json"
+      - "tests/services-migration-source-guard-phase28.test.mjs"
+      - ".github/workflows/services-migration-source-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-migration-source-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-integrity:
+    name: Inspect pinned Services migrations and source security invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout source only
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22 without database credentials
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Evaluate historic collision baseline and Phase 13/14 invariants
+        run: node scripts/services-migration-source-guard.mjs
+
+      - name: Test source gate rejects policy and journal regressions
+        run: node --test tests/services-migration-source-guard-phase28.test.mjs
+
+      # Deliberately do NOT set database secrets, provision Supabase,
+      # repair migration history, run SQL, or upload raw database evidence.
