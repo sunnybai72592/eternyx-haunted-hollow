@@ -22,7 +22,7 @@ Each result must be the literal boolean TRUE. Any FALSE, NULL, missing assertion
 
 ## Real mutation checks in disposable PostgreSQL 17
 
-An extra CI test executes the EXACT privilege query under a synthetic NOINHERIT/NOLOGIN? **LOGIN-enabled** least-privilege SQL role in the existing network-isolated disposable PostgreSQL 17 container.
+An extra CI test executes the EXACT privilege query under a synthetic **LOGIN-enabled, NOINHERIT** least-privilege SQL role in the existing network-isolated disposable PostgreSQL 17 container.
 
 The replay checks a clean role, then deliberately grants and removes five distinct dangerous capabilities in separate transactions: INSERT on the Services request table, CREATE on public schema, CREATEDB, pg_write_all_data membership, and USAGE on a synthetic sequence. Each real PostgreSQL mutation must flip its expected metadata check to FALSE. The runner subsequently verifies all seven checks return TRUE after cleanup, drops the ephemeral sequence and test role, and destroys the Docker container. No remote database is accessed by this workflow.
 
