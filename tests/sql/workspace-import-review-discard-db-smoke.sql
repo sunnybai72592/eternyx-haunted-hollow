@@ -25,6 +25,10 @@ BEGIN
     PERFORM public.workspace_import_prepare_discard(complete_id);
     RAISE EXCEPTION 'Completed import was improperly discarded';
   EXCEPTION WHEN check_violation THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_import_cancel_discard(complete_id);
+    RAISE EXCEPTION 'Completed import was improperly unsealed';
+  EXCEPTION WHEN check_violation THEN NULL; END;
 END;
 $check$;
 
@@ -51,6 +55,19 @@ BEGIN
     OR inspection->>'project_status' <> 'archived'
     OR inspection->>'can_finalize_discard' <> 'true' THEN
     RAISE EXCEPTION 'Prepared project was not sealed: %',inspection;
+  END IF;
+  -- A prepared but not finalized discard is reversible without data loss.
+  IF NOT public.workspace_import_cancel_discard(unfinished)
+    OR NOT public.workspace_import_cancel_discard(unfinished) THEN
+    RAISE EXCEPTION 'Undo-seal is not retry-safe';
+  END IF;
+  inspection := public.workspace_import_inspect(unfinished);
+  IF inspection->>'status' <> 'active'
+    OR inspection->>'project_status' <> 'active' THEN
+    RAISE EXCEPTION 'Undo seal failed to restore project state';
+  END IF;
+  IF NOT public.workspace_import_prepare_discard(unfinished) THEN
+    RAISE EXCEPTION 'Re-sealing restored empty project failed';
   END IF;
   reused := public.workspace_import_begin(repeat('b',64),1,'Unfinished import','',1,0,0,0);
   IF reused->>'status' <> 'discarding' OR reused->>'project_id' <> project::text THEN
@@ -173,6 +190,10 @@ BEGIN
   BEGIN
     PERFORM public.workspace_import_finalize_discard(bob_session);
     RAISE EXCEPTION 'Other owner finalized private import';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    PERFORM public.workspace_import_cancel_discard(bob_session);
+    RAISE EXCEPTION 'Other owner cancelled private import disposal';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END;
 $check$;
