@@ -134,7 +134,7 @@ test("cross-track progress is unique, derived from correct answers and never sto
  assert.throws(()=>summarizePracticeProgress(["unknown-case"]));
  assert.throws(()=>summarizePracticeProgress(PRACTICE_CASES.map(c=>c.id).concat(["fake"])));
 });
-test("UI correctly shows fifteen tracks, forty-five questions, safe examples and no network or durable score",async()=>{
+test("UI shows the 90-question filtered catalog, safe examples and no network or durable score",async()=>{
  const [ui,page,engine,ops]=await Promise.all([
   readFile(new URL("../src/components/labs/LabsPracticeChallenges.tsx",import.meta.url),"utf8"),
   readFile(new URL("../src/pages/EternyxLabs.tsx",import.meta.url),"utf8"),
@@ -142,7 +142,8 @@ test("UI correctly shows fifteen tracks, forty-five questions, safe examples and
   readFile(new URL("../src/lib/eternyxLabsOperations.mjs",import.meta.url),"utf8"),
  ]);
  assert.match(ui,/\{PRACTICE_CASES.length\} hands-on questions across \{PRACTICE_TRACKS.length\} tracks/);
- assert.match(ui,/PRACTICE_TRACKS\.map/);
+ assert.match(ui,/visibleTracks\.map/);
+ assert.match(ui,/filterPracticeTracks\(filters\)/);
  assert.match(ui,/gradePracticeAnswerAsync\(caseId,submittedAnswer\)/);
  assert.match(ui,/setPassed\(new Set\(\)\)/);
  assert.match(ui,/Current tab only/);

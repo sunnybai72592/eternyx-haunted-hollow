@@ -4,6 +4,8 @@ import {
   PRACTICE_CASES, PRACTICE_TRACKS,
   gradePracticeAnswerAsync, summarizePracticeProgress,
 } from "@/lib/eternyxLabsPractice.mjs";
+import {filterPracticeCases,filterPracticeTracks,nextUnfinishedPracticeCase,summarizePracticeReview} from "@/lib/eternyxLabsPracticeSession.mjs";
+import PracticeSessionToolbar from "./PracticeSessionToolbar";
 
 const fieldClass="min-h-11 w-full rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary";
 const buttonClass="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border/70 bg-card/80 px-4 py-2.5 text-sm font-semibold transition hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
@@ -19,11 +21,20 @@ export default function LabsPracticeChallenges(){
   const [hintOpen,setHintOpen]=useState(false);
   const [passed,setPassed]=useState<Set<string>>(()=>new Set());
   const [feedbackError,setFeedbackError]=useState<string | null>(null);
+  const [bookmarks,setBookmarks]=useState<Set<string>>(()=>new Set());
+  const [query,setQuery]=useState("");
+  const [status,setStatus]=useState<"all"|"todo"|"done">("all");
+  const [bookmarksOnly,setBookmarksOnly]=useState(false);
+  const [navigationNotice,setNavigationNotice]=useState<string | null>(null);
 
   const active=PRACTICE_CASES.find(c=>c.id===activeId)!;
   const track=PRACTICE_TRACKS.find(t=>t.id===active.track)!;
   const cases=PRACTICE_CASES.filter(c=>c.track===active.track);
   const progress=useMemo(()=>summarizePracticeProgress(passed),[passed]);
+  const review=useMemo(()=>summarizePracticeReview(passed,bookmarks),[passed,bookmarks]);
+  const filters={query,status,bookmarksOnly,passedIds:passed,bookmarkedIds:bookmarks};
+  const visibleTracks=filterPracticeTracks(filters);
+  const visibleCases=filterPracticeCases(active.track,filters);
 
   const selectCase=(id:string)=>{
     if(!PRACTICE_CASES.some(c=>c.id===id))return;
@@ -34,6 +45,7 @@ export default function LabsPracticeChallenges(){
     setResult(null);
     setHintOpen(false);
     setFeedbackError(null);
+    setNavigationNotice(null);
   };
   const grade=async()=>{
     const ticket=++requestSeq.current;
@@ -68,11 +80,28 @@ export default function LabsPracticeChallenges(){
     setFeedbackError(null);
   };
   const next=()=>{
-    const index=PRACTICE_CASES.findIndex(c=>c.id===activeId);
-    selectCase(PRACTICE_CASES[(index+1)%PRACTICE_CASES.length].id);
+    // Navigation obeys the user's current search, status and bookmark filters.
+    const matching=visibleTracks.flatMap(t=>filterPracticeCases(t.id,filters));
+    if(!matching.length){setNavigationNotice("No cases match these filters.");return;}
+    const index=matching.findIndex(c=>c.id===activeId);
+    selectCase(matching[(index+1)%matching.length].id);
+  };
+  const nextUnfinished=()=>{
+    const id=nextUnfinishedPracticeCase(activeId,passed);
+    if(id){
+      setQuery("");setStatus("all");setBookmarksOnly(false);
+      selectCase(id);
+    }else setNavigationNotice("All 90 scenarios have locally checked-correct markers.");
+  };
+  const importLocal=(updatedPassed:Set<string>,updatedBookmarks:Set<string>)=>{
+    ++requestSeq.current;setChecking(false);
+    setPassed(updatedPassed);setBookmarks(updatedBookmarks);
+    setResult(null);setAnswer("");setFeedbackError(null);setNavigationNotice(null);
   };
   const reset=()=>{
     setPassed(new Set());
+    setBookmarks(new Set());
+    setQuery("");setStatus("all");setBookmarksOnly(false);
     selectCase(PRACTICE_CASES[0].id);
   };
   return (
@@ -98,15 +127,23 @@ export default function LabsPracticeChallenges(){
         </div>
       </div>
 
+      <PracticeSessionToolbar query={query} onQuery={setQuery}
+        status={status} onStatus={setStatus} bookmarksOnly={bookmarksOnly}
+        onBookmarksOnly={setBookmarksOnly} passed={passed} bookmarks={bookmarks}
+        onImport={importLocal}/>
+      <div role="status" aria-live="polite" className="text-xs text-muted-foreground">
+        {review.unfinished} unfinished · {review.bookmarked} bookmarked · {review.bookmarkedUnfinished} bookmarked and unfinished
+      </div>
       <div className="space-y-3">
         <h3 className="text-sm font-semibold">Choose a practice track</h3>
+        <p role="status" className="text-xs text-muted-foreground">{visibleTracks.length} of {PRACTICE_TRACKS.length} tracks match filters.</p>
         <div role="group" aria-label="Practice tracks" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {PRACTICE_TRACKS.map(t=>{
+          {visibleTracks.map(t=>{
             const complete=progress.byTrack.find(p=>p.id===t.id)!;
             const activeTrack=track.id===t.id;
             return (
               <button key={t.id} type="button" aria-pressed={activeTrack}
-                onClick={()=>selectCase(PRACTICE_CASES.find(c=>c.track===t.id)!.id)}
+                onClick={()=>selectCase(filterPracticeCases(t.id,filters)[0].id)}
                 className={"min-h-20 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary "+
                   (activeTrack?"border-primary/50 bg-primary/[0.09]":"border-border/60 bg-background/50 hover:border-primary/35")}>
                 <span className="block text-sm font-semibold">{t.title}</span>
@@ -115,26 +152,31 @@ export default function LabsPracticeChallenges(){
             );
           })}
         </div>
+        {visibleTracks.length===0&&<p role="status" className="text-sm text-muted-foreground">No tracks match. Clear the search or filters to continue.</p>}
         <p className="text-xs text-muted-foreground">{track.description}</p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
         <nav aria-label="Questions in selected track" className="space-y-2">
-          {cases.map((c,index)=><button key={c.id} type="button"
+          {visibleCases.map(c=><button key={c.id} type="button"
             aria-pressed={c.id===activeId} onClick={()=>selectCase(c.id)}
             className={"flex min-h-12 w-full items-center gap-2 rounded-xl border p-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary "+
               (c.id===activeId?"border-primary/50 bg-primary/[0.09]":"border-border/60 bg-background/50 hover:border-primary/35")}>
             {passed.has(c.id)
               ?<CheckCircle2 className="h-4 w-4 shrink-0 text-primary" aria-label="Checked correct"/>
               :<CircleHelp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true"/>}
-            <span className="min-w-0"><span className="block text-xs text-muted-foreground">Case {index+1}</span><span className="block font-medium">{c.title}</span></span>
+            <span className="min-w-0"><span className="block text-xs text-muted-foreground">Case {cases.findIndex(x=>x.id===c.id)+1}</span><span className="block font-medium">{c.title}</span></span>
           </button>)}
+          {visibleCases.length===0&&<p role="status" className="p-2 text-xs text-muted-foreground">No cases in this track match the filters.</p>}
         </nav>
 
         <div className="min-w-0 space-y-5 rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">{track.title} · {cases.findIndex(c=>c.id===activeId)+1} of 3</p>
             <h3 className="text-xl font-bold">{active.title}</h3>
+            {!visibleCases.some(c=>c.id===activeId)&&<p role="status" className="text-xs text-muted-foreground">
+              This open scenario is outside your current filters. Choose a matching case or select Next scenario.
+            </p>}
             <p className="text-sm leading-6">{active.prompt}</p>
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/70 bg-card/75 p-4 font-mono text-xs leading-6">{active.scenario}</pre>
           </div>
@@ -176,9 +218,14 @@ export default function LabsPracticeChallenges(){
               <button type="button" className={buttonClass} aria-expanded={hintOpen}
                 onClick={()=>setHintOpen(v=>!v)}><CircleHelp className="h-4 w-4"/> {hintOpen?"Hide hint":"Show hint"}</button>
               <button type="button" className={buttonClass} onClick={next}>Next scenario <ArrowRight className="h-4 w-4"/></button>
+              <button type="button" className={buttonClass} onClick={nextUnfinished}>Next unfinished <ArrowRight className="h-4 w-4"/></button>
+              <button type="button" className={buttonClass} aria-pressed={bookmarks.has(activeId)}
+                onClick={()=>setBookmarks(old=>{const next=new Set(old);if(next.has(activeId))next.delete(activeId);else next.add(activeId);return next;})}>
+                {bookmarks.has(activeId)?"Remove bookmark":"Bookmark scenario"}</button>
             </div>
           </form>
 
+          {navigationNotice&&<p role="status" aria-live="polite" className="text-sm text-primary">{navigationNotice}</p>}
           {hintOpen&&<p className="rounded-xl border border-primary/25 bg-primary/[0.06] p-4 text-sm leading-6"><strong>Hint:</strong> {active.hint}</p>}
           {feedbackError&&<p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/[0.05] p-4 text-sm text-destructive">{feedbackError}</p>}
           {result&&(
