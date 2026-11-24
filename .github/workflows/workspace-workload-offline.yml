@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'src/lib/workspaceTeam*.mjs'
+      - 'src/lib/workspaceStagingPreflight.mjs'
+      - 'scripts/sql/workspace-staging-fresh-install-preflight.sql'
+      - 'tests/workspace-staging-preflight.test.mjs'
       - 'src/components/workspace/WorkspaceTeamPortfolio.tsx'
       - 'tests/workspace-team-portfolio.test.mjs'
       - 'tests/workspace-team-command-center.test.mjs'
@@ -34,4 +37,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs tests/workspace-team-discussion.test.mjs tests/workspace-team-live.test.mjs tests/workspace-team-activity-history.test.mjs tests/workspace-team-utils.test.mjs tests/workspace-team-access.test.mjs tests/workspace-team-complete-pages.test.mjs tests/workspace-team-fresh-snapshot.test.mjs tests/workspace-team-command-center.test.mjs tests/workspace-team-portfolio.test.mjs tests/workspace-team-resume.test.mjs tests/workspace-team-board-drag-drop.test.mjs
+      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs tests/workspace-team-discussion.test.mjs tests/workspace-team-live.test.mjs tests/workspace-team-activity-history.test.mjs tests/workspace-team-utils.test.mjs tests/workspace-team-access.test.mjs tests/workspace-team-complete-pages.test.mjs tests/workspace-team-fresh-snapshot.test.mjs tests/workspace-team-command-center.test.mjs tests/workspace-team-portfolio.test.mjs tests/workspace-team-resume.test.mjs tests/workspace-team-board-drag-drop.test.mjs tests/workspace-staging-preflight.test.mjs
