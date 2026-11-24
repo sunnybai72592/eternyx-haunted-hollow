@@ -1,0 +1,57 @@
+name: Cybersecurity Wave 20 offline
+on:
+  pull_request:
+    paths:
+      - 'scripts/sql/*security-session-fence.sql'
+      - 'src/components/pentest/PentestEvidencePanel.tsx'
+      - 'tests/pentest-evidence-audit.test.mjs'
+      - '.github/workflows/cybersecurity-wave20-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/sql/*security-session-fence.sql'
+      - 'src/components/pentest/PentestEvidencePanel.tsx'
+      - 'tests/pentest-evidence-audit.test.mjs'
+      - '.github/workflows/cybersecurity-wave20-offline.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Disposable PostgreSQL session fence and evidence contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Export exact event commit files without submodule traversal
+        shell: bash
+        env:
+          TEST_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TEST_SHA" =~ ^[0-9a-f]{40}$ ]]
+          source_dir="$(mktemp -d "$RUNNER_TEMP/wave20-source.XXXXXX")"
+          git -C "$source_dir" init -q
+          git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
+          test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
+          for path in scripts/sql/staged-security-session-fence.sql scripts/sql/test-security-session-fence.sql src/components/pentest/PentestEvidencePanel.tsx src/components/pentest/PentestEngagementManager.tsx tests/pentest-evidence-audit.test.mjs supabase/migrations/20261111220000_pentest_evidence_and_audit.sql; do
+            mkdir -p "$(dirname "$path")"
+            git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/pentest-evidence-audit.test.mjs
+      - name: Execute SQL in isolated disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull postgres:17
+          docker run -d --name wave20-pg --network none -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+          trap 'docker rm -f wave20-pg >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if docker exec wave20-pg pg_isready -q -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec wave20-pg pg_isready -q -U postgres
+          docker cp scripts/sql/staged-security-session-fence.sql wave20-pg:/tmp/staged-security-session-fence.sql
+          docker cp scripts/sql/test-security-session-fence.sql wave20-pg:/tmp/test-security-session-fence.sql
+          docker exec wave20-pg psql -X -v ON_ERROR_STOP=1 -U postgres -f /tmp/test-security-session-fence.sql
