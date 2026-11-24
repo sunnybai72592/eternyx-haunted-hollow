@@ -85,7 +85,7 @@ def classify(config,source,package_sha):
 def limit_file(size):
     resource.setrlimit(resource.RLIMIT_FSIZE,(size,size))
 
-def module_package_config(release,version,env,work):
+def authenticated_modules_archive(release,version,env,work):
     p.require((release,version)==(p.GUEST_RELEASE,p.GUEST_VERSION),
               "modules audit requires exact immutable guest identity")
     package="linux-modules-"+release
@@ -113,9 +113,13 @@ def module_package_config(release,version,env,work):
             check=True,timeout=180,stdout=output,stderr=subprocess.PIPE,
             env=p.BASE_ENV,preexec_fn=lambda: limit_file(MAX_MODULES_TAR))
     p.require(0<tar.stat().st_size<=MAX_MODULES_TAR,"modules tar exceeds bounded size")
+    return tar,pin[0]
+
+def module_package_config(release,version,env,work):
+    tar,pin=authenticated_modules_archive(release,version,env,work)
     data=read_member(tar,"boot/config-"+release,MAX_CONFIG)
     p.require(data is not None,"exact authenticated modules package contains no boot config")
-    return data,pin[0]
+    return data,pin
 
 def audit(tar,release,version,env,work):
     # Called only after signed image package and immutable kernel hash checks.
@@ -139,6 +143,7 @@ def audit(tar,release,version,env,work):
     report=classify(parse_config(data),source,pin)
     report["configurationSha256"]=hashlib.sha256(data).hexdigest()
     print(json.dumps(report,sort_keys=True),flush=True)
+    return report
 
 if __name__=="__main__":
     p.main(None,audit=audit)
