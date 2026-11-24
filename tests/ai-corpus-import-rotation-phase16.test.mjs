@@ -73,7 +73,7 @@ test("review classifies exact source-ID additions, removals, text and metadata c
 });
 
 test("same filename with new ID does not hide a remove/add as unchanged",async()=>{
-  const input={...current(),documents:[doc("old","shared.txt","text")]};
+  const input={...current(),sourceFilter:null,documents:[doc("old","shared.txt","text")]};
   const backup=await backups.parseCorpusWorkspace(
     await backups.exportCorpusWorkspace({...input,documents:[doc("new","shared.txt","text")]}));
   const diff=reviewApi.compareCorpusImport(input,backup);
@@ -83,7 +83,7 @@ test("same filename with new ID does not hide a remove/add as unchanged",async()
 });
 
 test("exact Unicode and CRLF text differences count as content changes",async()=>{
-  const input={...current(),documents:[doc("ar","unicode.md","المعالجة\r\nپښتو","md")]};
+  const input={...current(),sourceFilter:null,documents:[doc("ar","unicode.md","المعالجة\r\nپښتو","md")]};
   const backup=await backups.parseCorpusWorkspace(
     await backups.exportCorpusWorkspace({...input,documents:[doc("ar","unicode.md","المعالجة\nپښتو","md")]}));
   const diff=reviewApi.compareCorpusImport(input,backup);
