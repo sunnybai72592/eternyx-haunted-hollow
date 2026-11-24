@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Copy, Download, FileVideo2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {buildPortablePhoneIntake,buildPortablePhoneMovie} from "@/lib/ai/portablePhoneIntake.mjs";
+import {
+  PHONE_MOVIE_EDIT_DRAFT_NAME,PHONE_MOVIE_EDIT_DRAFT_MAX_BYTES,
+  createPhoneMovieEditDraft,readPhoneMovieEditDraft,verifyPhoneMovieEditDraftMedia,
+} from "@/lib/ai/phoneMovieEditDraft.mjs";
 import phonePython from "../../gpu-worker/prepare_video_sources.py?raw";
 import renderPython from "../../gpu-worker/render_video_timeline.py?raw";
 import assemblePython from "../../gpu-worker/assemble_video_storyboard.py?raw";
@@ -31,6 +35,10 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const [movieQuality,setMovieQuality]=useState<"standard"|"high"|"cinematic">("standard");
   const [movieDelivery,setMovieDelivery]=useState<"mp4"|"mp4_with_subtitles"|"mp4_webm"|"all">("mp4");
   const [movieFraming,setMovieFraming]=useState<"contain"|"cover">("contain");
+  const [pendingMovieDraft,setPendingMovieDraft]=useState<ReturnType<typeof readPhoneMovieEditDraft>|null>(null);
+  const [movieDraftWorking,setMovieDraftWorking]=useState(false);
+  const movieDraftVersion=useRef(0);
+  const [movieDraftProgress,setMovieDraftProgress]=useState("");
   const [bundling,setBundling]=useState(false);
   const [bundleStatus,setBundleStatus]=useState("");
   const bundleRequest=useRef(0);
@@ -50,7 +58,7 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const active = useRef(0);
-  useEffect(() => () => { active.current++;bundleRequest.current++; }, []);
+  useEffect(() => () => { active.current++;bundleRequest.current++;movieDraftVersion.current++; }, []);
 
   let command = "";
   let commandError = "";
@@ -81,25 +89,110 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
     }
   };
 
+  const currentMoviePlan=()=>({
+    profile:movieProfile,quality:movieQuality,delivery:movieDelivery,
+    framing:movieFraming,
+    shots:originals.map((file,index)=>({
+      source_filename:file.name,frames:(movieShotSeconds[index]??movieCutSeconds)*16,
+      start_seconds:movieTrimSeconds[index]??0,
+      fade_in_frames:movieFadeInFrames[index]??0,
+      fade_out_frames:movieFadeOutFrames[index]??0,
+      caption:movieCaptions[index]??"",
+      rights_ref:movieRights[index]??"",
+    })),
+  });
+
+  // Metadata draft does not need valid captions or licenses until final export.
+  // It never uploads original video, and returns no File objects or blob URLs.
+  const saveMovieDraft=async()=>{
+    if(movieDraftWorking||bundling||pendingMovieDraft||!originals.length)return;
+    if(!validShotWindows){setError("Fix shot timing and source windows before saving.");return;}
+    const request=++movieDraftVersion.current;
+    setMovieDraftWorking(true);setError("");setMovieDraftProgress("Hashing original footage locally...");
+    try{
+      const result=await createPhoneMovieEditDraft({
+        files:originals,start,seconds,moviePlan:currentMoviePlan(),
+      });
+      if(request!==movieDraftVersion.current)return;
+      const url=URL.createObjectURL(new Blob([result.json],{type:"application/json"}));
+      const link=document.createElement("a");link.href=url;link.download=result.filename;
+      document.body.appendChild(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+      setMessage("Media-free "+result.fps+" FPS re-edit draft saved. Keep all original clips to reopen.");
+    }catch(cause){
+      if(request===movieDraftVersion.current)
+        setError(cause instanceof Error?cause.message:"Cannot save this private video draft.");
+    }finally{
+      if(request===movieDraftVersion.current){
+        setMovieDraftWorking(false);setMovieDraftProgress("");
+      }
+    }
+  };
+
+  const openMovieDraft=async(file?:File)=>{
+    const request=++movieDraftVersion.current;
+    setError("");setMessage("");setMovieDraftProgress("");
+    if(!file)return;
+    try{
+      if(file.name!==PHONE_MOVIE_EDIT_DRAFT_NAME||!file.size||
+         file.size>PHONE_MOVIE_EDIT_DRAFT_MAX_BYTES)
+        throw new Error("Choose the metadata-only phone-movie-edit-draft.json (up to 32 KiB).");
+      const draft=readPhoneMovieEditDraft(await file.text());
+      if(request!==movieDraftVersion.current)return;
+      setPendingMovieDraft(draft);
+      setMessage("Draft inspected: reattach all "+draft.originals.length+
+        " original camera recordings; the current editor is still unchanged.");
+    }catch(cause){
+      if(request===movieDraftVersion.current)
+        setError(cause instanceof Error?cause.message:"Invalid phone movie edit draft.");
+    }
+  };
+
+  const reattachMovieDraft=async(files:File[])=>{
+    if(!pendingMovieDraft||bundling)return;
+    const request=++movieDraftVersion.current;
+    setMovieDraftWorking(true);setError("");setMovieDraftProgress("Verifying actual original bytes...");
+    try{
+      const verified=await verifyPhoneMovieEditDraftMedia(pendingMovieDraft,files,step=>{
+        if(request===movieDraftVersion.current)
+          setMovieDraftProgress("Checked original "+step.checked+"/"+step.total);
+      });
+      if(request!==movieDraftVersion.current)return;
+      ++bundleRequest.current;
+      setOriginals(verified.files);
+      setStart(verified.start);setSeconds(verified.seconds);
+      setMovieCaptions(verified.moviePlan.shots.map(s=>s.caption));
+      setMovieRights(verified.moviePlan.shots.map(s=>s.rights_ref));
+      setMovieShotSeconds(verified.moviePlan.shots.map(s=>s.frames/16));
+      setMovieCutSeconds(verified.moviePlan.shots[0].frames/16);
+      setMovieTrimSeconds(verified.moviePlan.shots.map(s=>s.start_seconds));
+      setMovieFadeInFrames(verified.moviePlan.shots.map(s=>s.fade_in_frames));
+      setMovieFadeOutFrames(verified.moviePlan.shots.map(s=>s.fade_out_frames));
+      setMovieProfile(verified.moviePlan.profile as "landscape"|"portrait"|"square");
+      setMovieQuality(verified.moviePlan.quality as "standard"|"high"|"cinematic");
+      setMovieDelivery(verified.moviePlan.delivery as "mp4"|"mp4_with_subtitles"|"mp4_webm"|"all");
+      setMovieFraming(verified.moviePlan.framing as "contain"|"cover");
+      setPendingMovieDraft(null);
+      setMessage("Restored "+verified.fps+" FPS edit after "+verified.verifiedCount+
+        " exact original SHA-256 checks. Adjust cuts, fades, captions and re-export privately.");
+    }catch(cause){
+      if(request===movieDraftVersion.current)
+        setError(cause instanceof Error?cause.message:"Original clips could not be verified.");
+    }finally{
+      if(request===movieDraftVersion.current){
+        setMovieDraftWorking(false);setMovieDraftProgress("");
+      }
+    }
+  };
+
   const downloadPortablePhoneIntake=async(directMovie=false)=>{
-    if(bundling)return;
+    if(bundling||movieDraftWorking||pendingMovieDraft)return;
     if(directMovie&&!validShotWindows){setError("Each shot must fit the source window and the 30-second timeline.");return;}
     const token=++bundleRequest.current;
     setBundling(true);setBundleStatus("Hashing private original phone files locally...");
     setError("");setMessage("");
     try{
-      const moviePlan=directMovie?{
-        profile:movieProfile,quality:movieQuality,delivery:movieDelivery,
-        framing:movieFraming,
-        shots:originals.map((file,index)=>({
-          source_filename:file.name,frames:(movieShotSeconds[index]??movieCutSeconds)*16,
-          start_seconds:movieTrimSeconds[index]??0,
-          fade_in_frames:movieFadeInFrames[index]??0,
-          fade_out_frames:movieFadeOutFrames[index]??0,
-          caption:movieCaptions[index]??"",
-          rights_ref:movieRights[index]??"",
-        })),
-      }:null;
+      const moviePlan=directMovie?currentMoviePlan():null;
       const result=await (directMovie?buildPortablePhoneMovie:buildPortablePhoneIntake)({
         files:originals,start,seconds,moviePlan,
         pythonSources:{
@@ -172,10 +265,10 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
           <label className="block space-y-1 text-sm">
             Select 1–8 original MP4, MOV or M4V recordings (up to 64 MiB each)
             <Input type="file" multiple accept=".mp4,.mov,.m4v,video/mp4,video/quicktime"
-              disabled={bundling}
+              disabled={bundling||movieDraftWorking||Boolean(pendingMovieDraft)}
               className="mt-1 min-h-11 border-slate-700 bg-slate-950"
               onChange={event=>{
-                ++bundleRequest.current;
+                ++bundleRequest.current;++movieDraftVersion.current;
                 const picked=Array.from(event.currentTarget.files??[]);
                 setOriginals(picked);
                 setMovieCaptions(picked.map(()=>""));
@@ -188,6 +281,54 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
                 event.currentTarget.value="";
               }}/>
           </label>
+
+          <section className="space-y-3 rounded border border-cyan-400/30 bg-cyan-950/10 p-3">
+            <h5 className="text-sm font-semibold text-cyan-100">
+              Reopen saved 16/24 FPS cinematic movie edits
+            </h5>
+            <p className="text-xs leading-5 text-slate-300">
+              Open the metadata-only phone-movie-edit-draft.json from an earlier movie ZIP
+              or one you saved here. No original video is embedded in this JSON.
+              Current edits remain untouched until every original camera file matches SHA-256.
+            </p>
+            <Input type="file" accept=".json,application/json"
+              aria-label="Open saved phone movie edit draft"
+              disabled={bundling||movieDraftWorking}
+              className="min-h-11 border-slate-700 bg-slate-950"
+              onChange={event=>{
+                void openMovieDraft(event.currentTarget.files?.[0]);
+                event.currentTarget.value="";
+              }}/>
+            {pendingMovieDraft&&<div className="space-y-2 rounded border border-cyan-500/40 p-3">
+              <p className="text-sm text-cyan-200">
+                Pending {pendingMovieDraft.fps} FPS edit · {pendingMovieDraft.originals.length}
+                {" "}exact originals required (not uploaded)
+              </p>
+              {pendingMovieDraft.originals.map(source=><p key={source.filename}
+                className="break-all text-xs text-slate-300">
+                {source.filename} · {source.bytes} bytes · SHA-256 {source.sha256.slice(0,12)}…
+              </p>)}
+              <Input type="file" multiple accept=".mp4,.mov,.m4v,video/mp4,video/quicktime"
+                aria-label="Reattach exact original phone recordings"
+                disabled={bundling||movieDraftWorking}
+                className="min-h-11 border-slate-700 bg-slate-950"
+                onChange={event=>{
+                  void reattachMovieDraft(Array.from(event.currentTarget.files??[]));
+                  event.currentTarget.value="";
+                }}/>
+              <Button variant="outline" size="sm" disabled={movieDraftWorking}
+                onClick={()=>{
+                  ++movieDraftVersion.current;
+                  setPendingMovieDraft(null);setError("");
+                  setMessage("Draft restore cancelled. Your previous edit is unchanged.");
+                }}>
+                Cancel draft restoration
+              </Button>
+            </div>}
+            {movieDraftProgress&&<p role="status" className="text-xs text-cyan-200">
+              {movieDraftProgress}
+            </p>}
+          </section>
           {originals.length>0&&<p className="text-xs text-emerald-200">
             {originals.length} original file(s) ·
             {" "}{(originals.reduce((sum,file)=>sum+file.size,0)/1048576).toFixed(2)} MiB,
@@ -339,8 +480,18 @@ export default function LocalVideoImportPrep({sources}: {sources: SelectedClip[]
               Fades go to/from black (not cross-dissolves).
               Editable SRT is always included; optional MP4 subtitle tracks are selectable, not burned into pixels.
             </p>
+            <Button size="sm" variant="outline"
+              disabled={bundling||movieDraftWorking||Boolean(pendingMovieDraft)||!validShotWindows}
+              onClick={()=>{void saveMovieDraft();}}>
+              <Download className="mr-2 h-4 w-4"/>
+              {movieDraftWorking?"Hashing source files...":"Save editable 16/24 FPS movie draft (no media)"}
+            </Button>
+            <p className="text-xs text-cyan-200">
+              Export ZIP automatically contains the same media-free edit draft for later
+              changes; it is not the legacy 16 FPS-only Studio draft.
+            </p>
             <Button size="sm"
-              disabled={bundling||!!commandError||!validShotWindows}
+              disabled={bundling||movieDraftWorking||Boolean(pendingMovieDraft)||!!commandError||!validShotWindows}
               onClick={()=>{void downloadPortablePhoneIntake(true);}}>
               <Download className="mr-2 h-4 w-4"/>
               {bundling?"Packaging local media...":"Download direct-to-finished-MP4 project ZIP"}
