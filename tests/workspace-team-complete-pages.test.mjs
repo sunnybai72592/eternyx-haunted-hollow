@@ -69,8 +69,16 @@ test("synchronous lock, owner epoch and late-response quarantine stay wired",()=
 test("invite secrets and saved drafts are published only in confirmed callbacks",()=>{
  const source=component();
  const invite=source.slice(source.indexOf("const invite=()=>"),source.indexOf("const saveTask="));
- assert.ok(invite.indexOf("return receipt;")>0);
- assert.ok(invite.indexOf("return receipt;")<invite.indexOf("setRevealedToken({token:receipt.token"));
+ // Check publication in the confirmed callback, not the spelling of a receipt.
+ const returned=invite.indexOf("return workspaceTeamInviteReceipt(data,inviteRole,Date.now());");
+ const callback=invite.indexOf("result=>{",returned);
+ const fence=invite.indexOf("if(inviteEpoch!==detailsEpoch.current||Date.parse(receipt.expires)<=Date.now())",callback);
+ const publish=invite.indexOf("setRevealedToken(receipt);",callback);
+ assert.ok(returned>0&&callback>returned&&fence>callback&&publish>fence);
+ assert.match(invite.slice(fence,publish),/throw Error\(/);
+ assert.ok(!invite.slice(0,callback).includes("setRevealedToken(receipt)"));
+ assert.equal((invite.match(/setRevealedToken\(/g)||[]).length,2);
+ assert.ok(invite.slice(0,returned).includes('if(inviteEpoch!==detailsEpoch.current)throw Error('));
  const save=source.slice(source.indexOf("const saveTask="),source.indexOf("const editTask="));
  assert.ok(save.includes('true,\n    ()=>setDraft(freshDraft())'));
  assert.ok(!save.includes('setDraft(freshDraft());'));
