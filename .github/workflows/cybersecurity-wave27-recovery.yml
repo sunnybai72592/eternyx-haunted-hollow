@@ -1,0 +1,61 @@
+name: Cybersecurity Wave 27 recovery rehearsal
+on:
+  pull_request:
+    paths:
+      - 'scripts/sql/**security**.sql'
+      - 'scripts/security-wave27-*.mjs'
+      - 'tests/security-wave27-*.mjs'
+      - '.github/workflows/cybersecurity-wave27-recovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/sql/**security**.sql'
+      - 'scripts/security-wave27-*.mjs'
+      - 'tests/security-wave27-*.mjs'
+      - '.github/workflows/cybersecurity-wave27-recovery.yml'
+permissions:
+  contents: read
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Export pinned source without submodule traversal
+        shell: bash
+        env:
+          TEST_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TEST_SHA" =~ ^[0-9a-f]{40}$ ]]
+          source_dir="$(mktemp -d "$RUNNER_TEMP/wave27.XXXXXX")"
+          git -C "$source_dir" init -q
+          git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
+          test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
+          for path in scripts/sql/test-security-session-fence.sql scripts/sql/staged-security-session-fence.sql scripts/sql/staged-security-evidence-controls.sql scripts/sql/staged-security-evidence-global-budget.sql scripts/sql/staged-security-evidence-gateway.sql scripts/sql/seed-security-recovery-rehearsal.sql scripts/sql/verify-security-recovery-rehearsal.sql scripts/security-wave27-verify-backup.mjs tests/security-wave27-verify-backup.test.mjs; do
+            mkdir -p "$(dirname "$path")"
+            git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/security-wave27-verify-backup.test.mjs
+      - name: Dump and restore synthetic database into separate database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull postgres:17
+          docker run -d --name wave27-pg --network none -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+          trap 'docker rm -f wave27-pg >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if docker exec wave27-pg pg_isready -q -U postgres && docker exec wave27-pg sh -c 'test "$(cat /proc/1/comm)" = postgres'; then break; fi
+            sleep 1
+          done
+          docker exec wave27-pg pg_isready -q -U postgres
+          docker cp scripts/sql wave27-pg:/tmp/rehearsal
+          docker exec wave27-pg createdb -U postgres baseline
+          docker exec wave27-pg psql -X -v ON_ERROR_STOP=1 -U postgres -d baseline -f /tmp/rehearsal/test-security-session-fence.sql
+          docker exec wave27-pg psql -X -v ON_ERROR_STOP=1 -U postgres -d baseline -f /tmp/rehearsal/seed-security-recovery-rehearsal.sql
+          docker exec wave27-pg pg_dump -U postgres -Fc -f /tmp/synthetic.dump baseline
+          docker exec wave27-pg createdb -U postgres recovered
+          docker exec wave27-pg pg_restore -U postgres --exit-on-error --single-transaction -d recovered /tmp/synthetic.dump
+          docker exec wave27-pg psql -X -v ON_ERROR_STOP=1 -U postgres -d recovered -f /tmp/rehearsal/verify-security-recovery-rehearsal.sql
