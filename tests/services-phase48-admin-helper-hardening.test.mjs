@@ -30,3 +30,14 @@ test('Phase48 exact candidate runs after prior fixture rehearsal and preserves e
  assert.match(wf,/Phase48 repeated hardening unexpectedly succeeded/);
  assert.match(wf,/Phase48 hardened Services catalog/);
 });
+
+test('Phase48 cannot treat partial or malformed catalog as hardening proof',async()=>{
+ const {FACTS,analyzeHardening}=await import('../scripts/services-phase48-admin-helper-proof.mjs');
+ const full=Object.fromEntries(FACTS.map(k=>[k,true]));
+ assert.equal(analyzeHardening(JSON.stringify(full)).factsPassed,10);
+ assert.equal(analyzeHardening(JSON.stringify(full)).state,'hardened_catalog_verified');
+ assert.equal(analyzeHardening(JSON.stringify(full)).liveDataApiExposureVerified,false);
+ assert.equal(analyzeHardening(JSON.stringify({...full,private_definer_exact_body:false})).state,'hardening_not_verified');
+ assert.throws(()=>analyzeHardening(JSON.stringify({...full,extra:true})),/incomplete_facts/);
+ assert.throws(()=>analyzeHardening(JSON.stringify({...full,public_wrapper_invoker:'true'})),/incomplete_facts/);
+});
