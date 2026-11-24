@@ -10,7 +10,7 @@ import {
 
 export const VIDEO_DRAFT_LIMITS=Object.freeze({
   maxBytes:32768,maxTitleLength:80,maxCaptionLength:180,
-  maxMedia:9,maxClips:LOCAL_VIDEO_LIMITS.maxClips,
+  maxMedia:11,maxClips:LOCAL_VIDEO_LIMITS.maxClips,
   maxFrames:LOCAL_VIDEO_LIMITS.maxFrames,
 });
 const HASH=/^[a-f0-9]{64}$/;
@@ -58,7 +58,7 @@ function mediaRecord(item,kind){
   return base;
 }
 function normalize(data){
-  fields(data,[...ROOT,...["grade","framing"].filter(k=>data&&Object.hasOwn(data,k))],"draft");
+  fields(data,[...ROOT,...["grade","framing","narration","effects"].filter(k=>data&&Object.hasOwn(data,k))],"draft");
   checkLocalVideoLook(Object.hasOwn(data,"grade")?data.grade:"neutral",Object.hasOwn(data,"framing")?data.framing:"contain");
   if(data.format!=="eternyx-local-video-edit-draft"||
      data.version!==1||data.contains_private_media!==false)
@@ -83,6 +83,14 @@ function normalize(data){
   if(!LOCAL_VIDEO_PROFILES.includes(data.profile)||
      !LOCAL_VIDEO_QUALITIES.includes(data.quality))
     throw new Error("Unsupported saved local CPU output profile or quality.");
+  const extra={};
+  const audioNames=new Set([...byName.keys(),...(soundtrack?[soundtrack.name.toLowerCase()]:[])]);
+  for(const role of ["narration","effects"]){
+    if(!Object.hasOwn(data,role))continue;
+    const track=mediaRecord(data[role],"audio");
+    if(audioNames.has(track.name.toLowerCase()))throw new Error("Audio track filenames must be unique across the project.");
+    audioNames.add(track.name.toLowerCase());extra[role]=track;
+  }
   const fps=localVideoFps(data.quality), maxFrames=localVideoMaxFrames(fps),
         sourceCeiling=localVideoMaxSourceFrames(fps);
   if(!Array.isArray(data.shots)||!data.shots.length||
@@ -112,16 +120,17 @@ function normalize(data){
      !LOCAL_VIDEO_QUALITIES.includes(data.quality))
     throw new Error("Unsupported saved local CPU output profile or quality.");
   if(soundtrack)checkSoundtrackEdit(soundtrack,total,fps);
+  for(const track of Object.values(extra))checkSoundtrackEdit(track,total,fps);
   return {
     format:"eternyx-local-video-edit-draft",version:1,
-    name,contains_private_media:false,sources,soundtrack,shots,
+    name,contains_private_media:false,sources,soundtrack,shots,...extra,
     profile:data.profile,quality:data.quality,
     ...(Object.hasOwn(data,"grade")?{grade:data.grade}:{}),
     ...(Object.hasOwn(data,"framing")?{framing:data.framing}:{}),
   };
 }
 export function createLocalVideoDraft({
-  name="My ETERNYX video",sources,shots,soundtrack=null,
+  name="My ETERNYX video",sources,shots,soundtrack=null,narration=null,effects=null,
   profile="landscape",quality="standard",grade,framing,
 }){
   const raw={
@@ -135,6 +144,10 @@ export function createLocalVideoDraft({
       rightsRef:soundtrack.rightsRef,volumePercent:soundtrack.volumePercent,
       ...Object.fromEntries([...Object.keys(SOUNDTRACK_EDIT_FIELDS),"loop"].filter(k=>Object.hasOwn(soundtrack,k)).map(k=>[k,soundtrack[k]])),
     }:null,
+    ...Object.fromEntries([["narration",narration],["effects",effects]].filter(([,track])=>track!==null).map(([role,track])=>[role,{
+      name:track.name,size:track.size,sha256:track.sha256,rightsRef:track.rightsRef,volumePercent:track.volumePercent,
+      ...Object.fromEntries([...Object.keys(SOUNDTRACK_EDIT_FIELDS),"loop"].filter(k=>Object.hasOwn(track,k)).map(k=>[k,track[k]])),
+    }])),
     shots:(shots??[]).map(s=>({
       sourceName:s.sourceName,startFrame:s.startFrame,frames:s.frames,
       caption:s.caption,rightsRef:s.rightsRef,
@@ -147,7 +160,7 @@ export function createLocalVideoDraft({
   if(new TextEncoder().encode(json).byteLength>VIDEO_DRAFT_LIMITS.maxBytes)
     throw new Error("Local video edit draft exceeds the 32 KiB limit.");
   return {draft,json,filename:"eternyx-video-edit-draft.json",
-    sourceCount:draft.sources.length+(draft.soundtrack?1:0),
+    sourceCount:draft.sources.length+["soundtrack","narration","effects"].filter(role=>draft[role]).length,
     frames:draft.shots.reduce((n,s)=>n+s.frames,0)};
 }
 export function readLocalVideoDraft(raw){
@@ -163,13 +176,11 @@ export async function verifyLocalVideoDraftMedia(draft,files,onProgress=()=>{}){
   const safe=normalize(draft);
   if(typeof onProgress!=="function")throw new Error("Invalid draft verification progress handler.");
   if(!Array.isArray(files)||
-     files.length!==safe.sources.length+(safe.soundtrack?1:0))
-    throw new Error("Select every original MP4"+(safe.soundtrack?" and soundtrack":"")+
-      " from the draft, with no extra files.");
+     files.length!==safe.sources.length+["soundtrack","narration","effects"].filter(role=>safe[role]).length)
+    throw new Error("Select every original MP4 and required audio file from the draft, with no extra files.");
   const required=new Map([...safe.sources.map(x=>[x.name.toLowerCase(),{
     record:x,kind:"video"}]),
-    ...(safe.soundtrack?[[safe.soundtrack.name.toLowerCase(),{
-      record:safe.soundtrack,kind:"audio"}]]:[])]);
+    ...["soundtrack","narration","effects"].filter(role=>safe[role]).map(role=>[safe[role].name.toLowerCase(),{record:safe[role],kind:"audio"}])]);
   const seen=new Set();
   const matched=new Map();
   if(!globalThis.crypto?.subtle?.digest)
@@ -199,6 +210,8 @@ export async function verifyLocalVideoDraftMedia(draft,files,onProgress=()=>{}){
   return {
     sources:safe.sources.map(s=>matched.get(s.name.toLowerCase())),
     soundtrack:safe.soundtrack?matched.get(safe.soundtrack.name.toLowerCase()):null,
+    narration:safe.narration?matched.get(safe.narration.name.toLowerCase()):null,
+    effects:safe.effects?matched.get(safe.effects.name.toLowerCase()):null,
     shots:safe.shots.map(s=>({...s})),profile:safe.profile,quality:safe.quality,
     grade:safe.grade??"neutral",framing:safe.framing??"contain",
     name:safe.name,verifiedCount:matched.size,

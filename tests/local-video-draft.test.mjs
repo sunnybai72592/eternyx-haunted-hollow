@@ -184,3 +184,16 @@ test("soundtrack placement and fades roundtrip through metadata-only saved draft
   assert.deepEqual(readLocalVideoDraft(made.json).soundtrack,soundtrack);
   assert.throws(()=>createLocalVideoDraft({...input,soundtrack:{...soundtrack,fadeOutMs:700}}),/Soundtrack/);
 });
+
+test("three-track draft restores exact local bytes and rejects colliding audio roles",async()=>{
+  const narration={...mk("voice.wav","private voice"),rightsRef:"owned",volumePercent:80,loop:false,durationMs:500};
+  const effects={...mk("fx.wav","private effect"),rightsRef:"owned",volumePercent:40,loop:false,timelineStartMs:500,durationMs:500};
+  const made=createLocalVideoDraft({...state(),narration,effects});
+  assert.equal(made.sourceCount,5);
+  const restored=await verifyLocalVideoDraftMedia(readLocalVideoDraft(made.json),[clipA.file,clipB.file,music.file,narration.file,effects.file]);
+  assert.equal(restored.narration.file,narration.file);
+  assert.equal(restored.effects.file,effects.file);
+  assert.equal(restored.effects.timelineStartMs,500);
+  assert.throws(()=>createLocalVideoDraft({...state(),narration:{...audio}}),/unique/);
+  await assert.rejects(()=>verifyLocalVideoDraftMedia(made.draft,[clipA.file,clipB.file,music.file,narration.file]));
+});

@@ -90,7 +90,7 @@ export function checkSoundtrackEdit(soundtrack,totalFrames,fps){
   return result;
 }
 
-export function buildLocalVideoBoard({ sources, shots, soundtrack = null, quality = "standard" }) {
+export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard" }) {
   const fps=localVideoFps(quality),maxFrames=localVideoMaxFrames(fps),maxSource=localVideoMaxSourceFrames(fps);
   const clips = validateUniqueClips(sources);
   if (!Array.isArray(shots) || shots.length === 0 || shots.length > LOCAL_VIDEO_LIMITS.maxClips) {
@@ -118,14 +118,18 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null, qualit
     };
   });
   const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}) };
-  if (soundtrack) {
-    const audio = mediaRecord(soundtrack, "audio");
-    board.soundtrack = {
+  const names=new Set([...clips.keys()].map(name=>name.toLowerCase()));
+  for(const [role,track] of [["soundtrack",soundtrack],["narration",narration],["effects",effects]]){
+    if(track===null)continue;
+    const audio = mediaRecord(track, "audio");
+    if(names.has(audio.name.toLowerCase()))throw new Error("Audio track filenames must be unique across the project.");
+    names.add(audio.name.toLowerCase());
+    board[role] = {
       file: audio.name,
       source_sha256: audio.sha256,
-      rights_ref: label(soundtrack.rightsRef, "Soundtrack rights reference"),
-      volume_percent: integer(soundtrack.volumePercent, 0, 100, "Soundtrack volume"),
-      ...checkSoundtrackEdit(soundtrack,totalFrames,fps),
+      rights_ref: label(track.rightsRef, "Soundtrack rights reference"),
+      volume_percent: integer(track.volumePercent, 0, 100, "Soundtrack volume"),
+      ...checkSoundtrackEdit(track,totalFrames,fps),
     };
   }
   const json = JSON.stringify(board, null, 2);

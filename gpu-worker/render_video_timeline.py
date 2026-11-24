@@ -54,7 +54,7 @@ def read_board(path):
         raise ValueError("Storyboard exceeds 32 KiB")
     board = json.loads(content, object_pairs_hook=unique_keys)
     if (not isinstance(board, dict) or type(board.get("version")) is not int or
-            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "fps"} or
+            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps"} or
             type(board.get("fps", FPS)) is not int or board.get("fps", FPS) not in (FPS, CINEMATIC_FPS)):
         raise ValueError("Expected a v2 storyboard with shots and optional soundtrack")
     shots = board.get("shots")
@@ -207,8 +207,8 @@ def audio_edit(raw, total, fps):
     return {**values, "loop": loop, "active_ms": length}
 
 
-def check_soundtrack(board, root):
-    raw = board.get("soundtrack")
+def check_soundtrack(board, root, role="soundtrack"):
+    raw = board.get(role)
     if raw is None:
         return None
     if not isinstance(raw, dict) or not AUDIO_KEYS <= set(raw) or set(raw) - AUDIO_KEYS - AUDIO_EDIT_KEYS:
@@ -224,7 +224,7 @@ def check_soundtrack(board, root):
     streams = probe(path)
     if len([item for item in streams if item.get("codec_type") == "audio"]) != 1:
         raise ValueError("Exactly one audio stream is required for the soundtrack")
-    if AUDIO_EDIT_KEYS & set(raw):
+    if AUDIO_EDIT_KEYS & set(raw) or role != "soundtrack":
         edit = audio_edit(raw, sum(s["frames"] for s in board["shots"]), board.get("fps", FPS))
         if edit["source_start_ms"] or not edit["loop"]:
             metadata = json.loads(execute(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe",
@@ -240,6 +240,19 @@ def check_soundtrack(board, root):
     return {**raw, "path": path}
 
 
+def check_audio_tracks(board, root):
+    tracks = {role: check_soundtrack(board, root, role)
+              for role in ("soundtrack", "narration", "effects")}
+    names = {shot["file"].casefold() for shot in board["shots"]}
+    for track in tracks.values():
+        if track is not None:
+            key = track["file"].casefold()
+            if key in names:
+                raise ValueError("Audio track filenames must be unique across the project")
+            names.add(key)
+    return tracks
+
+
 # Fixed reviewed filters only; never accept arbitrary filter commands.
 COLOR_GRADES = {
     "neutral": None,
@@ -250,7 +263,7 @@ COLOR_GRADES = {
 }
 
 
-def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral"):
+def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None):
     if quality not in ("standard", "high", "cinematic") or framing not in ("contain", "cover"):
         raise ValueError("Unsupported offline encoder quality or framing")
     if not isinstance(grade, str) or grade not in COLOR_GRADES:
@@ -260,10 +273,12 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
            "-filter_complex_threads", "1", "-threads", "1"]
     for shot in shots:
         cmd += ["-protocol_whitelist", "file,pipe", "-i", str(shot["path"])]
-    if soundtrack is not None:
-        if soundtrack.get("loop", True):
+    tracks = [track for track in (soundtrack, narration, effects) if track is not None]
+    expanded_audio = narration is not None or effects is not None
+    for track in tracks:
+        if track.get("loop", True):
             cmd += ["-stream_loop", "-1"]
-        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(soundtrack["path"])]
+        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(track["path"])]
     graph = []
     for i, shot in enumerate(shots):
         start, end = shot["start_frame"], shot["start_frame"] + shot["frames"]
@@ -285,10 +300,12 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
         graph.append(",".join(filters) + f"[shot{i}]")
     graph.append("".join(f"[shot{i}]" for i in range(len(shots))) +
                  f"concat=n={len(shots)}:v=1:a=0[outv]")
-    if soundtrack is not None:
+    for index, track in enumerate(tracks):
         duration = total / fps
-        if AUDIO_EDIT_KEYS & set(soundtrack):
-            edit = audio_edit(soundtrack, total, fps)
+        audio_input = len(shots) + index
+        output_label = f"[mix{index}]" if len(tracks) > 1 else "[outa]"
+        if expanded_audio or AUDIO_EDIT_KEYS & set(track):
+            edit = audio_edit(track, total, fps)
             # Normalize to 48 kHz before trimming, then rebuild timestamps from
             # sample counts. Both 16 and 24 fps divide 48000 exactly.
             # Time-based adelay/apad after a timestamp-shifting resample can
@@ -299,9 +316,9 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
             active = edit["duration_ms"] * 48 if edit["duration_ms"] else total_samples - delay
             fade_in = edit["fade_in_ms"] * 48
             fade_out = edit["fade_out_ms"] * 48
-            filters = [f"[{len(shots)}:a:0]aresample=48000",
+            filters = [f"[{audio_input}:a:0]aresample=48000",
                        f"atrim=start_sample={source_start}:end_sample={source_start+active}",
-                       "asetpts=N/SR/TB", f"volume={soundtrack['volume_percent']/100:.2f}"]
+                       "asetpts=N/SR/TB", f"volume={track['volume_percent']/100:.2f}"]
             if fade_in:
                 filters.append(f"afade=t=in:ss=0:ns={fade_in}")
             if fade_out:
@@ -309,18 +326,23 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
             if delay:
                 filters.append(f"adelay={delay}S:all=1")
             filters.extend(["apad", f"atrim=end_sample={total_samples}", "asetpts=N/SR/TB"])
-            graph.append(",".join(filters) + "[outa]")
+            graph.append(",".join(filters) + output_label)
         else:
-            graph.append(f"[{len(shots)}:a:0]atrim=duration={duration:.4f},asetpts=PTS-STARTPTS,"
-                         f"volume={soundtrack['volume_percent']/100:.2f}[outa]")
+            graph.append(f"[{audio_input}:a:0]atrim=duration={duration:.4f},asetpts=PTS-STARTPTS,"
+                         f"volume={track['volume_percent']/100:.2f}" + output_label)
+    if len(tracks) > 1:
+        # Equal fixed headroom per selected track, without dropout gain pumping.
+        # All inputs have equal sample duration, including silence.
+        graph.append("".join(f"[mix{i}]" for i in range(len(tracks))) +
+                     f"amix=inputs={len(tracks)}:duration=longest:dropout_transition=0:normalize=1[outa]")
     cmd += ["-filter_complex", ";".join(graph), "-map", "[outv]"]
-    if soundtrack is None:
+    if not tracks:
         cmd += ["-an"]
     else:
         cmd += ["-map", "[outa]", "-c:a", "aac", "-b:a", "96k"]
     # The finite concat already emits exactly total video frames. For edited
     # soundtracks, avoid -frames:v terminating muxing before padded audio ends.
-    edited_audio = soundtrack is not None and bool(AUDIO_EDIT_KEYS & set(soundtrack))
+    edited_audio = expanded_audio or (soundtrack is not None and bool(AUDIO_EDIT_KEYS & set(soundtrack)))
     cmd += ["-sn", "-dn"]
     if not edited_audio:
         cmd += ["-frames:v", str(total)]
@@ -417,7 +439,8 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
     if (quality == "cinematic") != (fps == CINEMATIC_FPS):
         raise ValueError("24 FPS storyboard requires cinematic quality and vice versa")
     shots, total = check_shots(board, root, fps)
-    soundtrack = check_soundtrack(board, root)
+    tracks = check_audio_tracks(board, root)
+    soundtrack, narration, effects = (tracks[k] for k in ("soundtrack", "narration", "effects"))
     if output.exists() or output.is_symlink():
         raise ValueError("Output directory already exists; no overwriting")
     if output.parent.is_symlink() or not output.parent.is_dir():
@@ -425,8 +448,8 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade), timeout=240)
-        video = verify_output(video_path, total, size, soundtrack is not None, fps)
+        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects), timeout=240)
+        video = verify_output(video_path, total, size, any(t is not None for t in tracks.values()), fps)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}
         receipt = {"version": 2, "type": "local CPU video editing",
@@ -434,7 +457,9 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
                    "profile": profile, "quality": quality, "framing": framing, "fps": fps,
                    **({"grade": grade} if grade != "neutral" else {}),
                    "total_frames": total, "shots": public_shots,
-                   "soundtrack": audio, "captions": "captions.srt", "model_generation": False}
+                   "soundtrack": audio, **{role: {k: v for k, v in tracks[role].items() if k != "path"}
+                       for role in ("narration", "effects") if tracks[role] is not None},
+                   "captions": "captions.srt", "model_generation": False}
         (stage / "captions.srt").write_text(srt(shots, fps), encoding="utf-8")
         (stage / "manifest.json").write_text(json.dumps(receipt, indent=2, allow_nan=False) + "\n",
                                               encoding="utf-8")

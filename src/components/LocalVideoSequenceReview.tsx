@@ -14,18 +14,18 @@ type Shot={
 type Props={
   sources:Source[];shots:Shot[];soundtrack:{
     name:string;size:number;sha256:string;rightsRef:string;volumePercent:number;
-  }|null;profile:string;quality:string;
+  }|null;narration?:Props["soundtrack"];effects?:Props["soundtrack"];profile:string;quality:string;
   disabled?:boolean;onJumpToShot?:(index:number)=>void;
 };
 export default function LocalVideoSequenceReview({
-  sources,shots,soundtrack,profile,quality,disabled=false,
+  sources,shots,soundtrack,narration=null,effects=null,profile,quality,disabled=false,
   onJumpToShot=()=>{},
 }:Props){
   const audit=useMemo(()=>{
     try{return {value:auditLocalVideoExport({
-      sources,shots,soundtrack,profile,quality}),error:""};}
+      sources,shots,soundtrack,narration,effects,profile,quality}),error:""};}
     catch(cause){return {value:null,error:cause instanceof Error?cause.message:"Cannot audit this project."};}
-  },[sources,shots,soundtrack,profile,quality]);
+  },[sources,shots,soundtrack,narration,effects,profile,quality]);
   const scheduled=useMemo(()=>{
     try{return {value:localSequencePlan(shots,sources,quality==="cinematic"?24:16),error:""};}
     catch(cause){return {value:null,error:cause instanceof Error?cause.message:"Cannot preview original sequence."};}

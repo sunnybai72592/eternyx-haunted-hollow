@@ -111,7 +111,16 @@ export function readLocalRenderReceipt(raw) {
     cursor += row.frames;
   });
   if (cursor !== receipt.total_frames) fail("Shot lengths do not match the rendered timeline.");
-  const hasAudio = verifyAudio(receipt.soundtrack,receipt.total_frames,fps);
+  const audioRoles=["soundtrack","narration","effects"];
+  const seen=new Set(receipt.shots.map(shot=>shot.file.toLowerCase()));
+  let hasAudio=false;
+  for(const role of audioRoles){
+    const track=receipt[role]??null;
+    if(verifyAudio(track,receipt.total_frames,fps)){
+      if(seen.has(track.file.toLowerCase()))fail("Audio track filenames collide.");
+      seen.add(track.file.toLowerCase());hasAudio=true;
+    }
+  }
   if (video.audio !== hasAudio) fail("Soundtrack and output audio states disagree.");
   return receipt;
 }
@@ -149,8 +158,8 @@ export function verifyLocalRenderReceipt(receipt, file, context = null) {
         fail("Rendered shot " + (i + 1) + " differs from the locally prepared project.");
       }
     }
-    if (!sameJSON(receipt.soundtrack, context.board.soundtrack ?? null)) {
-      fail("Renderer soundtrack differs from the locally prepared project.");
+    for(const role of ["soundtrack","narration","effects"]){
+      if(!sameJSON(receipt[role]??null,context.board[role]??null))fail("Renderer "+role+" differs from the locally prepared project.");
     }
     projectMatch = true;
   }
