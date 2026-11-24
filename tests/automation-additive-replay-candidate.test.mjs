@@ -25,3 +25,9 @@ test("real tracked candidate records complete fingerprints but never authorizes 
   assert.equal(report.remoteExecutionAuthorized,false);
   for(const row of report.files)assert.match(row.sha256,/^[a-f0-9]{64}$/);
 });
+
+test("legacy UUID and mixed-case migration names are valid inventory but remain excluded from scoped replay",()=>{
+  const legacy=["20250828011106_6b94a803-f5af-4e9c-9dd5-9d8c41a74268.sql","20250828011234_Legacy-Name.sql"];
+  assert.deepEqual(selectCandidate([...valid,...legacy]),[...valid].sort());
+  assert.throws(()=>selectCandidate([...valid,"20250828011106_legacy/name.sql"]),/invalid_source/);
+});
