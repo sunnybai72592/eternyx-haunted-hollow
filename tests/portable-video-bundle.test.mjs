@@ -552,3 +552,43 @@ test("real six camera moves change decoded composition without changing native f
     }
   }
 });
+
+test("real timed titles render only in exact selected frame windows with literal punctuation",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir(),path=join(dir,"title-source.mp4");
+  const sourceRender=spawnSync("ffmpeg",["-nostdin","-v","error","-y","-f","lavfi","-i",
+    "color=black:size=256x144:rate=24:duration=2","-threads","1","-c:v","libx264","-pix_fmt","yuv420p",path],{encoding:"utf8",timeout:30000});
+  assert.equal(sourceRender.status,0,sourceRender.stderr);
+  const source=media("title-source.mp4",readFileSync(path));
+  const titles=[
+    {text:"ETERNYX: 100% [local] ' \"",position:"center",color:"white",start_ms:250,duration_ms:500,animation:"fade"},
+    {text:"Closing title",position:"lower_left",color:"gold",start_ms:1000,duration_ms:500,animation:"static"},
+  ];
+  const pack=await buildPortableVideoBundle(settings([source],[shot(source,{frames:48})],{quality:"cinematic",titles,delivery:"all"}));
+  const folder=join(dir,"unpacked"),zip=join(dir,"titles.zip");mkdirSync(folder);
+  writeFileSync(zip,Buffer.from(await pack.blob.arrayBuffer()));extractedZip(zip,folder);
+  const run=spawnSync("python3",["launch_portable_video.py","--run"],{cwd:folder,encoding:"utf8",timeout:240000});
+  assert.equal(run.status,0,run.stderr+"\n"+run.stdout);
+  const output=join(folder,"eternyx-video-output");
+  const receipt=JSON.parse(readFileSync(join(output,"manifest.json"),"utf8"));
+  assert.deepEqual(receipt.titles,titles);assert.equal(receipt.video.frame_count,48);
+  assert.ok(!existsSync(join(output,"title-0.txt")));
+  for(const name of ["video.mp4","video-subtitled.mp4","video.webm"]){
+    const r=spawnSync("ffmpeg",["-v","error","-i",join(output,name),"-vf","scale=160:90","-pix_fmt","rgb24","-f","rawvideo","pipe:1"],{timeout:30000,maxBuffer:4*1024*1024});
+    assert.equal(r.status,0,r.stderr?.toString());assert.equal(r.stdout.length,48*160*90*3);
+    const count=(f,y0,y1,limit=120)=>{
+      let n=0;
+      for(let y=y0;y<y1;y++)for(let x=0;x<160;x++){
+        const i=(f*160*90+y*160+x)*3;if(r.stdout[i]>limit&&r.stdout[i+1]>limit)n++;
+      }
+      return n;
+    };
+    assert.equal(count(0,0,90),0,name+" before title");
+    assert.ok(count(11,30,60)>20,name+" actual center glyphs");
+    assert.ok(count(6,30,60)<count(11,30,60),name+" fade starts dimmer");
+    assert.equal(count(20,0,90),0,name+" between titles");
+    assert.ok(count(28,60,90)>20,name+" lower-third glyphs");
+    assert.equal(count(42,0,90),0,name+" after titles");
+  }
+});

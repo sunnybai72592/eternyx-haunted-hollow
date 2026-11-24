@@ -4,7 +4,7 @@
  * before any timeline, soundtrack or profile is restored to the live editor.
  */
 import {
-  checkLocalMediaName,LOCAL_VIDEO_LIMITS,checkLocalVideoLook,checkSoundtrackEdit,SOUNDTRACK_EDIT_FIELDS,checkLocalVideoTransition,checkLocalVideoCamera,
+  checkLocalMediaName,LOCAL_VIDEO_LIMITS,checkLocalVideoLook,checkSoundtrackEdit,SOUNDTRACK_EDIT_FIELDS,checkLocalVideoTransition,checkLocalVideoCamera,checkLocalVideoTitles,
   LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps,localVideoMaxFrames,localVideoMaxSourceFrames,
 } from "./localVideoEditor.mjs";
 
@@ -58,7 +58,7 @@ function mediaRecord(item,kind){
   return base;
 }
 function normalize(data){
-  fields(data,[...ROOT,...["grade","framing","narration","effects","transition","camera"].filter(k=>data&&Object.hasOwn(data,k))],"draft");
+  fields(data,[...ROOT,...["grade","framing","narration","effects","transition","camera","titles"].filter(k=>data&&Object.hasOwn(data,k))],"draft");
   checkLocalVideoLook(Object.hasOwn(data,"grade")?data.grade:"neutral",Object.hasOwn(data,"framing")?data.framing:"contain");
   if(data.format!=="eternyx-local-video-edit-draft"||
      data.version!==1||data.contains_private_media!==false)
@@ -123,9 +123,10 @@ function normalize(data){
   for(const track of Object.values(extra))checkSoundtrackEdit(track,total,fps);
   const transition=checkLocalVideoTransition(data.transition,shots,fps);
   const camera=checkLocalVideoCamera(data.camera);
+  const titles=checkLocalVideoTitles(data.titles,total,fps);
   return {
     format:"eternyx-local-video-edit-draft",version:1,
-    name,contains_private_media:false,sources,soundtrack,shots,...extra,...(transition?{transition}:{}),...(camera?{camera}:{}),
+    name,contains_private_media:false,sources,soundtrack,shots,...extra,...(transition?{transition}:{}),...(camera?{camera}:{}),...(titles?{titles}:{}),
     profile:data.profile,quality:data.quality,
     ...(Object.hasOwn(data,"grade")?{grade:data.grade}:{}),
     ...(Object.hasOwn(data,"framing")?{framing:data.framing}:{}),
@@ -133,7 +134,7 @@ function normalize(data){
 }
 export function createLocalVideoDraft({
   name="My ETERNYX video",sources,shots,soundtrack=null,narration=null,effects=null,
-  profile="landscape",quality="standard",grade,framing,transition,camera,
+  profile="landscape",quality="standard",grade,framing,transition,camera,titles,
 }){
   const raw={
     format:"eternyx-local-video-edit-draft",version:1,
@@ -155,7 +156,7 @@ export function createLocalVideoDraft({
       caption:s.caption,rightsRef:s.rightsRef,
       fadeInFrames:s.fadeInFrames,fadeOutFrames:s.fadeOutFrames,
     })),
-    profile,quality,...(grade===undefined?{}:{grade}),...(framing===undefined?{}:{framing}),...(transition===undefined?{}:{transition}),...(camera===undefined?{}:{camera}),
+    profile,quality,...(grade===undefined?{}:{grade}),...(framing===undefined?{}:{framing}),...(transition===undefined?{}:{transition}),...(camera===undefined?{}:{camera}),...(titles===undefined?{}:{titles}),
   };
   const draft=normalize(raw);
   const json=JSON.stringify(draft,null,2)+"\n";
@@ -215,7 +216,7 @@ export async function verifyLocalVideoDraftMedia(draft,files,onProgress=()=>{}){
     narration:safe.narration?matched.get(safe.narration.name.toLowerCase()):null,
     effects:safe.effects?matched.get(safe.effects.name.toLowerCase()):null,
     shots:safe.shots.map(s=>({...s})),profile:safe.profile,quality:safe.quality,
-    grade:safe.grade??"neutral",framing:safe.framing??"contain",transition:safe.transition,camera:safe.camera,
+    grade:safe.grade??"neutral",framing:safe.framing??"contain",transition:safe.transition,camera:safe.camera,titles:safe.titles,
     name:safe.name,verifiedCount:matched.size,
     privateMediaUploaded:false,
   };

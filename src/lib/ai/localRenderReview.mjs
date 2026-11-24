@@ -2,7 +2,7 @@
  * These are integrity checks against supplied files, NOT digital signatures,
  * authenticity proofs, visual-quality ratings, or server verification.
  */
-import { checkLocalMediaName, localVideoSrt, LOCAL_VIDEO_LIMITS, checkSoundtrackEdit, checkLocalVideoTransition, checkLocalVideoCamera } from "./localVideoEditor.mjs";
+import { checkLocalMediaName, localVideoSrt, LOCAL_VIDEO_LIMITS, checkSoundtrackEdit, checkLocalVideoTransition, checkLocalVideoCamera, checkLocalVideoTitles } from "./localVideoEditor.mjs";
 
 export const MAX_RENDER_BYTES = 64 * 1024 * 1024;
 export const MAX_RECEIPT_BYTES = 64 * 1024;
@@ -113,6 +113,7 @@ export function readLocalRenderReceipt(raw) {
   if (cursor !== receipt.total_frames) fail("Shot lengths do not match the rendered timeline.");
   checkLocalVideoTransition(receipt.transition,receipt.shots,fps);
   checkLocalVideoCamera(receipt.camera);
+  checkLocalVideoTitles(receipt.titles,receipt.total_frames,fps);
   if(!Object.hasOwn(receipt,"soundtrack"))fail("Missing soundtrack receipt.");
   const audioRoles=["soundtrack","narration","effects"];
   const seen=new Set(receipt.shots.map(shot=>shot.file.toLowerCase()));
@@ -154,6 +155,7 @@ export function verifyLocalRenderReceipt(receipt, file, context = null) {
         (context.framing!==undefined && (receipt.framing??"contain")!==context.framing))
       fail("The rendered color grade or framing differs from the current project.");
     if (!context.board || context.board.version !== 2) fail("No valid studio v2 project to compare.");
+    if(!sameJSON(receipt.titles??null,context.board.titles??null))fail("Renderer titles differ from the local project.");
     if(!sameJSON(receipt.camera??null,context.board.camera??null))fail("Renderer camera motion differs from the local project.");
     if(!sameJSON(receipt.transition??null,context.board.transition??null))fail("Renderer scene transition differs from the local project.");
     if (receipt.shots.length !== context.board.shots.length) fail("Renderer changed the number of shots.");

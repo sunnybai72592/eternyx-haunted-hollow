@@ -116,6 +116,8 @@ def preflight(root=ROOT):
         raise ValueError("Portable manifest shot count and storyboard disagree")
     media = root / "media"
     shots,total = renderer.check_shots(board, media, manifest["fps"])
+    if "titles" in board:
+        check_program("ffmpeg", ["-hide_banner", "-filters"], b"drawtext")
     tracks = renderer.check_audio_tracks(board, media)
     audio_names = {track["file"] for track in tracks.values() if track is not None}
     if total != manifest["frames"]:
@@ -175,6 +177,7 @@ def preflight(root=ROOT):
         "grade": grade, "framing": framing,
         "transition": board.get("transition"),
         "camera": board.get("camera"),
+        "titles": board.get("titles"),
     }
 
 
@@ -387,6 +390,7 @@ def run(root=ROOT, on_stage=None, cancel=None):
                 receipt.get("grade", "neutral")!=checked.get("grade", "neutral") or
                 receipt.get("transition")!=checked.get("transition") or
                 receipt.get("camera")!=checked.get("camera") or
+                receipt.get("titles")!=checked.get("titles") or
                 receipt.get("fps")!=checked["fps"] or
                 receipt.get("video", {}).get("fps")!=str(checked["fps"])+"/1"):
             raise ValueError("Actual local renderer receipt conflicts with original validated project")

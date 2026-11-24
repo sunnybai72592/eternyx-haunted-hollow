@@ -98,6 +98,9 @@ export default function LocalVideoEditor() {
   const [framing,setFraming]=useState("contain");
   const [transition,setTransition]=useState<{mode:string;duration_ms:number}|undefined>(undefined);
   const [camera,setCamera]=useState<{mode:string;strength_percent:number}|undefined>(undefined);
+  type TitleOverlay={text:string;position:string;color:string;start_ms:number;duration_ms:number;animation:string};
+  const [titleOverlays,setTitleOverlays]=useState<TitleOverlay[]>([]);
+  const titles=titleOverlays.length?titleOverlays:undefined;
   const fps:16|24=quality==="cinematic"?24:16;
   const [selectedSource, setSelectedSource] = useState("");
   const [working, setWorking] = useState(false);
@@ -130,7 +133,7 @@ export default function LocalVideoEditor() {
   const downloadDraft = () => {
     try {
       const saved = createLocalVideoDraft({
-        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,transition,camera,
+        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,transition,camera,titles,
       });
       saveDownload(saved.json,saved.filename,"application/json");
       setMessage("");
@@ -216,7 +219,7 @@ export default function LocalVideoEditor() {
       setSelectedSource(prepared[0].name);
       setProfile(verified.profile);
       setQuality(verified.quality);
-      setGrade(verified.grade);setFraming(verified.framing);setTransition(verified.transition);setCamera(verified.camera);
+      setGrade(verified.grade);setFraming(verified.framing);setTransition(verified.transition);setCamera(verified.camera);setTitleOverlays((verified.titles??[]) as TitleOverlay[]);
       setDraftName(verified.name);
       setPendingDraft(null);
       setNotice("Editing project restored: "+verified.verifiedCount+
@@ -369,7 +372,7 @@ export default function LocalVideoEditor() {
   let validation = "";
   if (sources.length) {
     try {
-      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition, camera });
+      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition, camera, titles });
     } catch (error) {
       validation = error instanceof Error ? error.message : "Check the selected timeline.";
     }
@@ -383,7 +386,7 @@ export default function LocalVideoEditor() {
     setBundleProgress("Verifying actual source media...");
     try {
       const output = await buildPortableVideoBundle({
-        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing, transition, camera,
+        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing, transition, camera, titles,
         rendererSources: {
           "render_video_timeline.py": rendererPython,
           "assemble_video_storyboard.py": storyboardPython,
@@ -570,7 +573,7 @@ export default function LocalVideoEditor() {
         {sources.length > 0 && (
           <LocalVideoSequenceReview
             sources={sources} shots={shots} soundtrack={soundtrack} narration={narration} effects={effects}
-            profile={profile} quality={quality} transition={transition} camera={camera}
+            profile={profile} quality={quality} transition={transition} camera={camera} titles={titles}
             disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
             onJumpToShot={index=>{
               document.getElementById("local-video-shot-"+index)
@@ -782,6 +785,31 @@ export default function LocalVideoEditor() {
             </label>
           </div>
           <p className="text-xs text-slate-400">Local FFmpeg applies eased digital zoom or pan over each composed shot, then fades and transitions. The camera crops the composed image, including any letterbox bars, without changing frame count or audio timing. This is digital reframing, not AI camera generation. Original-source preview is unchanged.</p>
+          <section className="space-y-3 rounded-lg border border-slate-700 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="font-semibold">Cinematic titles · {titleOverlays.length}/3</h4>
+              <Button size="sm" variant="outline" disabled={titleOverlays.length>=3||bundleWorking||draftWorking||Boolean(pendingDraft)}
+                onClick={()=>setTitleOverlays(old=>[...old,{text:"ETERNYX",position:old.length?"lower_left":"center",color:"white",start_ms:old.length?old[old.length-1].start_ms+old[old.length-1].duration_ms:0,duration_ms:500,animation:"fade"}])}>Add timed title</Button>
+            </div>
+            {titleOverlays.map((item,index)=>{
+              const disabled=bundleWorking||draftWorking||Boolean(pendingDraft);
+              const update=(patch:Partial<TitleOverlay>)=>setTitleOverlays(old=>old.map((value,i)=>i===index?{...value,...patch}:value));
+              return <div key={index} className="space-y-2 rounded border border-slate-700 p-3">
+                <div className="flex items-center justify-between"><span className="text-sm">Title {index+1}</span>
+                  <Button size="sm" variant="ghost" disabled={disabled} onClick={()=>setTitleOverlays(old=>old.filter((_,i)=>i!==index))}>Remove</Button></div>
+                <label className="block text-sm">Title text<Input disabled={disabled} maxLength={40} value={item.text} onChange={e=>update({text:e.target.value})}/></label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="block text-sm">Start (ms)<Input type="number" min={0} max={30000} step={250} disabled={disabled} value={item.start_ms} onChange={e=>update({start_ms:Number(e.target.value)})}/></label>
+                  <label className="block text-sm">Duration (ms)<Input type="number" min={500} max={30000} step={250} disabled={disabled} value={item.duration_ms} onChange={e=>update({duration_ms:Number(e.target.value)})}/></label>
+                  {([["position","Position",["center","lower_left","upper_left"]],["color","Color",["white","gold","cyan"]],["animation","Animation",["static","fade"]]] as const).map(([key,label,values])=><label key={key} className="block text-sm">{label}
+                    <select disabled={disabled} value={item[key]} onChange={e=>update({[key]:e.target.value})} className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
+                      {values.map(value=><option key={value} value={value}>{value.replaceAll("_"," ")}</option>)}
+                    </select></label>)}
+                </div>
+              </div>;
+            })}
+            <p className="text-xs text-slate-400">Up to three non-overlapping titles, in chronological order. Use 250 ms steps, at least 500 ms each. Printable English/ASCII text only (40 characters); the local FFmpeg build needs drawtext and a usable Sans font. Titles appear in the rendered movie, not the original preview.</p>
+          </section>
           <label className="block space-y-1 text-sm">Offline movie delivery formats
             <select value={delivery} disabled={bundleWorking} onChange={e=>setDelivery(e.target.value)}
               className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">

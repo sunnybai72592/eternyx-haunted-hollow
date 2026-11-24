@@ -35,9 +35,9 @@ AUDIO_KEYS = {"file", "source_sha256", "rights_ref", "volume_percent"}
 AUDIO_EDIT_KEYS = {"source_start_ms", "timeline_start_ms", "duration_ms", "fade_in_ms", "fade_out_ms", "loop"}
 
 
-def execute(args, timeout=120):
+def execute(args, timeout=120, cwd=None):
     try:
-        proc = subprocess.run(args, capture_output=True, timeout=timeout, check=False)
+        proc = subprocess.run(args, capture_output=True, timeout=timeout, check=False, cwd=cwd)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError("Local FFmpeg/FFprobe failed or exceeded its CPU time limit") from error
     if proc.returncode:
@@ -54,7 +54,7 @@ def read_board(path):
         raise ValueError("Storyboard exceeds 32 KiB")
     board = json.loads(content, object_pairs_hook=unique_keys)
     if (not isinstance(board, dict) or type(board.get("version")) is not int or
-            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps", "transition", "camera"} or
+            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps", "transition", "camera", "titles"} or
             type(board.get("fps", FPS)) is not int or board.get("fps", FPS) not in (FPS, CINEMATIC_FPS)):
         raise ValueError("Expected a v2 storyboard with shots and optional soundtrack")
     shots = board.get("shots")
@@ -199,6 +199,48 @@ def camera_filter(camera, frames, width, height, fps):
     return f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={width}x{height}:fps={fps}"
 
 
+TITLE_POSITIONS = {"center", "lower_left", "upper_left"}
+TITLE_COLORS = {"white", "gold", "cyan"}
+
+
+def check_titles(titles, total, fps):
+    if not isinstance(titles, list) or not 1 <= len(titles) <= 3:
+        raise ValueError("Supply one to three timed titles")
+    previous_end = 0
+    for item in titles:
+        if not isinstance(item, dict) or set(item) != {"text", "position", "color", "start_ms", "duration_ms", "animation"}:
+            raise ValueError("Invalid title overlay fields")
+        message = item["text"]
+        if not isinstance(message, str) or not 1 <= len(message) <= 40 or not message.strip() or any(not 32 <= ord(c) <= 126 for c in message):
+            raise ValueError("Title text must be 1-40 printable ASCII characters")
+        if (not isinstance(item["position"], str) or item["position"] not in TITLE_POSITIONS or
+                not isinstance(item["color"], str) or item["color"] not in TITLE_COLORS or
+                not isinstance(item["animation"], str) or item["animation"] not in ("static", "fade")):
+            raise ValueError("Unsupported title style")
+        start, duration = item["start_ms"], item["duration_ms"]
+        if (type(start) is not int or type(duration) is not int or start < 0 or duration < 500 or
+                start % 250 or duration % 250 or start < previous_end or (start + duration) * fps > total * 1000):
+            raise ValueError("Title timings must be ordered, non-overlapping 250 ms steps within the movie, with duration >= 500 ms")
+        previous_end = start + duration
+    return titles
+
+
+def title_filter(item, index, width, height, fps):
+    first = item["start_ms"] * fps // 1000
+    end = (item["start_ms"] + item["duration_ms"]) * fps // 1000
+    size = max(6, min(64, height // 10, int(width * .85 / (len(item["text"]) * .85 + 2))))
+    x = "(w-tw)/2" if item["position"] == "center" else "w*0.06"
+    y = {"center": "(h-th)/2", "lower_left": "h-th-h*0.09", "upper_left": "h*0.09"}[item["position"]]
+    color = {"white": "white", "gold": "0xFFD166", "cyan": "0x67E8F9"}[item["color"]]
+    alpha = ""
+    if item["animation"] == "fade":
+        fade = max(1, min(fps // 4, (end-first)//2))
+        alpha = f":alpha='min(1,max(0,min((n-{first}+1)/{fade},({end}-n)/{fade})))'"
+    # User text is exclusively a private file, never part of a filter expression.
+    return (f"drawtext=font=Sans:textfile=title-{index}.txt:expansion=none:fontcolor={color}:"
+            f"fontsize={size}:borderw=1:bordercolor=black:x={x}:y={y}:enable='gte(n,{first})*lt(n,{end})'" + alpha)
+
+
 def check_shots(board, root, fps=FPS):
     total = 0
     sources = {}
@@ -241,6 +283,8 @@ def check_shots(board, root, fps=FPS):
         check_transition(board["transition"], validated, fps)
     if "camera" in board:
         check_camera(board["camera"])
+    if "titles" in board:
+        check_titles(board["titles"], total, fps)
     return validated, total
 
 
@@ -320,7 +364,7 @@ COLOR_GRADES = {
 }
 
 
-def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None, transition=None, camera=None):
+def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None, transition=None, camera=None, titles=None):
     if quality not in ("standard", "high", "cinematic") or framing not in ("contain", "cover"):
         raise ValueError("Unsupported offline encoder quality or framing")
     if not isinstance(grade, str) or grade not in COLOR_GRADES:
@@ -329,13 +373,13 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y",
            "-filter_complex_threads", "1", "-threads", "1"]
     for shot in shots:
-        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(shot["path"])]
+        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(shot["path"].resolve() if titles is not None else shot["path"])]
     tracks = [track for track in (soundtrack, narration, effects) if track is not None]
     expanded_audio = narration is not None or effects is not None
     for track in tracks:
         if track.get("loop", True):
             cmd += ["-stream_loop", "-1"]
-        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(track["path"])]
+        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(track["path"].resolve() if titles is not None else track["path"])]
     transition_frames = check_transition(transition, shots, fps) if transition is not None else 0
     graph = []
     for i, shot in enumerate(shots):
@@ -384,7 +428,11 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
         ordered = "[main0]" + "".join(f"[scene{i}]" for i in range(1, len(shots)))
     else:
         ordered = "".join(f"[shot{i}]" for i in range(len(shots)))
-    graph.append(ordered + f"concat=n={len(shots)}:v=1:a=0[outv]")
+    graph.append(ordered + f"concat=n={len(shots)}:v=1:a=0" + ("[titlesource]" if titles is not None else "[outv]"))
+    if titles is not None:
+        check_titles(titles, total, fps)
+        graph.append("[titlesource]" + ",".join(title_filter(item, i, width, height, fps)
+                     for i, item in enumerate(titles)) + "[outv]")
     for index, track in enumerate(tracks):
         duration = total / fps
         audio_input = len(shots) + index
@@ -434,7 +482,7 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
     cmd += ["-r", str(fps), "-t", f"{total/fps:.6f}" if edited_audio else f"{total/fps:.4f}",
             "-c:v", "libx264", "-preset", "medium" if quality in ("high", "cinematic") else "veryfast",
             "-crf", "18" if quality == "cinematic" else ("19" if quality == "high" else "23"), "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart", str(destination)]
+            "-movflags", "+faststart", str(destination.resolve() if titles is not None else destination)]
     return cmd
 
 
@@ -533,7 +581,14 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects, board.get("transition"), board.get("camera")), timeout=240)
+        titles = board.get("titles")
+        if titles is not None:
+            for i, title in enumerate(titles):
+                (stage / f"title-{i}.txt").write_text(title["text"], encoding="ascii")
+        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects, board.get("transition"), board.get("camera"), titles), timeout=240, cwd=stage if titles is not None else None)
+        if titles is not None:
+            for i in range(len(titles)):
+                (stage / f"title-{i}.txt").unlink()
         video = verify_output(video_path, total, size, any(t is not None for t in tracks.values()), fps)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}
@@ -543,6 +598,7 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
                    **({"grade": grade} if grade != "neutral" else {}),
                    **({"transition": board["transition"]} if "transition" in board else {}),
                    **({"camera": board["camera"]} if "camera" in board else {}),
+                   **({"titles": board["titles"]} if "titles" in board else {}),
                    "total_frames": total, "shots": public_shots,
                    "soundtrack": audio, **{role: {k: v for k, v in tracks[role].items() if k != "path"}
                        for role in ("narration", "effects") if tracks[role] is not None},
