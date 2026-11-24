@@ -172,3 +172,10 @@ test("stale, cancelled and mismatched reports cannot be exported as current UI e
   const forged={scenarioId:"a",method:"GET",origin:"https://example.com",status:200,elapsedMs:10,passed:true,reason:"content-type-mismatch",contentTypeCheck:"mismatch"};
   assert.equal(JSON.parse(exportProjectApiReport([forged])).summary.passed,0);
 });
+
+test("structured JSON suffix recognition accepts standard vendor MIME types and rejects non-JSON",async()=>{
+  const cases=makeSaved(["application/problem+json","application/vnd.api+json","application/ld+json","text/json","application/jsonish"].map((mime,i)=>specimen("mime"+i,{url:"https://example.com/"+i,expectedContentType:"json"})));
+  const mimes=["application/problem+json","application/vnd.api+json","application/ld+json","text/json","application/jsonish"];
+  const rows=await runProjectApiSuite(cases,{fetcher:async(url)=>({status:200,headers:{get:()=>mimes[Number(url.split("/").at(-1))]}})});
+  assert.deepEqual(rows.map(x=>x.passed),[true,true,true,false,false]);
+});
