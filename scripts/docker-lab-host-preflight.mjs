@@ -18,6 +18,8 @@ import {evaluateSignedDockerHostReadOnly}
  from "../src/lib/dockerSignedHostReadOnlyPreflight.mjs";
 import {loadHostEvidencePrivateKey,signDockerReadOnlyHostReport}
  from "../src/lib/dockerSignedHostEvidenceReview.mjs";
+import {evaluateDockerStagingLifecycleCapture}
+ from "../src/lib/dockerStagingLifecycleEvidence.mjs";
 
 const FULL=/^[a-f0-9]{64}$/;
 const OPS=new Set(["start","stop","restart"]);
@@ -83,9 +85,12 @@ function main(){
  const args=process.argv.slice(2);
  const signed=args.length===7&&args[3]==="--sign-evidence"&&
    args[5]==="--challenge"&&FULL.test(args[6]||"");
- if((args.length!==3&&!signed)||args[0]!=="--read-only"||
-    !FULL.test(args[1]||"")||!OPS.has(args[2]))
-  throw Error("Usage: docker-lab-host-preflight.mjs --read-only FULL_CONTAINER_ID start|stop|restart [--sign-evidence /ABS/SEPARATE-PRIVATE-KEY --challenge 64_HEX]");
+ const capture=args.length===4&&args[0]==="--capture-lifecycle"&&
+   ["before","after"].includes(args[1])&&FULL.test(args[2]||"")&&
+   OPS.has(args[3]);
+ if(!capture&&((args.length!==3&&!signed)||args[0]!=="--read-only"||
+    !FULL.test(args[1]||"")||!OPS.has(args[2])))
+  throw Error("Usage: --read-only FULL_CONTAINER_ID start|stop|restart [--sign-evidence /ABS/SEPARATE-PRIVATE-KEY --challenge 64_HEX] | --capture-lifecycle before|after FULL_CONTAINER_ID start|stop|restart");
  if(process.platform!=="linux"||typeof process.getuid!=="function"||
     process.getuid()===0||process.env.CI==="true"||
     process.env.GITHUB_ACTIONS==="true")
@@ -94,7 +99,8 @@ function main(){
  if(process.env.ETERNYX_REMOTE_LAB_ENABLED==="true"||
     process.env.DOCKER_REMOTE_LAB_ENABLED==="true")
   throw Error("Disable all lab execution flags before read-only host preflight.");
- const [_,containerId,operation]=args;
+ const containerId=capture?args[2]:args[1];
+ const operation=capture?args[3]:args[2];
  // The attestor credential is dedicated to local evidence and must never be
  // confused with the agent's execution credential or a server permit.
  const attestorKey=signed?loadHostEvidencePrivateKey(args[4]):null;
@@ -122,6 +128,21 @@ function main(){
     cliBefore.path!==cliAfter.path)
   throw Error("Independent Docker CLI or config pins changed during preflight.");
  const inventoryAfter=auditSignedAgentRecoveryDirectory();
+ if(capture){
+  // A controlled operator action, if any, happens BETWEEN separate invocations
+  // and is NEVER launched by this read-only evidence collector.
+  const snapshot=evaluateDockerStagingLifecycleCapture({
+   pins,contextBefore:first.context,contextAfter:second.context,
+   endpointBefore:first.endpoint,endpointAfter:second.endpoint,
+   infoBefore:first.info,infoAfter:second.info,
+   targetBefore:first.target,targetAfter:second.target,
+   containerId,operation,phase:args[1],
+   inventoryBefore,inventoryAfter,
+   cli:cliAfter,config:configAfter
+  });
+  process.stdout.write(JSON.stringify(snapshot)+"\n");
+  return;
+ }
  const report=evaluateSignedDockerHostReadOnly({
   pins,contextBefore:first.context,contextAfter:second.context,
   endpointBefore:first.endpoint,endpointAfter:second.endpoint,
