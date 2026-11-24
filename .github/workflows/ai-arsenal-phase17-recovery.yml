@@ -1,0 +1,28 @@
+name: AI Arsenal local recovery
+on:
+  pull_request:
+    paths:
+      - 'src/lib/ai/document-corpus*.ts'
+      - 'src/pages/AIDocumentIntelligence.tsx'
+      - 'src/pages/AIArsenal.tsx'
+      - 'tests/ai-corpus-*.test.mjs'
+      - '.github/workflows/ai-arsenal-phase17-recovery.yml'
+permissions:
+  contents: read
+jobs:
+  recovery:
+    name: Verified backup and selective recovery regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install only the pinned test compiler
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ai-recovery-compiler" --no-audit --no-fund --ignore-scripts --package-lock=false typescript@5.8.3
+          mkdir -p node_modules
+          ln -s "$RUNNER_TEMP/ai-recovery-compiler/node_modules/typescript" node_modules/typescript
+      - name: Run actual recovery regressions
+        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs
