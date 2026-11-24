@@ -9,6 +9,7 @@ import { inspectStagingDossier, EVIDENCE_IDS, DOSSIER_LIMIT } from "@/lib/securi
 import { validateMigrationObservation } from "@/lib/securityMigrationObservation.mjs";
 import { evaluateStagingRecoveryReadiness } from "@/lib/securityStagingRecoveryReadiness.mjs";
 import { parseRecoveryPacketJson, RECOVERY_PACKET_MAX_BYTES } from "@/lib/securityRecoveryEvidence.mjs";
+import { validateWave17AuditReport, W17_CHECK_IDS } from "@/lib/securityWave17StagingAudit.mjs";
 
 const MAX_REPORT_BYTES=48*1024;
 type Report={observedAt:string;[key:string]:unknown};
@@ -57,6 +58,8 @@ export default function SecurityReleaseReadiness(){
   const [migrationError,setMigrationError]=useState("");
   const [recoveryPacket,setRecoveryPacket]=useState<ReturnType<typeof parseRecoveryPacketJson>|null>(null);
   const [recoveryPacketError,setRecoveryPacketError]=useState("");
+  const [liveStagingReport,setLiveStagingReport]=useState<ReturnType<typeof validateWave17AuditReport>|null>(null);
+  const [liveStagingError,setLiveStagingError]=useState("");
   const recovery=evaluateStagingRecoveryReadiness(migrationObservation);
   const gate=evaluateCybersecurityReleaseGate(uploaded);
   async function importReport(file?:File){
@@ -127,6 +130,20 @@ export default function SecurityReleaseReadiness(){
       setRecoveryPacket(validated);
     }catch{
       setRecoveryPacketError("Recovery evidence rejected: malformed, contradictory or elevated claims.");
+    }
+  }
+  async function importLiveStagingReport(file?:File){
+    setLiveStagingReport(null);setLiveStagingError("");
+    if(!file)return;
+    if(file.size<1||file.size>MAX_REPORT_BYTES){
+      setLiveStagingError("Source/RLS audit file must be 48 KiB or less.");return;
+    }
+    try{
+      const input:unknown=JSON.parse(await file.text());
+      const checked=validateWave17AuditReport(input);
+      setLiveStagingReport(checked);
+    }catch{
+      setLiveStagingError("The staging deployment report is incomplete, altered or claims unverified access.");
     }
   }
   return <main className="min-h-screen bg-background text-foreground"><div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
@@ -212,7 +229,22 @@ export default function SecurityReleaseReadiness(){
         <p className="text-xs text-amber-100">Even if every supplied file has a matching SHA-256 digest, no independent backup restore, project identity or production approval is established. Authenticated approval is always missing in this packet.</p>
       </div>}
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>6. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
+    <Card><CardHeader><CardTitle>6. Live staging schema and migration-source audit</CardTitle>
+      <CardDescription>Wave 17's separate Supabase staging project now contains the three reviewed Cybersecurity migrations. Its live read-only catalog verified migration source bytes, seven RLS tables, and the private evidence bucket. Authenticated two-user testing remains a separate blocker.</CardDescription>
+    </CardHeader><CardContent className="space-y-3">
+      <Label htmlFor="security-live-staging-audit">Optional unsigned Wave 17 staging SQL observation (48 KiB maximum)</Label>
+      <Input id="security-live-staging-audit" type="file" accept=".json,application/json" onChange={e=>void importLiveStagingReport(e.target.files?.[0])}/>
+      {liveStagingError&&<p role="alert" className="text-sm text-rose-200">{liveStagingError}</p>}
+      <p className="flex items-center gap-2 text-sm font-medium text-amber-100"><ShieldAlert className="h-4 w-4"/>{liveStagingReport?"Operator-reported staging deployment checks accepted (unsigned)":"No signed live staging audit artifact verified in this session"}</p>
+      {liveStagingReport&&<div className="space-y-2 rounded-lg border border-border bg-background p-3 text-sm">
+        <p>Staging project: {liveStagingReport.stagingRef} · {liveStagingReport.checksPassed}/{W17_CHECK_IDS.length} source, privacy and RLS checks passed</p>
+        <p>Auth test fixtures: {liveStagingReport.authFixturesPresent?"present (JWT tests still outstanding)":"missing"}</p>
+        <p>Full PostgreSQL catalog: {liveStagingReport.catalogPassed}/60 checks reported</p>
+        <p className="text-xs text-muted-foreground">Migration SQL source checks are no replacement for actual two-account JWT HTTP, write isolation, revocation, backup restore or independent approval.</p>
+      </div>}
+      <p className="text-xs text-amber-100">Staging and production migration timestamps differ. Reconcile version history and approved source files before any future CLI push; do not reapply staged SQL blindly. Production remains BLOCKED.</p>
+    </CardContent></Card>
+    <Card><CardHeader><CardTitle>7. Production release safeguards</CardTitle><CardDescription>Even a complete staging read-only report does not authorize production changes. Separate staging write-deny, migrations, rollback and operator review evidence are required.</CardDescription></CardHeader><CardContent className="space-y-3">
       <p role="status" className="flex items-center gap-2 font-semibold text-amber-200"><ShieldAlert className="h-5 w-5"/>Production release: BLOCKED</p>
       <ol className="space-y-3">{gate.blockers.map((item,index)=><li key={item} className="flex gap-3 rounded-lg border border-border bg-background p-3 text-sm"><span className="font-semibold text-amber-200">{index+1}.</span><span>{item}</span></li>)}</ol>
       <p className="text-xs text-muted-foreground">No deployment button, schema write, role change, fake readiness score or release override exists on this page.</p>

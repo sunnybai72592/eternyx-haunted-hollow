@@ -17,6 +17,10 @@ on:
       - "scripts/security-staging-migration-history.mjs"
       - "src/lib/securityMigrationObservation.mjs"
       - "tests/security-staging-migration-history.test.mjs"
+      - "scripts/sql/security-wave17-live-audit.sql"
+      - "src/lib/securityWave17StagingAudit.mjs"
+      - "scripts/security-wave17-live-audit.mjs"
+      - "tests/security-wave17-staging-audit.test.mjs"
       - ".github/workflows/security-case-ledger-sql.yml"
   workflow_dispatch:
 
@@ -76,6 +80,19 @@ jobs:
             psql -X -qAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
             < scripts/sql/security-staging-migration-history.sql \
             | node scripts/security-staging-migration-history.mjs --evaluate-raw
+      - name: Exercise exact staged-source migration hashes against networkless PostgreSQL
+        run: |
+          set -euo pipefail
+          # This fixture changes ONLY the disposable, disconnected CI container.
+          export ETERNYX_EPHEMERAL_POSTGRES_ONLY=yes
+          node scripts/security-wave17-live-audit.mjs --check-source >/dev/null
+          node scripts/security-wave17-live-audit.mjs --emit-disposable-seed |
+            docker exec -i eternyx-security-case-ledger-ci \
+              psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -q
+          docker exec -i eternyx-security-case-ledger-ci \
+            psql -X -qAt -F '|' -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < scripts/sql/security-wave17-live-audit.sql |
+            node scripts/security-wave17-live-audit.mjs --evaluate
       - name: Exercise two real database roles, revoked scopes and immutable history
         run: docker exec -i eternyx-security-case-ledger-ci psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/security-case-ledger-db-smoke.sql
       - name: Verify 60 live PostgreSQL catalog invariants in read-only transaction
