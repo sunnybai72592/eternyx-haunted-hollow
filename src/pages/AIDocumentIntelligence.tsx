@@ -55,6 +55,7 @@ import { compareCorpusVersions, formatRecoveryReceipt, selectiveRecoveryReceipt,
 import {createCorpusCheckpoint,canUndoCorpusCheckpoint,undoCorpusCheckpoint,summarizeCorpusCheckpoint,type CorpusCheckpoint} from "@/lib/ai/document-corpus-checkpoint";
 import {buildKnowledgeIndex,searchKnowledgeIndex,formatKnowledgePassage,KnowledgeError,type KnowledgeIndex} from "@/lib/ai/document-corpus-knowledge";
 import {suggestKnowledgeTerms,prepareKnowledgeEvidence,KnowledgeEvidenceError,MAX_EVIDENCE_PASSAGES} from "@/lib/ai/document-corpus-knowledge-evidence";
+import {prepareKnowledgeRagRequest,reviewKnowledgeRagResponse} from "@/lib/ai/document-corpus-rag";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -120,13 +121,18 @@ const AIDocumentIntelligence = () => {
   const [knowledgeQuestion,setKnowledgeQuestion] = useState("");
   const [knowledgePacket,setKnowledgePacket] = useState<ReturnType<typeof prepareKnowledgeEvidence>|null>(null);
   const [knowledgePacketError,setKnowledgePacketError] = useState<string|null>(null);
+  const knowledgeAI=useAIStudioChat();
+  const [ragPrepared,setRagPrepared]=useState<{prompt:string;message:string;findings:number}|null>(null);
+  const [ragConsent,setRagConsent]=useState(false);
+  const [ragError,setRagError]=useState<string|null>(null);
   const [knowledgeSuggestions,setKnowledgeSuggestions] = useState<string[]>([]);
   const [knowledgeMode,setKnowledgeMode] = useState<"all"|"any">("all");
   const [knowledgeFilter,setKnowledgeFilter] = useState("");
   const [knowledgeResults,setKnowledgeResults] = useState<ReturnType<typeof searchKnowledgeIndex>|null>(null);
   const [knowledgeError,setKnowledgeError] = useState<string|null>(null);
   const activeKnowledgeIndex=knowledgeIndex?.sources===corpusFiles ? knowledgeIndex.index:null;
-  const invalidateKnowledgePacket=()=>{setKnowledgePacket(null);setKnowledgePacketError(null);};
+  const invalidateRag=()=>{setRagPrepared(null);setRagConsent(false);setRagError(null);knowledgeAI.invalidate();};
+  const invalidateKnowledgePacket=()=>{setKnowledgePacket(null);setKnowledgePacketError(null);invalidateRag();};
   const invalidateKnowledgeResults=()=>{setKnowledgeResults(null);setKnowledgeError(null);setKnowledgeSelected([]);setKnowledgeSuggestions([]);invalidateKnowledgePacket();};
   const prepareLocalKnowledgePacket=()=>{
     invalidateKnowledgePacket();
@@ -136,6 +142,30 @@ const AIDocumentIntelligence = () => {
       ({invalid_selection:"Select one to three current ranked passages.",invalid_question:"Enter a nonempty question of at most 250 characters.",stale_source:"Source evidence is stale; rebuild and search again.",too_large:"Evidence packet exceeds 5,000 characters. Select fewer passages."}[reason.code])
       :"Could not prepare the local evidence packet.");}
   };
+  const getCurrentRag=()=>{
+    if(!activeKnowledgeIndex||!knowledgeResults||!knowledgePacket||corpusBusy)throw new Error("stale");
+    const packet=prepareKnowledgeEvidence(corpusFiles,activeKnowledgeIndex,knowledgeResults,knowledgeSelected,knowledgeQuestion);
+    if(packet.draft!==knowledgePacket.draft)throw new Error("stale");
+    const request=prepareKnowledgeRagRequest(packet,knowledgeQuestion);
+    const findings=inspectDocumentPrivacy([knowledgeQuestion,...packet.passages.flatMap(p=>[p.source,p.text])].join("\n")).findings.length;
+    return {...request,findings};
+  };
+  const prepareRag=()=>{
+    invalidateRag();
+    try{setRagPrepared(getCurrentRag());}
+    catch{setRagError("Cannot prepare the exact AI request within the 4,000-character bridge limit or privacy scan limits. Select fewer passages or rebuild stale evidence.");}
+  };
+  const submitRag=()=>{
+    if(!ragPrepared||!ragConsent||knowledgeAI.loading||corpusBusy)return;
+    try{
+      const fresh=getCurrentRag();
+      if(fresh.message!==ragPrepared.message||fresh.findings!==ragPrepared.findings)throw new Error("stale");
+      if(!window.confirm("Send the reviewed unredacted question, source names and passages to the configured external AI provider? This uses AI Chat credits and saves chat history. The request cannot be cancelled after submission."))return;
+      setRagConsent(false);setRagError(null);
+      void knowledgeAI.run("ai.documents.analyze",fresh.prompt);
+    }catch{invalidateRag();setRagError("The reviewed request is no longer valid. Prepare it again before sending.");}
+  };
+  const ragReview=knowledgeAI.result&&knowledgePacket&&ragPrepared?reviewKnowledgeRagResponse(knowledgeAI.result,knowledgePacket):null;
   const invalidateKnowledgeIndex=()=>{setKnowledgeIndex(null);setKnowledgeFilter("");invalidateKnowledgeResults();};
   const buildLocalKnowledge=()=>{
     if(corpusBusy||!corpusFiles.length)return;
@@ -302,6 +332,7 @@ const AIDocumentIntelligence = () => {
   };
   const loadCorpusFiles = async (files: readonly File[]) => {
     const version = ++corpusReadVersion.current;
+    invalidateKnowledgeIndex();
     discardRecoveryCheckpoint();
     invalidateCorpusWorkspace();
     invalidateCorpus();
@@ -2039,7 +2070,7 @@ const AIDocumentIntelligence = () => {
                   </article>)}
                   {knowledgeResults.results.length>0 && <section aria-label="Local evidence-grounded answer preparation" className="space-y-2 rounded border border-slate-700 p-3">
                     <h5 className="text-sm font-semibold text-white">Prepare source-grounded answer draft</h5>
-                    <p className="text-xs text-slate-400">{knowledgeSelected.length}/{MAX_EVIDENCE_PASSAGES} passages selected. No AI answer is generated or sent. Review sensitive content before copying this prompt elsewhere.</p>
+                    <p className="text-xs text-slate-400">{knowledgeSelected.length}/{MAX_EVIDENCE_PASSAGES} passages selected. No AI answer is generated or sent by local preparation. Review sensitive content before copying this prompt elsewhere.</p>
                     <label className="block text-xs text-slate-300">Question (up to 250 characters)
                       <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeQuestion} maxLength={250}
                         onChange={e=>{setKnowledgeQuestion(e.target.value);invalidateKnowledgePacket();}}/>
@@ -2050,6 +2081,34 @@ const AIDocumentIntelligence = () => {
                       <p className="text-xs text-slate-300">{knowledgePacket.passages.length} evidence passages · {knowledgePacket.sourceCount} sources. Exact source text checked locally, not independently fact-checked.</p>
                       <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-200">{knowledgePacket.draft}</pre>
                       <Button type="button" size="sm" variant="outline" onClick={()=>void copy(knowledgePacket.draft,"Local evidence packet")}>Copy answer-preparation prompt</Button>
+                      <section aria-label="Controlled AI synthesis" className="space-y-3 rounded border border-cyan-400/25 p-3">
+                        <h5 className="text-sm font-semibold text-white">Optional AI synthesis · uses existing AI Chat</h5>
+                        <p className="text-xs text-amber-200">External AI may consume credits and save chat history. Only explicitly reviewed evidence is sent. A privacy pattern scan is advisory, not proof that content is safe to share.</p>
+                        <Button type="button" variant="outline" onClick={prepareRag} disabled={knowledgeAI.loading}>Review exact AI request</Button>
+                        {ragError&&<p role="alert" className="text-xs text-amber-200">{ragError}</p>}
+                        {ragPrepared&&<>
+                          <p className="text-xs text-slate-300">{ragPrepared.message.length}/4,000 request characters · {ragPrepared.findings} possible sensitive pattern matches. No automatic redaction.</p>
+                          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-200">{ragPrepared.message}</pre>
+                          <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={ragConsent} disabled={knowledgeAI.loading} onChange={e=>setRagConsent(e.target.checked)}/>I reviewed the exact unredacted request and agree to external AI processing, credits and saved history.</label>
+                          <Button type="button" onClick={submitRag} disabled={!ragConsent||knowledgeAI.loading}>{knowledgeAI.loading?"Generating answer…":"Generate evidence-grounded AI answer"}</Button>
+                        </>}
+                        {knowledgeAI.loading&&<p role="status" className="text-xs text-cyan-200">Request in progress. Editing evidence hides stale results but cannot cancel the request or undo charges.</p>}
+                        {knowledgeAI.error&&<p role="alert" className="text-xs text-amber-200">{knowledgeAI.error}</p>}
+                        {ragReview&&<div className="space-y-2">
+                          <p className="text-xs text-amber-200">Citation checks verify label references and response structure only, not whether the claims are true or entailed by evidence. Review every source.</p>
+                          {ragReview.valid===true ? <>
+                            <p role="status" className="text-xs text-slate-300">Citation structure passed · {ragReview.status==="insufficient"?"Model reports insufficient evidence":"Model returned claims"} · {ragReview.usedLabels.length} cited passages · {ragReview.unusedLabels.length} unused passages.</p>
+                            {ragReview.claims.map((claim,i)=><article key={i} className="space-y-2 rounded border border-slate-700 p-2 text-xs">
+                              <p className="whitespace-pre-wrap break-words text-slate-200">{claim.text}</p>
+                              {claim.citations.map(label=>{const p=knowledgePacket.passages.find(p=>p.label===label)!;return <details key={label}><summary className="break-all text-cyan-200">{label} · {p.source} · lines {p.startLine}–{p.endLine}</summary><pre className="whitespace-pre-wrap break-all text-slate-300">{p.text}</pre></details>;})}
+                            </article>)}
+                            {ragReview.uncertainty&&<p className="whitespace-pre-wrap break-words text-xs text-slate-300">Model uncertainty: {ragReview.uncertainty}</p>}
+                          </>:<>
+                            <p role="alert" className="text-xs text-amber-200">Citation structure rejected: {ragReview.reason}. The raw model output below is unvalidated; do not rely on it.</p>
+                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-300">{knowledgeAI.result}</pre>
+                          </>}
+                        </div>}
+                      </section>
                     </>}
                   </section>}
                 </div>}
