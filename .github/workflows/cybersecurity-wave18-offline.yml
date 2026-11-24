@@ -1,0 +1,29 @@
+name: Cybersecurity Wave 18 offline
+on:
+  pull_request:
+    paths:
+      - 'scripts/security-wave18-real-auth.mjs'
+      - 'tests/security-wave18-real-auth.test.mjs'
+      - '.github/workflows/cybersecurity-wave18-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/security-wave18-real-auth.mjs'
+      - 'tests/security-wave18-real-auth.test.mjs'
+      - '.github/workflows/cybersecurity-wave18-offline.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Offline config and denial regression (not live staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/security-wave18-real-auth.mjs
+      - run: node --test tests/security-wave18-real-auth.test.mjs
