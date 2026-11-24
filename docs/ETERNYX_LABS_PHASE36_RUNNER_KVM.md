@@ -18,3 +18,23 @@ review the runner's suitability and pinned guest/kernel/binaries before a
 separately approved hardware test. Do not treat a shared ephemeral CI runner
 as the dedicated operator-controlled host required by the current harness.
 All provider and production release gates remain false. No staging changes.
+
+## Phase 37 — distinguish ordinary user from administrator access
+
+Operator-supplied Phase 36 output: all seven contract tests passed;
+KVM character device detected but open returned access_denied. Firecracker
+and jailer were absent. This is not hardware acceptance.
+
+For one separately consented diagnostic, select
+`I_APPROVE_PRIVILEGED_READONLY_KVM_PROBE` on main. The ordinary probe runs
+first, followed by exactly the same API-version-only probe under GitHub's
+documented passwordless sudo for its standard Linux VM, with a cleared
+environment and isolated system Python. No device chmod, group membership
+change, packages, VM creation, or KVM access from pull-request CI.
+The effectiveRoot field distinguishes reports. Even a successful
+administrator API probe is not proof of nested guest execution or a
+dedicated operator-controlled host. If administrator access is denied,
+stop this approach; do not weaken runner security. No paid runner or
+staging/production changes.
+
+Reference: https://docs.github.com/en/actions/reference/runners/github-hosted-runners#administrative-privileges

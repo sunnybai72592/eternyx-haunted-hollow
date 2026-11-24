@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Non-launching Linux KVM capability probe. No credentials, sudo or network."""
+"""Non-launching Linux KVM capability probe. No credentials, privilege changes or network."""
 import errno
 import fcntl
 import json
@@ -41,6 +41,7 @@ def report():
     result = inspect_kvm() if sys.platform == "linux" else "unsupported_host"
     return {
         "schemaVersion": 1,
+        "effectiveRoot": os.geteuid() == 0,
         "runnerKind": "github_hosted_candidate" if os.environ.get("GITHUB_ACTIONS") == "true" else "local_candidate",
         "linuxHost": sys.platform == "linux",
         "archSupported": platform.machine() in ("x86_64", "aarch64"),

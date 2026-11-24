@@ -9,11 +9,12 @@ on:
         options:
           - DENY
           - I_APPROVE_READONLY_KVM_PROBE
+          - I_APPROVE_PRIVILEGED_READONLY_KVM_PROBE
 permissions:
   contents: read
 jobs:
   capability:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_READONLY_KVM_PROBE' }}
+    if: ${{ github.ref == 'refs/heads/main' && (inputs.approval == 'I_APPROVE_READONLY_KVM_PROBE' || inputs.approval == 'I_APPROVE_PRIVILEGED_READONLY_KVM_PROBE') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
@@ -26,3 +27,6 @@ jobs:
         run: python3 -B tests/labs-runner-kvm-capability-test.py
       - name: Inspect KVM device and API without creating a VM
         run: python3 -B scripts/labs-runner-kvm-capability.py
+      - name: Inspect KVM using runner's documented administrative privilege
+        if: ${{ inputs.approval == 'I_APPROVE_PRIVILEGED_READONLY_KVM_PROBE' }}
+        run: sudo -n /usr/bin/env -i GITHUB_ACTIONS=true /usr/bin/python3 -I -B scripts/labs-runner-kvm-capability.py
