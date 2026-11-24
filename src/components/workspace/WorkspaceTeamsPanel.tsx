@@ -8,12 +8,13 @@ import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed"
 import {
   workspaceTeamBoardColumns,workspaceTeamNextTaskStatus,
   workspaceTeamNextTaskLabel,workspaceTeamTaskStatusPayload,
-  workspaceTeamTaskMovePayload,workspaceTeamBoardDragReceipt,
+  workspaceTeamTaskMovePayload,workspaceTeamTaskQuickPatch,workspaceTeamBoardDragReceipt,
   workspaceTeamBoardResolveDrag,WORKSPACE_TEAM_BOARD_DRAG_MIME,
 } from "@/lib/workspaceTeamTaskBoard.mjs";
 import {
   workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
   selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
+  resolveWorkspaceAssigneeFilter,
 } from "@/lib/workspaceTeamTaskOperations.mjs";
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
@@ -60,6 +61,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [taskFilter,setTaskFilter]=useState("all");
   const [taskQuery,setTaskQuery]=useState("");
   const [taskSort,setTaskSort]=useState("updated");
+  const [taskPriorityFilter,setTaskPriorityFilter]=useState("all");
+  const [taskAssigneeFilter,setTaskAssigneeFilter]=useState("all");
   const [taskLayout,setTaskLayout]=useState<"list"|"board">("list");
   const [dragOverColumn,setDragOverColumn]=useState<string|null>(null);
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
@@ -87,11 +90,14 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const canInvite=teamCanInvite(currentRole,selected?.status);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
   const today=workspaceTeamLocalDay(new Date());
+  const effectiveAssigneeFilter=resolveWorkspaceAssigneeFilter(taskAssigneeFilter,memberIds);
   const taskSummary=useMemo(()=>workspaceTeamTaskSummary(tasks,today),[tasks,today]);
   const visibleTasks=useMemo(
     ()=>selectWorkspaceTeamTasks(tasks,{
       filter:taskFilter,search:taskQuery,sort:taskSort,owner,today,
-    }),[tasks,taskFilter,taskQuery,taskSort,owner,today]);
+      priority:taskPriorityFilter,assignee:effectiveAssigneeFilter,memberIds,
+    }),[tasks,taskFilter,taskQuery,taskSort,owner,today,
+      taskPriorityFilter,effectiveAssigneeFilter,memberIds]);
   const boardColumns=useMemo(
     ()=>selected&&currentRole?workspaceTeamBoardColumns(visibleTasks,selected.id):[],
     [visibleTasks,selected,currentRole]);
@@ -200,6 +206,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setEvents([]);setInvites([]);setRevealedToken(null);
     setVerifiedSpaceId(null);
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
+    setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     setDragOverColumn(null);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
@@ -223,6 +230,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
+    setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     setDragOverColumn(null);
     if(!selectedId)return;
@@ -512,6 +520,17 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       "Done":"In progress")+".",true,
     ()=>{if(draft.id===task.id)setDraft(freshDraft());});
   };
+  const quickUpdateTask=(task:Task,change:{priority:string}|{assignee_id:string|null})=>{
+    if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
+       verifiedSpaceId!==selected.id)return;
+    void run(async()=>{
+      const params=workspaceTeamTaskQuickPatch(task,change,selected.id,memberIds);
+      const {data,error:queryError}=await supabase.rpc("workspace_team_save_task",params);
+      if(queryError||!data)throw new Error(
+        queryError?.message??"Quick task update was not confirmed by the team backend");
+    },"Task assignment or priority updated.",true,
+    ()=>{if(draft.id===task.id)setDraft(freshDraft());});
+  };
   const startBoardDrag=(event:DragEvent<HTMLElement>,task:Task)=>{
     if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
        verifiedSpaceId!==selected.id){event.preventDefault();return;}
@@ -587,6 +606,25 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
             <option value="done">Done</option>
           </select>
         </label>
+        <label className="flex items-center gap-1 text-xs">
+          Priority
+          <select aria-label={"Change priority for "+task.title}
+            value={task.priority} disabled={busy||disabled||loading}
+            onChange={event=>quickUpdateTask(task,{priority:event.target.value})}
+            className="min-h-9 rounded-md border border-border bg-background px-2 text-xs">
+            {WORKSPACE_TEAM_PRIORITIES.map(priority=>
+              <option key={priority} value={priority}>{priority}</option>)}
+          </select>
+        </label>
+        {(task.assignee_id===null||task.assignee_id===owner)&&
+          <Button size="sm" type="button" variant="outline"
+            disabled={busy||disabled||loading}
+            aria-label={(task.assignee_id===null?"Claim ":"Release ")+task.title}
+            onClick={()=>quickUpdateTask(task,{
+              assignee_id:task.assignee_id===owner?null:owner,
+            })}>
+            {task.assignee_id===null?"Claim":"Release"}
+          </Button>}
         <Button size="sm" type="button" variant="ghost"
           disabled={busy||disabled||loading}
           aria-label={"Delete "+task.title} onClick={()=>removeTask(task)}>Delete</Button>
@@ -775,6 +813,32 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
               <option value="due">Earliest due first</option>
               <option value="priority">Highest priority first</option>
               <option value="title">Title A–Z</option>
+            </select>
+          </label>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1 text-xs">Filter by priority
+            <select aria-label="Filter team tasks by priority"
+              value={taskPriorityFilter}
+              onChange={event=>setTaskPriorityFilter(event.target.value)}
+              className="min-h-10 w-full rounded-md border border-border bg-background px-2">
+              <option value="all">All priorities</option>
+              {WORKSPACE_TEAM_PRIORITIES.map(priority=>
+                <option key={priority} value={priority}>{priority}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs">Filter by assignee
+            <select aria-label="Filter team tasks by assignee"
+              value={effectiveAssigneeFilter}
+              onChange={event=>setTaskAssigneeFilter(event.target.value)}
+              className="min-h-10 w-full rounded-md border border-border bg-background px-2">
+              <option value="all">All assignees</option>
+              <option value="mine">Assigned to me</option>
+              <option value="unassigned">Unassigned</option>
+              {members.filter(member=>member.user_id!==owner).map(member=>
+                <option key={member.user_id} value={member.user_id}>
+                  {teamMemberLabel(member.user_id,owner)}
+                </option>)}
             </select>
           </label>
         </div>
