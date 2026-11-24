@@ -5,7 +5,7 @@
  */
 import {
   checkLocalMediaName,LOCAL_VIDEO_LIMITS,
-  LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,
+  LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps,localVideoMaxFrames,localVideoMaxSourceFrames,
 } from "./localVideoEditor.mjs";
 
 export const VIDEO_DRAFT_LIMITS=Object.freeze({
@@ -74,6 +74,11 @@ function normalize(data){
     if(byName.has(soundtrack.name.toLowerCase()))
       throw new Error("Video and audio source filenames must not collide.");
   }
+  if(!LOCAL_VIDEO_PROFILES.includes(data.profile)||
+     !LOCAL_VIDEO_QUALITIES.includes(data.quality))
+    throw new Error("Unsupported saved local CPU output profile or quality.");
+  const fps=localVideoFps(data.quality), maxFrames=localVideoMaxFrames(fps),
+        sourceCeiling=localVideoMaxSourceFrames(fps);
   if(!Array.isArray(data.shots)||!data.shots.length||
      data.shots.length>VIDEO_DRAFT_LIMITS.maxClips)
     throw new Error("Draft must contain one to eight editable video cuts.");
@@ -83,12 +88,12 @@ function normalize(data){
     if(typeof raw.sourceName!=="string"||
        !sources.some(src=>src.name===raw.sourceName))
       throw new Error("Draft shot "+(index+1)+" references an unknown original clip.");
-    const start=int(raw.startFrame,0,960,"Start frame");
-    const frames=int(raw.frames,1,VIDEO_DRAFT_LIMITS.maxFrames,"Shot length");
-    if(start+frames>960)throw new Error("Draft shot exceeds source frame safety ceiling.");
+    const start=int(raw.startFrame,0,sourceCeiling,"Start frame");
+    const frames=int(raw.frames,1,maxFrames,"Shot length");
+    if(start+frames>sourceCeiling)throw new Error("Draft shot exceeds source frame safety ceiling.");
     total+=frames;
-    if(total>VIDEO_DRAFT_LIMITS.maxFrames)
-      throw new Error("Total draft timeline exceeds 30 seconds at 16 FPS.");
+    if(total>maxFrames)
+      throw new Error("Total draft timeline exceeds 30 seconds at "+fps+" FPS.");
     return {
       sourceName:raw.sourceName,startFrame:start,frames,
       caption:wording(raw.caption,180,"Editable caption",true),

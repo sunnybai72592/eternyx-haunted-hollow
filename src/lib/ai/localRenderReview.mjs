@@ -11,7 +11,8 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const PROFILES = {
   landscape: [256, 144], portrait: [144, 256], square: [256, 256],
 };
-const QUALITIES = ["standard", "high"];
+const QUALITIES = ["standard", "high", "cinematic"];
+const CINEMATIC_PROFILES={landscape:[1280,720],portrait:[720,1280],square:[720,720]};
 const TEXT = value => typeof value === "string" && value.trim().length > 0 &&
   value.length <= 180 && !/[\x00-\x1f\x7f]/.test(value);
 
@@ -24,14 +25,14 @@ function integer(value, min, max, name) {
     fail("Invalid " + name + " (expected " + min + "–" + max + ").");
   }
 }
-function verifyShot(row, index, position) {
+function verifyShot(row, index, position, fps=16) {
   if (!row || typeof row !== "object" || Array.isArray(row) ||
       row.index !== index || row.timeline_start_frame !== position) fail("Incorrect source timeline position.");
   checkLocalMediaName(row.file, "video");
   hash(row.source_sha256, "source");
-  integer(row.start_frame, 0, 960, "start frame");
-  integer(row.frames, 1, LOCAL_VIDEO_LIMITS.maxFrames, "shot frames");
-  if (row.start_frame + row.frames > 960) fail("Source window exceeds the 960-frame limit.");
+  integer(row.start_frame, 0, fps*60, "start frame");
+  integer(row.frames, 1, fps*30, "shot frames");
+  if (row.start_frame + row.frames > fps*60) fail("Source window exceeds the "+(fps*60)+"-frame limit.");
   integer(row.fade_in_frames, 0, Math.min(16, Math.floor(row.frames / 2)), "fade in");
   integer(row.fade_out_frames, 0, Math.min(16, Math.floor(row.frames / 2)), "fade out");
   if (!TEXT(row.caption) || !TEXT(row.rights_ref)) fail("Missing or malformed source caption/rights.");
@@ -70,22 +71,28 @@ export function readLocalRenderReceipt(raw) {
   if (!video || typeof video !== "object" || Array.isArray(video)) fail("Missing video output details.");
   hash(video.sha256, "rendered video");
   integer(video.file_bytes, 1, MAX_RENDER_BYTES, "rendered video bytes");
-  integer(video.frame_count, 1, LOCAL_VIDEO_LIMITS.maxFrames, "rendered frames");
-  if (video.fps !== "16/1") fail("Only verified 16 FPS renderer receipts are supported.");
+  if (!Object.hasOwn(PROFILES, receipt.profile) || !QUALITIES.includes(receipt.quality))
+    fail("Unsupported render profile or quality.");
+  const fps=receipt.quality==="cinematic"?24:16;
+  integer(video.frame_count, 1, fps*30, "rendered frames");
+  if (video.fps !== fps+"/1" || (receipt.fps!==undefined&&receipt.fps!==fps))
+    fail("Verified render FPS conflicts with selected quality or timebase.");
   if (typeof video.audio !== "boolean") fail("Unverifiable audio stream state.");
   if (typeof video.duration_seconds !== "number" ||
-      video.duration_seconds !== video.frame_count / LOCAL_VIDEO_LIMITS.fps) {
+      video.duration_seconds !== video.frame_count / fps) {
     fail("Video duration disagrees with the frame count.");
   }
   if (!Object.hasOwn(PROFILES, receipt.profile) || !QUALITIES.includes(receipt.quality)) {
     fail("Unsupported render profile or quality.");
   }
   const factor = receipt.quality === "high" ? 2 : 1;
-  const [width, height] = PROFILES[receipt.profile].map(n => n * factor);
+  const [width, height] = receipt.quality==="cinematic"
+    ? CINEMATIC_PROFILES[receipt.profile]
+    : PROFILES[receipt.profile].map(n => n * factor);
   if (video.width !== width || video.height !== height) {
     fail("Render dimensions disagree with the selected profile and quality.");
   }
-  integer(receipt.total_frames, 1, LOCAL_VIDEO_LIMITS.maxFrames, "total frames");
+  integer(receipt.total_frames, 1, fps*30, "total frames");
   if (receipt.total_frames !== video.frame_count) fail("Render frame count disagrees with storyboard.");
   if (receipt.captions !== "captions.srt") fail("The expected subtitle sidecar was not recorded.");
   if (!Array.isArray(receipt.shots) || !receipt.shots.length || receipt.shots.length > 8) {
@@ -93,7 +100,7 @@ export function readLocalRenderReceipt(raw) {
   }
   let cursor = 0;
   receipt.shots.forEach((row, index) => {
-    verifyShot(row, index, cursor);
+    verifyShot(row, index, cursor, fps);
     cursor += row.frames;
   });
   if (cursor !== receipt.total_frames) fail("Shot lengths do not match the rendered timeline.");
@@ -141,6 +148,7 @@ export function verifyLocalRenderReceipt(receipt, file, context = null) {
     videoSha256: file.sha256,
     fileBytes: file.size,
     frameCount: receipt.video.frame_count,
+    fps: receipt.quality==="cinematic"?24:16,
     durationSeconds: receipt.video.duration_seconds,
     width: receipt.video.width,
     height: receipt.video.height,
@@ -156,7 +164,8 @@ export function checkRenderedSubtitles(text, receipt) {
   if (typeof text !== "string" || new TextEncoder().encode(text).length > MAX_SUBTITLES_BYTES) {
     fail("Subtitle file must be UTF-8 text no larger than 32 KiB.");
   }
-  const expected = localVideoSrt({version: 2, shots: receipt.shots});
+  const expected = localVideoSrt({version: 2, shots: receipt.shots,
+    ...(receipt.quality==="cinematic"?{fps:24}:{})});
   if (text.replace(/\r\n/g, "\n") !== expected) {
     fail("Subtitle timing or text differs from the exact renderer-generated sidecar.");
   }

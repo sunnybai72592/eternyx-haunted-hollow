@@ -6,7 +6,14 @@ export const LOCAL_VIDEO_LIMITS = Object.freeze({
   maxAudioBytes: 16 * 1024 * 1024, fps: 16,
 });
 export const LOCAL_VIDEO_PROFILES = Object.freeze(["landscape", "portrait", "square"]);
-export const LOCAL_VIDEO_QUALITIES = Object.freeze(["standard", "high"]);
+export const LOCAL_VIDEO_QUALITIES = Object.freeze(["standard", "high", "cinematic"]);
+export function localVideoFps(quality="standard"){
+  if(!LOCAL_VIDEO_QUALITIES.includes(quality))
+    throw new Error("Unsupported local CPU video quality.");
+  return quality==="cinematic"?24:16;
+}
+export const localVideoMaxFrames=(fps=16)=>fps*30;
+export const localVideoMaxSourceFrames=(fps=16)=>fps*60;
 const SHA256 = /^[0-9a-f]{64}$/;
 const VIDEO = /^[^\/\\:\x00-\x1f\x7f]{1,180}\.mp4$/i;
 const AUDIO = /^[^\/\\:\x00-\x1f\x7f]{1,180}\.(wav|mp3|m4a)$/i;
@@ -61,7 +68,8 @@ function validateUniqueClips(files) {
 }
 
 /** Produce exact v2 JSON accepted by gpu-worker/render_video_timeline.py. */
-export function buildLocalVideoBoard({ sources, shots, soundtrack = null }) {
+export function buildLocalVideoBoard({ sources, shots, soundtrack = null, quality = "standard" }) {
+  const fps=localVideoFps(quality),maxFrames=localVideoMaxFrames(fps),maxSource=localVideoMaxSourceFrames(fps);
   const clips = validateUniqueClips(sources);
   if (!Array.isArray(shots) || shots.length === 0 || shots.length > LOCAL_VIDEO_LIMITS.maxClips) {
     throw new Error("Choose between 1 and 8 real video shots.");
@@ -71,12 +79,12 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null }) {
     if (!shot || typeof shot !== "object") throw new Error("Invalid shot " + (index + 1) + ".");
     const source = clips.get(shot.sourceName);
     if (!source) throw new Error("Shot " + (index + 1) + " must select one verified MP4.");
-    const start = integer(shot.startFrame, 0, 960, "Start frame");
-    const frames = integer(shot.frames, 1, LOCAL_VIDEO_LIMITS.maxFrames, "Shot frames");
-    if (start + frames > 960) throw new Error("The cut exceeds the source ceiling of 960 frames.");
+    const start = integer(shot.startFrame, 0, maxSource, "Start frame");
+    const frames = integer(shot.frames, 1, maxFrames, "Shot frames");
+    if (start + frames > maxSource) throw new Error("The cut exceeds the source ceiling of "+maxSource+" frames.");
     totalFrames += frames;
-    if (totalFrames > LOCAL_VIDEO_LIMITS.maxFrames) {
-      throw new Error("The entire video must be 30 seconds / 480 frames or less.");
+    if (totalFrames > maxFrames) {
+      throw new Error("The entire video must be 30 seconds / "+maxFrames+" frames or less.");
     }
     const fadeIn = integer(shot.fadeInFrames ?? 0, 0, Math.min(16, Math.floor(frames / 2)), "Fade-in frames");
     const fadeOut = integer(shot.fadeOutFrames ?? 0, 0, Math.min(16, Math.floor(frames / 2)), "Fade-out frames");
@@ -87,7 +95,7 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null }) {
       fade_in_frames: fadeIn, fade_out_frames: fadeOut,
     };
   });
-  const board = { version: 2, shots: normalized };
+  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}) };
   if (soundtrack) {
     const audio = mediaRecord(soundtrack, "audio");
     board.soundtrack = {
@@ -101,7 +109,7 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null }) {
   if (new TextEncoder().encode(json).length > 32 * 1024) {
     throw new Error("Storyboard exceeds the offline editor's 32 KiB manifest limit.");
   }
-  return { board, totalFrames, seconds: totalFrames / LOCAL_VIDEO_LIMITS.fps, json: json + "\n" };
+  return { board, totalFrames, fps, seconds: totalFrames / fps, json: json + "\n" };
 }
 
 /** Paths are static; the operator puts original files in the local media folder. */
@@ -113,15 +121,17 @@ export function localVideoCommand(profile = "landscape", quality = "standard") {
 }
 
 export function localVideoSrt(board) {
-  if (!board || board.version !== 2 || !Array.isArray(board.shots)) {
+  if (!board || board.version !== 2 || !Array.isArray(board.shots) ||
+      (board.fps !== undefined && board.fps !== 24)) {
     throw new Error("Build a valid v2 video storyboard first.");
   }
+  const fps=board.fps===24?24:16;
   const stamp = frame => {
     // Python renderer uses round-half-to-even; Math.round differs on odd half-ms frames.
     const ticks = frame * 1000;
-    const whole = Math.floor(ticks / LOCAL_VIDEO_LIMITS.fps);
-    const remainder = ticks % LOCAL_VIDEO_LIMITS.fps;
-    const midpoint = LOCAL_VIDEO_LIMITS.fps / 2;
+    const whole = Math.floor(ticks / fps);
+    const remainder = ticks % fps;
+    const midpoint = fps / 2;
     const ms = whole + (remainder > midpoint || (remainder === midpoint && whole % 2 === 1) ? 1 : 0);
     const hours = Math.floor(ms / 3600000);
     const minutes = Math.floor(ms / 60000) % 60;

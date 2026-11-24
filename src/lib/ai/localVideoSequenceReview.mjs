@@ -3,7 +3,7 @@
  * browser metadata proves FFmpeg's exact CFR frames or media ownership.
  */
 import {buildLocalVideoBoard,checkLocalMediaName,LOCAL_VIDEO_LIMITS,
-  LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES} from "./localVideoEditor.mjs";
+  LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps} from "./localVideoEditor.mjs";
 import {timelineSegments,timelineSeek} from "./localVideoTimeline.mjs";
 
 const HASH=/^[a-f0-9]{64}$/;
@@ -22,6 +22,7 @@ export function auditLocalVideoExport({
 }={}){
   if(!Array.isArray(sources)||!Array.isArray(shots))
     throw new Error("Expected editable shot and media arrays.");
+  const fps=quality==="cinematic"?24:16,sourceLimit=60*fps,timelineLimit=30*fps;
   const errors=[],warnings=[],rows=[];
   if(!sources.length||sources.length>LOCAL_VIDEO_LIMITS.maxClips)
     errors.push(issue("SOURCE_COUNT","Choose 1–8 original MP4 source files."));
@@ -52,10 +53,10 @@ export function auditLocalVideoExport({
     }
     if(typeof shot.sourceName!=="string"||!byName.has(shot.sourceName))
       add("SHOT_SOURCE","Cut "+(index+1)+" references a missing or unverified MP4.");
-    if(!Number.isSafeInteger(shot.startFrame)||shot.startFrame<0||shot.startFrame>960||
+    if(!Number.isSafeInteger(shot.startFrame)||shot.startFrame<0||shot.startFrame>sourceLimit||
        !Number.isSafeInteger(shot.frames)||shot.frames<1||
-       shot.frames>LOCAL_VIDEO_LIMITS.maxFrames||
-       shot.startFrame+shot.frames>960)
+       shot.frames>timelineLimit||
+       shot.startFrame+shot.frames>sourceLimit)
       add("SHOT_FRAME_RANGE","Cut "+(index+1)+" requires a valid original frame range.");
     else frames+=shot.frames;
     if(!printable(shot.caption)||!shot.caption.trim()||shot.caption.length>180)
@@ -76,8 +77,8 @@ export function auditLocalVideoExport({
       rightsRef:typeof shot.rightsRef==="string"?shot.rightsRef:"",
       issues:reasons});
   });
-  if(frames>LOCAL_VIDEO_LIMITS.maxFrames)
-    errors.push(issue("TOTAL_FRAMES","The edited timeline exceeds 30 seconds / 480 frames."));
+  if(frames>timelineLimit)
+    errors.push(issue("TOTAL_FRAMES","The edited timeline exceeds 30 seconds / "+timelineLimit+" frames."));
   if(!LOCAL_VIDEO_PROFILES.includes(profile)||!LOCAL_VIDEO_QUALITIES.includes(quality))
     errors.push(issue("OUTPUT_PROFILE","Choose a supported output shape and quality."));
   if(soundtrack){
@@ -97,20 +98,20 @@ export function auditLocalVideoExport({
   if(unused.length)warnings.push(issue("UNUSED_SOURCES",
     unused.length+" selected original MP4(s) will be excluded from the portable ZIP."));
   if(shots.length)warnings.push(issue("DECODE_UNVERIFIED",
-    "Browser inspection does not prove constant 16 FPS or decoded frame availability; offline FFmpeg verifies these."));
+    "Browser inspection does not prove constant "+fps+" FPS or decoded frame availability; offline FFmpeg verifies these."));
   if(soundtrack)warnings.push(issue("SOUNDTRACK_NOT_PREVIEWED",
     "The source preview is silent; licensed soundtrack is mixed only by offline FFmpeg."));
   // The REAL storyboard serializer is the final authority. The audit may
   // explain issues but cannot approve a project rejected by the renderer schema.
   let storyboard=null;
-  try{storyboard=buildLocalVideoBoard({sources,shots,soundtrack});}
+  try{storyboard=buildLocalVideoBoard({sources,shots,soundtrack,quality});}
   catch(error){
     if(!errors.length)
       errors.push(issue("STORYBOARD",error instanceof Error?error.message:"Invalid v2 storyboard."));
   }
   return {
     canExport:errors.length===0&&storyboard!==null,
-    frameCount:frames,seconds:frames/LOCAL_VIDEO_LIMITS.fps,
+    frameCount:frames,seconds:frames/fps,fps,
     shots:rows,sourcesUsed:used.size,
     sourcesUnused:unused.map(x=>x.name),
     soundtrackIncluded:!!soundtrack,
@@ -119,8 +120,8 @@ export function auditLocalVideoExport({
     rendererRequired:true,
   };
 }
-export function localSequencePlan(shots,sources){
-  const timeline=timelineSegments(shots);
+export function localSequencePlan(shots,sources,fps=16){
+  const timeline=timelineSegments(shots,fps);
   if(!Array.isArray(sources))throw new Error("Expected original source list.");
   const byName=new Map();
   for(const source of sources){
