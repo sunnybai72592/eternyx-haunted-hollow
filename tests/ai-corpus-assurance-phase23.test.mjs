@@ -14,7 +14,7 @@ test("quote candidates are exact cited substrings with decoded offsets",()=>{
  for(const q of suggestions){const p=packet.passages.find(p=>p.label===q.label);assert.ok(claim.citations.includes(q.label));assert.equal(p.text.slice(q.startOffset-p.startOffset,q.startOffset-p.startOffset+q.quote.length),q.quote);}
 });
 test("exact quoted evidence records unique location and retains case and Unicode",()=>{
- assert.deepEqual(api.assessClaimQuote(claim,packet,"E1","Pipe potential is -850 mV."),{label:"E1",startOffset:100,endOffset:125});
+ assert.deepEqual(api.assessClaimQuote(claim,packet,"E1","Pipe potential is -850 mV."),{label:"E1",startOffset:100,endOffset:100+"Pipe potential is -850 mV.".length});
  assert.equal(api.assessClaimQuote(claim,packet,"E1","pipe potential is -850 mV."),null);
  const q="العربية\r\nCoating";
  const loc=api.assessClaimQuote(claim,packet,"E1",q);
