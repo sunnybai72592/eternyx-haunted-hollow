@@ -21,7 +21,7 @@ import {validateSignedAgentEnginePins,validateSignedAgentSocket,
   from "../src/lib/dockerSignedAgentEngineGate.mjs";
 import {assertSignedAgentPreMutationUnchanged,validateSignedAgentLifecycleEvidence}
   from "../src/lib/dockerSignedAgentLastMomentGate.mjs";
-import {verifyPinnedDockerCliExecutable,signedDockerCliEnvironment}
+import {verifyPinnedDockerCliExecutable,withPinnedDockerCliFile,signedDockerCliEnvironment}
   from "../src/lib/dockerSignedCliExecutableGate.mjs";
 import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
@@ -53,15 +53,15 @@ function pubFile(path){
   return createPublicKey({key:Buffer.concat([Buffer.from("302a300506032b6570032100","hex"),bytes]),format:"der",type:"spki"});
 }
 function docker(args,ms=8000){
-  // Never resolve Docker through operator PATH. Even rootless Docker daemon,
-  // image and container policy pins are ineffective if a local executable can
-  // be substituted. Rehash the root-owned absolute executable on EACH call.
-  const cli=verifyPinnedDockerCliExecutable(process.env);
+  // The root-owned ELF is hashed through an O_NOFOLLOW descriptor and Linux
+  // EXECUTES THAT VERY DESCRIPTOR (inherited as child fd 3). No second path
+  // lookup by PATH or by the original pin is allowed between check and spawn.
   const childEnv=signedDockerCliEnvironment(homedir());
-  const r=spawnSync(cli.path,args,{
+  const r=withPinnedDockerCliFile(process.env,cli=>spawnSync(cli.execPath,args,{
     shell:false,encoding:"utf8",timeout:ms,maxBuffer:524288,
-    windowsHide:true,env:childEnv
-  });
+    windowsHide:true,env:childEnv,
+    stdio:["ignore","pipe","pipe",cli.fd]
+  }));
   if(r.error||r.status!==0)throw new Error("Local Docker command failed (pinned CLI).");
   return r.stdout.trim();
 }

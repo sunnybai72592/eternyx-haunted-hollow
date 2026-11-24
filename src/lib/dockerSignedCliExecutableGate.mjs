@@ -53,11 +53,18 @@ function parentsTrusted(path){
 }
 
 /**
- * Rehash the root-owned Docker CLI binary before EVERY subprocess invocation.
- * Root-owned, non-writable parents reduce (not eliminate) check-to-spawn drift.
- * Never use PATH to choose the binary, never treat a daemon pin as a CLI pin.
+ * Hold the exact O_NOFOLLOW-opened, root-owned ELF executable descriptor
+ * throughout one synchronous caller operation. The verified inode, not a
+ * second lookup by pathname, is what Linux will execute through fd 3.
+ *
+ * This is not fexecve(2) or hardware attestation: it still trusts a
+ * separately reviewed Linux host, /proc, the ELF interpreter and root.
  */
-export function verifyPinnedDockerCliExecutable(env={}){
+export function withPinnedDockerCliFile(env,useVerifiedFd){
+ if(process.platform!=="linux")
+  throw Error("Signed Docker CLI descriptor execution requires Linux.");
+ if(typeof useVerifiedFd!=="function")
+  throw Error("Pinned Docker CLI operation must be synchronous.");
  const pins=validateSignedDockerCliPins(env);
  parentsTrusted(pins.path);
  const before=trustedRootOwned(lstatSync(pins.path));
@@ -77,13 +84,36 @@ export function verifyPinnedDockerCliExecutable(env={}){
        s.size!==before.size||s.mtimeMs!==before.mtimeMs||
        s.ctimeMs!==before.ctimeMs))
    throw Error("Signed Docker CLI executable changed during verification.");
+  if(raw.length<4||raw[0]!==0x7f||raw[1]!==0x45||
+     raw[2]!==0x4c||raw[3]!==0x46)
+   throw Error("Signed Docker CLI requires a verified ELF binary, not a shell script.");
   if(createHash("sha256").update(raw).digest("hex")!==pins.sha256)
    throw Error("Signed Docker CLI executable SHA-256 differs from independent pin.");
+  parentsTrusted(pins.path);
+  const verified=Object.freeze({
+   path:pins.path,sha256:pins.sha256,
+   fd,execPath:"/proc/self/fd/3",
+   rootOwned:true,symlinkFree:true,hashVerified:true,
+   independentlyApprovedHost:false
+  });
+  // Passing fd3 via spawnSync stdio pins execve to the inode we hashed.
+  // No asynchronous action is allowed to outlive the held descriptor.
+  const result=useVerifiedFd(verified);
+  if(result!==null&&typeof result==="object"&&typeof result.then==="function")
+   throw Error("Pinned Docker CLI descriptor cannot escape a synchronous call.");
+  return result;
  }finally{closeSync(fd);}
- parentsTrusted(pins.path);
- return Object.freeze({path:pins.path,sha256:pins.sha256,
-  rootOwned:true,symlinkFree:true,hashVerified:true,
-  independentlyApprovedHost:false});
+}
+
+/** Compatibility/read-only check for independently managed preflight calls.
+ * Actual command execution must use withPinnedDockerCliFile() instead. */
+export function verifyPinnedDockerCliExecutable(env={}){
+ return withPinnedDockerCliFile(env,verified=>Object.freeze({
+  path:verified.path,sha256:verified.sha256,
+  rootOwned:verified.rootOwned,symlinkFree:verified.symlinkFree,
+  hashVerified:verified.hashVerified,
+  independentlyApprovedHost:false
+ }));
 }
 
 /**

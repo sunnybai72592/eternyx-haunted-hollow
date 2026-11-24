@@ -1,0 +1,46 @@
+name: Docker signed agent execute verified ELF fd3 (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-cli-fd-exec-phase36.yml'
+      - 'src/lib/dockerSignedCliExecutableGate.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'tests/docker-signed-cli-fd-exec-phase36.test.mjs'
+      - 'tests/docker-signed-cli-executable-pin.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_FD_EXEC_PHASE36.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-fd:
+    name: Prove checked Docker ELF inode is the one Linux executes (no Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check actual agent, verified ELF descriptor and regressions
+        run: |
+          node --check src/lib/dockerSignedCliExecutableGate.mjs
+          node --check scripts/docker-lab-agent.mjs
+          node --check tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --check tests/docker-signed-cli-executable-pin.test.mjs
+      - name: Verify actual harmless ELF fd3 exec and all previous Docker safety suites
+        run: |
+          node --test tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --test tests/docker-signed-cli-executable-pin.test.mjs
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
