@@ -55,7 +55,9 @@ def validate_archive_path(name):
             "unexpected package archive path")
     return name
 
-def metadata_pin(text, package, version):
+def metadata_pin(text, package, version, *, max_bytes=MAX_PACKAGE):
+    require(type(max_bytes) is int and 0 < max_bytes <= 512*1024*1024,
+            "invalid package size policy")
     candidates = set()
     for record in text.split("\n\n"):
         fields = {}
@@ -71,8 +73,10 @@ def metadata_pin(text, package, version):
             continue
         sha, size, name = fields["SHA256"], fields["Size"], fields["Filename"]
         require(re.fullmatch(r"[a-f0-9]{64}", sha), "invalid archive package digest")
-        require(size.isascii() and size.isdecimal() and 0 < int(size) <= MAX_PACKAGE,
+        require(size.isascii() and size.isdecimal() and len(size) <= 12,
                 "invalid archive package size")
+        require(0 < int(size) <= max_bytes,
+                f"invalid archive package size: {int(size)} bytes (limit {max_bytes})")
         validate_archive_path(name)
         candidates.add((sha, int(size)))
     require(len(candidates) == 1, "exact pinned guest package absent or conflicting in signed archive")
