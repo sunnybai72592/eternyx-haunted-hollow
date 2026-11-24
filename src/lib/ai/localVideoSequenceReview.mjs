@@ -18,7 +18,7 @@ function validMedia(record,kind){
   }catch{return false;}
 }
 export function auditLocalVideoExport({
-  sources=[],shots=[],soundtrack=null,profile="landscape",quality="standard",
+  sources=[],shots=[],soundtrack=null,narration=null,effects=null,profile="landscape",quality="standard",
 }={}){
   if(!Array.isArray(sources)||!Array.isArray(shots))
     throw new Error("Expected editable shot and media arrays.");
@@ -99,12 +99,12 @@ export function auditLocalVideoExport({
     unused.length+" selected original MP4(s) will be excluded from the portable ZIP."));
   if(shots.length)warnings.push(issue("DECODE_UNVERIFIED",
     "Browser inspection does not prove constant "+fps+" FPS or decoded frame availability; offline FFmpeg verifies these."));
-  if(soundtrack)warnings.push(issue("SOUNDTRACK_NOT_PREVIEWED",
+  if(soundtrack||narration||effects)warnings.push(issue("SOUNDTRACK_NOT_PREVIEWED",
     "The source preview is silent; licensed soundtrack is mixed only by offline FFmpeg."));
   // The REAL storyboard serializer is the final authority. The audit may
   // explain issues but cannot approve a project rejected by the renderer schema.
   let storyboard=null;
-  try{storyboard=buildLocalVideoBoard({sources,shots,soundtrack,quality});}
+  try{storyboard=buildLocalVideoBoard({sources,shots,soundtrack,narration,effects,quality});}
   catch(error){
     if(!errors.length)
       errors.push(issue("STORYBOARD",error instanceof Error?error.message:"Invalid v2 storyboard."));
@@ -114,7 +114,7 @@ export function auditLocalVideoExport({
     frameCount:frames,seconds:frames/fps,fps,
     shots:rows,sourcesUsed:used.size,
     sourcesUnused:unused.map(x=>x.name),
-    soundtrackIncluded:!!soundtrack,
+    soundtrackIncluded:!!(soundtrack||narration||effects),
     errors,warnings,
     previewIsRenderedVideo:false,
     rendererRequired:true,

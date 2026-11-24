@@ -417,3 +417,51 @@ test("soundtrack timing rejects out-of-range, invalid and overlapping fade setti
   for(const bad of [{timelineStartMs:1000},{durationMs:1001},{fadeInMs:800,fadeOutMs:300},{loop:"false"},{sourceStartMs:-1},{durationMs:1.5}])
     await assert.rejects(()=>buildPortableVideoBundle(settings([video],[shot(video)],{soundtrack:{...audio,...bad}})),/Soundtrack/);
 });
+
+test("real three-track movie mixes distinct music, narration and effects with independent timing",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir(),movie=join(dir,"movie.mp4");
+  const generate=(args)=>{const r=spawnSync("ffmpeg",["-nostdin","-v","error","-y",...args],{encoding:"utf8",timeout:45000});assert.equal(r.status,0,r.stderr);};
+  generate(["-f","lavfi","-i","testsrc2=size=96x56:rate=24:duration=2","-threads","1","-c:v","libx264","-pix_fmt","yuv420p",movie]);
+  const source=media("movie.mp4",readFileSync(movie));
+  const tracks=[["music.wav",440,0,1600],["voice.wav",880,400,800],["effect.wav",1320,800,800]].map(([name,freq,start,duration])=>{
+    const path=join(dir,name);
+    generate(["-f","lavfi","-i","sine=frequency="+freq+":sample_rate=44100:duration=2","-c:a","pcm_s16le",path]);
+    return media(name,readFileSync(path),{rightsRef:"owned test tone",volumePercent:90,timelineStartMs:start,durationMs:duration,loop:false});
+  });
+  const [soundtrack,narration,effects]=tracks;
+  const packed=await buildPortableVideoBundle(settings([source],[shot(source,{frames:48})],{quality:"cinematic",soundtrack,narration,effects,delivery:"all"}));
+  const zip=join(dir,"mix.zip"),out=join(dir,"unpacked");mkdirSync(out);
+  writeFileSync(zip,Buffer.from(await packed.blob.arrayBuffer()));extractedZip(zip,out);
+  assert.equal(packed.manifest.sources.filter(x=>x.kind==="audio").length,3);
+  const run=spawnSync("python3",["launch_portable_video.py","--run"],{cwd:out,encoding:"utf8",timeout:240000});
+  assert.equal(run.status,0,run.stderr+"\n"+run.stdout);
+  const folder=join(out,"eternyx-video-output");
+  const receipt=JSON.parse(readFileSync(join(folder,"manifest.json"),"utf8"));
+  assert.equal(receipt.narration.source_sha256,narration.sha256);
+  assert.equal(receipt.effects.source_sha256,effects.sha256);
+  assert.equal(receipt.video.frame_count,48);
+  for(const name of ["video.mp4","video-subtitled.mp4","video.webm"]){
+    const r=spawnSync("ffmpeg",["-v","error","-i",join(folder,name),"-map","0:a:0","-ac","1","-ar","48000","-f","s16le","pipe:1"],{timeout:30000,maxBuffer:1024*1024});
+    assert.equal(r.status,0,r.stderr?.toString());
+    const pcm=r.stdout;
+    assert.ok(pcm.length/96000>=1.98&&pcm.length/96000<=2.05,name+" full duration");
+    const amplitude=(freq,start,end)=>{
+      let x=0,y=0,n=0;
+      for(let i=Math.round(start*48000);i<Math.round(end*48000);i++){
+        const sample=pcm.readInt16LE(i*2)/32768,angle=2*Math.PI*freq*i/48000;
+        x+=sample*Math.cos(angle);y+=sample*Math.sin(angle);n++;
+      }
+      return 2*Math.hypot(x,y)/n;
+    };
+    assert.ok(amplitude(440,.1,.3)>.015,name+" music");
+    assert.ok(amplitude(880,.1,.3)<.003,name+" narration starts late");
+    assert.ok(amplitude(880,.5,.7)>.015,name+" narration");
+    assert.ok(amplitude(1320,.5,.7)<.003,name+" effect starts late");
+    for(const f of [440,880,1320])assert.ok(amplitude(f,.9,1.1)>.015,name+" overlapping track "+f);
+    assert.ok(amplitude(880,1.35,1.5)<.003,name+" narration stops");
+    for(const f of [440,880,1320])assert.ok(amplitude(f,1.75,1.9)<.003,name+" trailing silence "+f);
+  }
+  await assert.rejects(()=>buildPortableVideoBundle(settings([source],[shot(source,{frames:48})],{quality:"cinematic",soundtrack,narration:{...soundtrack}})),/unique/);
+});

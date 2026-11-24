@@ -184,7 +184,7 @@ function readme(profile,quality,shotCount,seconds,delivery,grade,framing){
   ].join("\n");
 }
 export async function buildPortableVideoBundle({
-  sources,shots,soundtrack=null,profile="landscape",quality="standard",
+  sources,shots,soundtrack=null,narration=null,effects=null,profile="landscape",quality="standard",
   rendererSources,onProgress=()=>{},delivery,grade,framing,
 }){
   if(!LOCAL_VIDEO_PROFILES.includes(profile)||!LOCAL_VIDEO_QUALITIES.includes(quality))
@@ -193,7 +193,7 @@ export async function buildPortableVideoBundle({
   if(delivery!==undefined&&!PORTABLE_DELIVERIES.includes(delivery))
     throw new Error("Unsupported portable movie delivery.");
   if(typeof onProgress!=="function")throw new Error("Invalid CPU bundle progress callback.");
-  const project=buildLocalVideoBoard({sources,shots,soundtrack,quality});
+  const project=buildLocalVideoBoard({sources,shots,soundtrack,narration,effects,quality});
   const required=["render_video_timeline.py","assemble_video_storyboard.py",
     "audit_video_render.py","launch_portable_video.py"];
   if(!rendererSources||typeof rendererSources!=="object"||
@@ -202,17 +202,17 @@ export async function buildPortableVideoBundle({
   // Include only shots actually present on the edited timeline; removed shots
   // must not leak unused private clips into the exported archive.
   const used=new Set(project.board.shots.map(shot=>shot.file));
-  const media=[...sources.filter(item=>used.has(item.name)),
-               ...(soundtrack?[soundtrack]:[])];
+  const tracks=[soundtrack,narration,effects].filter(track=>track!==null);
+  const media=[...sources.filter(item=>used.has(item.name)),...tracks];
   const expected=new Map([
     ...project.board.shots.map(shot=>[shot.file,shot.source_sha256]),
-    ...(soundtrack?[[project.board.soundtrack.file,project.board.soundtrack.source_sha256]]:[]),
+    ...["soundtrack","narration","effects"].filter(role=>project.board[role]).map(role=>[project.board[role].file,project.board[role].source_sha256]),
   ]);
   const names=new Set();
   const items=[];
   let total=0;
   for(const record of media){
-    const kind=soundtrack&&record===soundtrack?"audio":"video";
+    const kind=tracks.includes(record)?"audio":"video";
     const name=checkLocalMediaName(record?.name,kind);
     if(names.has(name.toLowerCase()))
       throw new Error("Duplicate or case-colliding private media names in portable ZIP.");
@@ -223,7 +223,7 @@ export async function buildPortableVideoBundle({
        !SHA.test(record.sha256)||expected.get(name)!==record.sha256)
       throw new Error("A source file no longer matches the validated editor storyboard.");
     total+=record.size;
-    if(total>PORTABLE_BUNDLE_LIMITS.maxTotalBytes)
+    if(total>PORTABLE_BUNDLE_LIMITS.maxTotalBytes+Math.max(0,tracks.length-1)*16*1024*1024)
       throw new Error("Portable private media exceeds the bounded CPU bundle size.");
     // SHA-256 is recomputed on ACTUAL file bytes, not trusted from a filename or
     // earlier browser state, to prevent exporting a broken project.
@@ -264,7 +264,7 @@ export async function buildPortableVideoBundle({
     ...Object.entries(scripts).map(([path,blob])=>({path,blob})),
   ];
   const zipMembers=[...extras,...items.map(item=>({path:item.path,blob:item.blob}))];
-  if(zipMembers.length>PORTABLE_BUNDLE_LIMITS.maxFiles)
+  if(zipMembers.length>PORTABLE_BUNDLE_LIMITS.maxFiles+Math.max(0,tracks.length-1))
     throw new Error("Too many portable archive entries.");
   const archive=[];
   const indexes=[];

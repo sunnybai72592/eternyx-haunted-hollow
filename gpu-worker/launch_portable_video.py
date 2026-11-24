@@ -108,7 +108,7 @@ def preflight(root=ROOT):
         raise ValueError("Unsupported portable movie delivery")
     if delivery in ("mp4_webm", "all"):
         check_program("ffmpeg", ["-hide_banner", "-encoders"], b"libvpx-vp9")
-        if board.get("soundtrack"):
+        if any(board.get(role) for role in ("soundtrack", "narration", "effects")):
             check_program("ffmpeg", ["-hide_banner", "-encoders"], b"libopus")
     if delivery in ("mp4_with_subtitles", "all"):
         check_program("ffmpeg", ["-hide_banner", "-encoders"], b"mov_text")
@@ -116,14 +116,16 @@ def preflight(root=ROOT):
         raise ValueError("Portable manifest shot count and storyboard disagree")
     media = root / "media"
     shots,total = renderer.check_shots(board, media, manifest["fps"])
-    audio = renderer.check_soundtrack(board, media)
+    tracks = renderer.check_audio_tracks(board, media)
+    audio_names = {track["file"] for track in tracks.values() if track is not None}
     if total != manifest["frames"]:
         raise ValueError("Storyboard duration differs from portable project receipt")
     source_hashes = {}
     for shot in shots:
         source_hashes[shot["file"]] = shot["source_sha256"]
-    if audio is not None:
-        source_hashes[audio["file"]] = audio["source_sha256"]
+    for track in tracks.values():
+        if track is not None:
+            source_hashes[track["file"]] = track["source_sha256"]
     members = manifest.get("sources")
     if not isinstance(members, list) or len(members) != len(source_hashes):
         raise ValueError("Portable media inventory must exactly match referenced project clips")
@@ -148,7 +150,7 @@ def preflight(root=ROOT):
                 any(character not in SHA for character in digest) or
                 digest != source_hashes[filename]):
             raise ValueError("Portable source SHA-256 differs from original footage")
-        kind = ("audio" if audio is not None and filename == audio["file"] else "video")
+        kind = ("audio" if filename in audio_names else "video")
         if member["kind"] != kind:
             raise ValueError("Private media source kind differs from the original storyboard")
         source_path = renderer.safe_path(media, filename,

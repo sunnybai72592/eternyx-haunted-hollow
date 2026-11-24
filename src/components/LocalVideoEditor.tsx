@@ -89,6 +89,8 @@ export default function LocalVideoEditor() {
   const undoShotEdit=()=>setTimelineHistory(old=>undoTimelineHistory(old));
   const redoShotEdit=()=>setTimelineHistory(old=>redoTimelineHistory(old));
   const [soundtrack, setSoundtrack] = useState<LocalSound | null>(null);
+  const [narration,setNarration]=useState<LocalSound|null>(null);
+  const [effects,setEffects]=useState<LocalSound|null>(null);
   const [profile, setProfile] = useState<RenderProfile>("landscape");
   const [quality, setQuality] = useState<RenderQuality>("standard");
   const [delivery,setDelivery]=useState("mp4");
@@ -112,6 +114,7 @@ export default function LocalVideoEditor() {
   const audioVersion = useRef(0);
   const urls = useRef<string[]>([]);
   const audioUrl = useRef<string | null>(null);
+  const extraAudioUrls=useRef<Record<"narration"|"effects",string|null>>({narration:null,effects:null});
 
   useEffect(() => () => {
     videoVersion.current++;
@@ -119,12 +122,13 @@ export default function LocalVideoEditor() {
     draftVersion.current++;
     urls.current.forEach(url => URL.revokeObjectURL(url));
     if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
+    Object.values(extraAudioUrls.current).forEach(url=>{if(url)URL.revokeObjectURL(url);});
   }, []);
 
   const downloadDraft = () => {
     try {
       const saved = createLocalVideoDraft({
-        name:draftName,sources,shots,soundtrack,profile,quality,grade,framing,
+        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,
       });
       saveDownload(saved.json,saved.filename,"application/json");
       setMessage("");
@@ -154,7 +158,7 @@ export default function LocalVideoEditor() {
       const draft=readLocalVideoDraft(await file.text());
       if(current!==draftVersion.current)return;
       setPendingDraft(draft);
-      setNotice("Draft loaded safely. Reconnect all "+(draft.sources.length+(draft.soundtrack?1:0))+
+      setNotice("Draft loaded safely. Reconnect all "+(draft.sources.length+[draft.soundtrack,draft.narration,draft.effects].filter(Boolean).length)+
         " ORIGINAL source files to verify their actual bytes. Your current timeline remains untouched until verification succeeds.");
     } catch (error) {
       if(current===draftVersion.current)
@@ -171,6 +175,7 @@ export default function LocalVideoEditor() {
     setNotice("");
     let prepared:LocalFile[]=[];
     let newAudio:LocalSound|null=null;
+    let newNarration:LocalSound|null=null,newEffects:LocalSound|null=null;
     let committed=false;
     try {
       const verified=await verifyLocalVideoDraftMedia(pendingDraft,files,
@@ -192,6 +197,8 @@ export default function LocalVideoEditor() {
         };
         newAudio={...item,url:URL.createObjectURL(item.file)};
       }
+      if(verified.narration)newNarration={...verified.narration,url:URL.createObjectURL(verified.narration.file)} as LocalSound;
+      if(verified.effects)newEffects={...verified.effects,url:URL.createObjectURL(verified.effects.file)} as LocalSound;
       if(current!==draftVersion.current)return;
       ++videoVersion.current;
       ++audioVersion.current;
@@ -199,9 +206,11 @@ export default function LocalVideoEditor() {
       if(audioUrl.current)URL.revokeObjectURL(audioUrl.current);
       urls.current=prepared.map(f=>f.url);
       audioUrl.current=newAudio?.url??null;
+      Object.values(extraAudioUrls.current).forEach(url=>{if(url)URL.revokeObjectURL(url);});
+      extraAudioUrls.current={narration:newNarration?.url??null,effects:newEffects?.url??null};
       setSources(prepared);
       setTimelineHistory(resetTimelineHistory(verified.shots));
-      setSoundtrack(newAudio);
+      setSoundtrack(newAudio);setNarration(newNarration);setEffects(newEffects);
       setSelectedSource(prepared[0].name);
       setProfile(verified.profile);
       setQuality(verified.quality);
@@ -219,6 +228,8 @@ export default function LocalVideoEditor() {
       if(!committed){
         prepared.forEach(f=>URL.revokeObjectURL(f.url));
         if(newAudio)URL.revokeObjectURL(newAudio.url);
+        if(newNarration)URL.revokeObjectURL(newNarration.url);
+        if(newEffects)URL.revokeObjectURL(newEffects.url);
       }
       if(current===draftVersion.current){
         setDraftWorking(false);setDraftProgress("");
@@ -328,11 +339,35 @@ export default function LocalVideoEditor() {
     }
   };
 
+  const selectExtraAudio=async(role:"narration"|"effects",file?:File)=>{
+    const current=++audioVersion.current;
+    const setter=role==="narration"?setNarration:setEffects;
+    setAudioWorking(Boolean(file));setMessage("");setNotice("");
+    if(!file){
+      const old=extraAudioUrls.current[role];if(old)URL.revokeObjectURL(old);
+      extraAudioUrls.current[role]=null;setter(null);return;
+    }
+    let selected:LocalFile|null=null;
+    try{
+      selected=await fingerprint(file,"audio");
+      if(current!==audioVersion.current)return;
+      const old=extraAudioUrls.current[role];if(old)URL.revokeObjectURL(old);
+      extraAudioUrls.current[role]=selected.url;
+      setter({...selected,rightsRef:"",volumePercent:role==="narration"?100:50,loop:false});
+      setNotice("Audio SHA-256 verified locally. Enter its rights reference and set its duration.");
+    }catch(error){
+      if(current===audioVersion.current)setMessage(error instanceof Error?error.message:"Could not hash audio.");
+    }finally{
+      if(current!==audioVersion.current&&selected)URL.revokeObjectURL(selected.url);
+      if(current===audioVersion.current)setAudioWorking(false);
+    }
+  };
+
   let ready: ReturnType<typeof buildLocalVideoBoard> | null = null;
   let validation = "";
   if (sources.length) {
     try {
-      ready = buildLocalVideoBoard({ sources, shots, soundtrack, quality });
+      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality });
     } catch (error) {
       validation = error instanceof Error ? error.message : "Check the selected timeline.";
     }
@@ -346,7 +381,7 @@ export default function LocalVideoEditor() {
     setBundleProgress("Verifying actual source media...");
     try {
       const output = await buildPortableVideoBundle({
-        sources, shots, soundtrack, profile, quality, delivery, grade, framing,
+        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing,
         rendererSources: {
           "render_video_timeline.py": rendererPython,
           "assemble_video_storyboard.py": storyboardPython,
@@ -461,13 +496,13 @@ export default function LocalVideoEditor() {
               Before replacing your current editing timeline, select all exact original files:
             </p>
             <ul className="space-y-1 text-xs text-slate-300">
-              {[...pendingDraft.sources,...(pendingDraft.soundtrack?[pendingDraft.soundtrack]:[])]
+              {[...pendingDraft.sources,...[pendingDraft.soundtrack,pendingDraft.narration,pendingDraft.effects].filter(Boolean)]
                 .map(source=><li key={source.sha256+source.name} className="break-all">
                   {source.name} · {(source.size/1024/1024).toFixed(2)} MiB · SHA-256 {source.sha256.slice(0,16)}…
                 </li>)}
             </ul>
             <label className="block space-y-1 text-sm">
-              Reattach all original MP4 files{pendingDraft.soundtrack?" and soundtrack":""}
+              Reattach all original MP4 files{pendingDraft.soundtrack||pendingDraft.narration||pendingDraft.effects?" and audio tracks":""}
               <Input type="file" multiple accept=".mp4,.wav,.mp3,.m4a,video/mp4,audio/*"
                 disabled={draftWorking}
                 className="mt-1 min-h-11 border-slate-700 bg-slate-950 file:text-foreground"
@@ -532,7 +567,7 @@ export default function LocalVideoEditor() {
 
         {sources.length > 0 && (
           <LocalVideoSequenceReview
-            sources={sources} shots={shots} soundtrack={soundtrack}
+            sources={sources} shots={shots} soundtrack={soundtrack} narration={narration} effects={effects}
             profile={profile} quality={quality}
             disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
             onJumpToShot={index=>{
@@ -640,6 +675,41 @@ export default function LocalVideoEditor() {
             </div>
             <p className="text-xs text-slate-400">The audio is silent before its entrance and after its scheduled segment. Non-looping segments must fit the original recording; looping repeats the original after its initial trim. Fades apply within the segment. Original preview does not include these edits.</p>
           </>}
+          {(["narration","effects"] as const).map(role=>{
+            const track=role==="narration"?narration:effects;
+            const setter=role==="narration"?setNarration:setEffects;
+            const update=(patch:Partial<LocalSound>)=>setter(previous=>previous?{...previous,...patch}:null);
+            const title=role==="narration"?"Narration / voice-over":"Sound effects";
+            const disabled=audioWorking||draftWorking||bundleWorking||Boolean(pendingDraft);
+            return <div key={role} className="space-y-3 rounded-lg border border-slate-700 p-3">
+              <label className="block space-y-1 text-sm font-semibold">{title}
+                <Input type="file" accept=".wav,.mp3,.m4a,audio/*" disabled={disabled}
+                  onChange={e=>{void selectExtraAudio(role,e.currentTarget.files?.[0]);e.currentTarget.value="";}}/>
+              </label>
+              {track&&<>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="break-all text-xs">{track.name} · SHA-256 {track.sha256.slice(0,16)}…</p>
+                  <Button size="sm" variant="outline" disabled={disabled} onClick={()=>{void selectExtraAudio(role);}}>Remove track</Button>
+                </div>
+                <audio controls preload="metadata" src={track.url} aria-label={"Original "+title+" preview"} className="w-full"/>
+                <label className="block space-y-1 text-sm">Rights reference
+                  <Input disabled={disabled} value={track.rightsRef} maxLength={180} onChange={e=>update({rightsRef:e.target.value})}/>
+                </label>
+                <label className="block space-y-1 text-sm">Track volume · {track.volumePercent}%
+                  <Input disabled={disabled} type="range" min={0} max={100} value={track.volumePercent} onChange={e=>update({volumePercent:Number(e.target.value)})}/>
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {([["Source trim start (ms)","sourceStartMs",60000],["Movie entrance (ms)","timelineStartMs",30000],
+                     ["Duration (ms; 0 = remaining movie)","durationMs",30000],["Fade in (ms)","fadeInMs",10000],
+                     ["Fade out (ms)","fadeOutMs",10000]] as const).map(([label,key,max])=><label key={key} className="block space-y-1 text-sm">{label}
+                    <Input disabled={disabled} type="number" min={0} max={max} step={1} value={track[key]??0} onChange={e=>update({[key]:Number(e.target.value)})}/>
+                  </label>)}
+                  <label className="flex items-center gap-2 text-sm"><input disabled={disabled} type="checkbox" checked={track.loop??true} onChange={e=>update({loop:e.target.checked})}/>Loop original track</label>
+                </div>
+              </>}
+            </div>;
+          })}
+          <p className="text-xs text-slate-400">Music, narration and effects can overlap. Each selected track receives equal fixed mix headroom to avoid clipping; the volume controls adjust relative balance. The mixed result is only produced by FFmpeg.</p>
           <p className="text-xs text-slate-400">Audio editing runs only in the local FFmpeg renderer. Source-video audio is removed. A rights reference records your assertion; it does not verify a license.</p>
         </section>
 
@@ -741,7 +811,7 @@ export default function LocalVideoEditor() {
             <p className="text-sm font-medium">How to render a real MP4 on your own machine</p>
             <p className="text-sm text-slate-300">
               1. Save the downloaded JSON in your ETERNYX repository folder. 2. Put your unchanged MP4 originals
-              {soundtrack ? " and selected soundtrack" : ""} into a folder named <code className="text-cyan-200">local-video-media</code> there.
+              {soundtrack||narration||effects ? " and selected audio tracks" : ""} into a folder named <code className="text-cyan-200">local-video-media</code> there.
               3. Install local Python 3.11+, FFmpeg and FFprobe (with libx264). 4. Run the command below from the repository root.
               5. Open <code className="text-cyan-200">eternyx-video-output/video.mp4</code> when the local process completes.
             </p>
