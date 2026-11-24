@@ -1,19 +1,16 @@
 // Phase 36: real owner-scoped team scheduling and downloadable all-day calendar.
 // Uses only currently authorized task rows. No backend calls or invented events.
-import {normalizeTeamTaskDraft,WORKSPACE_TEAM_STATUSES,teamMemberLabel} from "./workspaceTeamUtils.mjs";
+import {normalizeTeamTaskDraft,WORKSPACE_TEAM_STATUSES,WORKSPACE_TEAM_PRIORITIES,teamMemberLabel,workspaceValidGregorianDay} from "./workspaceTeamUtils.mjs";
 import {WORKSPACE_TEAM_TASK_VIEW_LIMIT} from "./workspaceTeamTaskOperations.mjs";
 
-const DAY=/^\d{4}-\d{2}-\d{2}$/;
-const UUID=/^[0-9a-f-]{8,64}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function workspaceValidTaskDay(value){
-  if(typeof value!=="string"||!DAY.test(value))return false;
-  const d=new Date(value+"T00:00:00.000Z");
-  return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;
+  return workspaceValidGregorianDay(value);
 }
 function addDays(day,count){
   const date=new Date(day+"T00:00:00.000Z");
   date.setUTCDate(date.getUTCDate()+count);
-  return date.toISOString().slice(0,10);
+  return date.getTime();
 }
 function authorizedTaskRows(tasks,spaceId){
   if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT||
@@ -50,10 +47,11 @@ export function workspaceTeamScheduleGroups(tasks,spaceId,today){
     else if(task.due_on===null)bucket.unscheduled.push(task);
     else if(task.due_on<today)bucket.overdue.push(task);
     else if(task.due_on===today)bucket.today.push(task);
-    else if(task.due_on<=next)bucket.next7.push(task);
+    else if(Date.parse(task.due_on+"T00:00:00.000Z")<=next)bucket.next7.push(task);
     else bucket.later.push(task);
   }
-  const sort=(a,b)=>(a.due_on??"9999-12-31").localeCompare(b.due_on??"9999-12-31")
+  const sort=(a,b)=>Number(a.due_on===null)-Number(b.due_on===null)||
+    (a.due_on??"").localeCompare(b.due_on??"")
     ||String(a.id).localeCompare(String(b.id));
   return WORKSPACE_TEAM_SCHEDULE_BUCKETS.map(item=>({
     key:item.key,label:item.label,
@@ -79,7 +77,7 @@ export function workspaceTeamTaskDueDatePatch(task,due,spaceId,memberIds){
 const encoder=new TextEncoder();
 export function escapeWorkspaceCalendarText(value){
   if(typeof value!=="string")throw Error("Invalid calendar text");
-  return value.replaceAll("\\","\\\\").replace(/\r\n|\r|\n/g,"\\n")
+  return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu,"\uFFFD").replaceAll("\\","\\\\").replace(/\r\n|\r|\n/g,"\\n")
     .replaceAll(";","\\;").replaceAll(",","\\,");
 }
 function calendarLine(value){
@@ -95,7 +93,8 @@ function calendarLine(value){
 }
 export function buildWorkspaceTeamScheduleIcs(tasks,owner,spaceId,now=new Date()){
   if(typeof owner!=="string"||!owner||
-    !(now instanceof Date)||!Number.isFinite(now.getTime()))
+    !(now instanceof Date)||!Number.isFinite(now.getTime())||
+    now.getUTCFullYear()<1||now.getUTCFullYear()>9999)
     throw Error("Invalid calendar export identity or timestamp");
   const rows=authorizedTaskRows(tasks,spaceId);
   const stamp=now.toISOString().replaceAll("-","").replaceAll(":","").replace(/\.\d{3}Z$/,"Z");
@@ -106,6 +105,9 @@ export function buildWorkspaceTeamScheduleIcs(tasks,owner,spaceId,now=new Date()
     if(task.status==="done"||task.due_on===null)continue;
     if(!UUID.test(task.id)||!UUID.test(spaceId))
       throw Error("Unsafe calendar event identity");
+    if(!WORKSPACE_TEAM_PRIORITIES.includes(task.priority)||
+       !(task.assignee_id===null||(typeof task.assignee_id==="string"&&task.assignee_id)))
+      throw Error("Malformed calendar event metadata");
     const name=escapeWorkspaceCalendarText(task.title);
     const description=escapeWorkspaceCalendarText(task.details+
       "\nStatus: "+task.status+"\nPriority: "+task.priority+
@@ -113,7 +115,11 @@ export function buildWorkspaceTeamScheduleIcs(tasks,owner,spaceId,now=new Date()
         teamMemberLabel(task.assignee_id,owner):"Unassigned"));
     lines.push("BEGIN:VEVENT","UID:"+task.id+"@eternyx.local",
       "DTSTAMP:"+stamp,"DTSTART;VALUE=DATE:"+task.due_on.replaceAll("-",""),
-      "DTEND;VALUE=DATE:"+addDays(task.due_on,1).replaceAll("-",""),
+      // RFC 5545: a DATE-only event without DTEND/DURATION lasts one day.
+      // Avoid an unrepresentable year 10000 for the final supported date.
+      ...(task.due_on==="9999-12-31"?[]:[
+        "DTEND;VALUE=DATE:"+new Date(addDays(task.due_on,1)).toISOString().slice(0,10).replaceAll("-",""),
+      ]),
       "SUMMARY:"+name,"DESCRIPTION:"+description,"END:VEVENT");
     exported++;
   }

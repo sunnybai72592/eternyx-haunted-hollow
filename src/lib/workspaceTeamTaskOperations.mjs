@@ -1,7 +1,7 @@
 // Workspace Phase 32 — bounded, deterministic views of real RLS-loaded team tasks.
 // Pure helpers operate ONLY on current authorized rows and never fetch data.
 import {workspaceTeamTaskMatchesFilter} from "./workspaceTeamDiscussion.mjs";
-import {teamMemberLabel,WORKSPACE_TEAM_PRIORITIES,WORKSPACE_TEAM_STATUSES} from "./workspaceTeamUtils.mjs";
+import {teamMemberLabel,WORKSPACE_TEAM_PRIORITIES,WORKSPACE_TEAM_STATUSES,workspaceValidGregorianDay} from "./workspaceTeamUtils.mjs";
 
 export const WORKSPACE_TEAM_TASK_VIEW_LIMIT=500;
 export const WORKSPACE_TEAM_TASK_SEARCH_LIMIT=120;
@@ -10,17 +10,14 @@ export const WORKSPACE_TEAM_TASK_FILTERS=Object.freeze([
   "all","mine","unassigned","outstanding","overdue","upcoming","done","today","unscheduled","in_progress",
 ]);
 const priorityRank={low:0,normal:1,high:2,urgent:3};
-const dayFormat=/^\d{4}-\d{2}-\d{2}$/;
-function validDay(day){
-  if(typeof day!=="string"||!dayFormat.test(day))return false;
-  const date=new Date(day+"T00:00:00.000Z");
-  return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===day;
-}
+const validDay=workspaceValidGregorianDay;
 export function workspaceTeamLocalDay(date=new Date()){
   if(!(date instanceof Date)||!Number.isFinite(date.getTime()))
     throw Error("Invalid local date");
   const pad=n=>String(n).padStart(2,"0");
-  return date.getFullYear()+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate());
+  const year=date.getFullYear();
+  if(year<1||year>9999)throw Error("Invalid local date");
+  return String(year).padStart(4,"0")+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate());
 }
 export function workspaceTeamTaskDueBucket(task,today){
   if(!validDay(today))throw Error("Invalid task review date");
@@ -92,10 +89,13 @@ export function selectWorkspaceTeamTasks(tasks,{
   });
 }
 function csvCell(value){
-  const text=String(value??"");
-  // Spreadsheet CSV formula injection: including leading whitespace/control
-  // before =,+,-,@. Prefix apostrophe inside the quoted CSV cell.
-  const safe=/^[\s\u0000-\u001f]*[=+\-@]/u.test(text)?"'"+text:text;
+  const text=String(value??"").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu,"\uFFFD");
+  // Spreadsheet imports differ. Protect control-led cells and compatibility
+  // forms of formula prefixes, but preserve the original text otherwise.
+  const probe=String(value??"").normalize("NFKC");
+  const unsafe=/^[\s\u0000-\u001f\u007f\u200b-\u200f\u2060]*[=+\-@]/u.test(probe)||
+    /^[\t\r\n]/u.test(probe);
+  const safe=unsafe?"'"+text:text;
   return '"'+safe.replaceAll('"','""')+'"';
 }
 export function buildWorkspaceTeamTasksCsv(tasks,owner,spaceId){
@@ -110,7 +110,7 @@ export function buildWorkspaceTeamTasksCsv(tasks,owner,spaceId){
        typeof task.details!=="string"||!WORKSPACE_TEAM_STATUSES.includes(task.status)||
        !WORKSPACE_TEAM_PRIORITIES.includes(task.priority)||
        !(task.due_on===null||validDay(task.due_on))||
-       !(task.assignee_id===null||typeof task.assignee_id==="string")||
+       !(task.assignee_id===null||(typeof task.assignee_id==="string"&&task.assignee_id))||
        typeof task.updated_at!=="string"||
        !Number.isFinite(Date.parse(task.updated_at)))
       throw Error("Invalid or cross-team task export row");

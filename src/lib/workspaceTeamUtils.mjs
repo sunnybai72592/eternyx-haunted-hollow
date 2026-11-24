@@ -2,6 +2,13 @@ export const WORKSPACE_TEAM_ROLES = Object.freeze(["owner","editor","viewer"]);
 export const WORKSPACE_TEAM_STATUSES = Object.freeze(["todo","in_progress","done"]);
 export const WORKSPACE_TEAM_PRIORITIES = Object.freeze(["low","normal","high","urgent"]);
 const TOKEN=/^[a-f0-9]{64}$/;
+// Browser and PostgreSQL task dates use Gregorian years 0001–9999.
+export function workspaceValidGregorianDay(value){
+  if(typeof value!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(value)||
+     value.startsWith("0000-"))return false;
+  const day=new Date(value+"T00:00:00.000Z");
+  return Number.isFinite(day.getTime())&&day.toISOString().slice(0,10)===value;
+}
 export function validateTeamInviteToken(token) {
   if(typeof token!=="string" || !TOKEN.test(token.trim())) {
     throw new Error("Invitation code must be exactly 64 lowercase hexadecimal characters");
@@ -21,7 +28,7 @@ export function normalizeTeamTaskDraft(input,memberIds=[]) {
     !WORKSPACE_TEAM_STATUSES.includes(input?.status) ||
     !WORKSPACE_TEAM_PRIORITIES.includes(input?.priority) ||
     typeof input?.due!=="string" ||
-    (input.due!=="" && !/^\d{4}-\d{2}-\d{2}$/.test(input.due)) ||
+    (input.due!=="" && !workspaceValidGregorianDay(input.due)) ||
     typeof input?.assignee!=="string" ||
     (input.assignee && !memberIds.includes(input.assignee))) {
     throw new Error("Review title, details, status, priority, due date and current team assignee");

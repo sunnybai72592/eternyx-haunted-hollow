@@ -255,3 +255,39 @@ test("triage controls are accessible and reuse verified list filters without wri
   const handler=panel.slice(panel.indexOf("const openWorkloadTasks="),panel.indexOf("const exportTaskView="));
   assert.ok(!handler.includes("supabase.")&&!handler.includes("setTasks("));
 });
+
+test("Gregorian day validation agrees with the editor and pads early local years",async()=>{
+  const {normalizeTeamTaskDraft}=await import("../src/lib/workspaceTeamUtils.mjs");
+  const draft={title:"task",details:"",status:"todo",priority:"normal",assignee:""};
+  for(const due of ["0000-01-01","2026-02-30","1900-02-29","2026-13-01"]){
+    assert.throws(()=>normalizeTeamTaskDraft({...draft,due}));
+    assert.throws(()=>workspaceTeamTaskDueBucket(tasks[0],due));
+    assert.throws(()=>buildWorkspaceTeamTasksCsv([task("a",{due_on:due})],owner,spaceId));
+  }
+  assert.equal(normalizeTeamTaskDraft({...draft,due:"2000-02-29"}).p_due_on,"2000-02-29");
+  const early=new Date(2026,0,2);early.setFullYear(1);
+  assert.equal(workspaceTeamLocalDay(early),"0001-01-02");
+  early.setFullYear(0);assert.throws(()=>workspaceTeamLocalDay(early));
+});
+test("CSV protects compatibility formula prefixes and leading control cells without stripping multiline text",()=>{
+  for(const title of ["＝SUM(1,2)","＋SUM(1,2)","－1","＠SUM(1,2)","\u200b=1","\u0001=1"]){
+    const csv=buildWorkspaceTeamTasksCsv([task("a",{title})],owner,spaceId);
+    assert.ok(csv.includes("\"'"),title);
+    assert.ok(!csv.includes("\u0001"));
+  }
+  for(const details of ["\ttext","\rtext","\ntext"]){
+    assert.ok(buildWorkspaceTeamTasksCsv([task("a",{details})],owner,spaceId).includes("\"'"+details));
+  }
+  const ordinary=buildWorkspaceTeamTasksCsv([task("a",{details:"Line 1\nLine 2, with \"quotes\""})],owner,spaceId);
+  assert.ok(ordinary.includes('"Line 1\nLine 2, with ""quotes"""'));
+  assert.throws(()=>buildWorkspaceTeamTasksCsv([task("a",{assignee_id:""})],owner,spaceId));
+});
+test("both explicit file downloads clean up object URLs even when activation fails",()=>{
+  const panel=readFileSync(new URL("../src/components/workspace/WorkspaceTeamsPanel.tsx",import.meta.url),"utf8");
+  for(const [start,end,url] of [["const exportTaskView=","const createTeam=","objectUrl"],["const exportCalendarView=","const startBoardDrag=","url"]]){
+    const body=panel.slice(panel.indexOf(start),panel.indexOf(end));
+    assert.ok(body.includes("finally{\n        link.remove();"));
+    assert.ok(body.includes("window.setTimeout(()=>URL.revokeObjectURL("+url+"),1000);"));
+    assert.ok(body.includes("verifiedSpaceId!==selected.id"));
+  }
+});
