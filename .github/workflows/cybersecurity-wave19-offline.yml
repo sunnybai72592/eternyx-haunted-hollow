@@ -1,0 +1,45 @@
+name: Cybersecurity Wave 19 offline
+on:
+  pull_request:
+    paths:
+      - 'scripts/security-wave18-real-auth.mjs'
+      - 'scripts/security-wave19-session-evidence.mjs'
+      - 'tests/security-wave19-session-evidence.test.mjs'
+      - '.github/workflows/cybersecurity-wave19-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/security-wave18-real-auth.mjs'
+      - 'scripts/security-wave19-session-evidence.mjs'
+      - 'tests/security-wave19-session-evidence.test.mjs'
+      - '.github/workflows/cybersecurity-wave19-offline.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Offline config and denial regression (not live staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Export only the two reviewed test inputs from the exact public event
+      # commit. No checkout credential cleanup or legacy submodule traversal.
+      - name: Fetch exact event commit and export Wave 19 files
+        shell: bash
+        env:
+          TEST_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TEST_SHA" =~ ^[0-9a-f]{40}$ ]]
+          source_dir="$(mktemp -d "$RUNNER_TEMP/wave19-source.XXXXXX")"
+          git -C "$source_dir" init -q
+          git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
+          test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
+          mkdir -p scripts tests
+          git -C "$source_dir" show "$TEST_SHA:scripts/security-wave18-real-auth.mjs" > scripts/security-wave18-real-auth.mjs
+          git -C "$source_dir" show "$TEST_SHA:scripts/security-wave19-session-evidence.mjs" > scripts/security-wave19-session-evidence.mjs
+          git -C "$source_dir" show "$TEST_SHA:tests/security-wave19-session-evidence.test.mjs" > tests/security-wave19-session-evidence.test.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/security-wave19-session-evidence.mjs
+      - run: node --test tests/security-wave19-session-evidence.test.mjs
