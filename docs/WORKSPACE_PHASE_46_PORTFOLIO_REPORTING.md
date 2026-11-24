@@ -5,7 +5,7 @@
 - Recheck every successful team before publishing and before exporting. Auth and scope receipts fence late results; changed or unavailable access suppresses complete totals and report export.
 - Review timestamp and local reference day distinguish a reviewed task snapshot from the later membership check.
 - Sort full verified page by name, overdue, urgent or personal open workload; explicit CSV contains only page-level team summaries and formula-protected text. No raw member identities or task contents. No persistent export storage.
-- Expanded offline release regression coverage for resume, board drag and staging-config validation; no actual staging access assumed.
+- Expanded offline release regression coverage for resume and board drag; staging-config validation remains in full utility CI because it imports the Supabase SDK. No actual staging access assumed.
 
 ## Release gates still outstanding
 
