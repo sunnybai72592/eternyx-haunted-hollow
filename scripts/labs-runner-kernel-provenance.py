@@ -7,6 +7,7 @@ import pathlib
 import pwd
 import re
 import resource
+import shutil
 import stat
 import subprocess
 import sys
@@ -96,6 +97,39 @@ def kernel_digest_from_tar(path, release):
                 hashes.append(hashlib.file_digest(stream, "sha256").hexdigest())
     require(len(hashes) == 1, "expected exactly one kernel archive member")
     return hashes[0]
+
+def export_verified_kernel(tar, release, destination):
+    # Verify before exporting, then re-hash the actual exported bytes. Never
+    # overwrite an existing file or use the archive member as a filesystem path.
+    require(kernel_digest_from_tar(tar, release) == PIN,
+            "archive kernel does not match immutable Phase 41 pin")
+    require(destination.name == "kernel" and destination.is_absolute(),
+            "expected fixed private kernel output path")
+    parent = destination.parent
+    info = parent.lstat()
+    require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+            and stat.S_IMODE(info.st_mode) == 0o700,
+            "kernel export parent must be private and owned")
+    with tempfile.TemporaryDirectory(prefix="verified-kernel-", dir=parent) as directory:
+        staging = pathlib.Path(directory) / "kernel"
+        with tarfile.open(tar, "r:") as archive, staging.open("xb") as output:
+            found = 0
+            for member in archive:
+                if member.name.removeprefix("./") != "boot/vmlinuz-" + release:
+                    continue
+                require(member.isreg() and 0 < member.size <= MAX_PACKAGE,
+                        "invalid kernel member")
+                found += 1
+                require(found == 1, "duplicate kernel member")
+                with archive.extractfile(member) as stream:
+                    shutil.copyfileobj(stream, output, 1024 * 1024)
+            require(found == 1, "missing kernel member")
+        staging.chmod(0o400)
+        require(digest(staging) == PIN, "exported kernel digest mismatch")
+        os.link(staging, destination)  # atomic publication, no overwrite
+    require(digest(destination) == PIN, "published kernel digest mismatch")
+    print(json.dumps({"authenticatedGuestKernelExported": True,
+                      "exportedKernelSha256": PIN}), flush=True)
 
 def provenance_result(archive_kernel, observed_kernel):
     # Archive authenticity is checked before this function. A changed host
@@ -230,7 +264,7 @@ APT::Sandbox::User "{pwd.getpwuid(os.getuid()).pw_name}";
 def limit_tar():
     resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_TAR, MAX_TAR))
 
-def main(observed):
+def main(observed, export=None):
     require(os.geteuid() != 0, "run archive inspection unprivileged")
     release, package, version = fixed_guest_identity()
     runner_release, observed_hash = observe_runner_kernel(observed)
@@ -265,6 +299,8 @@ def main(observed):
         print(json.dumps({"archiveKernelMemberSha256": archive_hash,
                           "archiveKernelMemberMatchesPhase41Pin": archive_hash == PIN}), flush=True)
         evidence = provenance_result(archive_hash, observed_hash)
+        if export is not None:
+            export_verified_kernel(tar, release, export)
         print(json.dumps({"archivePackageSha256": pin[0], "archivePackageBytes": pin[1],
                           "archiveKernelSha256": archive_hash, "runnerKernelSha256": observed_hash,
                           "immutablePhase41KernelSha256": PIN, "ubuntuArchiveKeyringSha256": digest(keyring),
@@ -272,10 +308,13 @@ def main(observed):
     print(json.dumps(evidence), flush=True)
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (1, 2):
-        raise SystemExit("expected zero or one private observed runner kernel copy")
     try:
-        main(pathlib.Path(sys.argv[1]).absolute() if len(sys.argv) == 2 else None)
+        if len(sys.argv) == 3 and sys.argv[1] == "--export-guest-kernel":
+            main(None, pathlib.Path(sys.argv[2]).absolute())
+        elif len(sys.argv) in (1, 2):
+            main(pathlib.Path(sys.argv[1]).absolute() if len(sys.argv) == 2 else None)
+        else:
+            raise SystemExit("expected optional runner kernel copy or --export-guest-kernel path")
     except subprocess.CalledProcessError as exc:
         # Fixed commands only; bounded diagnostics, no environment or credentials.
         err = exc.stderr or ""

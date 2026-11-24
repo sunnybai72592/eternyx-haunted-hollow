@@ -1,0 +1,88 @@
+name: LABS authenticated immutable guest boot
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-runner-authenticated-guest.yml'
+      - 'scripts/labs-runner-kernel-provenance.py'
+      - 'tests/labs-runner-kernel-provenance-test.py'
+      - 'scripts/labs-runner-firecracker-*.py'
+      - 'scripts/labs-runner-firecracker-*.c'
+      - 'tests/labs-runner-firecracker-*-test.py'
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Authenticate and boot the exact historical guest twice on a disposable runner
+        required: true
+        type: choice
+        options:
+          - DENY
+          - I_APPROVE_AUTHENTICATED_IMMUTABLE_GUEST_BOOT
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization before any diagnostic code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Offline preparation and isolation contract
+        run: |
+          set -euo pipefail
+          python3 -B tests/labs-runner-kernel-provenance-test.py
+          python3 -B tests/labs-runner-firecracker-boot-test.py
+          python3 -B tests/labs-runner-firecracker-jailed-test.py
+          cc -static -Os -Wall -Wextra -Werror -DETERNYX_FIXED_DELAY=5 scripts/labs-runner-firecracker-jailed-init.c -o /tmp/eternyx-normal
+          cc -static -Os -Wall -Wextra -Werror -DETERNYX_FIXED_DELAY=60 scripts/labs-runner-firecracker-jailed-init.c -o /tmp/eternyx-timeout
+  authenticated-guest:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_AUTHENTICATED_IMMUTABLE_GUEST_BOOT' }}
+    needs: offline-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization before any diagnostic code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Prepare fixed inputs as runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          umask 077
+          work="$(mktemp -d "$RUNNER_TEMP/eternyx-jailed-input.XXXXXXXX")"
+          printf 'ETERNYX_JAILED_INPUT=%s\n' "$work" >> "$GITHUB_ENV"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 60 --max-filesize 7606252 --output "$work/release.tgz" 'https://github.com/firecracker-microvm/firecracker/releases/download/v1.18.0/firecracker-v1.18.0-x86_64.tgz'
+          python3 -I -B scripts/labs-runner-kernel-provenance.py --export-guest-kernel "$work/kernel"
+          cc -static -Os -Wall -Wextra -Werror -DETERNYX_FIXED_DELAY=5 scripts/labs-runner-firecracker-jailed-init.c -o "$work/init-normal"
+          cc -static -Os -Wall -Wextra -Werror -DETERNYX_FIXED_DELAY=60 scripts/labs-runner-firecracker-jailed-init.c -o "$work/init-timeout"
+      - name: Run Jailer and verify two fixed guest lifecycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /usr/bin/python3 -I -B scripts/labs-runner-firecracker-jailed.py "$ETERNYX_JAILED_INPUT" --require-pinned-kernel
+      - name: Remove unprivileged inputs
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${ETERNYX_JAILED_INPUT:-}" == "$RUNNER_TEMP"/eternyx-jailed-input.* && -d "$ETERNYX_JAILED_INPUT" ]]; then
+            rm -rf -- "$ETERNYX_JAILED_INPUT"
+          fi
