@@ -226,3 +226,30 @@ and prepared-clip hashes. Original footage and rights information are kept
 locally; any unavailable/too-short clip fails closed without publishing a
 finished movie. Old 16 FPS editing drafts and conversion-only projects
 remain valid. The separate 24 FPS draft-editing limitation still applies.
+
+## Native 24 FPS phone-movie re-edit drafts
+
+Every direct-to-movie ZIP now includes `phone-movie-edit-draft.json`, a strict
+versioned editing record without original footage bytes, object URLs or cloud
+upload references. It contains the FPS preset, shape, deliverables,
+framing, every camera filename/size/SHA-256, the shared source window,
+and each cut, caption, rights note and actual fade timing.
+
+To re-edit an earlier 24 FPS or 16 FPS movie, open AI Video Studio,
+expand **Import ordinary phone footage**, select the saved
+`phone-movie-edit-draft.json` under **Reopen saved 16/24 FPS cinematic movie edits**,
+then reattach every original MOV/MP4/M4V recording. The browser verifies
+exact filename, size and SHA-256 for **all** originals. The current edit remains
+untouched unless every original matches. Cancel or retry without data loss.
+Adjust each cut start, duration, fade, authored captions, recording rights,
+quality, framing and delivery format, then download a fresh private ZIP
+and run the same offline launcher. **Cinematic remains at native 24 FPS.**
+
+**Save editable 16/24 FPS movie draft (no media)** saves current work, including
+unfinished captions/rights, without including media. Final render still requires
+actual caption and rights references, and still validates real decoded frames.
+
+This is the direct phone-movie re-edit form, not a claim that the separate
+general-purpose 16 FPS desktop-style timeline has native 24 FPS support.
+It does not interpolate source footage, invent licenses or synthesize
+AI cinematic scenes. No GPU, cloud uploads, AI API or subscription needed.
