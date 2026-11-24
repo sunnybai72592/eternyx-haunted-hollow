@@ -104,3 +104,12 @@ test("destructive replacement prompts on dirty changes and checkpoint restores a
   assert.match(studio, /setCheckpoints\(\(items\) => \[\.\.\.items, project\]\.slice\(-5\)/);
   assert.match(studio, /setPreviewHtml\(null\)/);
 });
+
+test("preview widths remain contained and reset horizontal scroll without remounting source", () => {
+  assert.ok(studio.includes('ref={previewScroller} aria-label="Preview scroll area"'));
+  assert.ok(studio.includes('min-w-0 max-w-full overflow-x-auto'));
+  assert.ok(studio.includes('previewScroller.current.scrollLeft = 0'));
+  assert.ok(studio.includes('}, [previewMode]);'));
+  assert.ok(studio.includes('<iframe key={previewRun} title="Isolated project preview" srcDoc={previewHtml}'));
+  assert.ok(!studio.includes('key={previewMode}'));
+});
