@@ -1,0 +1,71 @@
+name: Services read-only staging inventory (manual, no deployment)
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledgment:
+        description: "Inspect existing staging migration names and table presence only. No Service rows or schema are changed."
+        required: true
+        type: choice
+        options:
+          - "NOT_APPROVED"
+          - "READ_ONLY_STAGING_INVENTORY"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-staging-readonly-inventory
+  cancel-in-progress: false
+
+jobs:
+  staging-inventory:
+    if: ${{ inputs.acknowledgment == 'READ_ONLY_STAGING_INVENTORY' }}
+    name: Compare 13 source-defined Services migrations against actual staging
+    runs-on: ubuntu-latest
+    environment: services-staging
+    timeout-minutes: 8
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for read-only inventory
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify source migration allowlist before accessing staging
+        run: |
+          node scripts/services-migration-source-guard.mjs > /dev/null
+          node scripts/services-pg17-replay-plan.mjs --check > /dev/null
+
+      - name: Independently verify registered staging project through GET-only Management API
+        env:
+          SERVICES_PREFLIGHT_CONFIRM: ${{ inputs.acknowledgment }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_STAGING_AUDIT_POOLER_HOST: ${{ vars.SERVICES_STAGING_AUDIT_POOLER_HOST }}
+          SERVICES_STAGING_EXPECTED_ORG_SLUG: ${{ vars.SERVICES_STAGING_EXPECTED_ORG_SLUG }}
+          SERVICES_STAGING_EXPECTED_PROJECT_NAME: ${{ vars.SERVICES_STAGING_EXPECTED_PROJECT_NAME }}
+          SERVICES_STAGING_MANAGEMENT_API_TOKEN: ${{ secrets.SERVICES_STAGING_MANAGEMENT_API_TOKEN }}
+        run: node scripts/services-phase41-registered-staging-project.mjs
+
+      - name: Ensure PostgreSQL read-only client is installed
+        run: |
+          if ! command -v psql > /dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Report Services schema gaps using restricted auditor and repeatable-read SQL
+        env:
+          SERVICES_PREFLIGHT_CONFIRM: ${{ inputs.acknowledgment }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_STAGING_AUDIT_POOLER_HOST: ${{ vars.SERVICES_STAGING_AUDIT_POOLER_HOST }}
+          SERVICES_STAGING_AUDIT_DB_PASSWORD: ${{ secrets.SERVICES_STAGING_AUDIT_DB_PASSWORD }}
+        run: node scripts/services-phase42-staging-inventory.mjs
+
+      # No npm application client, Auth accounts, migration application,
+      # Supabase deploy, Service business row access, or customer fixtures.
+      # Logs contain only six source-defined marker IDs and reviewed file names.
