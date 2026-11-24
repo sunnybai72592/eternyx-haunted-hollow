@@ -66,11 +66,41 @@ class ProvenanceTest(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         p.kernel_digest_from_tar(path,"6.17")
 
-    def test_no_silent_repin_even_if_both_match(self):
-        p.verify_kernel_hashes(p.PIN,p.PIN)
-        for pair in (("a"*64,"a"*64),(p.PIN,"a"*64),("a"*64,p.PIN)):
+    def test_fixed_guest_identity_not_selected_by_runner(self):
+        with patch.object(p,"command",side_effect=AssertionError("host lookup")):
+            self.assertEqual(p.fixed_guest_identity(),("7.0.0-1014-aws",
+                "linux-image-7.0.0-1014-aws","7.0.0-1014.14~24.04.1"))
+
+    def test_archive_mismatch_cannot_be_overridden_by_runner(self):
+        for observed in (p.PIN,"a"*64,None):
+            with self.assertRaisesRegex(RuntimeError,"immutable Phase 41 pin"):
+                p.provenance_result("a"*64,observed)
+
+    def test_verified_historical_guest_with_different_runner(self):
+        for observed in ("b"*64,None,p.PIN):
+            result=p.provenance_result(p.PIN,observed)
+            self.assertTrue(result["phase41GuestKernelIndependentlyPinned"])
+            self.assertEqual(result["runnerKernelIndependentlyPinned"],observed==p.PIN)
+            self.assertEqual(result["currentRunnerKernelMatchesPhase41Pin"],observed==p.PIN)
+            for gate in ("dedicatedHardwareAcceptanceVerified",
+                         "providerActivationAllowed","productionReleaseReady"):
+                self.assertFalse(result[gate])
+
+    def test_runner_observation_missing_is_explicit(self):
+        with patch.object(p,"command",return_value="6.17.0-1010-azure"):
+            self.assertEqual(p.observe_runner_kernel(None),("6.17.0-1010-azure",None))
+
+    def test_runner_observation_does_not_choose_guest(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=pathlib.Path(d)/"kernel"
+            path.write_bytes(b"different runner kernel")
+            with patch.object(p,"command",return_value="6.17.0-1010-azure"):
+                self.assertEqual(p.observe_runner_kernel(path),
+                    ("6.17.0-1010-azure",p.digest(path)))
+            self.assertNotEqual(p.digest(path),p.PIN)
+            path.unlink()
             with self.assertRaises(RuntimeError):
-                p.verify_kernel_hashes(*pair)
+                p.observe_runner_kernel(path)
 
     def test_primary_fingerprint_not_subkey_or_uid(self):
         def row(kind,value):

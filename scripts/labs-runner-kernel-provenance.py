@@ -14,6 +14,11 @@ import tarfile
 import tempfile
 
 PIN = "a6a897d3b8c177c8736e8bce85b6b9cd8e3275f94107221ee93820fcd5388384"
+# Identity reported by the hash-matching Phase 42 run before keyring preflight.
+GUEST_RELEASE = "7.0.0-1014-aws"
+GUEST_PACKAGE = "linux-image-7.0.0-1014-aws"
+GUEST_VERSION = "7.0.0-1014.14~24.04.1"
+GUEST_ARCH = "amd64"
 KEYRING = pathlib.Path("/usr/share/keyrings/ubuntu-archive-keyring.gpg")
 # Canonical publishes this full archive signing key fingerprint:
 # https://wiki.ubuntu.com/Security/FAQ
@@ -60,7 +65,7 @@ def metadata_pin(text, package, version):
                 and all(part not in ("", ".", "..") for part in name.split("/")),
                 "unexpected package archive path")
         candidates.add((sha, int(size)))
-    require(len(candidates) == 1, "exact installed package absent or conflicting in signed archive")
+    require(len(candidates) == 1, "exact pinned guest package absent or conflicting in signed archive")
     return candidates.pop()
 
 def verify_deb(path, pin):
@@ -83,9 +88,32 @@ def kernel_digest_from_tar(path, release):
     require(len(hashes) == 1, "expected exactly one kernel archive member")
     return hashes[0]
 
-def verify_kernel_hashes(archive_kernel, observed_kernel):
-    require(archive_kernel == PIN and observed_kernel == PIN,
+def provenance_result(archive_kernel, observed_kernel):
+    # Archive authenticity is checked before this function. A changed host
+    # cannot select a different guest, and matching host bytes alone prove nothing.
+    require(archive_kernel == PIN,
             "independent archive kernel does not match immutable Phase 41 pin")
+    same = observed_kernel == PIN
+    return {"signedUbuntuArchivePackageVerified": True,
+            "independentArchiveKernelMatchesPhase41Pin": True,
+            "phase41GuestKernelIndependentlyPinned": True,
+            "currentRunnerKernelMatchesPhase41Pin": same,
+            "runnerKernelIndependentlyPinned": same,
+            "dedicatedHardwareAcceptanceVerified": False,
+            "providerActivationAllowed": False, "productionReleaseReady": False}
+
+def fixed_guest_identity():
+    validate_identity(GUEST_RELEASE, GUEST_PACKAGE, GUEST_VERSION, GUEST_ARCH)
+    return GUEST_RELEASE, GUEST_PACKAGE, GUEST_VERSION
+
+def observe_runner_kernel(observed):
+    release = command(["/usr/bin/uname", "-r"])
+    require(re.fullmatch(r"[0-9][a-zA-Z0-9.+-]{1,100}", release), "invalid runner release")
+    if observed is None:
+        return release, None
+    require(observed.is_file() and not observed.is_symlink()
+            and 0 < observed.stat().st_size <= MAX_PACKAGE, "invalid observed runner kernel")
+    return release, digest(observed)
 
 def command(args, env=BASE_ENV, cwd=None, timeout=30):
     return subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -195,20 +223,14 @@ def limit_tar():
 
 def main(observed):
     require(os.geteuid() != 0, "run archive inspection unprivileged")
-    release = command(["/usr/bin/uname", "-r"])
-    require(re.fullmatch(r"[0-9][a-zA-Z0-9.+-]{1,100}", release), "invalid release")
-    require(observed.is_file() and observed.stat().st_size <= MAX_PACKAGE, "invalid observed kernel")
-    observed_hash = digest(observed)
-    require(observed_hash == PIN, "runner kernel drifted; no silent repin")
-    owner = command(["/usr/bin/dpkg-query", "-S", "/boot/vmlinuz-" + release])
-    require(owner.endswith(": /boot/vmlinuz-" + release) and "\n" not in owner,
-            "kernel package owner ambiguous")
-    package = owner.split(": ", 1)[0].removesuffix(":amd64")
-    version, arch, status = command(["/usr/bin/dpkg-query", "-W",
-        "-f=${Version}\t${Architecture}\t${Status}", package]).split("\t")
-    require(status == "install ok installed", "kernel owner not installed")
-    validate_identity(release, package, version, arch)
-    print(json.dumps({"kernelRelease": release, "package": package, "version": version}), flush=True)
+    release, package, version = fixed_guest_identity()
+    runner_release, observed_hash = observe_runner_kernel(observed)
+    print(json.dumps({"guestKernelRelease": release, "guestPackage": package,
+                      "guestPackageVersion": version, "immutablePhase41KernelSha256": PIN,
+                      "currentRunnerKernelRelease": runner_release,
+                      "currentRunnerKernelSha256": observed_hash,
+                      "currentRunnerKernelMatchesPhase41Pin": observed_hash == PIN,
+                      "currentRunnerKernelObserved": observed_hash is not None}), flush=True)
     with tempfile.TemporaryDirectory(prefix="eternyx-kernel-proof-") as directory:
         work = pathlib.Path(directory)
         keyring = prepare_archive_keyring(work)
@@ -227,22 +249,18 @@ def main(observed):
                 check=True, timeout=30, stdout=output, stderr=subprocess.PIPE,
                 env=BASE_ENV, preexec_fn=limit_tar)
         archive_hash = kernel_digest_from_tar(tar, release)
-        verify_kernel_hashes(archive_hash, observed_hash)
+        evidence = provenance_result(archive_hash, observed_hash)
         print(json.dumps({"archivePackageSha256": pin[0], "archivePackageBytes": pin[1],
                           "archiveKernelSha256": archive_hash, "runnerKernelSha256": observed_hash,
                           "immutablePhase41KernelSha256": PIN, "ubuntuArchiveKeyringSha256": digest(keyring),
                           "ubuntuArchiveSigningKeyFingerprint": ARCHIVE_FINGERPRINT}))
-    print(json.dumps({"signedUbuntuArchivePackageVerified": True,
-                      "independentArchiveKernelMatchesPhase41Pin": True,
-                      "runnerKernelIndependentlyPinned": True,
-                      "dedicatedHardwareAcceptanceVerified": False,
-                      "providerActivationAllowed": False, "productionReleaseReady": False}))
+    print(json.dumps(evidence), flush=True)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("expected private observed kernel copy")
+    if len(sys.argv) not in (1, 2):
+        raise SystemExit("expected zero or one private observed runner kernel copy")
     try:
-        main(pathlib.Path(sys.argv[1]).resolve(strict=True))
+        main(pathlib.Path(sys.argv[1]).absolute() if len(sys.argv) == 2 else None)
     except subprocess.CalledProcessError as exc:
         # Fixed commands only; bounded diagnostics, no environment or credentials.
         err = exc.stderr or ""

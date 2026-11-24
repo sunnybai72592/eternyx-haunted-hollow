@@ -58,5 +58,9 @@ jobs:
           umask 077
           work="$(mktemp -d "$RUNNER_TEMP/eternyx-kernel-copy.XXXXXXXX")"
           trap 'rm -rf -- "$work"' EXIT
-          sudo -n /usr/bin/cat "/boot/vmlinuz-$(uname -r)" > "$work/kernel"
-          python3 -I -B scripts/labs-runner-kernel-provenance.py "$work/kernel"
+          if sudo -n /usr/bin/cat "/boot/vmlinuz-$(uname -r)" > "$work/kernel"; then
+            python3 -I -B scripts/labs-runner-kernel-provenance.py "$work/kernel"
+          else
+            echo "Current runner kernel copy unavailable; historical archive proof remains independent."
+            python3 -I -B scripts/labs-runner-kernel-provenance.py
+          fi
