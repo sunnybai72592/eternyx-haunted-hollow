@@ -1,0 +1,27 @@
+name: LABS dedicated host readiness offline contract
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-dedicated-host-readiness.yml'
+      - 'scripts/labs-dedicated-host-readiness.py'
+      - 'tests/labs-dedicated-host-readiness-test.py'
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Offline contracts only (never inspect or boot CI host)
+        run: python3 -B tests/labs-dedicated-host-readiness-test.py
