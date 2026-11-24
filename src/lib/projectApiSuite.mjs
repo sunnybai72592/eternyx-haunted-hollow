@@ -1,4 +1,5 @@
 import { sanitizedApiLocation } from "./apiWorkspaceUtils.mjs";
+import { normalizeJsonContract, inspectJsonContract } from "./projectApiJsonContract.mjs";
 
 export const PROJECT_API_SUITE_KEY = "eternyx:developer-project-api-suites:v1";
 export const PROJECT_API_REPORT_SCHEMA = "eternyx-project-api-report-v1";
@@ -59,8 +60,13 @@ export function normalizeProjectApiScenario(item) {
     throw new Error("Maximum response time must be 1–20000 ms.");
   }
   const expectedContentType = contentTypeExpectation(item.expectedContentType);
+  const jsonContract = normalizeJsonContract(item.jsonContract);
+  if (jsonContract && (method !== "GET" || expectedContentType !== "json")) {
+    throw new Error("JSON field checks require GET with an expected JSON content type.");
+  }
   return { id, projectId: linkedProjectId, name, method, url, expectedStatus, maxDurationMs,
-    ...(expectedContentType === "any" ? {} : { expectedContentType }) };
+    ...(expectedContentType === "any" ? {} : { expectedContentType }),
+    ...(jsonContract ? { jsonContract } : {}) };
 }
 
 export function normalizeProjectApiScenarios(value, validProjectIds) {
@@ -101,8 +107,9 @@ export function exportProjectApiSuite(collection, id) {
   const linkedId = projectId(id);
   const scenarios = normalizeProjectApiScenarios(collection)
     .filter((item) => item.projectId === linkedId)
-    .map(({ name, method, url, expectedStatus, maxDurationMs, expectedContentType }) =>
-      ({ name, method, url, expectedStatus, maxDurationMs, ...(expectedContentType ? { expectedContentType } : {}) }));
+    .map(({ name, method, url, expectedStatus, maxDurationMs, expectedContentType, jsonContract }) =>
+      ({ name, method, url, expectedStatus, maxDurationMs, ...(expectedContentType ? { expectedContentType } : {}),
+        ...(jsonContract ? { jsonContract } : {}) }));
   return JSON.stringify({ schema: PROJECT_API_IMPORT_SCHEMA, scenarios }, null, 2);
 }
 
@@ -125,13 +132,15 @@ function safeResult(item) {
   const elapsedMs = Number.isFinite(item.elapsedMs) && item.elapsedMs >= 0 ? Math.min(Math.round(item.elapsedMs), MAX_RUNTIME_MS + 1000) : 0;
   const contentTypeCheck = ["passed", "mismatch", "unavailable", "not-requested"].includes(item.contentTypeCheck)
     ? item.contentTypeCheck : "not-requested";
-  const reason = ["passed", "status-mismatch", "slow-response", "network-or-cors-error", "timed-out", "cancelled", "content-type-mismatch", "content-type-unavailable"].includes(item.reason)
+  const jsonCheck = ["passed","missing","type-mismatch","invalid-json","body-too-large","not-run"].includes(item.jsonCheck)
+    ? item.jsonCheck : undefined;
+  const reason = ["passed", "status-mismatch", "slow-response", "network-or-cors-error", "timed-out", "cancelled", "content-type-mismatch", "content-type-unavailable", "json-contract-failed"].includes(item.reason)
     ? item.reason : "network-or-cors-error";
   const passed = item.passed === true && reason === "passed" && status !== null &&
-    !["mismatch","unavailable"].includes(contentTypeCheck);
+    !["mismatch","unavailable"].includes(contentTypeCheck) && (!jsonCheck || jsonCheck === "passed");
   const origin = sanitizedApiLocation(item.origin, { originOnly: true });
   return { scenarioId, method, origin, status, elapsedMs, passed, reason,
-    ...(contentTypeCheck === "not-requested" ? {} : { contentTypeCheck }) };
+    ...(contentTypeCheck === "not-requested" ? {} : { contentTypeCheck }), ...(jsonCheck ? { jsonCheck } : {}) };
 }
 
 export function summarizeProjectApiResults(results) {
@@ -175,23 +184,31 @@ export async function runProjectApiSuite(scenarios, options = {}) {
         credentials: "omit",
         redirect: "error",
         cache: "no-store",
+        referrerPolicy: "no-referrer",
         signal: timer.signal,
       });
-      const elapsedMs = Math.max(0, Math.round(now() - started));
       const contentTypeCheck = checkResponseType(response, scenario.expectedContentType || "any");
-      // Only response headers are tested. Avoid downloading unused bodies.
-      try { void response.body?.cancel().catch(() => {}); } catch { /* body may already be closed */ }
+      let jsonCheck = scenario.jsonContract ? "not-run" : undefined;
+      if (scenario.jsonContract && response.status === scenario.expectedStatus && contentTypeCheck === "passed" &&
+          !timer.signal.aborted && !signal?.aborted) {
+        jsonCheck = await inspectJsonContract(response, scenario.jsonContract);
+      } else {
+        try { void response.body?.cancel().catch(() => {}); } catch { /* body may already be closed */ }
+      }
+      const elapsedMs = Math.max(0, Math.round(now() - started));
       const reason = signal?.aborted ? "cancelled" : timer.signal.aborted ? "timed-out"
         : response.status !== scenario.expectedStatus ? "status-mismatch"
         : elapsedMs > scenario.maxDurationMs ? "slow-response"
         : contentTypeCheck === "mismatch" ? "content-type-mismatch"
-        : contentTypeCheck === "unavailable" ? "content-type-unavailable" : "passed";
+        : contentTypeCheck === "unavailable" ? "content-type-unavailable"
+        : jsonCheck && jsonCheck !== "passed" ? "json-contract-failed" : "passed";
       row = { scenarioId: scenario.id, method: scenario.method, origin: new URL(scenario.url).origin,
-        status: response.status, elapsedMs, passed: reason === "passed", reason, contentTypeCheck };
+        status: response.status, elapsedMs, passed: reason === "passed", reason, contentTypeCheck, jsonCheck };
     } catch {
       row = { scenarioId: scenario.id, method: scenario.method, origin: new URL(scenario.url).origin,
         status: null, elapsedMs: Math.max(0, Math.round(now() - started)), passed: false,
-        reason: signal?.aborted ? "cancelled" : timer.signal.aborted ? "timed-out" : "network-or-cors-error" };
+        reason: signal?.aborted ? "cancelled" : timer.signal.aborted ? "timed-out" : "network-or-cors-error",
+        ...(scenario.jsonContract ? { jsonCheck:"not-run" } : {}) };
     } finally {
       clearTimeout(timeout);
       signal?.removeEventListener("abort", abort);

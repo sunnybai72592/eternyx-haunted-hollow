@@ -13,8 +13,8 @@ import {
   runProjectApiSuite, summarizeProjectApiResults, projectApiSuiteSignature, isProjectApiRunComplete,
 } from "@/lib/projectApiSuite.mjs";
 
-type Scenario = { id: string; projectId: string; name: string; method: string; url: string; expectedStatus: number; maxDurationMs: number; expectedContentType?: string };
-type ReportRow = { scenarioId: string; method: string; origin: string; status: number | null; elapsedMs: number; passed: boolean; reason: string; contentTypeCheck?: string };
+type Scenario = { id: string; projectId: string; name: string; method: string; url: string; expectedStatus: number; maxDurationMs: number; expectedContentType?: string; jsonContract?: { path:string; type:string } };
+type ReportRow = { scenarioId: string; method: string; origin: string; status: number | null; elapsedMs: number; passed: boolean; reason: string; contentTypeCheck?: string; jsonCheck?: string };
 type Project = { id: string; name: string };
 
 function readProjects(): Project[] {
@@ -51,6 +51,8 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const [expectedStatus, setExpectedStatus] = useState("200");
   const [maxDurationMs, setMaxDurationMs] = useState("3000");
   const [expectedContentType, setExpectedContentType] = useState("any");
+  const [jsonPath, setJsonPath] = useState("");
+  const [jsonType, setJsonType] = useState("exists");
   const [importText, setImportText] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -95,6 +97,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       const next = addProjectApiScenario(scenarios, {
         id: crypto.randomUUID(), projectId, name: scenarioName, method: draft.method, url: draft.url,
         expectedStatus, maxDurationMs, expectedContentType,
+        ...(jsonPath.trim() ? {jsonContract:{path:jsonPath.trim(),type:jsonType}} : {}),
       }, projects.map(p => p.id));
       persist(next);
       setScenarioName("");
@@ -111,10 +114,10 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     } catch (cause) { flash(cause instanceof Error ? cause.message : "Import failed.", true); }
   };
   const run = async () => {
-    if (running || !projectId || !available.length) return;
+    if (running || abortRef.current || !projectId || !available.length) return;
     const targets = [...new Set(available.map(item => new URL(item.url).origin))];
     if (!window.confirm("Run " + available.length + " GET/HEAD check(s) against " + targets.join(", ") +
-      "? This will send actual network requests without cookies or authorization headers.")) return;
+      "? This will send actual network requests without cookies or authorization headers. Optional JSON checks read up to 64 KiB per response.")) return;
     const abort = new AbortController();
     abortRef.current = abort;
     setResults([]);
@@ -164,17 +167,26 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         </div>
         <div className="space-y-2">
           <Label htmlFor="api-scenario-content-type">Expected response content type</Label>
-          <select id="api-scenario-content-type" value={expectedContentType} onChange={e => setExpectedContentType(e.target.value)} disabled={running}
+          <select id="api-scenario-content-type" value={expectedContentType} onChange={e => { setExpectedContentType(e.target.value); if (e.target.value !== "json") setJsonPath(""); }} disabled={running}
             className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-white">
             <option value="any">Any (status and latency only)</option>
             <option value="json">JSON (including +json)</option>
             <option value="html">HTML</option>
             <option value="text">Plain text</option>
           </select>
-          <p className="text-xs text-slate-400">Use 401 or 403 to check anonymous denial. This does not prove authenticated access or RLS. Latency measures response headers; no body is inspected.</p>
+          <p className="text-xs text-slate-400">Use 401 or 403 to check anonymous denial. This does not prove authenticated access or RLS. Latency measures response headers, or total read time when a JSON field check is enabled.</p>
         </div>
+        {expectedContentType === "json" && <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2"><Label htmlFor="api-scenario-json-path">Optional JSON field path</Label>
+            <Input id="api-scenario-json-path" value={jsonPath} maxLength={120} disabled={running} onChange={e => setJsonPath(e.target.value)} placeholder="data.0.id" className="border-slate-700 bg-slate-950 text-white"/></div>
+          <div className="space-y-2"><Label htmlFor="api-scenario-json-type">Expected field type</Label>
+            <select id="api-scenario-json-type" value={jsonType} disabled={running} onChange={e => setJsonType(e.target.value)} className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+              {["exists","string","number","boolean","object","array","null"].map(type => <option key={type} value={type}>{type}</option>)}
+            </select></div>
+          <p className="text-xs text-slate-400 sm:col-span-2">GET only. Checks own JSON fields within 64 KiB. Field values and body content are never retained or exported. Do not put secrets in paths.</p>
+        </div>}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={running || available.length >= MAX_PROJECT_SCENARIOS} onClick={add}>
+          <Button type="button" variant="outline" disabled={running || available.length >= MAX_PROJECT_SCENARIOS || (!!jsonPath.trim() && draft.method !== "GET")} onClick={add}>
             <Save className="mr-2 h-4 w-4"/>Save current request as check</Button>
           <span className="self-center text-xs text-slate-400">{available.length} / {MAX_PROJECT_SCENARIOS} checks linked</span>
         </div>
@@ -182,7 +194,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         <div className="space-y-2" aria-label="Saved API scenarios">
           {available.length ? available.map(s => <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm">
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms · {s.expectedContentType || "any content type"}</p>
+              <p className="font-medium">{s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms · {s.expectedContentType || "any content type"}{s.jsonContract ? " · JSON " + s.jsonContract.path + " : " + s.jsonContract.type : ""}</p>
             </div>
             <Button size="sm" variant="ghost" disabled={running} aria-label={"Remove " + s.name} onClick={() => persist(scenarios.filter(item => item.id !== s.id))}>
               <Trash2 className="h-4 w-4"/></Button>
@@ -200,10 +212,10 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           <p className="font-semibold"><Activity className="mr-2 inline h-4 w-4 text-cyan-300"/>Actual results: {summary.passed} passed · {summary.failed} failed · {summary.cancelled} cancelled</p>
           {stale && <p role="status" className="mt-2 text-sm text-amber-300">Suite changed. Previous results are stale; rerun before exporting.</p>}
           {!stale && !running && !complete && <p role="status" className="mt-2 text-sm text-amber-300">Run incomplete or cancelled. Rerun before exporting.</p>}
-          <p className="mt-1 text-xs text-slate-400">Results show origin, status, header latency, content-type outcome and reason. No response body, request path, URL query or raw headers are retained in the report.</p>
+          <p className="mt-1 text-xs text-slate-400">Results show origin, status, latency, content-type and optional JSON field outcomes, and reason. No response body, request path, URL query or raw headers are retained in the report.</p>
           <div className="mt-3 space-y-2">{results.map((r, i) => <p key={r.scenarioId + i} className={"rounded-md border p-2 text-xs " +
               (r.passed ? "border-emerald-500/30 text-emerald-200" : "border-rose-500/30 text-rose-200")}>
-              {r.passed ? "PASS" : "FAIL"} · {r.method} {r.origin} · HTTP {r.status ?? "unavailable"} · {r.elapsedMs} ms · {r.reason}{r.contentTypeCheck ? " · content type: " + r.contentTypeCheck : ""}</p>)}</div>
+              {r.passed ? "PASS" : "FAIL"} · {r.method} {r.origin} · HTTP {r.status ?? "unavailable"} · {r.elapsedMs} ms · {r.reason}{r.contentTypeCheck ? " · content type: " + r.contentTypeCheck : ""}{r.jsonCheck ? " · JSON field: " + r.jsonCheck : ""}</p>)}</div>
           <Button className="mt-3" size="sm" variant="outline" disabled={!complete} onClick={() => { if (complete) saveJson("eternyx-api-smoke-report.json", exportProjectApiReport(results)); }}>
             <Download className="mr-2 h-4 w-4"/>Export sanitized results</Button>
         </div>}
