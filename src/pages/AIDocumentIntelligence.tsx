@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useAIStudioChat } from "@/hooks/useAIStudioChat";
+import StoredPdfCorpusImport from "@/components/ai/StoredPdfCorpusImport";
+import {useAuthStore} from "@/store/authStore";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -75,7 +77,7 @@ import {
 } from "@/lib/ai/document-local-tools";
 
 const features = getFeaturesForStudio("documents");
-const AIDocumentIntelligence = () => {
+const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
   const [kind, setKind] = useState<LocalDocumentKind>("txt");
   const [source, setSource] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -338,6 +340,16 @@ const AIDocumentIntelligence = () => {
       : reason instanceof DocumentPrivacyError
         ? "Too many sensitive-looking strings in the selected evidence; no AI request was made."
         : "Local multi-document search failed.";
+  };
+  const importStoredPdfSources = (next:CorpusDocument[])=>{
+    if(corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting||useAuthStore.getState().user?.id!==ownerId)throw new Error("busy_or_stale_owner");
+    ++corpusReadVersion.current;
+    discardRecoveryCheckpoint();
+    invalidateCorpusWorkspace();
+    invalidateCorpusFingerprints();
+    invalidateCorpus();
+    setCorpusFiles(next);
+    setCorpusNotice("Selected stored PDF evidence copied into local text sources. Build the local knowledge index or run a new search. Cloud originals remain unchanged.");
   };
   const loadCorpusFiles = async (files: readonly File[]) => {
     const version = ++corpusReadVersion.current;
@@ -1602,8 +1614,8 @@ const AIDocumentIntelligence = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-xs text-amber-200">
-              Completely local until you explicitly send selected excerpts to AI Chat.
-              Files are held only in memory (not uploaded or saved).
+              Local text analysis stays in memory until you explicitly send selected excerpts to AI Chat.
+              The optional account PDF panel reads already stored cloud documents; local file selection does not upload.
               100,000 characters per file; 400,000 characters total.
               Matches are exact Unicode word tokens, not semantic similarity.
             </p>
@@ -1621,6 +1633,7 @@ const AIDocumentIntelligence = () => {
             <p role="status" className="text-xs text-slate-400">
               {corpusFiles.length} / {MAX_CORPUS_FILES} files · {corpusCharacters.toLocaleString()} / 400,000 characters
             </p>
+            <StoredPdfCorpusImport ownerId={ownerId} existing={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting} onImport={importStoredPdfSources}/>
             <section aria-label="Portable local evidence workspace backup and restore"
               className="space-y-3 rounded-xl border border-cyan-500/20 bg-slate-950 p-4">
               <h3 className="font-semibold text-white">Portable evidence workspace · local verified backup</h3>
@@ -2446,5 +2459,11 @@ const AIDocumentIntelligence = () => {
       </div>
     </div>
   );
+};
+const AIDocumentIntelligence=()=>{
+  const ownerId=useAuthStore(s=>s.user?.id);
+  // Re-key the complete local workspace across account changes, including
+  // pending previews, checkpoints, indexed evidence and AI response state.
+  return ownerId?<AIDocumentIntelligenceWorkspace key={ownerId} ownerId={ownerId}/>:null;
 };
 export default AIDocumentIntelligence;
