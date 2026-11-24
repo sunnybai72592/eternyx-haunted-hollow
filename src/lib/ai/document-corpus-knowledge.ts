@@ -66,15 +66,20 @@ export function buildKnowledgeIndex(documents:readonly CorpusDocument[]):Knowled
   }
   return {passages,postings,documentIds:docs.map(d=>d.id),averageLength:passages.length?totalTokens/passages.length:0};
 }
-export function searchKnowledgeIndex(index:KnowledgeIndex,query:string,mode:"all"|"any",sourceId:string|null=null){
+export function searchKnowledgeIndex(index:KnowledgeIndex,query:string,mode:"all"|"any",sourceId:string|null=null,options:{expansion?:string;diversify?:boolean}={}){
   if(typeof query!=="string"||query.length>120||query.includes("\u0000")||!(mode==="all"||mode==="any"))throw new KnowledgeError("invalid_query");
   const terms=[...new Set(tokens(query))];
   if(!terms.length||terms.length>8)throw new KnowledgeError("invalid_query");
+  const expansion=options.expansion??"";
+  if(typeof expansion!=="string"||expansion.length>120||expansion.includes("\u0000"))throw new KnowledgeError("invalid_query");
+  const expansionTerms=[...new Set(tokens(expansion))].filter(term=>!terms.includes(term));
+  if((expansion.trim()&&!tokens(expansion).length)||terms.length+expansionTerms.length>8)throw new KnowledgeError("invalid_query");
+  const primary=new Set(terms);
   if(sourceId!==null&&!index.documentIds.includes(sourceId))throw new KnowledgeError("invalid_filter");
   if(!index.passages.length)throw new KnowledgeError("empty_index");
   const scores=new Map<number,{score:number;matched:string[]}>();
   const N=index.passages.length,k1=1.2,b=.75;
-  for(const term of terms){
+  for(const term of [...terms,...expansionTerms]){
     const posting=index.postings.get(term);
     if(!posting)continue;
     const idf=Math.log(1+(N-posting.size+.5)/(posting.size+.5));
@@ -82,13 +87,28 @@ export function searchKnowledgeIndex(index:KnowledgeIndex,query:string,mode:"all
       const p=index.passages[position];
       if(sourceId!==null&&p.documentId!==sourceId)continue;
       const value=scores.get(position)??{score:0,matched:[]};
-      value.score+=idf*tf*(k1+1)/(tf+k1*(1-b+b*p.tokenCount/index.averageLength));
+      value.score+=(primary.has(term)?1:0.5)*idf*tf*(k1+1)/(tf+k1*(1-b+b*p.tokenCount/index.averageLength));
       value.matched.push(term);scores.set(position,value);
     }
   }
-  const ranked=[...scores].filter(([,value])=>mode==="any"||value.matched.length===terms.length)
+  const ranked=[...scores].filter(([,value])=>mode==="any"||terms.every(term=>value.matched.includes(term)))
     .sort(([a,x],[b,y])=>y.score-x.score||a-b);
-  return {totalMatches:ranked.length,terms,results:ranked.slice(0,KNOWLEDGE_MAX_RESULTS).map(([i,value])=>({...index.passages[i],score:value.score,matchedTerms:value.matched}))};
+  let ordered=ranked;
+  if(options.diversify){
+    // Round-robin across sources in first-ranked-source order. Within each source
+    // keep BM25 order. This intentionally trades pure score order for coverage.
+    const groups=new Map<string,typeof ranked>();
+    for(const entry of ranked){
+      const id=index.passages[entry[0]].documentId;
+      const group=groups.get(id)??[];
+      group.push(entry);groups.set(id,group);
+    }
+    ordered=[];
+    const longest=Math.max(0,...Array.from(groups.values(),group=>group.length));
+    for(let round=0;round<longest;round++)for(const group of groups.values())if(group[round])ordered.push(group[round]);
+  }
+  return {totalMatches:ranked.length,terms,expansionTerms,matchingSources:new Set(ranked.map(([i])=>index.passages[i].documentId)).size,
+    results:ordered.slice(0,KNOWLEDGE_MAX_RESULTS).map(([i,value])=>({...index.passages[i],score:value.score,matchedTerms:value.matched}))};
 }
 export function formatKnowledgePassage(p:Passage):string{
   return p.documentName+" | lines "+p.startLine+"–"+p.endLine+" | decoded UTF-16 offsets ["+p.startOffset+", "+p.endOffset+")\n"+p.text;
