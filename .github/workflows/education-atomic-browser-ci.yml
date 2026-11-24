@@ -11,6 +11,7 @@ on:
       - 'tests/education-study-paths.test.mjs'
       - 'tests/education-study-revision.test.mjs'
       - 'tests/education-revision-agenda.test.mjs'
+      - 'tests/education-focus-session.test.mjs'
       - 'src/components/home/VisitorPresence.tsx'
       - 'src/lib/education*.mjs'
       - 'src/lib/education*.ts'
@@ -32,6 +33,7 @@ on:
       - 'tests/education-study-paths.test.mjs'
       - 'tests/education-study-revision.test.mjs'
       - 'tests/education-revision-agenda.test.mjs'
+      - 'tests/education-focus-session.test.mjs'
       - 'src/components/home/VisitorPresence.tsx'
       - 'src/lib/education*.mjs'
       - 'src/lib/education*.ts'
@@ -76,7 +78,7 @@ jobs:
       - name: Install locked frontend dependencies (no remote secrets)
         run: npm ci
       - name: Exercise Study Paths parser, authoring and export security contracts
-        run: node --test tests/education-study-paths.test.mjs tests/education-study-revision.test.mjs tests/education-revision-agenda.test.mjs
+        run: node --test tests/education-study-paths.test.mjs tests/education-study-revision.test.mjs tests/education-revision-agenda.test.mjs tests/education-focus-session.test.mjs
       - name: Build isolated atomic CBT UI with fake host and no production credentials
         run: npm run build
       - name: Run real desktop and mobile Chrome against intercepted synthetic API
