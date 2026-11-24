@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
+import WorkspaceTeamPortfolio from "@/components/workspace/WorkspaceTeamPortfolio";
 import {workspaceTeamCommandCenter,workspaceTeamCommandView} from "@/lib/workspaceTeamCommandCenter.mjs";
 import {
   workspaceTeamScheduleGroups,workspaceTeamTaskDueDatePatch,
@@ -861,6 +862,12 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         No team memberships yet. Create a team or accept an invitation.
       </p>}
     </div>
+    {spaceListVerified&&!disabled&&!busy&&!loading&&spaces.length>0&&<WorkspaceTeamPortfolio
+      key={owner} owner={owner} spaces={spaces} today={today} onOpenTeam={id=>{
+        if(!spaceListVerified||disabled||busy||loading||!spaces.some(space=>space.id===id))return;
+        if(id===selectedId)return;
+        quarantineTeam();setSelectedId(id);
+      }}/>}
     {selected&&currentRole&&<div className="space-y-4 rounded-xl border border-border p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
