@@ -185,7 +185,7 @@ function readme(profile,quality,shotCount,seconds,delivery,grade,framing){
 }
 export async function buildPortableVideoBundle({
   sources,shots,soundtrack=null,narration=null,effects=null,profile="landscape",quality="standard",
-  rendererSources,onProgress=()=>{},delivery,grade,framing,transition,
+  rendererSources,onProgress=()=>{},delivery,grade,framing,transition,camera,
 }){
   if(!LOCAL_VIDEO_PROFILES.includes(profile)||!LOCAL_VIDEO_QUALITIES.includes(quality))
     throw new Error("Unsupported portable CPU output preset.");
@@ -193,7 +193,7 @@ export async function buildPortableVideoBundle({
   if(delivery!==undefined&&!PORTABLE_DELIVERIES.includes(delivery))
     throw new Error("Unsupported portable movie delivery.");
   if(typeof onProgress!=="function")throw new Error("Invalid CPU bundle progress callback.");
-  const project=buildLocalVideoBoard({sources,shots,soundtrack,narration,effects,quality,transition});
+  const project=buildLocalVideoBoard({sources,shots,soundtrack,narration,effects,quality,transition,camera});
   const required=["render_video_timeline.py","assemble_video_storyboard.py",
     "audit_video_render.py","launch_portable_video.py"];
   if(!rendererSources||typeof rendererSources!=="object"||

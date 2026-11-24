@@ -103,7 +103,17 @@ export function checkLocalVideoTransition(transition,shots,fps){
   return {mode:transition.mode,duration_ms:transition.duration_ms};
 }
 
-export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard", transition }) {
+export const LOCAL_VIDEO_CAMERA_MODES=Object.freeze(["push_in","pull_out","pan_left","pan_right","tilt_up","tilt_down"]);
+export function checkLocalVideoCamera(camera){
+  if(camera===undefined)return undefined;
+  if(!camera||typeof camera!=="object"||Array.isArray(camera)||
+     Object.keys(camera).length!==2||!Object.hasOwn(camera,"mode")||!Object.hasOwn(camera,"strength_percent")||
+     !LOCAL_VIDEO_CAMERA_MODES.includes(camera.mode)||![10,20,30].includes(camera.strength_percent))
+    throw new Error("Unsupported camera motion preset or strength.");
+  return {mode:camera.mode,strength_percent:camera.strength_percent};
+}
+
+export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard", transition, camera }) {
   const fps=localVideoFps(quality),maxFrames=localVideoMaxFrames(fps),maxSource=localVideoMaxSourceFrames(fps);
   const clips = validateUniqueClips(sources);
   if (!Array.isArray(shots) || shots.length === 0 || shots.length > LOCAL_VIDEO_LIMITS.maxClips) {
@@ -131,7 +141,8 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narrat
     };
   });
   const sceneTransition=checkLocalVideoTransition(transition,normalized,fps);
-  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}), ...(sceneTransition?{transition:sceneTransition}:{}) };
+  const motion=checkLocalVideoCamera(camera);
+  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}), ...(sceneTransition?{transition:sceneTransition}:{}), ...(motion?{camera:motion}:{}) };
   const names=new Set([...clips.keys()].map(name=>name.toLowerCase()));
   for(const [role,track] of [["soundtrack",soundtrack],["narration",narration],["effects",effects]]){
     if(track===null)continue;

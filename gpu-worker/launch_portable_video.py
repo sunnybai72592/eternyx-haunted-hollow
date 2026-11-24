@@ -174,6 +174,7 @@ def preflight(root=ROOT):
         "local_only": True, "output": OUTPUT, "delivery": delivery,
         "grade": grade, "framing": framing,
         "transition": board.get("transition"),
+        "camera": board.get("camera"),
     }
 
 
@@ -385,6 +386,7 @@ def run(root=ROOT, on_stage=None, cancel=None):
                 receipt.get("framing", "contain")!=checked.get("framing", "contain") or
                 receipt.get("grade", "neutral")!=checked.get("grade", "neutral") or
                 receipt.get("transition")!=checked.get("transition") or
+                receipt.get("camera")!=checked.get("camera") or
                 receipt.get("fps")!=checked["fps"] or
                 receipt.get("video", {}).get("fps")!=str(checked["fps"])+"/1"):
             raise ValueError("Actual local renderer receipt conflicts with original validated project")
