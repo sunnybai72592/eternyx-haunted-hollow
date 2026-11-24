@@ -10,13 +10,14 @@ This is a reviewed immutable equality target, NOT yet vendor provenance.
 
 After merge, dispatch LABS independently authenticated kernel provenance on
 main with I_APPROVE_EPHEMERAL_KERNEL_PROVENANCE. This separate diagnostic
-does not boot a guest or install packages. It reads the runner kernel and
-dpkg owner/version, requires the exact observed pin, then uses isolated APT
+does not boot a guest or install packages. It uses the fixed historical guest
+package identity and immutable observed pin, then uses isolated APT
 configuration and fresh authenticated Ubuntu noble archive metadata, restricted
 to the independently published 2018 Ubuntu archive primary signing key. The downloaded exact version's SHA256
 and size must match the signed archive index. Extract only the exact regular
 kernel member from a bounded tar stream written to a private temporary file.
-Its SHA256 must match both the observed bytes and the immutable prior pin.
+Its SHA256 must match the immutable Phase 41 prior pin. Current runner bytes
+are a separately reported comparison, not a guest selection input.
 No automatic pin update, unsigned sources, packages installed, root archive
 extraction, staging/production mutation, dedicated host, or provider activation.
 
@@ -24,9 +25,10 @@ Sources: https://documentation.ubuntu.com/security/common-mistakes/deb-download-
 and https://manpages.ubuntu.com/manpages/noble/man8/apt-secure.8.html.
 
 Trust remains scoped to the pinned Canonical archive signing key and the hosted
-runner's GPG, APT and dpkg toolchain; not an independently attested host. A newer runner kernel,
-retired package version, unavailable authenticated archive, unsupported package
-owner or mismatch fails closed. Do not substitute a different version or
+runner's GPG, APT and dpkg toolchain; not an independently attested host. A
+retired pinned package version, unavailable authenticated archive or archive
+kernel hash mismatch fails closed. A different current runner kernel is not
+a failure of historical guest provenance. Do not substitute a different version or
 unverified mirror to obtain a green result. If the package is retired, obtain
 a reviewed signed Ubuntu snapshot reference as a separate follow-up.
 Live archive verification and dedicated hardware acceptance remain pending.
@@ -48,3 +50,21 @@ https://wiki.ubuntu.com/Security/FAQ and
 https://documentation.ubuntu.com/security/software-integrity/image-verification/.
 Record original file UID/mode/symlink status for diagnosis; use the actual
 runner username for APT sandbox configuration. Live archive proof pending.
+
+## Runner independence correction after PR #808
+
+The next live run stopped at the current runner hash drift guard, before
+archive authentication. The exact historical identity had already been
+reported by the prior hash-matching run: 7.0.0-1014-aws,
+linux-image-7.0.0-1014-aws, 7.0.0-1014.14~24.04.1, amd64.
+Fix these literals, not the current runner's uname/dpkg owner, as the only
+archive download selection. The independently authenticated archive member
+must still hash to the unchanged Phase 41 digest. Record current runner
+release and optional observed hash; report runnerKernelIndependentlyPinned
+only if it matches. phase41GuestKernelIndependentlyPinned is the separate
+historical provenance result. Do not allow an unobserved or different runner
+to be described as independently pinned. No host boot or installation.
+No silent fallback, unsigned sources, relaxed freshness checks, or automatic
+repin. If the exact version is no longer published, use a separately reviewed
+Ubuntu snapshot (https://ubuntu.com/server/docs/how-to/software/snapshot-service/).
+Dedicated hardware and provider activation remain false.
