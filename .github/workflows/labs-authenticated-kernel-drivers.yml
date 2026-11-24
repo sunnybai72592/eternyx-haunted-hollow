@@ -1,0 +1,58 @@
+name: LABS authenticated kernel driver audit
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-authenticated-kernel-drivers.yml'
+      - 'scripts/labs-authenticated-kernel-drivers.py'
+      - 'scripts/labs-runner-kernel-provenance.py'
+      - 'tests/labs-authenticated-kernel-drivers-test.py'
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Inspect exact authenticated guest kernel drivers without boot or installation
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_AUTHENTICATED_KERNEL_DRIVER_AUDIT
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Offline driver and provenance tests
+        run: |
+          python3 -B tests/labs-runner-kernel-provenance-test.py
+          python3 -B tests/labs-authenticated-kernel-drivers-test.py
+  driver-audit:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_AUTHENTICATED_KERNEL_DRIVER_AUDIT' }}
+    needs: offline-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Authenticate immutable guest and inspect exact kernel configuration
+        run: python3 -I -B scripts/labs-authenticated-kernel-drivers.py
