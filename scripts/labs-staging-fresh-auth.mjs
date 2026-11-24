@@ -51,7 +51,7 @@ async function signin(key,account,fetcher,now){
     deny("invalid_token_scope");
   return {id,token};
 }
-export async function runFreshLabsAcceptance(env,fetcher=globalThis.fetch,now=()=>Math.floor(Date.now()/1000)){
+export async function acquireFreshLabsConfig(env,fetcher=globalThis.fetch,now=()=>Math.floor(Date.now()/1000)){
   const {key,a,b}=validateAuthInputs(env);
   const first=await signin(key,a,fetcher,now),second=await signin(key,b,fetcher,now);
   if(first.id===second.id||first.token===second.token)deny("same_account");
@@ -60,6 +60,10 @@ export async function runFreshLabsAcceptance(env,fetcher=globalThis.fetch,now=()
     ETERNYX_LABS_STAGING_CONSENT:LABS_STAGING_APPROVAL,ETERNYX_LABS_STAGING_PUBLIC_KEY:key,
     ETERNYX_LABS_STAGING_JWT_A:first.token,ETERNYX_LABS_STAGING_JWT_B:second.token,
   });
+  return config;
+}
+export async function runFreshLabsAcceptance(env,fetcher=globalThis.fetch,now=()=>Math.floor(Date.now()/1000)){
+  const config=await acquireFreshLabsConfig(env,fetcher,now);
   const result=await runLabsStagingReadOnly(config,fetcher);
   return {schema:"eternyx.labs.fresh-auth-acceptance.v1",authSessionsCreated:2,
     credentialsPersistedByRunner:false,acceptance:result};

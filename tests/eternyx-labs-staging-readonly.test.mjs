@@ -46,7 +46,11 @@ function mock({solvesA=[],solvesB=[],fixtures=false,override=()=>undefined}={}){
     calls.push({path,method:opts.method,action,who,query:target.searchParams});
     let res;
     if(path==="/auth/v1/user")res=json({id:who==="a"?ownerA:ownerB,is_anonymous:false});
-    else if(path==="/rest/v1/ctf_verified_solves")res=json([]);
+    else if(path==="/rest/v1/ctf_verified_solves"){
+      const ownId=who==="a"?ownerA:ownerB,solves=who==="a"?solvesA:solvesB;
+      const mission=target.searchParams.get("mission_id")?.slice(3);
+      res=json(target.searchParams.get("user_id")==="eq."+ownId&&solves.includes(mission)?progress([mission]).solves:[]);
+    }
     else if(path==="/rest/v1/ctf_range_sessions"){
       const projection=target.searchParams.get("select"),id=target.searchParams.get("id");
       const blocked=!who||projection==="*"||PRIVATE_RANGE_COLUMNS.includes(projection)||
@@ -117,12 +121,13 @@ test("existing real solved fixtures permit two cross-account PostgREST denials",
   const result=await run(fetcher);
   assert.equal(result.crossOwnerChecks,2);
   assert.equal(result.crossOwnerStatus,"two_cross_owner_rows_denied");
-  assert.equal(calls.filter(x=>x.path==="/rest/v1/ctf_verified_solves").length,2);
+  assert.equal(calls.filter(x=>x.path==="/rest/v1/ctf_verified_solves").length,4);
+  assert.equal(result.ownedSolveRestChecks,2);
 });
 
 test("foreign solve record disclosure fails instead of fabricating verified isolation",async()=>{
   const {fetcher}=mock({solvesA:["encoded-access-log"],solvesB:["header-evidence"],
-    override:({path})=>path==="/rest/v1/ctf_verified_solves"?
+    override:({path,who,query})=>path==="/rest/v1/ctf_verified_solves"&&query.get("user_id")!=="eq."+(who==="a"?ownerA:ownerB)?
       json([{mission_id:"encoded-access-log"}]):undefined});
   await assert.rejects(run(fetcher),/labs_staging_cross_owner_row_disclosed/);
 });
@@ -223,4 +228,9 @@ test("exact staging target and validated config identity cannot be bypassed",asy
   let calls=0;
   await assert.rejects(runLabsStagingReadOnly({...validateLabsStagingConfig(env())},async()=>{calls++;}),/unverified_configuration/);
   assert.equal(calls,0);
+});
+
+test("two empty REST responses cannot masquerade as proof of isolation",async()=>{
+  const {fetcher}=mock({solvesA:["encoded-access-log"],solvesB:["header-evidence"],override:({path})=>path==="/rest/v1/ctf_verified_solves"?json([]):undefined});
+  await assert.rejects(run(fetcher),/owned_solve_rest_fixture_missing/);
 });
