@@ -1,5 +1,7 @@
 import importlib.util
 import io
+import os
+from unittest.mock import patch
 import pathlib
 import tarfile
 import tempfile
@@ -70,10 +72,78 @@ class ProvenanceTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 p.verify_kernel_hashes(*pair)
 
+    def test_primary_fingerprint_not_subkey_or_uid(self):
+        def row(kind,value):
+            return ":".join([kind]+[""]*8+[value])
+        pin=p.ARCHIVE_FINGERPRINT
+        other="A"*40
+        listing="\n".join(["pub:",row("fpr",other),"sub:",row("fpr",pin)])
+        self.assertEqual(p.primary_fingerprints(listing),{other})
+        self.assertEqual(p.primary_fingerprints("pub:\n"+row("fpr",pin)),{pin})
+
+    def test_public_keyring_snapshot_accepts_bounded_symlink(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            source=work/"source.gpg"
+            source.write_bytes(b"public key fixture")
+            source.chmod(0o666)
+            alias=work/"alias.gpg"
+            alias.symlink_to(source)
+            self.assertEqual(p.read_public_keyring(alias),b"public key fixture")
+            with self.assertRaises(RuntimeError):
+                p.read_public_keyring(work)
+            source.write_bytes(b"x"*(p.MAX_KEYRING+1))
+            with self.assertRaises(RuntimeError):
+                p.read_public_keyring(alias)
+
+    def test_nonregular_keyring_rejected_before_stream_and_fd_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            fifo=work/"keyring.fifo"
+            os.mkfifo(fifo)
+            for source in (work,fifo):
+                with self.subTest(source=source):
+                    fd=os.open(source,os.O_RDONLY|os.O_NONBLOCK|os.O_CLOEXEC)
+                    with patch.object(p.os,"open",return_value=fd), \
+                         patch.object(p.os,"fdopen",side_effect=AssertionError("nonregular stream opened")):
+                        with self.assertRaisesRegex(RuntimeError,"bounded regular file"):
+                            p.read_public_keyring(source)
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+    def test_regular_keyring_descriptor_closed_on_success(self):
+        with tempfile.TemporaryDirectory() as d:
+            source=pathlib.Path(d)/"key.gpg"
+            source.write_bytes(b"fixture")
+            fd=os.open(source,os.O_RDONLY|os.O_CLOEXEC)
+            with patch.object(p.os,"open",return_value=fd):
+                self.assertEqual(p.read_public_keyring(source),b"fixture")
+            with self.assertRaises(OSError):
+                os.fstat(fd)
+
+    def test_archive_keyring_requires_published_fingerprint(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            source=work/"source.gpg"
+            source.write_bytes(b"public key fixture")
+            for i,fpr in enumerate(("A"*40,p.ARCHIVE_FINGERPRINT)):
+                stage=work/str(i)
+                stage.mkdir()
+                listing="pub:\n"+":".join(["fpr"]+[""]*8+[fpr])
+                with patch.object(p,"command",return_value=listing):
+                    if i==0:
+                        with self.assertRaisesRegex(RuntimeError,"primary fingerprint missing"):
+                            p.prepare_archive_keyring(stage,source)
+                    else:
+                        key=p.prepare_archive_keyring(stage,source)
+                        self.assertEqual(key.read_bytes(),source.read_bytes())
+                        self.assertEqual(key.stat().st_mode&0o777,0o600)
+
     def test_apt_has_only_fixed_authenticated_sources(self):
         with tempfile.TemporaryDirectory() as d:
             work=pathlib.Path(d)
-            env=p.apt_environment(work)
+            keyring=work/"archive.gpg"
+            env=p.apt_environment(work,keyring)
             conf=pathlib.Path(env["APT_CONFIG"]).read_text()
             self.assertIn('APT::Get::AllowUnauthenticated "false";',conf)
             self.assertIn('Acquire::Check-Valid-Until "true";',conf)
@@ -81,7 +151,7 @@ class ProvenanceTest(unittest.TestCase):
             self.assertIn('Dir::Etc::SourceParts "-";',conf)
             sources=(work/"sources.list").read_text().splitlines()
             self.assertEqual(len(sources),3)
-            self.assertTrue(all("signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg" in x and
+            self.assertTrue(all(f"signed-by={keyring},{p.ARCHIVE_FINGERPRINT}!" in x and
                                 "https://archive.ubuntu.com/ubuntu" in x for x in sources))
 
 if __name__ == "__main__":
