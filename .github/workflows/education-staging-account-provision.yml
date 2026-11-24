@@ -1,0 +1,64 @@
+name: ETERNYX Education provision staging Auth accounts
+on:
+  workflow_dispatch:
+    inputs:
+      approve_new_accounts:
+        description: "Create four NEW dedicated staging Auth accounts (no application privileges)"
+        type: boolean
+        required: true
+        default: false
+      acknowledge_partial_failure:
+        description: "I understand interrupted provisioning must be inspected before a new dispatch"
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: eternyx-education-hosted-shared-staging
+  cancel-in-progress: false
+jobs:
+  provision-accounts:
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && inputs.approve_new_accounts && inputs.acknowledge_partial_failure && github.run_attempt == '1' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies without staging credentials
+        run: npm ci
+      - name: Create and independently verify four synthetic staging Auth accounts
+        timeout-minutes: 5
+        env:
+          ETERNYX_EDU_ACCOUNT_APPROVAL: "I_APPROVE_FOUR_NEW_SYNTHETIC_EDUCATION_STAGING_AUTH_USERS"
+          ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+          ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL }}
+          ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD }}
+        run: node scripts/staging/runEducationStagingAccountProvision.mjs
+      - name: Independently sanitize account recovery evidence
+        if: always()
+        run: node scripts/staging/educationAccountWorkflowEvidence.mjs
+      - name: Upload only sanitized current-run account recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: education-staging-account-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-account-provision-recovery.json
+          if-no-files-found: warn
+          retention-days: 7
