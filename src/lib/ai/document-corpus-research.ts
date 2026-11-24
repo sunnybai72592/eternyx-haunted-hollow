@@ -31,7 +31,7 @@ export function decodeResearchPlan(raw:string){
   if(!obj(data)||!keys(data,["format","plan"])||data.format!=="eternyx-research-plan-v1")fail();
   return validateResearchPlan(data.plan);
 }
-type DateMention={date:string;sourceId:string;sourceName:string;line:number;startOffset:number;endOffset:number;rawLine:string;lineTruncated:boolean};
+type DateMention={date:string;sourceId:string;sourceName:string;line:number;startOffset:number;endOffset:number;excerpt:string;excerptStartOffset:number;lineTruncated:boolean};
 function validDate(date:string){
   const [y,m,d]=date.split("-").map(Number);
   if(y<1||m<1||m>12||d<1)return false;
@@ -50,7 +50,8 @@ export function collectResearchDates(documents:readonly CorpusDocument[]){
         const date=hit[0];
         if(!validDate(date)){invalid++;continue;}
         total++;
-        const event={date,sourceId:doc.id,sourceName:doc.name,line,startOffset:offset+hit.index!,endOffset:offset+hit.index!+10,rawLine:m[1].slice(0,400),lineTruncated:m[1].length>400};
+        const start=Math.max(0,Math.min(hit.index!-150,m[1].length-400));
+        const event={date,sourceId:doc.id,sourceName:doc.name,line,startOffset:offset+hit.index!,endOffset:offset+hit.index!+10,excerpt:m[1].slice(start,start+400),excerptStartOffset:offset+start,lineTruncated:m[1].length>400};
         events.push(event);
       }
       offset+=m[0].length;
