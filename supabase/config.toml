@@ -420,3 +420,7 @@ verify_jwt = true
 # server-only DOCKER_REMOTE_LAB_ENABLED=true and signing key are configured.
 [functions.docker-command-dispatch]
 verify_jwt = false
+
+# Server-mediated evidence; handler independently verifies the user JWT.
+[functions.security-evidence-gateway]
+verify_jwt = true
