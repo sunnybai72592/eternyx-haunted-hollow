@@ -3,6 +3,7 @@ import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import StoredPdfCorpusImport from "@/components/ai/StoredPdfCorpusImport";
 import LocalOfficeCorpusImport from "@/components/ai/LocalOfficeCorpusImport";
 import LocalCorpusDiscovery from "@/components/ai/LocalCorpusDiscovery";
+import LocalCorpusAnalytics from "@/components/ai/LocalCorpusAnalytics";
 import {useAuthStore} from "@/store/authStore";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
@@ -2044,6 +2045,8 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
                 {corpusHashBusy ? "Hashing local decoded text…" : "Calculate local SHA-256 fingerprints"}
               </Button>
             </div>
+            <LocalCorpusAnalytics documents={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting}
+              onCopy={text=>void copy(text,"Local analytics report")}/>
             <LocalCorpusDiscovery documents={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting}
               onSearch={searchDiscoveredTerm} onCopy={text=>void copy(text,"Local discovery counts")}/>
             <section aria-label="Local indexed knowledge retrieval" className="space-y-3 rounded-xl border border-cyan-400/25 bg-slate-950 p-4">
