@@ -16,6 +16,8 @@ import {auditSignedAgentRecoveryDirectory}
  from "../src/lib/dockerStrictRecoveryInventory.mjs";
 import {evaluateSignedDockerHostReadOnly}
  from "../src/lib/dockerSignedHostReadOnlyPreflight.mjs";
+import {loadHostEvidencePrivateKey,signDockerReadOnlyHostReport}
+ from "../src/lib/dockerSignedHostEvidenceReview.mjs";
 
 const FULL=/^[a-f0-9]{64}$/;
 const OPS=new Set(["start","stop","restart"]);
@@ -79,9 +81,11 @@ function observe(pins,id){
 }
 function main(){
  const args=process.argv.slice(2);
- if(args.length!==3||args[0]!=="--read-only"||
+ const signed=args.length===7&&args[3]==="--sign-evidence"&&
+   args[5]==="--challenge"&&FULL.test(args[6]||"");
+ if((args.length!==3&&!signed)||args[0]!=="--read-only"||
     !FULL.test(args[1]||"")||!OPS.has(args[2]))
-  throw Error("Usage: docker-lab-host-preflight.mjs --read-only FULL_CONTAINER_ID start|stop|restart");
+  throw Error("Usage: docker-lab-host-preflight.mjs --read-only FULL_CONTAINER_ID start|stop|restart [--sign-evidence /ABS/SEPARATE-PRIVATE-KEY --challenge 64_HEX]");
  if(process.platform!=="linux"||typeof process.getuid!=="function"||
     process.getuid()===0||process.env.CI==="true"||
     process.env.GITHUB_ACTIONS==="true")
@@ -91,6 +95,9 @@ function main(){
     process.env.DOCKER_REMOTE_LAB_ENABLED==="true")
   throw Error("Disable all lab execution flags before read-only host preflight.");
  const [_,containerId,operation]=args;
+ // The attestor credential is dedicated to local evidence and must never be
+ // confused with the agent's execution credential or a server permit.
+ const attestorKey=signed?loadHostEvidencePrivateKey(args[4]):null;
  const pins=validateSignedAgentEnginePins(process.env);
  const configBefore=verifyPinnedDockerClientConfig(process.env);
  const cliBefore=verifyPinnedDockerCliExecutable(process.env);
@@ -126,11 +133,14 @@ function main(){
  });
  // Only allowlisted SHA-256 commitments, booleans and controlled labels.
  // Never print raw inspect JSON, daemon ID, host paths, secrets or socket URI.
- process.stdout.write(JSON.stringify({
-  ...report,inspectedAt:new Date().toISOString(),
+ const observation={...report,inspectedAt:new Date().toISOString(),
   readOnlyHostEvidenceSha256:digest("ETERNYX_DOCKER_HOST_READONLY_OUTPUT_V1\n"+
-    report.evidenceSha256)
- })+"\n");
+    report.evidenceSha256)};
+ // The unsigned compatibility output continues to work as a LOCAL summary,
+ // but only this direct, integrated signer can produce signed host evidence.
+ const result=signed?signDockerReadOnlyHostReport(
+  observation,args[6],attestorKey):observation;
+ process.stdout.write(JSON.stringify(result)+"\n");
 }
 try{main();}
 catch(error){
