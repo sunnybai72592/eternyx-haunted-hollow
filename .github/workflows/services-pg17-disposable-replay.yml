@@ -166,6 +166,17 @@ jobs:
             > "$RUNNER_TEMP/services-phase39-definer-mutations.sql"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
             < "$RUNNER_TEMP/services-phase39-definer-mutations.sql"
+          # Phase 43: execute the SAME read-only trusted-admin foundation
+          # catalog query against genuine networkless PG17 (no remote Auth).
+          # The synthetic bootstrap mirrors the reviewed trusted-admin
+          # grant/RLS contract, and all twelve metadata facts must be true.
+          node --input-type=module -e "import {buildFoundationSql} from './scripts/services-phase43-trusted-admin-foundation.mjs';process.stdout.write(buildFoundationSql())" \
+            > "$RUNNER_TEMP/services-phase43-foundation.sql"
+          docker exec -i "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < "$RUNNER_TEMP/services-phase43-foundation.sql" \
+            > "$RUNNER_TEMP/services-phase43-foundation.json"
+          node --input-type=module -e "import {readFileSync} from 'node:fs';import {analyzeServicesFoundation} from './scripts/services-phase43-trusted-admin-foundation.mjs';const r=analyzeServicesFoundation(readFileSync(process.argv[1],'utf8'));if(r.factsPassed!==12||r.state!=='eligible_for_separate_reviewed_staging_deployment')throw Error('Phase43 disposable foundation check failed')" \
+            "$RUNNER_TEMP/services-phase43-foundation.json"
           echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and hardened SECURITY DEFINER checks (no remote deployment)"
 
       # No Supabase secrets, no linked project, no production/staging database
