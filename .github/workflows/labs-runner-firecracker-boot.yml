@@ -1,0 +1,67 @@
+name: LABS ephemeral Firecracker diskless boot
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Download pinned release and boot one fixed offline guest
+        required: true
+        type: choice
+        options:
+          - DENY
+          - I_APPROVE_EPHEMERAL_FIRECRACKER_BOOT
+permissions:
+  contents: read
+jobs:
+  diskless-boot:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_EPHEMERAL_FIRECRACKER_BOOT' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - name: Test fixed guest preparation
+        run: python3 -B tests/labs-runner-firecracker-boot-test.py
+      - name: Prepare pinned Firecracker and fixed diskless guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          umask 077
+          work="$(mktemp -d "$RUNNER_TEMP/eternyx-fc.XXXXXXXX")"
+          printf 'ETERNYX_FC_WORK=%s\n' "$work" >> "$GITHUB_ENV"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 60 --max-filesize 7606252 --output "$work/release.tgz" 'https://github.com/firecracker-microvm/firecracker/releases/download/v1.18.0/firecracker-v1.18.0-x86_64.tgz'
+          kernel="/boot/vmlinuz-$(uname -r)"
+          sudo -n /usr/bin/test -f "$kernel"
+          sudo -n /usr/bin/cat "$kernel" > "$work/kernel"
+          /usr/bin/cc -static -Os -Wall -Wextra -Werror scripts/labs-runner-firecracker-init.c -o "$work/init"
+          python3 -B scripts/labs-runner-firecracker-boot.py prepare "$work"
+          "$work/firecracker" --version
+          "$work/jailer" --version
+      - name: Boot fixed guest without API or network as non-root
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$ETERNYX_FC_WORK"
+          uid="$(id -u)"
+          gid="$(id -g)"
+          kvm_gid="$(stat -c %g /dev/kvm)"
+          test "$uid" -gt 0
+          test "$gid" -gt 0
+          test "$kvm_gid" -gt 0
+          test -c /dev/kvm
+          ulimit -f 8192
+          rc=0
+          sudo -n /usr/bin/unshare --net -- /usr/bin/setpriv --reuid="$uid" --regid="$gid" --groups="$kvm_gid" --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all /usr/bin/env -i /usr/bin/timeout --kill-after=3s 45s "$work/firecracker" --no-api --config-file "$work/config.json" < /dev/null > "$work/boot.log" 2>&1 || rc=$?
+          tail -c 16384 "$work/boot.log"
+          test "$rc" -eq 0
+          python3 -B scripts/labs-runner-firecracker-boot.py verify-log "$work"
+      - name: Remove ephemeral files
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${ETERNYX_FC_WORK:-}" == "$RUNNER_TEMP"/eternyx-fc.* && -d "$ETERNYX_FC_WORK" ]]; then
+            rm -rf -- "$ETERNYX_FC_WORK"
+          fi
