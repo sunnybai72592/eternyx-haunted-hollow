@@ -1,0 +1,64 @@
+{
+  "schema": "eternyx.labs.release-observation.v1",
+  "observedOn": "2026-11-24",
+  "sourceCommit": "ce4a9314ce227bc404426524e8b282c2b3e90c68",
+  "originalDeploymentCommit": "36ac171d50c82a566c40c405fded1c53280de692",
+  "projectRef": "mhodwvypfbxafamkrgsk",
+  "scope": "historical-read-only-management-observation",
+  "catalogChecksPassed": true,
+  "rlsTableCount": 8,
+  "providerDisabled": true,
+  "spendDisabled": true,
+  "authUsers": 0,
+  "verifiedSolves": 0,
+  "rangeSessions": 0,
+  "activeLabsFunctions": [
+    {
+      "slug": "ctf-verified",
+      "version": 1,
+      "verifyJwt": true
+    },
+    {
+      "slug": "ctf-range-control",
+      "version": 1,
+      "verifyJwt": true
+    }
+  ],
+  "migrationVersions": [
+    "20261124121732",
+    "20261124121741",
+    "20261124121744",
+    "20261124121747",
+    "20261124121749",
+    "20261124121752"
+  ],
+  "reviewedLocalBundleBlobs": [
+    {
+      "path": "supabase/functions/ctf-verified/index.ts",
+      "gitBlobSha1": "70cdba0366293174ec35f54443bc9a7bf357d7cf"
+    },
+    {
+      "path": "supabase/functions/ctf-range-control/index.ts",
+      "gitBlobSha1": "fcf564a4dc521ab27469d304ba3cc6fdd969f128"
+    },
+    {
+      "path": "supabase/functions/_shared/user-auth.ts",
+      "gitBlobSha1": "4c4124220640a8c425d6459d4ba93fb169afc75e"
+    },
+    {
+      "path": "supabase/functions/_shared/supabase.ts",
+      "gitBlobSha1": "bcf3f4d610f2b1e9e80c2625a988bdeb0ded17b8"
+    },
+    {
+      "path": "supabase/functions/_shared/ctf-range-contract.mjs",
+      "gitBlobSha1": "1c0b61abed924c5b4837e4e235ccf1e2c3c4ee80"
+    },
+    {
+      "path": "src/lib/eternyxVerifiedCtf.mjs",
+      "gitBlobSha1": "77edc5aad87dba63fcd72532228bf8675ccb24c9"
+    }
+  ],
+  "physicalHardwareVerified": false,
+  "authenticatedAcceptanceVerified": false,
+  "releaseAuthorized": false
+}
