@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import os
 from unittest.mock import patch
 import pathlib
 import tarfile
@@ -94,6 +95,31 @@ class ProvenanceTest(unittest.TestCase):
             source.write_bytes(b"x"*(p.MAX_KEYRING+1))
             with self.assertRaises(RuntimeError):
                 p.read_public_keyring(alias)
+
+    def test_nonregular_keyring_rejected_before_stream_and_fd_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            fifo=work/"keyring.fifo"
+            os.mkfifo(fifo)
+            for source in (work,fifo):
+                with self.subTest(source=source):
+                    fd=os.open(source,os.O_RDONLY|os.O_NONBLOCK|os.O_CLOEXEC)
+                    with patch.object(p.os,"open",return_value=fd), \
+                         patch.object(p.os,"fdopen",side_effect=AssertionError("nonregular stream opened")):
+                        with self.assertRaisesRegex(RuntimeError,"bounded regular file"):
+                            p.read_public_keyring(source)
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+    def test_regular_keyring_descriptor_closed_on_success(self):
+        with tempfile.TemporaryDirectory() as d:
+            source=pathlib.Path(d)/"key.gpg"
+            source.write_bytes(b"fixture")
+            fd=os.open(source,os.O_RDONLY|os.O_CLOEXEC)
+            with patch.object(p.os,"open",return_value=fd):
+                self.assertEqual(p.read_public_keyring(source),b"fixture")
+            with self.assertRaises(OSError):
+                os.fstat(fd)
 
     def test_archive_keyring_requires_published_fingerprint(self):
         with tempfile.TemporaryDirectory() as d:

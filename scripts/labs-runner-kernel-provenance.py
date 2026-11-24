@@ -110,13 +110,18 @@ def read_public_keyring(source):
     # non-regular files, and never use an unpinned key for authentication.
     # Open nonblocking to avoid hanging on a substituted FIFO.
     fd = os.open(source, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
-    with os.fdopen(fd, "rb") as stream:
-        info = os.fstat(stream.fileno())
+    try:
+        # Validate the opened object before fdopen: Python rejects directories
+        # during fdopen itself, before a stream-based fstat can run.
+        info = os.fstat(fd)
         require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= MAX_KEYRING,
                 "archive keyring is not a bounded regular file")
-        data = stream.read(MAX_KEYRING + 1)
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            data = stream.read(MAX_KEYRING + 1)
         require(0 < len(data) <= MAX_KEYRING, "archive keyring size exceeded")
-    return data
+        return data
+    finally:
+        os.close(fd)
 
 def prepare_archive_keyring(work, source=KEYRING):
     # Snapshot once in a private directory; trust the published fingerprint,
