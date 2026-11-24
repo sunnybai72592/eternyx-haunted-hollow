@@ -9,6 +9,7 @@ import {
   TEAM_ACTIVITY_PAGE_SIZE, TEAM_ACTIVITY_VIEW_CAP,
   mergeWorkspaceTeamHistory, normalizeWorkspaceTeamSnapshot,
   teamHistorySearch, buildWorkspaceTeamActivityCsv,
+  workspaceTeamAcknowledgementTarget,workspaceTeamActivityDateMatches,workspaceTeamActivityDateRangeValid,
 } from "@/lib/workspaceTeamActivityHistory.mjs";
 
 type Event=Database["public"]["Tables"]["workspace_team_events"]["Row"];
@@ -21,6 +22,12 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
   const [connection,setConnection]=useState<Connection>("connecting");
   const [unread,setUnread]=useState<number|null>(null);
   const [lastSeen,setLastSeen]=useState(0);
+  const [latestEvent,setLatestEvent]=useState<number|null>(null);
+  const [fromDay,setFromDay]=useState("");
+  const [toDay,setToDay]=useState("");
+  const markLock=useRef(false);
+  const historyLock=useRef(false);
+  const snapshotEpoch=useRef(0);
   const [group,setGroup]=useState("all");
   const [actor,setActor]=useState("all");
   const [onlyUnread,setOnlyUnread]=useState(false);
@@ -42,26 +49,31 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
 
   useEffect(()=>{
     const version=++revision.current;
-    setUnread(null);setLastSeen(0);setError("");setMessage("");
+    setUnread(null);setLastSeen(0);setLatestEvent(null);setError("");setMessage("");
+    setGroup("all");setActor("all");setOnlyUnread(false);setSearch("");setFromDay("");setToDay("");
+    markLock.current=false;historyLock.current=false;snapshotEpoch.current++;
+    setWorking(false);setHistoryLoading(false);
     setOlder([]);setHasMore(null);setHistoryError("");setHistoryNotice("");
     latestHead.current=null;historyEpoch.current++;
-    return ()=>{revision.current++;historyEpoch.current++;};
+    return ()=>{revision.current++;historyEpoch.current++;snapshotEpoch.current++;};
   },[owner,spaceId]);
 
   useEffect(()=>{
     const current=events[0]?.id??null;
     const before=latestHead.current;
     latestHead.current=current;
-    if(before!==null && before!==current){
-      historyEpoch.current++;
+    if(before!==current){
+      historyEpoch.current++;historyLock.current=false;setHistoryLoading(false);
       setOlder([]);setHasMore(null);setHistoryError("");
       setHistoryNotice("New activity arrived. Older pages were reset to avoid missing events.");
     }
   },[events,owner,spaceId]);
 
   useEffect(()=>{
-    const version=revision.current;
+    const version=revision.current,read=++snapshotEpoch.current;
     let alive=true;
+    const current=()=>alive&&version===revision.current&&read===snapshotEpoch.current;
+    setUnread(null);setLatestEvent(null);
     void (async()=>{
       try {
         const auth=await supabase.auth.getUser();
@@ -72,12 +84,15 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
         });
         if(snapshot.error)throw new Error(snapshot.error.message);
         const parsed=normalizeWorkspaceTeamSnapshot(snapshot.data);
-        if(alive&&version===revision.current) {
-          setLastSeen(parsed.lastSeen);setUnread(parsed.unread);setError("");
+        const verified=await supabase.auth.getUser();
+        if(verified.error||verified.data.user?.id!==owner)
+          throw Error("Workspace account changed while loading notifications");
+        if(current()) {
+          setLastSeen(parsed.lastSeen);setUnread(parsed.unread);setLatestEvent(parsed.latest);setError("");
         }
       }catch(failure) {
-        if(alive&&version===revision.current) {
-          setUnread(null);
+        if(current()) {
+          setUnread(null);setLatestEvent(null);
           setError(failure instanceof Error?failure.message:"Team notifications could not be loaded");
         }
       }
@@ -126,47 +141,53 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
   },[owner,spaceId]);
 
   const markSeen=async()=>{
-    if(working||unread===null||unread===0)return;
+    if(markLock.current||working||unread===null||unread===0)return;
+    let target:number;
+    try{target=workspaceTeamAcknowledgementTarget({lastSeen,unread,latest:latestEvent});}
+    catch(failure){setError(failure instanceof Error?failure.message:"Invalid read cursor");return;}
     const version=revision.current;
+    markLock.current=true;
     setWorking(true);setError("");setMessage("");
     try {
       const auth=await supabase.auth.getUser();
       if(auth.error||auth.data.user?.id!==owner)
         throw new Error("Workspace identity changed; refresh before acknowledging events");
-      const latest=await supabase.rpc("workspace_team_notification_snapshot",{
-        p_space_id:spaceId,
-      });
-      if(latest.error)throw new Error(latest.error.message);
-      const newest=normalizeWorkspaceTeamSnapshot(latest.data);
-      if(newest.latest===null)
-        throw new Error("No server event available to acknowledge");
+      if(version!==revision.current)return;
       const saved=await supabase.rpc("workspace_team_mark_events_seen",{
-        p_space_id:spaceId,p_event_id:newest.latest,
+        p_space_id:spaceId,p_event_id:target,
       });
-      if(saved.error||!Number.isSafeInteger(saved.data))
+      if(saved.error||!Number.isSafeInteger(saved.data)||(saved.data as number)<target)
         throw new Error(saved.error?.message??"Event acknowledgement was not verified");
+      const verified=await supabase.auth.getUser();
+      if(verified.error||verified.data.user?.id!==owner)
+        throw Error("Workspace account changed after acknowledgement");
       if(version===revision.current){
+        snapshotEpoch.current++;
         setLastSeen(saved.data as number);
-        setMessage("Server saved your read position.");
+        setUnread(null);setLatestEvent(null);
+        setMessage("Server saved your read position through the selected snapshot.");
         setPulse(n=>n+1);
       }
     }catch(failure){
       if(version===revision.current)
         setError(failure instanceof Error?failure.message:"Could not mark activity as read");
     }finally{
-      if(version===revision.current)setWorking(false);
+      if(version===revision.current){markLock.current=false;setWorking(false);}
     }
   };
   const history=mergeWorkspaceTeamHistory(events,older,spaceId);
-  const titles=Object.fromEntries(tasks.map(task=>[task.id,task.title]));
+  const titles=Object.fromEntries(tasks.filter(task=>task.space_id===spaceId).map(task=>[task.id,task.title]));
+  const validRange=workspaceTeamActivityDateRangeValid(fromDay,toDay);
   const visible=workspaceTeamVisibleEvents(history,group,actor,owner).filter(event=>
+    validRange&&workspaceTeamActivityDateMatches(event,fromDay,toDay)&&
     (!onlyUnread||(unread!==null && workspaceTeamEventUnread(event,owner,joinedAt,lastSeen))) &&
     teamHistorySearch(event,WORKSPACE_TEAM_EVENT_LABELS[
       event.event_type as keyof typeof WORKSPACE_TEAM_EVENT_LABELS]??event.event_type,
       titles[event.entity_id]??"",search));
   const canLoadMore=(hasMore??events.length>=30)&&history.length<TEAM_ACTIVITY_VIEW_CAP;
   const loadOlder=async()=>{
-    if(historyLoading||!canLoadMore||!history.length)return;
+    if(historyLock.current||historyLoading||!canLoadMore||!history.length)return;
+    historyLock.current=true;
     const version=revision.current,epoch=historyEpoch.current;
     const oldest=history.at(-1)!.id;
     const limit=Math.min(TEAM_ACTIVITY_PAGE_SIZE,TEAM_ACTIVITY_VIEW_CAP-history.length);
@@ -198,18 +219,18 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
       if(version===revision.current&&epoch===historyEpoch.current)
         setHistoryError(failure instanceof Error?failure.message:"Cannot load older activity");
     }finally{
-      if(version===revision.current&&epoch===historyEpoch.current)setHistoryLoading(false);
+      if(version===revision.current&&epoch===historyEpoch.current){historyLock.current=false;setHistoryLoading(false);}
     }
   };
   const exportVisible=()=>{
     try{
-      const csv=buildWorkspaceTeamActivityCsv(visible,owner,titles,WORKSPACE_TEAM_EVENT_LABELS);
+      const csv=buildWorkspaceTeamActivityCsv(visible,owner,titles,WORKSPACE_TEAM_EVENT_LABELS,spaceId);
       const blob=new Blob([String.fromCharCode(0xFEFF),csv],{type:"text/csv;charset=utf-8"});
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
       link.href=url;link.download="eternyx-team-activity-"+spaceId.slice(0,8)+".csv";
-      document.body.appendChild(link);link.click();link.remove();
-      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      try{document.body.appendChild(link);link.click();}
+      finally{link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
     }catch(failure){
       setHistoryError(failure instanceof Error?failure.message:"History CSV export failed");
     }
@@ -240,7 +261,7 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
       </p>
       <Button size="sm" variant="outline" disabled={working||unread===null||unread===0}
         onClick={()=>void markSeen()}>
-        <CheckCheck className="mr-1 h-3.5 w-3.5"/> Mark all seen
+        <CheckCheck className="mr-1 h-3.5 w-3.5"/> Mark snapshot seen
       </Button>
     </div>
     {error&&<p className="text-xs text-destructive" role="alert">{error}</p>}
@@ -253,7 +274,7 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
           <option value="all">All</option><option value="tasks">Tasks</option>
           <option value="discussion">Discussions & checklists</option>
           <option value="people">Members & invitations</option>
-          <option value="space">Team lifecycle</option>
+          <option value="space">Team lifecycle</option><option value="other">Other</option>
         </select>
       </label>
       <label className="text-xs">Author{" "}
@@ -266,11 +287,21 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
       </label>
     </div>
     <label className="block text-xs">Search loaded activity
-      <input aria-label="Search loaded team activity" value={search}
+      <input aria-label="Search loaded team activity" value={search} maxLength={120}
         onChange={event=>setSearch(event.target.value)}
         placeholder="Action or task title"
         className="mt-1 min-h-9 w-full rounded-md border border-border bg-background px-3"/>
     </label>
+    <div className="flex flex-wrap items-end gap-2 text-xs">
+      <label>From (UTC)<input type="date" className="block rounded border border-border bg-background p-1" value={fromDay}
+        onChange={event=>setFromDay(event.target.value)}/></label>
+      <label>Through (UTC)<input type="date" className="block rounded border border-border bg-background p-1" value={toDay}
+        onChange={event=>setToDay(event.target.value)}/></label>
+      <Button type="button" size="sm" variant="outline" onClick={()=>{
+        setGroup("all");setActor("all");setOnlyUnread(false);setSearch("");setFromDay("");setToDay("");
+      }}>Reset activity filters</Button>
+    </div>
+    {!validRange&&<p role="alert" className="text-xs text-destructive">Choose a valid chronological UTC date range.</p>}
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={onlyUnread} disabled={unread===null}
@@ -285,7 +316,7 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
     <div className="max-h-[18rem] space-y-2 overflow-y-auto">
       {visible.map(event=>{
         const task=tasks.find(t=>t.id===event.entity_id);
-        const isNew=workspaceTeamEventUnread(event,owner,joinedAt,lastSeen);
+        const isNew=unread!==null&&workspaceTeamEventUnread(event,owner,joinedAt,lastSeen);
         return <div key={event.id} className="border-b border-border/60 pb-2 text-xs">
           <span className="text-muted-foreground">{new Date(event.created_at).toLocaleString()}</span>
           {" · "}<strong>{WORKSPACE_TEAM_EVENT_LABELS[
@@ -304,7 +335,7 @@ export default function WorkspaceTeamLiveFeed({owner,spaceId,joinedAt,events,tas
     {historyError&&<p role="alert" className="text-xs text-destructive">{historyError}</p>}
     {historyNotice&&<p role="status" className="text-xs text-muted-foreground">{historyNotice}</p>}
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-      <span>Showing {history.length} loaded events (up to {TEAM_ACTIVITY_VIEW_CAP} per session)</span>
+      <span>Showing {visible.length} of {history.length} loaded events (up to {TEAM_ACTIVITY_VIEW_CAP} per session)</span>
       {canLoadMore&&<Button size="sm" variant="outline" type="button"
         disabled={historyLoading} onClick={()=>void loadOlder()}>
         {historyLoading?"Loading…":"Load older activity"}
