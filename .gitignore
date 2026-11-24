@@ -36,3 +36,6 @@ lerna-debug.log*
 
 # Local tooling
 .cache/
+
+# Local Education staging fixture variable manifest / recovery sentinel
+/education-staging-fixture-variables.private.json
