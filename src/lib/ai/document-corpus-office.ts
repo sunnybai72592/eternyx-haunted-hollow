@@ -42,7 +42,7 @@ export async function extractOfficeDocument(name:string,bytes:Uint8Array,parser:
     const doc=parse(await zip.read("word/document.xml"),parser,W,"document");
     const body=first(doc.documentElement,W,"body");
     if(!body)fail();
-    const paragraphs=elements(body,W,"p").map(p=>{
+    const paragraphs=elements(body,W,"p").filter(p=>{for(let node=p.parentElement;node&&node!==body;node=node.parentElement)if(node.namespaceURI===W&&["del","moveFrom"].includes(node.localName))return false;return true;}).map(p=>{
       const chunks:string[]=[];
       const visit=(node:Node)=>{
         if(node.nodeType!==1)return;
@@ -85,12 +85,13 @@ export async function extractOfficeDocument(name:string,bytes:Uint8Array,parser:
       const lines:string[]=[];const refs=new Set<string>();
       for(const row of children(data,S,"row"))for(const cell of children(row,S,"c")){
         if(++cells>MAX_CELLS)fail("office_cell_limit");
-        const ref=cell.getAttribute("r")??"",type=cell.getAttribute("t")??"n";
+        const ref=cell.getAttribute("r")??"",type=cell.getAttribute("t")||"n";
         if(!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(ref)||refs.has(ref))fail();
         refs.add(ref);
         const formula=first(cell,S,"f"),v=first(cell,S,"v"),raw=v?.textContent??"";
         let value=raw;
-        if(type==="s"){
+        if(formula&&(!v||!raw)){value="";}
+        else if(type==="s"){
           if(!/^(0|[1-9]\d*)$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)>=shared.length)fail();
           value=shared[Number(raw)];
         }else if(type==="inlineStr"){
