@@ -146,7 +146,8 @@ def starter_draft(report):
     return draft
 
 
-def run(root=ROOT, on_stage=None, *, cinematic=False, limit_seconds=None):
+def run(root=ROOT, on_stage=None, *, cinematic=False, limit_seconds=None,
+        clip_starts=None, clip_seconds=None):
     if on_stage is None:
         on_stage = lambda _: None
     on_stage("Checking local originals, codec support and SHA-256...")
@@ -159,6 +160,19 @@ def run(root=ROOT, on_stage=None, *, cinematic=False, limit_seconds=None):
     if (type(limit_seconds) is not int or
             not 1 <= limit_seconds <= manifest["seconds"]):
         raise ValueError("Requested conversion cut exceeds verified source window")
+    if clip_starts is not None or clip_seconds is not None:
+        if (not isinstance(clip_starts, (list, tuple)) or
+                not isinstance(clip_seconds, (list, tuple)) or
+                len(clip_starts) != checked["source_count"] or
+                len(clip_seconds) != checked["source_count"]):
+            raise ValueError("Every original requires an exact per-shot source range")
+        for offset, length in zip(clip_starts, clip_seconds):
+            if (type(offset) is not int or type(length) is not int or
+                    offset < manifest["start_seconds"] or
+                    length < 1 or length > 3 or
+                    offset + length > manifest["start_seconds"] + manifest["seconds"] or
+                    offset >= 300):
+                raise ValueError("Per-shot trim exceeds the verified private source window")
     workspace = Path(tempfile.mkdtemp(prefix=".eternyx-phone-bundle-",dir=root))
     final = root/OUTPUT
     try:
@@ -167,7 +181,8 @@ def run(root=ROOT, on_stage=None, *, cinematic=False, limit_seconds=None):
         names = [x["filename"] for x in manifest["originals"]]
         report = prepare(root/"phone-clips",output,clips=names,
                          start_seconds=manifest["start_seconds"],
-                         seconds=limit_seconds, cinematic=cinematic)
+                         seconds=limit_seconds, cinematic=cinematic,
+                         clip_starts=clip_starts, clip_seconds=clip_seconds)
         on_stage("Checking actual converted H264 outputs and creating editable draft...")
         if report["source_count"] != checked["source_count"]:
             raise ValueError("Converted output differs from the verified source inventory")

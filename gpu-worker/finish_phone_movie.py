@@ -182,10 +182,20 @@ def load_plan(root):
         raise ValueError("Unsupported or incomplete private phone movie plan")
     total=0
     for row in plan["shots"]:
-        if not isinstance(row,dict) or set(row)!={"source_filename","frames","caption","rights_ref"}:
+        if (not isinstance(row,dict) or not
+            {"source_filename","frames","caption","rights_ref"} <= set(row) or
+            set(row)-{"source_filename","frames","caption","rights_ref",
+                      "start_seconds","fade_in_frames","fade_out_frames"}):
             raise ValueError("Every movie cut must include its original, frames, human caption and rights")
         if type(row["frames"]) is not int or not 16<=row["frames"]<=48 or row["frames"]%16:
             raise ValueError("Each phone movie cut must be 1, 2 or 3 whole seconds at 16 FPS")
+        offset=row.get("start_seconds",0)
+        if type(offset) is not int or not 0<=offset<=299:
+            raise ValueError("Shot trim offset must be a valid whole number of seconds")
+        for field in ("fade_in_frames","fade_out_frames"):
+            fade=row.get(field,0)
+            if (type(fade) is not int or not 0<=fade<=min(8,row["frames"]//2)):
+                raise ValueError("Shot fade must be within 0-0.5 seconds of its actual cut")
         renderer.text_field(row["caption"],"Human caption")
         renderer.text_field(row["rights_ref"],"Recording permission/rights reference")
         total+=row["frames"]
@@ -202,6 +212,10 @@ def preflight(root=ROOT):
     for shot,source in zip(plan["shots"],manifest["originals"]):
         if shot["source_filename"]!=source["filename"]:
             raise ValueError("Movie cut order/filename differs from the original verified phone inventory")
+        if ((shot.get("start_seconds",0) + shot["frames"]//renderer.FPS) >
+            manifest["seconds"] or
+            manifest["start_seconds"]+shot.get("start_seconds",0)>=300):
+            raise ValueError("Shot trim plus duration exceeds selected original source window")
         if shot["frames"]>manifest["seconds"]*renderer.FPS:
             raise ValueError("Conversion trim is shorter than the requested movie cut")
     if (root/OUTPUT).exists() or (root/OUTPUT).is_symlink():
@@ -234,6 +248,12 @@ def build_board(root,plan,report):
         if converted["source_filename"]!=authored["source_filename"]:
             raise ValueError("Prepared video source order does not match the movie plan")
         frames = authored["frames"] * fps // renderer.FPS
+        offset=authored.get("start_seconds",0)
+        manifest=intake.read_manifest(root)
+        expected_start=manifest["start_seconds"]+offset
+        if (converted["start_seconds"]!=expected_start or
+                converted["seconds_limit"]!=authored["frames"]//renderer.FPS):
+            raise ValueError("Actual prepared source range disagrees with requested shot")
         if converted["prepared_fps"] != f"{fps}/1":
             raise ValueError("Prepared footage FPS is not the requested genuine output FPS")
         if frames>converted["prepared_frames"]:
@@ -247,7 +267,8 @@ def build_board(root,plan,report):
             "source_sha256":converted["prepared_sha256"],
             "start_frame":0,"frames":frames,
             "caption":authored["caption"],"rights_ref":authored["rights_ref"],
-            "fade_in_frames":0,"fade_out_frames":0,
+            "fade_in_frames":authored.get("fade_in_frames",0)*fps//renderer.FPS,
+            "fade_out_frames":authored.get("fade_out_frames",0)*fps//renderer.FPS,
         })
     return {"version":2,"shots":shots,**({"fps":fps} if fps != renderer.FPS else {})}
 
@@ -259,8 +280,12 @@ def run(root=ROOT,on_stage=None):
     checked=preflight(root)
     plan=load_plan(root)
     on_stage(f"Converting real source frames to verified {checked['fps']} FPS H264 on this CPU...")
+    source_manifest=intake.read_manifest(root)
     intake.run(root,on_stage=on_stage,cinematic=plan["quality"]=="cinematic",
-               limit_seconds=max(s["frames"] for s in plan["shots"]) // renderer.FPS)
+               limit_seconds=max(s["frames"] for s in plan["shots"]) // renderer.FPS,
+               clip_starts=[source_manifest["start_seconds"]+s.get("start_seconds",0)
+                            for s in plan["shots"]],
+               clip_seconds=[s["frames"]//renderer.FPS for s in plan["shots"]])
     media=root/intake.OUTPUT
     report_path=media/"preparation-report.json"
     if report_path.is_symlink() or not report_path.is_file():
@@ -287,6 +312,14 @@ def run(root=ROOT,on_stage=None):
             receipt.get("framing")!=plan.get("framing", "contain") or
             receipt.get("video",{}).get("frame_count")!=checked["frames"]):
             raise ValueError("Final local FFmpeg receipt does not match the original plan")
+        receipt["source_ranges"] = [
+            {"original_filename":row["source_filename"],
+             "source_sha256":row["source_sha256"],
+             "source_start_seconds":row["start_seconds"],
+             "duration_seconds":row["seconds_limit"],
+             "prepared_sha256":row["prepared_sha256"]}
+            for row in report["clips"]
+        ]
         on_stage("Encoding and verifying selected final deliverables on CPU...")
         receipt["delivery"] = plan.get("delivery", "mp4")
         receipt["deliverables"] = produce_deliverables(
