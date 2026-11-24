@@ -39,3 +39,7 @@ lerna-debug.log*
 
 # Local Education staging fixture variable manifest / recovery sentinel
 /education-staging-fixture-variables.private.json
+
+# Education local account recovery journal
+/education-staging-account-recovery.private.json
+/education-staging-account-recovery.private.json.tmp
