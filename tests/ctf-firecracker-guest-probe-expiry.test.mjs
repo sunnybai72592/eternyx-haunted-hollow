@@ -294,3 +294,18 @@ test("CI wiring and reference guest agent are manual-only",async()=>{
   assert.doesNotMatch(guest,/AF_INET|requests|urllib|http/);
   assert.doesNotMatch(source,/createServer|cloudProvisioningAllowed:true/);
 });
+
+test("expiry observer rejects stalled, reversing and nonfinite clocks",async()=>{
+ for(const mode of ["stalled","reverse","nan"]){
+  let ms=0;
+  const supervisor={async attest(){return safeAttestation();},async verifyDead(){return false;},async verifyTimedOut(){return false;}};
+  await assert.rejects(observeIndependentExpiry({sessionId,supervisor,wallStartMs:0,now:()=>ms,pause:async()=>{ms=mode==="stalled"?0:mode==="reverse"?-1:NaN;}}),/clock/);
+ }
+});
+test("tiny clock increments cannot cause an unbounded expiry observation",async()=>{
+ let ms=0,waits=0;
+ await assert.rejects(observeIndependentExpiry({sessionId,wallStartMs:0,now:()=>ms,
+   supervisor:{async attest(){return safeAttestation();},async verifyDead(){return false;},async verifyTimedOut(){return false;}},
+   pause:async()=>{waits++;ms++;}}),/bounded poll count/);
+ assert.equal(waits,100);
+});

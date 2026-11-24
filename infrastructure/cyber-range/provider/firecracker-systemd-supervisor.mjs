@@ -129,12 +129,12 @@ export function verifySystemdUnitProperties(sessionId,output,{allowStopped=false
   if(p.LoadState!=="loaded" ||
      !["active","inactive","failed"].includes(p.ActiveState) ||
      !/^(0|[1-9]\d{0,9})$/.test(p.MainPID) ||
-     (p.ControlGroup!=="" && !p.ControlGroup.endsWith("/"+unit))){
+     (p.ControlGroup!=="" && p.ControlGroup !== "/system.slice/"+unit)){
     throw Error("Systemd microVM identity or cgroup is unverified");
   }
   const active=p.ActiveState==="active" && p.SubState==="running" &&
     Number(p.MainPID)>1 &&
-    p.ControlGroup.startsWith("/system.slice/");
+    p.ControlGroup === "/system.slice/"+unit;
   if(!allowStopped&&!active)
     throw Error("Jailed VM systemd unit is not running");
   if(allowStopped&&p.ActiveState!=="active"&&p.MainPID!=="0")
@@ -307,6 +307,7 @@ export class SystemdMicrovmSupervisor {
     try{
       this.#command(plan.executable,plan.argv);
       await this.attest(sessionId);
+      await this.#launchGate();
       return Object.freeze({launched:true,unit:plan.unit,
         localOnly:true,guestNotBooted:true,cloudProvisioningAllowed:false});
     }catch{
@@ -348,6 +349,11 @@ export class SystemdMicrovmSupervisor {
     }catch{throw Error("Cannot attest microVM process network namespace");}
     verifyMicrovmProcessNetns(expectedNamespace,actualNamespace);
     await this.#loopback(sessionId);
+    const finalState=verifySystemdUnitProperties(sessionId,this.#read(sessionId));
+    if(finalState.mainPid!==state.mainPid||finalState.cgroup!==state.cgroup)
+      throw Error("VM process identity changed during attestation");
+    const finalNamespace=await this.#fs.stat("/proc/"+state.mainPid+"/ns/net");
+    verifyMicrovmProcessNetns(expectedNamespace,finalNamespace);
     // A transient systemd unit has an independently enforced lifetime even
     // if this Node process dies. We never rely on a JS setTimeout watchdog.
     return Object.freeze({
@@ -390,21 +396,29 @@ export class SystemdMicrovmSupervisor {
       const status=verifySystemdUnitProperties(sessionId,p,{allowStopped:true});
       if(status.active)return false;
     }
-    // MainPID=0 is insufficient. Check both direct processes and cgroup
-    // 'populated' (which includes nested descendants) before confirming dead.
+    // Two complete passes reject mixed missing/present files and a unit
+    // reappearing after the first observation. Never infer death from a
+    // single missing file or an incomplete cgroup.events payload.
     const path=join("/sys/fs/cgroup/system.slice",supervisedVmUnit(sessionId));
-    try{
-      const value=await this.#fs.readFile(join(path,"cgroup.procs"),"utf8");
-      if(value.trim()!=="")return false;
-    }catch(e){
-      if(e?.code!=="ENOENT")throw Error("Cannot verify VM cgroup teardown");
-    }
-    try{
-      const events=await this.#fs.readFile(join(path,"cgroup.events"),"utf8");
-      if(!/(?:^|\n)populated 0(?:\n|$)/.test(events))
-        return false;
-    }catch(e){
-      if(e?.code!=="ENOENT")throw Error("Cannot verify descendant VM cgroup teardown");
+    const readOptional=async name=>{
+      try{return await this.#fs.readFile(join(path,name),"utf8");}
+      catch(e){if(e?.code==="ENOENT")return null;throw Error("Cannot verify VM cgroup teardown");}
+    };
+    for(let pass=0;pass<2;pass++){
+      const procs=await readOptional("cgroup.procs");
+      const events=await readOptional("cgroup.events");
+      if((procs===null)!==(events===null))return false;
+      if(procs!==null){
+        const flags=events.trim().split("\n").filter(line=>line.startsWith("populated "));
+        if(procs.trim()!==""||flags.length!==1||flags[0]!=="populated 0")return false;
+      }
+      const next=parseSystemdUnitShow(this.#read(sessionId));
+      if(next.LoadState==="not-found"){
+        if(next.MainPID!=="0"||next.ActiveState!=="inactive"||next.ControlGroup!=="")return false;
+      }else{
+        const observed=verifySystemdUnitProperties(sessionId,next,{allowStopped:true});
+        if(observed.active||next.MainPID!=="0"||!["inactive","failed"].includes(next.ActiveState))return false;
+      }
     }
     return true;
   }
