@@ -151,7 +151,7 @@ function validateIdentity(response){
   if(!UUID.test(response.id??"")||response.is_anonymous===true)deny("authentication_failed");
   return response.id;
 }
-async function probeCrossOwner(config,fetcher,owner,foreignToken,missionId){
+async function probeSolveRow(config,fetcher,owner,token,missionId,expectOwned){
   if(!MISSION_SET.has(missionId)||!UUID.test(owner))deny("fixture_invalid");
   const url=new URL("/rest/v1/ctf_verified_solves",config.origin);
   url.searchParams.set("select","mission_id,solved_at");
@@ -161,7 +161,7 @@ async function probeCrossOwner(config,fetcher,owner,foreignToken,missionId){
   let response;
   try{
     response=await fetcher(url.toString(),{
-      method:"GET",headers:{apikey:config.publicKey,Authorization:"Bearer "+foreignToken,
+      method:"GET",headers:{apikey:config.publicKey,Authorization:"Bearer "+token,
         Accept:"application/json"},
       credentials:"omit",cache:"no-store",redirect:"error",signal:AbortSignal.timeout(TIMEOUT),
     });
@@ -171,7 +171,9 @@ async function probeCrossOwner(config,fetcher,owner,foreignToken,missionId){
   if(!response.headers||!/application\/json/i.test(response.headers.get("content-type")??""))
     deny("cross_owner_denial_unverified");
   const content=await readArrayBounded(response);
-  if(content.length!==0)deny("cross_owner_row_disclosed");
+  if(expectOwned){
+    if(content.length!==1||!own(content[0])||Object.keys(content[0]).length!==2||content[0].mission_id!==missionId||!validIso(content[0].solved_at))deny("owned_solve_rest_fixture_missing");
+  }else if(content.length!==0)deny("cross_owner_row_disclosed");
   return true;
 }
 async function readArrayBounded(response){
@@ -307,8 +309,10 @@ export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
   // Real isolation evidence requires an existing solved fixture owned by a test account.
   let crossOwnerStatus="not_tested_no_owned_solve_fixture",crossOwnerChecks=0;
   if(progress.a.solvedIds.length&&progress.b.solvedIds.length){
-    await probeCrossOwner(config,fetcher,idA,config.tokenB,progress.a.solvedIds[0]);
-    await probeCrossOwner(config,fetcher,idB,config.tokenA,progress.b.solvedIds[0]);
+    await probeSolveRow(config,fetcher,idA,config.tokenA,progress.a.solvedIds[0],true);
+    await probeSolveRow(config,fetcher,idB,config.tokenB,progress.b.solvedIds[0],true);
+    await probeSolveRow(config,fetcher,idA,config.tokenB,progress.a.solvedIds[0],false);
+    await probeSolveRow(config,fetcher,idB,config.tokenA,progress.b.solvedIds[0],false);
     crossOwnerChecks=2;
     crossOwnerStatus="two_cross_owner_rows_denied";
   }
@@ -320,7 +324,7 @@ export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
     observedAt:new Date().toISOString(),checks,authenticatedOwnerCount:2,
     verifiedCtfCatalogChecked:true,verifiedCtfProgressReads:2,
     rangeProviderReads:2,rangeSessionReads:2,unauthenticatedDenials:2,
-    crossOwnerStatus,crossOwnerChecks,
+    crossOwnerStatus,crossOwnerChecks,ownedSolveRestChecks:crossOwnerChecks===2?2:0,
     rangeRestProjectionChecks:2,rangeRestPrivatePermissionDenials:18,
     rangeRestAnonymousDenial:true,rangeRestIsolation,
     rangeRestCrossOwnerChecks:rangeRestIsolation==="two_edge_correlated_owned_fixtures_cross_denied"?2:0,
