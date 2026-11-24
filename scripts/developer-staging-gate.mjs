@@ -91,7 +91,7 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     runtime_safety: runtime,
     hosting_https_headers: headers,
     release_decision: releaseDecision,
-    notes: "Observed public root and direct Project Lab route, matching HTML/JavaScript and release manifest against the checkout. This is unsigned public provenance; protected backend and production readiness are unverified.",
+    notes: "Observed public root and direct Project Lab route, matching HTML/JavaScript and release manifest against the checkout. This is unsigned release provenance, not a signed deployment attestation; protected backend and production readiness are unverified.",
     production_verified: false,
   };
 }
