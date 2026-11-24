@@ -8,13 +8,18 @@ import {ETERNYX_PRODUCTION_REF} from "../../scripts/automation-staging-db-readon
 import {parseRangeProviderStatus,parseRangeSessionsResponse} from "./eternyxRangeSessionClient.mjs";
 import {VERIFIED_CTF_MISSIONS,tallyVerifiedCtfSolves} from "./eternyxVerifiedCtf.mjs";
 
-export const LABS_STAGING_SCHEMA="eternyx.labs.staging-readonly.v1";
+export const LABS_STAGING_SCHEMA="eternyx.labs.staging-readonly.v2";
+export const PUBLIC_RANGE_COLUMNS=Object.freeze(["id","challenge_pack","status","requested_at","updated_at","expires_at","started_at","finished_at"]);
+export const PRIVATE_RANGE_COLUMNS=Object.freeze(["user_id","provider_instance_ref","worker_fence_id","claimed_at"]);
 export const LABS_STAGING_APPROVAL="I_APPROVE_LABS_READONLY_STAGING";
 export const LABS_STAGING_REQUIRED_CHECKS=Object.freeze([
   "staging-target-pinned","two-distinct-authenticated-owners",
   "ctf-catalog-a","ctf-progress-a","range-provider-a","range-sessions-a",
   "ctf-catalog-b","ctf-progress-b","range-provider-b","range-sessions-b",
   "ctf-unauthenticated-denied","range-unauthenticated-denied",
+  "range-rest-projection-a","range-rest-private-denial-a",
+  "range-rest-projection-b","range-rest-private-denial-b",
+  "range-rest-anonymous-denied",
 ]);
 const REF=/^[a-z]{20}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -176,6 +181,70 @@ async function readArrayBounded(response){
     return json;
   }catch{deny("cross_owner_denial_unverified");}
 }
+// Exact allowlisted PostgREST requests: no caller-supplied paths, free-form filters,
+// wildcard expansion outside the deliberate denial check, or mutation methods.
+async function rangeRest(config,fetcher,token,select,id=null,privateFilter=null){
+  const allowed=[PUBLIC_RANGE_COLUMNS.join(","),"id","*",...PRIVATE_RANGE_COLUMNS];
+  if(!allowed.includes(select)||(id!==null&&!UUID.test(id))||
+    (privateFilter!==null&&!PRIVATE_RANGE_COLUMNS.includes(privateFilter)))deny("invalid_range_rest_probe");
+  const url=new URL("/rest/v1/ctf_range_sessions",config.origin);
+  url.searchParams.set("select",select);
+  url.searchParams.set("limit","1");
+  if(id!==null)url.searchParams.set("id","eq."+id);
+  if(privateFilter!==null)url.searchParams.set(privateFilter,"is.null");
+  const headers={apikey:config.publicKey,Accept:"application/json"};
+  if(token!==null)headers.Authorization="Bearer "+token;
+  try{
+    return await fetcher(url.toString(),{method:"GET",headers,credentials:"omit",
+      cache:"no-store",redirect:"error",signal:AbortSignal.timeout(TIMEOUT)});
+  }catch{deny("range_rest_transport_failed");}
+}
+async function rangeRestRows(response){
+  if(response?.status!==200){await readBounded(response,false);deny("range_rest_projection_failed");}
+  if(!/application\/json/i.test(response.headers.get("content-type")??""))
+    deny("range_rest_projection_failed");
+  const rows=await readArrayBounded(response);
+  if(rows.length>1||rows.some(row=>!own(row)||
+    Object.keys(row).length!==PUBLIC_RANGE_COLUMNS.length||
+    PUBLIC_RANGE_COLUMNS.some(key=>!Object.hasOwn(row,key))))
+    deny("range_rest_unexpected_columns");
+  try{return parseRangeSessionsResponse({sessions:rows,source:"authenticated_server",hostedAccessAvailable:false});}
+  catch{deny("range_rest_projection_invalid");}
+}
+async function requireDatabaseDenial(response,anonymous=false){
+  // Authenticated SQL permission denial must be PostgREST's 42501, not a
+  // generic timeout, unavailable table, revoked account, or empty result.
+  if(!(anonymous?[401,403]:[403]).includes(response?.status)){
+    await readBounded(response,false);deny("range_rest_permission_not_denied");
+  }
+  const error=await readBounded(response,true);
+  if(error.code!=="42501")deny("range_rest_wrong_denial_reason");
+}
+async function verifyRangeRestAccount(config,fetcher,account,edgeSessions){
+  const ownId=edgeSessions[0]?.id??null;
+  const result=await rangeRestRows(await rangeRest(config,fetcher,account.token,
+    PUBLIC_RANGE_COLUMNS.join(","),ownId));
+  if(ownId!==null&&(result.length!==1||result[0].id!==ownId))deny("range_rest_owned_fixture_missing");
+  if(ownId===null&&result.length!==0)deny("range_rest_edge_inconsistent");
+  for(const col of PRIVATE_RANGE_COLUMNS){
+    await requireDatabaseDenial(await rangeRest(config,fetcher,account.token,col,ownId));
+    await requireDatabaseDenial(await rangeRest(config,fetcher,account.token,"id",ownId,col));
+  }
+  await requireDatabaseDenial(await rangeRest(config,fetcher,account.token,"*",ownId));
+  return ownId;
+}
+async function verifyRangeRestIsolation(config,fetcher,accounts,ids){
+  if(ids.a===null||ids.b===null)return "not_tested_no_two_owned_session_fixtures";
+  if(ids.a===ids.b)deny("range_rest_shared_session_id");
+  for(const account of accounts){
+    const other=account.key==="a"?ids.b:ids.a;
+    const rows=await rangeRestRows(await rangeRest(config,fetcher,account.token,
+      PUBLIC_RANGE_COLUMNS.join(","),other));
+    if(rows.length!==0)deny("range_rest_foreign_session_disclosed");
+  }
+  return "two_edge_correlated_owned_fixtures_cross_denied";
+}
+
 export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
   if(!config?.stagingOnly||!config.productionExcluded||!REF.test(config.ref)||
     config.ref===ETERNYX_PRODUCTION_REF||
@@ -191,7 +260,7 @@ export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
   if(idA===idB)deny("same_account_supplied");
   one("two-distinct-authenticated-owners");
   const accounts=[{key:"a",token:config.tokenA,id:idA},{key:"b",token:config.tokenB,id:idB}];
-  const progress={};
+  const progress={},edgeSessions={};
   for(const account of accounts){
     const suffix=account.key;
     const catalog=await request(config,fetcher,"/functions/v1/ctf-verified",account.token,"catalog");
@@ -199,16 +268,31 @@ export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
     const current=await request(config,fetcher,"/functions/v1/ctf-verified",account.token,"progress");
     progress[suffix]=validateProgress(current);one("ctf-progress-"+suffix);
     const provider=await request(config,fetcher,"/functions/v1/ctf-range-control",account.token,"status");
-    try{parseRangeProviderStatus(provider);}catch{deny("provider_status_invalid");}
+    let parsedProvider;
+    try{parsedProvider=parseRangeProviderStatus(provider);}catch{deny("provider_status_invalid");}
+    if(parsedProvider.providerOnline!==false||parsedProvider.hostedAccessAvailable!==false||
+      parsedProvider.maxConcurrentSessions!==0||provider.dailyLaunchBudgetConfigured!==false)
+      deny("staging_provider_not_disabled");
     one("range-provider-"+suffix);
     const sessions=await request(config,fetcher,"/functions/v1/ctf-range-control",account.token,"sessions");
-    try{parseRangeSessionsResponse(sessions);}catch{deny("session_response_invalid");}
+    try{edgeSessions[suffix]=parseRangeSessionsResponse(sessions);}catch{deny("session_response_invalid");}
+    if(sessions.sessions.some(row=>Object.keys(row).length!==PUBLIC_RANGE_COLUMNS.length||
+      PUBLIC_RANGE_COLUMNS.some(key=>!Object.hasOwn(row,key))))deny("session_response_extra_fields");
     one("range-sessions-"+suffix);
   }
   await request(config,fetcher,"/functions/v1/ctf-verified",null,"progress",true);
   one("ctf-unauthenticated-denied");
   await request(config,fetcher,"/functions/v1/ctf-range-control",null,"sessions",true);
   one("range-unauthenticated-denied");
+  const fixtureIds={};
+  for(const account of accounts){
+    fixtureIds[account.key]=await verifyRangeRestAccount(config,fetcher,account,edgeSessions[account.key]);
+    one("range-rest-projection-"+account.key);
+    one("range-rest-private-denial-"+account.key);
+  }
+  await requireDatabaseDenial(await rangeRest(config,fetcher,null,PUBLIC_RANGE_COLUMNS.join(",")),true);
+  one("range-rest-anonymous-denied");
+  const rangeRestIsolation=await verifyRangeRestIsolation(config,fetcher,accounts,fixtureIds);
   // Real isolation evidence requires an existing solved fixture owned by a test account.
   let crossOwnerStatus="not_tested_no_owned_solve_fixture",crossOwnerChecks=0;
   if(progress.a.solvedIds.length&&progress.b.solvedIds.length){
@@ -226,6 +310,10 @@ export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
     verifiedCtfCatalogChecked:true,verifiedCtfProgressReads:2,
     rangeProviderReads:2,rangeSessionReads:2,unauthenticatedDenials:2,
     crossOwnerStatus,crossOwnerChecks,
+    rangeRestProjectionChecks:2,rangeRestPrivatePermissionDenials:18,
+    rangeRestAnonymousDenial:true,rangeRestIsolation,
+    rangeRestCrossOwnerChecks:rangeRestIsolation==="two_edge_correlated_owned_fixtures_cross_denied"?2:0,
+    disabledProviderConfirmed:true,
     anyMutatingActionsAttempted:false,sessionReservationsMade:0,flagsSubmitted:0,
     cloudProviderDeployedVerified:false,hostedIngressVerified:false,
     productionProjectChanged:false,productionReady:false,releaseAuthorized:false,
