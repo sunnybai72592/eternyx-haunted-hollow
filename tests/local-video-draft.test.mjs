@@ -163,3 +163,14 @@ test("live Studio has explicit save/reopen/reattach UX and transactional object 
   assert.match(ui,/Your current timeline remains untouched until verification succeeds/);
   assert.doesNotMatch(ui,/localStorage\.setItem|indexedDB\.open|fetch\(.*draft|supabase.*draft/);
 });
+
+test("local drafts roundtrip color grade and crop without changing old draft schema",()=>{
+  const source={name:"camera.mp4",size:20,sha256:"a".repeat(64)};
+  const shot={sourceName:source.name,startFrame:0,frames:24,caption:"",rightsRef:"",fadeInFrames:0,fadeOutFrames:0};
+  const input={sources:[source],shots:[shot],quality:"cinematic"};
+  const draft=createLocalVideoDraft({...input,grade:"warm",framing:"cover"});
+  assert.equal(readLocalVideoDraft(draft.json).grade,"warm");
+  assert.equal(readLocalVideoDraft(draft.json).framing,"cover");
+  assert.equal(Object.hasOwn(createLocalVideoDraft(input).draft,"grade"),false);
+  assert.throws(()=>createLocalVideoDraft({...input,grade:"unsafe"}));
+});

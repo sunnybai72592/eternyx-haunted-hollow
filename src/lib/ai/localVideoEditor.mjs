@@ -113,11 +113,19 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null, qualit
 }
 
 /** Paths are static; the operator puts original files in the local media folder. */
-export function localVideoCommand(profile = "landscape", quality = "standard") {
+export const LOCAL_VIDEO_GRADES=Object.freeze(["neutral","cinematic","warm","cool","monochrome"]);
+export const LOCAL_VIDEO_FRAMINGS=Object.freeze(["contain","cover"]);
+export function checkLocalVideoLook(grade="neutral",framing="contain"){
+  if(!LOCAL_VIDEO_GRADES.includes(grade)||!LOCAL_VIDEO_FRAMINGS.includes(framing))
+    throw new Error("Unsupported local video color grade or framing.");
+  return {grade,framing};
+}
+export function localVideoCommand(profile = "landscape", quality = "standard", grade="neutral", framing="contain") {
+  checkLocalVideoLook(grade,framing);
   if (!LOCAL_VIDEO_PROFILES.includes(profile) || !LOCAL_VIDEO_QUALITIES.includes(quality)) {
     throw new Error("Choose one supported profile and quality preset.");
   }
-  return "python gpu-worker/render_video_timeline.py --storyboard ./eternyx-video-v2.json --media ./local-video-media --output ./eternyx-video-output --profile " + profile + " --quality " + quality;
+  return "python gpu-worker/render_video_timeline.py --storyboard ./eternyx-video-v2.json --media ./local-video-media --output ./eternyx-video-output --profile " + profile + " --quality " + quality + (grade==="neutral"?"":" --grade "+grade) + (framing==="contain"?"":" --framing "+framing);
 }
 
 export function localVideoSrt(board) {

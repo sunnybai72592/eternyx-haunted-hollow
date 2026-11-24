@@ -1,0 +1,3 @@
+# Cinematic looks in the offline main editor
+
+Choose Neutral, Cinematic contrast, Warm, Cool or Monochrome and either contain (fit) or cover (center crop). These are fixed real FFmpeg filters applied before composition and fades, not neural enhancement. The same settings survive local draft recovery, flow into the ZIP, command scripts, guided launcher and output receipt, and are compared during project review. The original browser source preview is intentionally unchanged. Old drafts and packages default to neutral/contain. All media stays local; no paid API or GPU. Native 24 FPS fade-out duration uses the actual timebase, not the old 16 FPS constant.

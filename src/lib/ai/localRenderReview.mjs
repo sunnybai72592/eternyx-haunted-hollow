@@ -66,6 +66,9 @@ export function readLocalRenderReceipt(raw) {
       receipt.type !== "local CPU video editing" || receipt.model_generation !== false) {
     fail("Only genuine-format CPU v2 editing receipts are supported (not AI generation results).");
   }
+  if (!["neutral","cinematic","warm","cool","monochrome"].includes(Object.hasOwn(receipt,"grade")?receipt.grade:"neutral") ||
+      !["contain","cover"].includes(Object.hasOwn(receipt,"framing")?receipt.framing:"contain"))
+    fail("Unsupported rendered color grade or framing.");
   hash(receipt.storyboard_sha256, "storyboard");
   const video = receipt.video;
   if (!video || typeof video !== "object" || Array.isArray(video)) fail("Missing video output details.");
@@ -131,6 +134,9 @@ export function verifyLocalRenderReceipt(receipt, file, context = null) {
     if (receipt.profile !== context.profile || receipt.quality !== context.quality) {
       fail("The render uses a different output shape or quality than this project.");
     }
+    if ((context.grade!==undefined && (receipt.grade??"neutral")!==context.grade) ||
+        (context.framing!==undefined && (receipt.framing??"contain")!==context.framing))
+      fail("The rendered color grade or framing differs from the current project.");
     if (!context.board || context.board.version !== 2) fail("No valid studio v2 project to compare.");
     if (receipt.shots.length !== context.board.shots.length) fail("Renderer changed the number of shots.");
     for (let i = 0; i < receipt.shots.length; i++) {

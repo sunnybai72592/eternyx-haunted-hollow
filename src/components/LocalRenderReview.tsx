@@ -16,6 +16,8 @@ type Props = {
   project: LocalProject;
   profile: string;
   quality: string;
+  grade?: string;
+  framing?: string;
   original?: {name: string; url: string};
 };
 
@@ -36,7 +38,7 @@ async function localHash(file: File) {
   return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
 }
 
-export default function LocalRenderReview({project, profile, quality, original}: Props) {
+export default function LocalRenderReview({project, profile, quality, original, grade, framing}: Props) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [subtitleFile, setSubtitleFile] = useState<File | null>(null);
@@ -68,7 +70,7 @@ export default function LocalRenderReview({project, profile, quality, original}:
   useEffect(() => {
     // A changed project must never inherit an earlier confirmed source/receipt match.
     clearVerified();
-  }, [project?.json, profile, quality]);
+  }, [project?.json, profile, quality, grade, framing]);
 
   useEffect(() => () => {
     version.current++;
@@ -104,7 +106,7 @@ export default function LocalRenderReview({project, profile, quality, original}:
             const digest = await crypto.subtle.digest("SHA-256", bytes);
             return Array.from(new Uint8Array(digest), part => part.toString(16).padStart(2, "0")).join("");
           })(),
-          board: project.board, profile, quality,
+          board: project.board, profile, quality, grade, framing,
         };
       }
       const result = verifyLocalRenderReceipt(receipt, {

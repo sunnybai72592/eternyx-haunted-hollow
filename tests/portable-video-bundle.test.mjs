@@ -263,7 +263,7 @@ test("REAL 24 FPS native cinematic portable ZIP renders verified 1280x720 video 
   const project=await buildPortableVideoBundle(settings([clip],[shot(clip,{
     frames:48,startFrame:0,fadeInFrames:6,fadeOutFrames:6,
     caption:"Real original native 24fps footage",
-  })],{quality:"cinematic",profile:"landscape",delivery:"all"}));
+  })],{quality:"cinematic",profile:"landscape",delivery:"all",grade:"monochrome",framing:"cover"}));
   assert.equal(project.manifest.fps,24);
   assert.equal(project.manifest.frames,48);
   const zip=join(dir,"movie.zip"),extracted=join(dir,"extracted");
@@ -299,6 +299,20 @@ test("REAL 24 FPS native cinematic portable ZIP renders verified 1280x720 video 
   assert.equal(receipt.video.height,720);
   assert.equal(receipt.video.frame_count,48);
   assert.equal(receipt.video.duration_seconds,2);
+  assert.equal(receipt.grade,"monochrome");
+  assert.equal(receipt.framing,"cover");
+  const pixels=spawnSync("ffmpeg",["-v","error","-ss","1","-i",join(output,"video.mp4"),
+    "-frames:v","1","-vf","scale=32:18","-pix_fmt","rgb24","-f","rawvideo","pipe:1"],{timeout:30000});
+  assert.equal(pixels.status,0,pixels.stderr?.toString());
+  assert.equal(pixels.stdout.length,32*18*3);
+  let spread=0,lo=255,hi=0;
+  for(let i=0;i<pixels.stdout.length;i+=3){
+    const rgb=[pixels.stdout[i],pixels.stdout[i+1],pixels.stdout[i+2]];
+    spread=Math.max(spread,Math.max(...rgb)-Math.min(...rgb));
+    lo=Math.min(lo,...rgb);hi=Math.max(hi,...rgb);
+  }
+  assert.ok(spread<=4,"Monochrome filter did not remove chroma: "+spread);
+  assert.ok(hi-lo>50,"Rendered sample must contain real nonuniform imagery");
   assert.equal(receipt.deliverables["video.webm"].fps,"24/1");
   assert.equal(receipt.deliverables["video.webm"].frame_count,48);
   assert.equal(receipt.deliverables["video.webm"].audio,false);
@@ -360,4 +374,10 @@ test("portable delivery rejects unsupported values and preserves legacy default 
     const bundle=await buildPortableVideoBundle(settings([source],[shot(source)],{delivery}));
     assert.equal(bundle.manifest.delivery,delivery);
   }
+});
+
+test("portable grade and framing allowlist rejects command/filter injection",async()=>{
+  const source=media("local.mp4",Buffer.from("local test source"));
+  for(const look of [{grade:"hue=s=0"},{grade:null},{grade:"warm;touch x"},{framing:"crop=1"},{framing:[]}])
+    await assert.rejects(()=>buildPortableVideoBundle(settings([source],[shot(source)],look)),/color grade or framing/);
 });
