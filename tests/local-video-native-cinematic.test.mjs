@@ -75,7 +75,7 @@ test("24fps editor precision operations preserve original frames, real seconds a
   assert.equal(timelineSegments(shifted,24).frames,73);
   assert.deepEqual(moveTimelineShot(shots,1,-1,24),[second,first]);
   assert.equal(duplicateTimelineShot(shots,1,24).length,3);
-  for(const bad of [0,16,25,NaN])assert.throws(()=>timelineSegments(shots,bad));
+  for(const bad of [0,15,25,NaN])assert.throws(()=>timelineSegments(shots,bad));
   assert.throws(()=>timelineSeek(shots,72,24),/Timeline seek/);
   assert.deepEqual(shots,state(),"frame operations do not mutate original edit state");
 });
