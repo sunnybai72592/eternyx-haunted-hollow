@@ -3,7 +3,7 @@ export const MAX_BYTES=20*1024*1024;
 const BUCKET='pentest-evidence';
 const MIME=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/plain','text/csv','application/json']);
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-evidence-action,x-evidence-id,x-evidence-name,x-evidence-description','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'private, no-store, max-age=0','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
+const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-evidence-action,x-evidence-id,x-evidence-name,x-evidence-description,x-evidence-request-id','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'private, no-store, max-age=0','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 const json=(status,code)=>new Response(JSON.stringify({code}),{status,headers:{...headers,'Content-Type':'application/json'}});
 const safePath=(path,owner,engagement)=>typeof path==='string'&&path.startsWith(owner+'/'+engagement+'/')&&/^[A-Za-z0-9._-]{1,240}$/.test(path.split('/')[2]??'')&&path.split('/').length===3&&!['.','..'].includes(path.split('/')[2]);
 async function boundedBytes(req,limit){
@@ -27,6 +27,10 @@ const decode=(value,limit)=>{
  if(typeof value!=='string'||value.length>limit*12)return null;
  try{const text=decodeURIComponent(value);return text.length<=limit&&!/[\u0000-\u001f\u007f]/.test(text)?text:null;}catch{return null;}
 };
+export async function sha256(bytes){
+ const digest=await crypto.subtle.digest('SHA-256',bytes);
+ return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+}
 export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fetcher=fetch,randomId=()=>crypto.randomUUID()}){
  return async(req)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
@@ -49,16 +53,30 @@ export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fe
    const user=await userResponse.json();
    if(!UUID.test(user.id??'')||user.is_anonymous===true)return json(401,'authentication-required');
    const owner=user.id;
+   const reserve=async(requestId,bytes)=>{
+    const result=await call('/rest/v1/rpc/security_evidence_gateway_reserve',true,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_owner:owner,p_request:requestId,p_bytes:bytes})});
+    if(!result.ok)return 'unavailable';
+    const decision=await result.json();
+    return ['reserved','replay','quota'].includes(decision)?decision:'unavailable';
+   };
+   const rejectReservation=(decision)=>json(decision==='quota'?429:decision==='replay'?409:503,decision==='quota'?'quota-exceeded':decision==='replay'?'request-already-used':'controls-unavailable');
    // User-token queries, never privileged metadata queries. Wave 20's RLS
    // session fence is required before enabling this service.
    if(action==='download'){
     const query='pentest_evidence?select=id,owner_id,engagement_id,storage_path,file_size&id=eq.'+id+'&owner_id=eq.'+owner;
     const row=await readOne(query);
     if(!row||row.id!==id||row.owner_id!==owner||!UUID.test(row.engagement_id??'')||!safePath(row.storage_path,owner,row.engagement_id)||!Number.isSafeInteger(row.file_size)||row.file_size<1||row.file_size>MAX_BYTES)return json(404,'evidence-unavailable');
+    const decision=await reserve(randomId(),row.file_size);
+    if(decision!=='reserved')return rejectReservation(decision);
+    const digestResponse=await call('/rest/v1/security_evidence_gateway_digests?select=owner_id,byte_count,sha256&storage_path=eq.'+encodeURIComponent(row.storage_path)+'&owner_id=eq.'+owner,true);
+    if(!digestResponse.ok)return json(503,'controls-unavailable');
+    const digests=await digestResponse.json();
+    const expected=Array.isArray(digests)&&digests.length===1?digests[0]:null;
+    if(!expected||expected.owner_id!==owner||expected.byte_count!==row.file_size||!/^[0-9a-f]{64}$/.test(expected.sha256??''))return json(409,'evidence-digest-unavailable');
     const object=await call('/storage/v1/object/authenticated/'+BUCKET+'/'+row.storage_path,true);
     if(!object.ok)return json(404,'evidence-unavailable');
     const bytes=await boundedBytes(object,row.file_size);
-    if(!bytes||bytes.byteLength!==row.file_size)return json(409,'evidence-integrity-mismatch');
+    if(!bytes||bytes.byteLength!==row.file_size||await sha256(bytes)!==expected.sha256)return json(409,'evidence-integrity-mismatch');
     // Recheck authorization immediately before releasing any bytes.
     const latest=await readOne(query);
     if(!latest||latest.owner_id!==owner||latest.id!==id||latest.engagement_id!==row.engagement_id||latest.storage_path!==row.storage_path||latest.file_size!==row.file_size)return json(404,'evidence-unavailable');
@@ -73,6 +91,11 @@ export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fe
    const engagementQuery='pentest_engagements?select=id,owner_id&id=eq.'+id+'&owner_id=eq.'+owner;
    const engagement=await readOne(engagementQuery);
    if(!engagement||engagement.id!==id||engagement.owner_id!==owner)return json(404,'engagement-unavailable');
+   const requestId=req.headers.get('x-evidence-request-id')??'';
+   if(!UUID.test(requestId))return json(400,'invalid-request-id');
+   // Conservatively charge the whole upload cap before reading any bytes.
+   const decision=await reserve(requestId,MAX_BYTES);
+   if(decision!=='reserved')return rejectReservation(decision);
    const bytes=await boundedBytes(req,MAX_BYTES);
    if(!bytes)return json(413,'invalid-file-size');
    const suffix=filename.normalize('NFKC').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^\.+/,'').slice(-180)||'evidence';
@@ -82,6 +105,8 @@ export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fe
    if(!latest||latest.id!==id||latest.owner_id!==owner)return json(404,'engagement-unavailable');
    const uploaded=await call('/storage/v1/object/'+BUCKET+'/'+path,true,{method:'POST',headers:{'Content-Type':mime,'x-upsert':'false'},body:bytes});
    if(!uploaded.ok)return json(502,'upload-failed');
+   const sealed=await call('/rest/v1/security_evidence_gateway_digests',true,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({storage_path:path,owner_id:owner,byte_count:bytes.byteLength,sha256:await sha256(bytes)})});
+   if(!sealed.ok)return json(409,'digest-registration-unconfirmed');
    // Registration retains user RLS and existing audit trigger. On uncertain
    // registration failure retain the orphan for review; never delete evidence.
    const registered=await call('/rest/v1/pentest_evidence',false,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({owner_id:owner,engagement_id:id,storage_path:path,file_name:filename,mime_type:mime,file_size:bytes.byteLength,description:description||null})});
