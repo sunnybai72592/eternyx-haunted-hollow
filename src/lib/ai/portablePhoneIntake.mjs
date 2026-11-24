@@ -232,7 +232,11 @@ export async function buildPortablePhoneIntake({
        blob:new Blob([JSON.stringify(checkedMovie,null,2)+"\n"])},
       {path:"phone-movie-edit-draft.json",
        blob:new Blob([serializePhoneMovieEditDraft({
-         originals,start,seconds,moviePlan:checkedMovie,
+         originals,start,seconds,moviePlan:{
+           profile:checkedMovie.profile,quality:checkedMovie.quality,
+           delivery:checkedMovie.delivery,framing:checkedMovie.framing,
+           shots:checkedMovie.shots,
+         },
        }).json])},
       {path:"finish_phone_movie.py",
        blob:script("finish_phone_movie.py",pythonSources["finish_phone_movie.py"])},
