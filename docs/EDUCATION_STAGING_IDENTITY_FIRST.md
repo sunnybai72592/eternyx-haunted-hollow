@@ -1,0 +1,9 @@
+# Education staging identity-first acceptance
+
+Live staging deployment on 2026-11-24: all ten SQL files applied successfully, all 31 catalog checks true, 11 Education tables with RLS enabled. Read-only counts after deployment: zero Auth accounts, instructor grants, exams, attempts or final grades. No production change. Advisor notes about deny-by-default tables and authenticated SECURITY DEFINER RPCs are not automatically cleared; the latter require real role checks.
+
+Before configuring any exam fixture, create **three dedicated staging Auth users** using the Supabase Auth dashboard (not direct SQL inserts into auth.users). Use distinct `rls-` addresses, strong distinct passwords and confirmed email state, with no admin privileges. No production accounts. Store credentials only in GitHub's protected `rls-staging` environment: ETERNYX_RLS_TEST_A_EMAIL/PASSWORD, ETERNYX_RLS_TEST_B_EMAIL/PASSWORD, ETERNYX_RLS_INSTRUCTOR_EMAIL/PASSWORD, ETERNYX_RLS_STAGING_URL, ETERNYX_RLS_STAGING_PUBLISHABLE_KEY; set staging and production reference variables. Never commit credentials.
+
+Run the manual Education staging identity acceptance workflow on main with explicit approval and mode `accounts`. This checks two students, a non-admin ungranted instructor candidate, actual Auth getUser, distinct identities, anonymous RPC denial and signout, without exam fixtures or privileged credentials. After independently approved instructor grant provisioning, run mode `granted` to check the verified instructor is still not admin. Next provision isolated test fixtures and execute the existing hosted release workflow. A successful identity check is not a complete CBT acceptance or production approval.
+
+The connector used for SQL deployment does not provide supported Auth-user creation, GitHub secret configuration or workflow dispatch actions. Operators must create the users and configure the protected environment in the respective dashboards; do not post passwords in chat.

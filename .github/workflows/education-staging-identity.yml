@@ -1,0 +1,56 @@
+name: ETERNYX Education staging identity acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      approve_identity_check:
+        type: boolean
+        required: true
+        default: false
+      identity_mode:
+        type: choice
+        required: true
+        default: accounts
+        options:
+          - accounts
+          - granted
+permissions:
+  contents: read
+concurrency:
+  group: eternyx-education-hosted-shared-staging
+  cancel-in-progress: false
+jobs:
+  verify-identities:
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && inputs.approve_identity_check }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify three real staging Auth identities and role boundaries
+        timeout-minutes: 4
+        env:
+          ETERNYX_EDU_IDENTITY_APPROVAL: "I_APPROVE_EDUCATION_STAGING_IDENTITY_CHECK"
+          ETERNYX_EDU_IDENTITY_MODE: ${{ inputs.identity_mode }}
+          ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+          ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+        run: node scripts/staging/runEducationStagingIdentity.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: education-staging-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-staging-identity.json
+          if-no-files-found: warn
+          retention-days: 7
