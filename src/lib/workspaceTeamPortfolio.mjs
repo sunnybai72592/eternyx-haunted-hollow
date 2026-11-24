@@ -1,10 +1,10 @@
 // A bounded on-demand portfolio; no task bodies, member IDs or data from unverified teams.
 import {verifyWorkspaceTeamSpacePage,verifyWorkspaceTeamCompletePage,verifyWorkspaceTeamDetails} from "./workspaceTeamAccess.mjs";
-import {workspaceTeamWorkload,workspaceTeamTaskDueBucket} from "./workspaceTeamTaskOperations.mjs";
+import {workspaceTeamWorkload,workspaceTeamTaskDueBucket,csvCell} from "./workspaceTeamTaskOperations.mjs";
 import {workspaceValidGregorianDay} from "./workspaceTeamUtils.mjs";
 export const WORKSPACE_PORTFOLIO_BATCH=5;
 export function workspacePortfolioDirectory(spaces,{query="",status="all",page=0}={}){
-  verifyWorkspaceTeamSpacePage(spaces,spaces?.length);
+  verifyWorkspaceTeamSpacePage(spaces,spaces?.length,150);
   if(typeof query!=="string"||query.length>120||!["all","active","archived"].includes(status)||
     !Number.isSafeInteger(page)||page<0||spaces.some(s=>typeof s.name!=="string"||!s.name.trim()))
     throw Error("Invalid portfolio directory");
@@ -46,4 +46,31 @@ export function workspacePortfolioTotals(results,expectedIds){
     for(const k of keys)totals[k]+=r[k];
   }
   return totals;
+}
+
+export function workspacePortfolioScope(owner,today,spaces){
+  if(typeof owner!=="string"||!owner||!workspaceValidGregorianDay(today)||
+    !Array.isArray(spaces)||spaces.length>WORKSPACE_PORTFOLIO_BATCH)
+    throw Error("Invalid portfolio review scope");
+  verifyWorkspaceTeamSpacePage(spaces,spaces.length,WORKSPACE_PORTFOLIO_BATCH);
+  return JSON.stringify([owner,today,spaces.map(s=>[s.id,s.owner_id,s.status,s.name])]);
+}
+export function workspacePortfolioReportRows(results,expectedIds,sort="name"){
+  const totals=workspacePortfolioTotals(results,expectedIds);
+  if(!totals)throw Error("Complete verified portfolio page required");
+  if(!["name","overdue","urgent","mine"].includes(sort)||
+    results.some(r=>typeof r.name!=="string"||!r.name.trim()||r.name.length>120||
+      !["active","archived"].includes(r.status)||!["owner","editor","viewer"].includes(r.role)||
+      !Number.isSafeInteger(r.memberCount)||r.memberCount<1||r.memberCount>20))
+    throw Error("Invalid portfolio report metadata");
+  return [...results].sort((a,b)=>(sort==="name"?0:b[sort]-a[sort])||
+    a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+}
+export function buildWorkspacePortfolioCsv(results,expectedIds,today,reviewedAt,sort="name"){
+  if(!workspaceValidGregorianDay(today)||typeof reviewedAt!=="string"||
+    !Number.isFinite(Date.parse(reviewedAt)))throw Error("Invalid portfolio report timestamp");
+  const rows=workspacePortfolioReportRows(results,expectedIds,sort);
+  const header=["Team","Team status","My role","Members","Tasks","Completed","Open","Overdue","Urgent open","My open","Unassigned open","Local reference day","Review completed UTC"];
+  const body=rows.map(r=>[r.name,r.status,r.role,r.memberCount,r.total,r.done,r.open,r.overdue,r.urgent,r.mine,r.unassigned,today,new Date(reviewedAt).toISOString()]);
+  return "\uFEFF"+[header,...body].map(row=>row.map(csvCell).join(",")).join("\r\n")+"\r\n";
 }

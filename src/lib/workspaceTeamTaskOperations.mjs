@@ -88,7 +88,7 @@ export function selectWorkspaceTeamTasks(tasks,{
     return value||String(a.id).localeCompare(String(b.id));
   });
 }
-function csvCell(value){
+export function csvCell(value){
   const text=String(value??"").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu,"\uFFFD");
   // Spreadsheet imports differ. Protect control-led cells and compatibility
   // forms of formula prefixes, but preserve the original text otherwise.
