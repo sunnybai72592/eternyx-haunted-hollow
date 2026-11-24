@@ -594,7 +594,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     className={board?"space-y-2 rounded-lg border border-border bg-background/60 p-3 text-xs":
       "flex flex-wrap items-center gap-3 py-3 text-xs"}>
     <div className="min-w-0 flex-1">
-      {board&&editor&&<div className="mb-2 flex items-center justify-between gap-2">
+      {board&&taskLayout==="board"&&editor&&
+        <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">Move between columns</span>
         <span draggable={!busy&&!disabled&&!loading}
           onDragStart={event=>startBoardDrag(event,task)}
