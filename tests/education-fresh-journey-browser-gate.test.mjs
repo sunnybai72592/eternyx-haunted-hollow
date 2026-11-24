@@ -192,7 +192,9 @@ test("workflow runs real-browser journey only after five successful backend stag
  const gate=workflow.indexOf("Refuse a full staging journey verdict without fresh-attempt browser proof");
  const cleanup=workflow.indexOf("Erase protected fresh-attempt handoff");
  const upload=workflow.indexOf("Upload sanitized same-run evidence for independent review");
- assert.ok(backendStep>0 && build>backendStep && browser>build &&
+ const launch=workflow.indexOf("Prove Chromium can launch locally before consuming the synthetic attempt");
+ const preview=workflow.indexOf("Start local staging-targeted journey UI preview");
+ assert.ok(build>0 && preview>build && launch>preview && backendStep>launch && browser>backendStep &&
    gate>browser && cleanup>gate && upload>cleanup);
  assert.match(workflow,/environment: rls-staging/);
  assert.match(workflow,/github\.ref == 'refs\/heads\/main'/);
@@ -202,6 +204,7 @@ test("workflow runs real-browser journey only after five successful backend stag
   "Build disposable frontend against staging only for the newly finalized attempt",
   "Install isolated Chromium for fresh staging journey without credentials",
   "Start local staging-targeted journey UI preview with no account credentials",
+  "Prove Chromium can launch locally before consuming the synthetic attempt",
   "Verify newly finalized owned attempt in real desktop and mobile browser",
   "Refuse a full staging journey verdict without fresh-attempt browser proof",
  ])assert.match(step(label),/if: inputs\.run_mode == 'journey'/);
@@ -239,6 +242,7 @@ test("new Chrome frontend uses staging public key but neither service role nor D
  for(const label of [
   "Install isolated Chromium for fresh staging journey without credentials",
   "Start local staging-targeted journey UI preview with no account credentials",
+  "Prove Chromium can launch locally before consuming the synthetic attempt",
   "Refuse a full staging journey verdict without fresh-attempt browser proof",
  ])
   assert.doesNotMatch(step(label),/\$\{\{\s*secrets\./,label);
