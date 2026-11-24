@@ -465,3 +465,46 @@ test("real three-track movie mixes distinct music, narration and effects with in
   }
   await assert.rejects(()=>buildPortableVideoBundle(settings([source],[shot(source,{frames:48})],{quality:"cinematic",soundtrack,narration:{...soundtrack}})),/unique/);
 });
+
+test("real frame-preserving scene transitions at both timebases retain timeline and decoded colors",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir();
+  const generate=(args)=>{const r=spawnSync("ffmpeg",["-nostdin","-v","error","-y",...args],{encoding:"utf8",timeout:45000});assert.equal(r.status,0,r.stderr);};
+  for(const [fps,quality,modes] of [[16,"standard",["wipe_left","wipe_right","wipe_up","wipe_down"]],[24,"cinematic",["dissolve"]]]){
+    const sources=["red","blue","green"].map(color=>{
+      const name=color+"-"+fps+".mp4",path=join(dir,name);
+      generate(["-f","lavfi","-i","color="+color+":size=96x56:rate="+fps+":duration=1","-threads","1","-c:v","libx264","-pix_fmt","yuv420p",path]);
+      return media(name,readFileSync(path));
+    });
+    const shots=sources.map((source,i)=>shot(source,{frames:fps,caption:"Scene "+(i+1)}));
+    for(const mode of modes){
+      const transition={mode,duration_ms:250};
+      const pack=await buildPortableVideoBundle(settings(sources,shots,{quality,transition,framing:"cover"}));
+      const folder=join(dir,mode),zip=join(dir,mode+".zip");mkdirSync(folder);
+      writeFileSync(zip,Buffer.from(await pack.blob.arrayBuffer()));extractedZip(zip,folder);
+      const result=spawnSync("python3",["launch_portable_video.py","--run"],{cwd:folder,encoding:"utf8",timeout:240000});
+      assert.equal(result.status,0,result.stderr+"\n"+result.stdout);
+      const out=join(folder,"eternyx-video-output");
+      const receipt=JSON.parse(readFileSync(join(out,"manifest.json"),"utf8"));
+      assert.deepEqual(receipt.transition,transition);
+      assert.equal(receipt.video.frame_count,3*fps);
+      assert.deepEqual(receipt.shots.map(x=>x.timeline_start_frame),[0,fps,2*fps]);
+      assert.match(readFileSync(join(out,"captions.srt"),"utf8"),/00:00:01,000 --> 00:00:02,000/);
+      const r=spawnSync("ffmpeg",["-v","error","-i",join(out,"video.mp4"),"-vf","scale=16:16:flags=neighbor","-pix_fmt","rgb24","-f","rawvideo","pipe:1"],{timeout:30000,maxBuffer:1024*1024});
+      assert.equal(r.status,0,r.stderr?.toString());assert.equal(r.stdout.length,3*fps*16*16*3);
+      const px=(frame,x=8,y=8)=>Array.from(r.stdout.subarray((frame*256+y*16+x)*3,(frame*256+y*16+x)*3+3));
+      const red=p=>p[0]>160&&p[2]<80,blue=p=>p[2]>160&&p[0]<80;
+      assert.ok(red(px(fps-1)),mode+" previous shot");
+      assert.ok(red(px(fps)),mode+" first transition frame");
+      assert.ok(blue(px(fps+fps/4)),mode+" finished transition");
+      const mid=fps+fps/8;
+      if(mode==="dissolve"){const p=px(mid);assert.ok(p[0]>70&&p[2]>70,JSON.stringify(p));}
+      if(mode==="wipe_left"){assert.ok(blue(px(mid,2,8)));assert.ok(red(px(mid,13,8)));}
+      if(mode==="wipe_right"){assert.ok(red(px(mid,2,8)));assert.ok(blue(px(mid,13,8)));}
+      if(mode==="wipe_up"){assert.ok(blue(px(mid,8,2)));assert.ok(red(px(mid,8,13)));}
+      if(mode==="wipe_down"){assert.ok(red(px(mid,8,2)));assert.ok(blue(px(mid,8,13)));}
+      const final=px(3*fps-1);assert.ok(final[1]>90&&final[0]<80&&final[2]<80,"third scene retained");
+    }
+  }
+});

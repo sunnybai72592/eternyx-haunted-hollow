@@ -90,7 +90,20 @@ export function checkSoundtrackEdit(soundtrack,totalFrames,fps){
   return result;
 }
 
-export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard" }) {
+export const LOCAL_VIDEO_TRANSITIONS=Object.freeze(["dissolve","wipe_left","wipe_right","wipe_up","wipe_down"]);
+export function checkLocalVideoTransition(transition,shots,fps){
+  if(transition===undefined)return undefined;
+  if(!transition||typeof transition!=="object"||Array.isArray(transition)||
+     Object.keys(transition).length!==2||!Object.hasOwn(transition,"mode")||!Object.hasOwn(transition,"duration_ms")||
+     !LOCAL_VIDEO_TRANSITIONS.includes(transition.mode)||![250,500].includes(transition.duration_ms))
+    throw new Error("Unsupported scene transition preset or duration.");
+  const frames=transition.duration_ms*fps/1000;
+  if(!Array.isArray(shots)||shots.length<2||shots.slice(1).some(shot=>shot.frames<=frames))
+    throw new Error("Scene transition requires at least two cuts and each incoming cut longer than the transition.");
+  return {mode:transition.mode,duration_ms:transition.duration_ms};
+}
+
+export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard", transition }) {
   const fps=localVideoFps(quality),maxFrames=localVideoMaxFrames(fps),maxSource=localVideoMaxSourceFrames(fps);
   const clips = validateUniqueClips(sources);
   if (!Array.isArray(shots) || shots.length === 0 || shots.length > LOCAL_VIDEO_LIMITS.maxClips) {
@@ -117,7 +130,8 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narrat
       fade_in_frames: fadeIn, fade_out_frames: fadeOut,
     };
   });
-  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}) };
+  const sceneTransition=checkLocalVideoTransition(transition,normalized,fps);
+  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}), ...(sceneTransition?{transition:sceneTransition}:{}) };
   const names=new Set([...clips.keys()].map(name=>name.toLowerCase()));
   for(const [role,track] of [["soundtrack",soundtrack],["narration",narration],["effects",effects]]){
     if(track===null)continue;
