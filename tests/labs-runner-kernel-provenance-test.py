@@ -27,6 +27,35 @@ class ProvenanceTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(RuntimeError):
                 p.metadata_pin(value, PKG, VER)
 
+    def test_real_guest_version_with_tilde_in_signed_filename(self):
+        release, package, version = p.fixed_guest_identity()
+        name = ("pool/main/l/linux-signed-aws-7.0/" + package + "_" +
+                version + "_amd64.deb")
+        metadata = record(name=name).replace(PKG,package).replace(VER,version)
+        self.assertEqual(p.metadata_pin(metadata,package,version),("a"*64,100))
+        self.assertEqual(p.validate_archive_path(name),name)
+
+    def test_archive_path_allows_legitimate_version_characters(self):
+        for name in ("pool/main/l/linux/pkg_1.2~24.04.1+build-1_amd64.deb",
+                     "pool/restricted/l/linux-signed-aws/pkg_7.0-1014_amd64.deb"):
+            self.assertEqual(p.validate_archive_path(name),name)
+
+    def test_archive_path_rejects_unsafe_or_unbounded_inputs(self):
+        for name in ("/pool/main/a.deb","https://example.invalid/pool/main/a.deb",
+                     "pool/../a.deb","pool/main/./a.deb","pool//a.deb",
+                     "pool/main/%2e%2e/a.deb","pool/main/a.deb?x=1",
+                     "pool/main/a.deb#x","pool/main/a\\b.deb",
+                     "pool/main/a b.deb","pool/main/a\nb.deb",
+                     "pool/main/a.deb/","pool/main/a.rpm","pool/a.deb",
+                     "pool/main/"+"a"*256+".deb"):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError,"archive path"):
+                p.validate_archive_path(name)
+
+    def test_signed_metadata_still_rejects_conflicts_with_tilde_paths(self):
+        path="pool/main/l/linux/pkg_1.2~24.04.1_amd64.deb"
+        with self.assertRaisesRegex(RuntimeError,"conflicting"):
+            p.metadata_pin(record(name=path)+"\n"+record(sha="b"*64,name=path),PKG,VER)
+
     def test_exact_version_and_package_owner(self):
         p.validate_identity("6.17.0-1001-azure",PKG,VER,"amd64")
         for args in (("6.17.0-1001-azure","other",VER,"amd64"),
