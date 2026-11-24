@@ -6,6 +6,7 @@ on:
       - 'supabase/functions/ctf-*/**'
       - 'supabase/config.toml'
       - 'scripts/labs-bootstrap-*'
+      - 'scripts/sql/labs-staging-terminal-fixtures.sql'
       - 'tests/sql/ctf-*.sql'
       - 'tests/sql/eternyx-labs-*.sql'
       - 'tests/eternyx-labs-bootstrap.test.mjs'

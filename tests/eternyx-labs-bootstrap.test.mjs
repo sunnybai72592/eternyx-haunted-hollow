@@ -67,3 +67,16 @@ test("forward repair exactly matches the server public session projection",async
   assert.match(smoke,/Wildcard select leaked/);
   assert.match(smoke,/Owner B visibility failed/);
 });
+
+test("terminal fixture operator script has consent, exact staged history, zero budget and no active allocation",async()=>{
+ const sql=await read("scripts/sql/labs-staging-terminal-fixtures.sql");
+ const runner=await read("scripts/labs-bootstrap-rehearsal.sh");
+ assert.match(sql,/I_APPROVE_TWO_TERMINAL_STAGING_FIXTURES/);
+ assert.match(sql,/Staging deployment history mismatch/);
+ assert.match(sql,/max_active_sessions=0/);
+ assert.match(sql,/max_24h_micro_usd=0/);
+ assert.match(sql,/interval '72 hours'/);
+ assert.match(sql,/ON CONFLICT \(id\) DO NOTHING/);
+ assert.doesNotMatch(sql,/\b(?:UPDATE|DELETE FROM|DROP TABLE|CREATE FUNCTION|GRANT)\b/);
+ assert.match(runner,/labs-staging-terminal-fixtures\.sql scripts\/sql\/labs-staging-terminal-fixtures\.sql/);
+});
