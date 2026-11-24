@@ -17,7 +17,7 @@ function help() {
     "          RANGE_SESSION_ID=<trusted reservation UUID>",
     "          RANGE_GATEWAY_PORT=<verified localhost managed gateway port>",
     "          RANGE_GATEWAY_TOKEN=<private 64 hex gateway credential>",
-    "          RANGE_ACCESS_CHECK_URL=https://<project>/functions/v1/ctf-range-access-check",
+    "          RANGE_ACCESS_CHECK_URL=https://mhodwvypfbxafamkrgsk.supabase.co/functions/v1/ctf-range-access-check",
     "          CTF_RANGE_PROXY_TOKEN=<dedicated private proxy verifier secret>",
     "Run: npm run range:ingress -- --serve",
     "Every request needs both an ETERNYX-issued grant bearer and a current Supabase Auth JWT.",

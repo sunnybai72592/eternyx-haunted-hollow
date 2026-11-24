@@ -14,6 +14,27 @@ const paths = new Set([
   "/api/ops/report", "/api/verify",
 ]);
 const methods = new Set(["GET", "POST"]);
+export const STAGING_VERIFIER_URL = "https://mhodwvypfbxafamkrgsk.supabase.co/functions/v1/ctf-range-access-check";
+async function boundedResponse(response, limit) {
+  const length=response.headers.get("content-length");
+  if(length!==null&&(!/^\d+$/.test(length)||Number(length)>limit)){
+    await response.body?.cancel().catch(()=>{});
+    throw new Error("Response exceeds ingress limit");
+  }
+  const reader=response.body?.getReader();
+  if(!reader)return Buffer.alloc(0);
+  const chunks=[];let bytes=0;
+  try {
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done)break;
+      bytes+=value.byteLength;
+      if(bytes>limit)throw new Error("Response exceeds ingress limit");
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks);
+  }finally{await reader.cancel().catch(()=>{});}
+}
 const outHeaders = {
   "Cache-Control": "no-store",
   "Pragma": "no-cache",
@@ -30,8 +51,8 @@ function reply(res, status, error) {
  * Purely fixed-destination HTTPS verifier client; no caller-supplied URL.
  */
 export class RangeAccessVerifier {
-  constructor(url, secret) {
-    if (typeof url !== "string" || typeof secret !== "string" || secret.length < 48) {
+  constructor(url, secret, fetcher = globalThis.fetch) {
+    if (typeof url !== "string" || typeof secret !== "string" || !/^[A-Za-z0-9_-]{48,256}$/.test(secret) || typeof fetcher !== "function") {
       throw new Error("Missing private ingress verifier configuration");
     }
     const target = new URL(url);
@@ -40,15 +61,19 @@ export class RangeAccessVerifier {
         target.username || target.password || target.search || target.hash) {
       throw new Error("Verifier must use exact HTTPS Edge Function path");
     }
+    if (url !== STAGING_VERIFIER_URL || target.toString() !== STAGING_VERIFIER_URL)
+      throw new Error("Verifier must use exact approved staging HTTPS Edge Function");
     this.url = target.toString();
     this.secret = secret;
+    this.fetcher = fetcher;
   }
 
   async check(sessionId, accessToken, userJwt) {
-    if (!validUserJwt(userJwt)) throw new Error("Invalid signed-in learner JWT");
-    const response = await fetch(this.url, {
+    if (!validSessionId(sessionId) || !validAccessToken(accessToken) || !validUserJwt(userJwt)) throw new Error("Invalid range verification credentials");
+    const response = await this.fetcher(this.url, {
       method: "POST",
       redirect: "error",
+      credentials: "omit", cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         "x-range-proxy-token": this.secret,
@@ -57,10 +82,17 @@ export class RangeAccessVerifier {
       body: JSON.stringify({ action: "check", sessionId, accessToken }),
       signal: AbortSignal.timeout(3000),
     });
-    if (response.status === 403) return false;
-    if (!response.ok) throw new Error("Trusted range verifier is unavailable");
-    const result = await response.json();
-    return result?.authorized === true;
+    if(response.redirected || response.headers.has("location")) throw new Error("Unexpected verifier redirect");
+    if (response.status === 403) { await response.body?.cancel().catch(()=>{}); return false; }
+    if (response.status !== 200 || !/^application\/json(?:;|$)/i.test(response.headers.get("content-type")??"") ||
+        !/\bno-store\b/i.test(response.headers.get("cache-control")??"")) {
+      await response.body?.cancel().catch(()=>{});
+      throw new Error("Trusted range verifier is unavailable");
+    }
+    const result = JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(await boundedResponse(response,1024)));
+    if(!result||typeof result!=="object"||Array.isArray(result)||Object.keys(result).length!==1||typeof result.authorized!=="boolean")
+      throw new Error("Unexpected verifier response");
+    return result.authorized === true;
   }
 }
 
@@ -78,8 +110,12 @@ export async function startLocalIngress({
   }
 
   let localPort = port;
-  const server = createServer(async (req, res) => {
+  const deadline=Date.now()+lifetimeSeconds*1000;
+  let closed=false;
+  const sockets=new Set();
+  const server = createServer({maxHeaderSize:8192,requestTimeout:10000,headersTimeout:5000,keepAliveTimeout:1000},async (req, res) => {
     try {
+      if(closed||Date.now()>=deadline)return reply(res,503,"Local ingress expired");
       if (!new RegExp("^(127\\.0\\.0\\.1|localhost):" + localPort + "$").test(req.headers.host || "")) {
         return reply(res, 421, "Loopback Host required");
       }
@@ -89,7 +125,7 @@ export async function startLocalIngress({
       }
       const destination = new URL(req.url, "http://127.0.0.1:" + gatewayPort);
       if (destination.origin !== "http://127.0.0.1:" + gatewayPort ||
-          !paths.has(destination.pathname)) return reply(res, 404, "Unknown range resource");
+          !paths.has(destination.pathname) || req.url.split("?")[0]!==destination.pathname) return reply(res, 404, "Unknown range resource");
       if (req.method === "POST" && destination.pathname !== "/api/verify") {
         return reply(res, 405, "POST is not supported on this resource");
       }
@@ -112,6 +148,7 @@ export async function startLocalIngress({
       try { authorized = await verifier.check(sessionId, accessToken, userJwt); }
       catch { return reply(res, 503, "Session authorization temporarily unavailable"); }
       if (!authorized) return reply(res, 403, "Session authorization rejected");
+      if(closed||Date.now()>=deadline)return reply(res,503,"Local ingress expired");
 
       let body;
       if (req.method === "POST") {
@@ -125,6 +162,7 @@ export async function startLocalIngress({
         body = Buffer.concat(chunks);
       }
 
+      if(closed||Date.now()>=deadline)return reply(res,503,"Local ingress expired");
       const headers = { Authorization: "Bearer " + gatewayToken };
       if (typeof req.headers["content-type"] === "string") {
         headers["Content-Type"] = req.headers["content-type"].slice(0, 120);
@@ -140,8 +178,14 @@ export async function startLocalIngress({
         ...(req.method === "POST" ? { body } : {}),
         signal: AbortSignal.timeout(3500),
       });
-      const data = Buffer.from(await target.arrayBuffer());
-      if (data.length > 32768) return reply(res, 502, "Range response too large");
+      if(target.status>=300&&target.status<400){
+        await target.body?.cancel().catch(()=>{});
+        return reply(res,502,"Range redirect refused");
+      }
+      let data;
+      try{data=await boundedResponse(target,32768);}
+      catch{return reply(res,502,"Range response too large or incomplete");}
+      if(closed||Date.now()>=deadline)return reply(res,503,"Local ingress expired");
       const safe = { ...outHeaders };
       const type = target.headers.get("content-type");
       if (type && type.length < 120) safe["Content-Type"] = type;
@@ -153,6 +197,8 @@ export async function startLocalIngress({
     }
   });
 
+  server.on("connection",socket=>{sockets.add(socket);socket.once("close",()=>sockets.delete(socket));});
+  server.maxConnections=32;
   await new Promise((ok, fail) => {
     server.once("error", fail);
     server.listen(port, "127.0.0.1", () => {
@@ -161,11 +207,16 @@ export async function startLocalIngress({
     });
   });
   localPort = server.address().port;
-  const ttl = setTimeout(() => server.close(() => {}), lifetimeSeconds * 1000);
-  ttl.unref();
+  let closing;
   const close = () => {
+    if(closing)return closing;
+    closed=true;
     clearTimeout(ttl);
-    return new Promise((ok, fail) => server.close((err) => err ? fail(err) : ok()));
+    closing=new Promise((ok,fail)=>server.close(err=>err?fail(err):ok()));
+    for(const socket of sockets)socket.destroy();
+    return closing;
   };
+  const ttl=setTimeout(()=>{void close().catch(()=>{});},Math.max(0,deadline-Date.now()));
+  ttl.unref();
   return { port: localPort, close };
 }
