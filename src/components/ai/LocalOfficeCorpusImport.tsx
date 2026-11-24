@@ -15,7 +15,7 @@ export default function LocalOfficeCorpusImport({existing,disabled,onImport}:Pro
   const read=async(file:File)=>{
     discard();const n=version.current;setBusy(true);
     try{
-      if(!file.size||file.size>MAX_OFFICE_BYTES||! /\.(docx|xlsx)$/i.test(file.name))throw new Error("invalid_office_file");
+      if(!file.size||file.size>MAX_OFFICE_BYTES||! /\.(docx|xlsx|pptx)$/i.test(file.name))throw new Error("invalid_office_file");
       const result=await extractOfficeDocument(file.name,new Uint8Array(await file.arrayBuffer()));
       if(version.current===n)setReport(result);
     }catch(reason){if(version.current===n)setError(reason instanceof Error&&reason.message==="office_browser_unsupported"?"This browser cannot decompress Office ZIP parts. Try a current browser or export plain text/CSV.":"Office extraction rejected: unsupported, invalid, encrypted, oversized, or no readable text. No sources added.");}
@@ -31,9 +31,9 @@ export default function LocalOfficeCorpusImport({existing,disabled,onImport}:Pro
     }catch{setError("Import blocked by duplicate names or corpus limits. No sources added.");}
   };
   return <section aria-label="Local Office document ingestion" className="space-y-3 rounded-xl border border-cyan-500/20 bg-slate-950 p-4">
-    <h3 className="font-semibold text-white">Local Word and Excel ingestion</h3>
-    <p className="text-xs text-slate-400">Read DOCX main-body paragraphs and XLSX worksheet cell values in this browser. No uploads, macros, formula execution or external links. Dates and numbers are raw values, not formatted displays. Hidden worksheets are labeled; headers, footnotes, images, charts, comments and legacy DOC/XLS are not extracted. Maximum 8 MiB archive, 100,000 extracted characters, 30 sheets and 20,000 cells.</p>
-    <label className="block text-sm text-slate-300">Choose DOCX or XLSX<input type="file" accept=".docx,.xlsx" disabled={disabled||busy} className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2 text-xs" onChange={e=>{const file=e.target.files?.[0];e.currentTarget.value="";if(file)void read(file);}}/></label>
+    <h3 className="font-semibold text-white">Local Word, Excel and PowerPoint ingestion</h3>
+    <p className="text-xs text-slate-400">Read DOCX main-body paragraphs, XLSX worksheet cell values and PPTX slide text in this browser. Slide order follows the presentation, not filenames. Speaker notes, images and visual layout are not extracted. No uploads, macros, formula execution or external links. Dates and numbers are raw values, not formatted displays. Hidden worksheets are labeled; headers, footnotes, images, charts, comments and legacy DOC/XLS are not extracted. Maximum 8 MiB archive, 100,000 extracted characters, 30 sheets, 20,000 cells and 60 slides.</p>
+    <label className="block text-sm text-slate-300">Choose DOCX, XLSX or PPTX<input type="file" accept=".docx,.xlsx,.pptx" disabled={disabled||busy} className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2 text-xs" onChange={e=>{const file=e.target.files?.[0];e.currentTarget.value="";if(file)void read(file);}}/></label>
     {busy&&<p role="status" className="text-xs text-slate-300">Extracting local Office text…</p>}
     {report&&<div className="space-y-2">
       <p className="break-all text-xs text-slate-300">{report.name} · {report.sections.length} nonempty sections · {report.characters.toLocaleString()} decoded characters · {report.formulaCells} formula cells ({report.missingFormulaCache} missing cached values).</p>

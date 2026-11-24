@@ -5,7 +5,9 @@ const S="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const R="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const P="http://schemas.openxmlformats.org/package/2006/relationships";
 const C="http://schemas.openxmlformats.org/package/2006/content-types";
-const MAX_TEXT=100000,MAX_SHEETS=30,MAX_CELLS=20000;
+const T="http://schemas.openxmlformats.org/presentationml/2006/main";
+const A="http://schemas.openxmlformats.org/drawingml/2006/main";
+const MAX_TEXT=100000,MAX_SHEETS=30,MAX_CELLS=20000,MAX_SLIDES=60;
 type Parser=(text:string)=>Document;
 const nativeParser:Parser=text=>new DOMParser().parseFromString(text,"application/xml");
 const elements=(node:Document|Element,ns:string,name:string)=>Array.from(node.getElementsByTagNameNS(ns,name));
@@ -20,15 +22,15 @@ function parse(text:string,parser:Parser,ns:string,name:string){
 }
 function plainText(el:Element,ns:string){return elements(el,ns,"t").map(t=>t.textContent??"").join("");}
 function cellText(value:string){return value.replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\t/g,"\\t");}
-export type OfficeExtract={name:string;format:"docx"|"xlsx";sections:{label:string;text:string}[];characters:number;formulaCells:number;missingFormulaCache:number};
+export type OfficeExtract={name:string;format:"docx"|"xlsx"|"pptx";sections:{label:string;text:string}[];characters:number;formulaCells:number;missingFormulaCache:number};
 export async function extractOfficeDocument(name:string,bytes:Uint8Array,parser:Parser=nativeParser):Promise<OfficeExtract>{
   if(typeof name!=="string"||name.length>255||/[\u0000-\u001f\u007f]/.test(name)||bytes.length>MAX_OFFICE_BYTES)fail("invalid_office_file");
   const ext=name.toLowerCase().split(".").pop();
-  if(ext!=="docx"&&ext!=="xlsx")return fail("invalid_office_file");
+  if(ext!=="docx"&&ext!=="xlsx"&&ext!=="pptx")return fail("invalid_office_file");
   const zip=openOfficeZip(bytes);
   const types=parse(await zip.read("[Content_Types].xml"),parser,C,"Types");
   const overrides=elements(types,C,"Override");
-  const expected=ext==="docx"?["/word/document.xml","application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"]:["/xl/workbook.xml","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"];
+  const expected=ext==="docx"?["/word/document.xml","application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"]:ext==="xlsx"?["/xl/workbook.xml","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"]:["/ppt/presentation.xml","application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"];
   if(!overrides.some(e=>e.getAttribute("PartName")===expected[0]&&e.getAttribute("ContentType")===expected[1])||overrides.some(e=>/macroEnabled|vbaProject|activeX/i.test(e.getAttribute("ContentType")??"")))fail("unsupported_office_format");
   const sections:OfficeExtract["sections"]=[];
   let characters=0,formulaCells=0,missingFormulaCache=0,cells=0;
@@ -59,6 +61,39 @@ export async function extractOfficeDocument(name:string,bytes:Uint8Array,parser:
       visit(p);return chunks.join("");
     });
     append("Main document",paragraphs.join("\n"));
+  }else if(ext==="pptx"){
+    const presentation=parse(await zip.read("ppt/presentation.xml"),parser,T,"presentation");
+    const rels=parse(await zip.read("ppt/_rels/presentation.xml.rels"),parser,P,"Relationships");
+    const map=new Map<string,string>();
+    for(const rel of elements(rels,P,"Relationship")){
+      if(rel.getAttribute("Type")!==R+"/slide"||rel.getAttribute("TargetMode")==="External")continue;
+      const id=rel.getAttribute("Id")??"",target=rel.getAttribute("Target")??"";
+      const path=target.startsWith("/ppt/")?target.slice(1):"ppt/"+target;
+      if(!id||map.has(id)||!/^ppt\/slides\/[A-Za-z0-9_.-]+\.xml$/.test(path))fail();
+      map.set(id,path);
+    }
+    const list=first(presentation.documentElement,T,"sldIdLst");
+    if(!list)fail();
+    const slides=children(list,T,"sldId");
+    if(!slides.length||slides.length>MAX_SLIDES)fail("office_slide_limit");
+    const used=new Set<string>();
+    for(const [i,slide] of slides.entries()){
+      const path=map.get(slide.getAttributeNS(R,"id")??"");
+      if(!path||used.has(path))fail();
+      used.add(path);
+      const xml=parse(await zip.read(path),parser,T,"sld");
+      const tree=elements(xml,T,"spTree")[0];
+      if(!tree)fail();
+      const paragraphs=elements(tree,A,"p").map(p=>Array.from(p.childNodes).map(node=>{
+        if(node.nodeType!==1)return "";
+        const el=node as Element;
+        if(el.namespaceURI!==A)return "";
+        if(el.localName==="br")return "\n";
+        if(el.localName==="r"||el.localName==="fld")return plainText(el,A);
+        return "";
+      }).join(""));
+      append("Slide "+(i+1)+(xml.documentElement.getAttribute("show")==="0"||xml.documentElement.getAttribute("show")==="false"?" (hidden)":""),paragraphs.join("\n"));
+    }
   }else{
     const workbook=parse(await zip.read("xl/workbook.xml"),parser,S,"workbook");
     const rels=parse(await zip.read("xl/_rels/workbook.xml.rels"),parser,P,"Relationships");

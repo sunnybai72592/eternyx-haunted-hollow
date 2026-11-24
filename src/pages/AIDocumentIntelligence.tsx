@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import StoredPdfCorpusImport from "@/components/ai/StoredPdfCorpusImport";
 import LocalOfficeCorpusImport from "@/components/ai/LocalOfficeCorpusImport";
+import LocalCorpusDiscovery from "@/components/ai/LocalCorpusDiscovery";
 import {useAuthStore} from "@/store/authStore";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
@@ -184,6 +185,16 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
     invalidateKnowledgeIndex();
     try{setKnowledgeIndex({index:buildKnowledgeIndex(corpusFiles),sources:corpusFiles});}
     catch{setKnowledgeError("Index could not be built within local limits.");}
+  };
+  const searchDiscoveredTerm=(term:string)=>{
+    if(corpusBusy||!corpusFiles.length)return;
+    invalidateKnowledgeResults();
+    setKnowledgeQuery(term);setKnowledgeExpansion("");setKnowledgeMode("all");setKnowledgeFilter("");setKnowledgeDiversify(false);
+    try{
+      const index=activeKnowledgeIndex??buildKnowledgeIndex(corpusFiles);
+      const result=searchKnowledgeIndex(index,term,"all");
+      setKnowledgeIndex({index,sources:corpusFiles});setKnowledgeResults(result);
+    }catch{setKnowledgeError("Could not retrieve the selected shared term from the current corpus.");}
   };
   const runLocalKnowledge=()=>{
     invalidateKnowledgeResults();
@@ -2033,6 +2044,8 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
                 {corpusHashBusy ? "Hashing local decoded text…" : "Calculate local SHA-256 fingerprints"}
               </Button>
             </div>
+            <LocalCorpusDiscovery documents={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting}
+              onSearch={searchDiscoveredTerm} onCopy={text=>void copy(text,"Local discovery counts")}/>
             <section aria-label="Local indexed knowledge retrieval" className="space-y-3 rounded-xl border border-cyan-400/25 bg-slate-950 p-4">
               <h4 className="font-semibold text-white">Local knowledge index · ranked passages</h4>
               <p className="text-xs text-slate-400">Build an in-memory inverted index of loaded text passages. BM25 ranks matching words; it is not semantic AI, OCR, PDF extraction, or independent verification. Passages do not overlap; words or concepts spanning boundaries may be missed.</p>
