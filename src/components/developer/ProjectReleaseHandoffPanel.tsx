@@ -9,12 +9,19 @@ import {
 } from "@/lib/developerProjectReleaseIntegration.mjs";
 import { developerLinePosition } from "@/lib/developerLocalWorkflows.mjs";
 import {
+  analyzeDeveloperReleaseTriage, compareDeveloperReleaseTriage,
+  exportDeveloperReleaseTriage, DEVELOPER_TRIAGE_ADVICE,
+} from "@/lib/developerProjectReleaseTriage.mjs";
+import { readDeveloperReleaseSavedPlan } from "@/lib/developerProjectReleaseIntegration.mjs";
+import {
   runDeveloperLocalReleaseHandoff, exportDeveloperLocalReleaseHandoff,
 } from "@/lib/developerProjectReleaseHandoff.mjs";
 
 type Project = ReturnType<typeof normalizeDeveloperProject>;
 type Report = Awaited<ReturnType<typeof runDeveloperLocalReleaseHandoff>>;
 type SavedPlanReport = Awaited<ReturnType<typeof runDeveloperCombinedReleaseReview>>["savedPlan"];
+type TriageReport = ReturnType<typeof analyzeDeveloperReleaseTriage>;
+type TriageDelta = ReturnType<typeof compareDeveloperReleaseTriage>;
 type JumpTarget = { file: string; index: number; length: number; line?: number; column?: number };
 
 const CHECK_LABELS: Record<string, string> = {
@@ -44,7 +51,11 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
   onJump: (target: JumpTarget) => void;
 }) {
   const [running, setRunning] = useState(false);
-  const [lastRun, setLastRun] = useState<{ signature: string; report: Report; savedPlan?: SavedPlanReport; planRaw?: string } | null>(null);
+  const [lastRun, setLastRun] = useState<{
+    signature: string; report: Report; savedPlan?: SavedPlanReport; planRaw?: string;
+    projectId?: string; triage?: TriageReport; delta?: TriageDelta;
+  } | null>(null);
+  const [showAllTriage, setShowAllTriage] = useState(false);
   const [planVersion, setPlanVersion] = useState(0);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
   const [issuesOnly, setIssuesOnly] = useState(true);
@@ -101,7 +112,12 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
       if (localStorage.getItem(DEVELOPER_RELEASE_PLAN_STORAGE_KEY) !== raw) {
         throw new Error("Saved plan changed during the review. Run it again.");
       }
-      setLastRun({ signature: startedSignature, report: next.local, savedPlan: next.savedPlan, planRaw: raw });
+      const tests = readDeveloperReleaseSavedPlan(raw, project.id);
+      const triage = analyzeDeveloperReleaseTriage(project, tests, baseline, next);
+      const delta = lastRun?.projectId === project.id && lastRun.triage
+        ? compareDeveloperReleaseTriage(lastRun.triage, triage) : null;
+      setLastRun({ signature: startedSignature, report: next.local, savedPlan: next.savedPlan,
+        planRaw: raw, projectId: project.id, triage, delta });
       tell(next.savedPlan.status === "passed"
         ? "Saved project plan executed. Review coverage and the independent local release checks below."
         : "Saved test plan or changed-file coverage requires review. Remote release remains on hold.");
@@ -126,6 +142,24 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
       tell("Exported a filename-free local evidence pack. Staging, backend and production remain NOT VERIFIED.");
     } catch {
       tell("Could not export the combined evidence pack. Rerun both local checks.", true);
+    }
+  };
+
+  const exportTriage = () => {
+    if (!lastRun?.triage || combinedStale || running) {
+      tell("Rerun saved-plan diagnostics for the current source and saved plan before export.", true);
+      return;
+    }
+    try {
+      if (localStorage.getItem(DEVELOPER_RELEASE_PLAN_STORAGE_KEY) !== lastRun.planRaw) {
+        setPlanVersion(count => count + 1);
+        tell("Saved plan was modified. Diagnostic evidence is stale.", true);
+        return;
+      }
+      download(exportDeveloperReleaseTriage(lastRun.triage));
+      tell("Exported rule-code counts without filenames, expected literals or source.");
+    } catch {
+      tell("Diagnostics export failed. Rerun the saved-plan review.", true);
     }
   };
 
@@ -168,6 +202,10 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
         <Button type="button" size="sm" variant="outline"
           disabled={!lastRun?.savedPlan || combinedStale || running} onClick={exportCombined}>
           <Download className="mr-2 h-4 w-4"/>Export combined local evidence
+        </Button>
+        <Button type="button" size="sm" variant="outline"
+          disabled={!lastRun?.triage || combinedStale || running} onClick={exportTriage}>
+          <Download className="mr-2 h-4 w-4"/>Export redacted diagnostic summary
         </Button>
         {stale && <span role="status" className="text-xs text-amber-200">
           Project or baseline changed. Release review is stale; rerun required.
@@ -228,6 +266,52 @@ export default function ProjectReleaseHandoffPanel({ project, baseline, onJump }
           This includes only the explicitly saved plan for this project, not unsaved assertions.
           Passing checks prove neither linked-file runtime loading nor hosted integration.
           The portable combined report exports counts and built-in check kinds only.
+        </p>
+      </div>}
+      {lastRun?.triage && <div className="space-y-3 rounded-lg border border-slate-700 p-3"
+        aria-label="Integration reliability triage">
+        <p className="text-sm font-semibold text-cyan-100">
+          Integration reliability triage · {lastRun.triage.totalItems} local finding(s)
+        </p>
+        <p className="text-xs text-slate-300">
+          {lastRun.triage.severityCounts.blocker} blockers · {lastRun.triage.severityCounts.review} review item(s) ·
+          {" "}{lastRun.triage.severityCounts.info} informational.
+          {lastRun.triage.truncated ? " First 64 shown; export includes all rule counts." : ""}
+        </p>
+        {lastRun.delta && <p className="text-xs text-amber-100" role="status">
+          Since prior explicit run: {lastRun.delta.improved.length} rule category(s) improved ·
+          {" "}{lastRun.delta.regressed.length} regressed · {lastRun.delta.unchanged} unchanged.
+          Counts compare rule categories, not individual defect identities.
+        </p>}
+        <div className="flex justify-end">
+          <Button type="button" size="sm" variant="outline" aria-pressed={showAllTriage}
+            onClick={() => setShowAllTriage(value => !value)}>
+            {showAllTriage ? "Show priority findings" : "Show all diagnostic findings"}
+          </Button>
+        </div>
+        <div className="max-h-64 space-y-2 overflow-auto" aria-label="Prioritized integration diagnostics">
+          {lastRun.triage.items.filter(item => showAllTriage || item.severity !== "info").length === 0 &&
+            <p className="text-xs text-slate-400">No priority findings. Informational gaps are available in the full list.</p>}
+          {lastRun.triage.items.filter(item => showAllTriage || item.severity !== "info").map((item, index) =>
+            <div key={item.code + ":" + item.file + ":" + item.line + ":" + index}
+              className="rounded-md border border-slate-700 p-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="break-all font-semibold text-amber-100">
+                  {item.severity} · {item.code}
+                  {item.file ? " · " + item.file : ""}{item.line > 0 ? " · line " + item.line : ""}
+                  {item.count > 1 ? " · " + item.count + " occurrence(s)" : ""}
+                </p>
+                {item.file && project.files.some(file => file.name === item.file) &&
+                  <Button type="button" size="sm" variant="outline" disabled={combinedStale}
+                    onClick={() => jumpTo(item.file, item.line || 1)}>Open diagnostic source</Button>}
+              </div>
+              <p className="mt-1 text-slate-300">{DEVELOPER_TRIAGE_ADVICE[item.code]}</p>
+            </div>)}
+        </div>
+        <p className="text-xs text-slate-500">
+          Prioritized diagnostics are bounded browser-local heuristics, not runtime proof.
+          Rule-count changes do not prove issues were fixed. Export omits all file names and source.
+          Hosted staging, protected backend and production remain NOT VERIFIED.
         </p>
       </div>}
       {report ? <>
