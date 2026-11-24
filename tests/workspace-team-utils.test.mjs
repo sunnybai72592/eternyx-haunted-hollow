@@ -100,3 +100,12 @@ test("governance controls remain scoped, invitation history is bounded and raw m
   assert.ok(source.includes(anchor),anchor);
  assert.ok(!source.includes("title={member.user_id}"));
 });
+
+test("invitation receipt cannot reappear after a team verification epoch changes",()=>{
+ const s=readFileSync(new URL("../src/components/workspace/WorkspaceTeamsPanel.tsx",import.meta.url),"utf8");
+ const invite=s.slice(s.indexOf("const invite=()=>"),s.indexOf("const saveTask="));
+ assert.ok(invite.includes("const inviteEpoch=detailsEpoch.current;"));
+ assert.ok(invite.includes("if(inviteEpoch!==detailsEpoch.current)throw"));
+ assert.ok(invite.includes("if(inviteEpoch!==detailsEpoch.current||Date.parse(receipt.expires)<=Date.now())"));
+ assert.ok(s.includes("for(const row of i.data)workspaceTeamInviteState(row,Date.now());"));
+});

@@ -241,6 +241,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       setNotice("Access to this team could not be verified; cached details were cleared.");
       return false;
     }
+    // Reject malformed invitation metadata before rendering any lifecycle rows.
+    if(new Set(i.data.map(row=>row.id)).size!==i.data.length||i.data.length>30||
+      i.data.some(row=>typeof row.id!=="string"||!row.id))throw Error("Invalid invitation history page");
+    for(const row of i.data)workspaceTeamInviteState(row,Date.now());
     setDraft(previous=>retainWorkspaceTeamDraft(
       previous,verifiedRole,target.status,verifiedTasks)?previous:freshDraft());
     setMembers(verifiedMembers as Member[]);
@@ -492,7 +496,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const invite=()=>{
     if(!selected||!canInvite||!canManage||!["editor","viewer"].includes(inviteRole))return;
     setRevealedToken(null);
+    const inviteEpoch=detailsEpoch.current;
     void run(async()=>{
+      if(inviteEpoch!==detailsEpoch.current)throw Error("Team verification changed before invitation creation");
       const {data,error:queryError}=await supabase.rpc("workspace_team_invite",{
         p_space_id:selected.id,p_role:inviteRole,
       });
@@ -501,7 +507,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     },"One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",false,
     result=>{
       const receipt=result as {id:string;token:string;role:string;expires:string};
-      if(Date.parse(receipt.expires)>Date.now())setRevealedToken(receipt);
+      if(inviteEpoch!==detailsEpoch.current||Date.parse(receipt.expires)<=Date.now())
+        throw Error("Invitation was created but its code was cleared because the team verification changed or it expired. Refresh the invitation list before creating another.");
+      setRevealedToken(receipt);
     });
   };
   const saveTask=(event:FormEvent)=>{
