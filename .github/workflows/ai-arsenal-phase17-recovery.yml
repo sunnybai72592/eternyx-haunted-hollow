@@ -26,4 +26,4 @@ jobs:
           mkdir -p node_modules
           ln -s "$RUNNER_TEMP/ai-recovery-compiler/node_modules/typescript" node_modules/typescript
       - name: Run actual recovery regressions
-        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs tests/ai-corpus-version-review-phase18.test.mjs
+        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs tests/ai-corpus-version-review-phase18.test.mjs tests/ai-corpus-checkpoint-phase19.test.mjs
