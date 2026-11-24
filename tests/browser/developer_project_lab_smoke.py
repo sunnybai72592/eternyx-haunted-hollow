@@ -676,6 +676,25 @@ def api_project_link(page, staging):
         expect(page.get_by_role("button", name="Export sanitized results")).to_be_disabled()
         expect(page.get_by_role("button", name="Run selected project suite")).to_be_enabled()
         assert store(page, API_KEY)[0]["url"] == ORIGIN + "/"
+        # Reordering and fail-fast execute only the first failing real check.
+        page.locator("#api-execution-environment").select_option("saved")
+        page.get_by_role("button", name="Move up Wrong content type", exact=True).click()
+        assert store(page, API_KEY)[0]["name"] == "Wrong content type"
+        page.get_by_label("Stop on first failed check", exact=True).check()
+        page.get_by_role("button", name="Run selected project suite").click()
+        expect(page.get_by_text("Run incomplete or cancelled. 1 checks not run.", exact=False)).to_be_visible(timeout=15000)
+        expect(page.get_by_role("button", name="Export sanitized results")).to_be_disabled()
+        expect(page.get_by_role("button", name="Save API baseline")).to_be_disabled()
+        # Editing retains identity and makes the corrected sequence runnable.
+        original_id = store(page, API_KEY)[0]["id"]
+        page.get_by_role("button", name="Edit Wrong content type", exact=True).click()
+        page.locator("#api-scenario-content-type").select_option("html")
+        page.get_by_role("button", name="Save check changes", exact=True).click()
+        assert store(page, API_KEY)[0]["id"] == original_id
+        assert store(page, API_KEY)[0]["expectedContentType"] == "html"
+        page.get_by_role("button", name="Run selected project suite").click()
+        expect(page.get_by_text("Actual results: 2 passed · 0 failed · 0 cancelled")).to_be_visible(timeout=15000)
+        expect(page.get_by_role("button", name="Export sanitized results")).to_be_enabled()
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")
