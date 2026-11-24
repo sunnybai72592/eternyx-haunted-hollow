@@ -234,3 +234,96 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   });
   assert.notEqual(second.status,0,"The CPU renderer must refuse overwriting previous output");
 });
+
+
+test("REAL 24 FPS native cinematic portable ZIP renders verified 1280x720 video with actual 48 decoded frames",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir(),original=join(dir,"original-24.mp4");
+  const ff=spawnSync("ffmpeg",["-nostdin","-hide_banner","-v","error","-y",
+    "-f","lavfi","-i","testsrc2=size=320x180:rate=24:duration=2",
+    "-threads","1","-c:v","libx264","-preset","ultrafast",
+    "-pix_fmt","yuv420p",original],
+    {encoding:"utf8",timeout:60000});
+  assert.equal(ff.status,0,ff.stderr);
+  const clip=media("original-24.mp4",readFileSync(original));
+  const project=await buildPortableVideoBundle(settings([clip],[shot(clip,{
+    frames:48,startFrame:0,fadeInFrames:6,fadeOutFrames:6,
+    caption:"Real original native 24fps footage",
+  })],{quality:"cinematic",profile:"landscape"}));
+  assert.equal(project.manifest.fps,24);
+  assert.equal(project.manifest.frames,48);
+  const zip=join(dir,"movie.zip"),extracted=join(dir,"extracted");
+  mkdirSync(extracted);
+  writeFileSync(zip,Buffer.from(await project.blob.arrayBuffer()));
+  extractedZip(zip,extracted);
+  const board=JSON.parse(readFileSync(join(extracted,"eternyx-video-v2.json"),"utf8"));
+  assert.equal(board.fps,24);
+  assert.equal(board.shots[0].frames,48);
+  assert.equal(board.shots[0].fade_in_frames,6);
+  assert.equal(JSON.parse(readFileSync(join(extracted,"bundle-manifest.json"),"utf8")).fps,24);
+  assert.match(readFileSync(join(extracted,"README.txt"),"utf8"),/48/);
+  assert.match(readFileSync(join(extracted,"README.txt"),"utf8"),/24 FPS/);
+  assert.match(readFileSync(join(extracted,"captions-preview.srt"),"utf8"),
+    /00:00:00,000 --> 00:00:02,000/);
+  const check=spawnSync("python3",["launch_portable_video.py","--check"],{
+    cwd:extracted,encoding:"utf8",timeout:60000,
+  });
+  assert.equal(check.status,0,check.stderr+"\n"+check.stdout);
+  assert.equal(JSON.parse(check.stdout).fps,24);
+  assert.equal(JSON.parse(check.stdout).seconds,2);
+  const run=spawnSync("python3",["launch_portable_video.py","--run"],{
+    cwd:extracted,encoding:"utf8",timeout:240000,
+  });
+  assert.equal(run.status,0,run.stderr+"\n"+run.stdout);
+  const output=join(extracted,"eternyx-video-output");
+  const receipt=JSON.parse(readFileSync(join(output,"manifest.json"),"utf8"));
+  assert.equal(receipt.fps,24);
+  assert.equal(receipt.quality,"cinematic");
+  assert.equal(receipt.total_frames,48);
+  assert.equal(receipt.video.fps,"24/1");
+  assert.equal(receipt.video.width,1280);
+  assert.equal(receipt.video.height,720);
+  assert.equal(receipt.video.frame_count,48);
+  assert.equal(receipt.video.duration_seconds,2);
+  assert.equal(receipt.video.sha256,digest(readFileSync(join(output,"video.mp4"))));
+  const decoded=spawnSync("ffprobe",["-v","error","-count_frames","-show_entries",
+    "stream=codec_type,nb_read_frames,width,height,avg_frame_rate",
+    "-of","json",join(output,"video.mp4")],{encoding:"utf8",timeout:30000});
+  assert.equal(decoded.status,0,decoded.stderr);
+  const real=JSON.parse(decoded.stdout).streams.find(s=>s.codec_type==="video");
+  assert.equal(real.avg_frame_rate,"24/1");
+  assert.equal(Number(real.nb_read_frames),48);
+  assert.deepEqual([real.width,real.height],[1280,720]);
+  assert.match(readFileSync(join(output,"captions.srt"),"utf8"),
+    /00:00:00,000 --> 00:00:02,000/);
+  assert.equal(digest(readFileSync(join(extracted,"media","original-24.mp4"))),
+    clip.sha256);
+});
+
+test("REAL native cinematic portrait ZIP preserves exact 720x1280 24 FPS frames",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir(),original=join(dir,"portrait-24.mp4");
+  const ff=spawnSync("ffmpeg",["-nostdin","-hide_banner","-v","error","-y",
+    "-f","lavfi","-i","testsrc2=size=180x320:rate=24:duration=1",
+    "-threads","1","-c:v","libx264","-preset","ultrafast",
+    "-pix_fmt","yuv420p",original],{encoding:"utf8",timeout:60000});
+  assert.equal(ff.status,0,ff.stderr);
+  const source=media("portrait-24.mp4",readFileSync(original));
+  const pack=await buildPortableVideoBundle(settings([source],[shot(source,{
+    frames:24,fadeInFrames:4,fadeOutFrames:4,caption:"Real portrait footage",
+  })],{quality:"cinematic",profile:"portrait"}));
+  const zip=join(dir,"portrait.zip"),folder=join(dir,"extracted");
+  mkdirSync(folder);writeFileSync(zip,Buffer.from(await pack.blob.arrayBuffer()));
+  extractedZip(zip,folder);
+  const rendered=spawnSync("python3",["launch_portable_video.py","--run"],{
+    cwd:folder,encoding:"utf8",timeout:240000,
+  });
+  assert.equal(rendered.status,0,rendered.stderr+"\n"+rendered.stdout);
+  const receipt=JSON.parse(readFileSync(join(folder,"eternyx-video-output/manifest.json"),"utf8"));
+  assert.equal(receipt.fps,24);
+  assert.equal(receipt.video.frame_count,24);
+  assert.deepEqual([receipt.video.width,receipt.video.height],[720,1280]);
+  assert.equal(receipt.video.sha256,digest(readFileSync(join(folder,"eternyx-video-output/video.mp4"))));
+});
