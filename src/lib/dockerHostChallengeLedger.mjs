@@ -250,3 +250,20 @@ export function consumeDockerHostChallenge(dir,bundle,pub,expected,now=new Date(
  });
 }
 export const HOST_CHALLENGE_TEMPLATE_KEYS=Object.freeze(TEMPLATE_KEYS.slice());
+
+/** Read-only reviewer status; never retries or clears a consumed token. */
+export function inspectDockerHostChallenge(dir,challenge){
+ if(!HASH.test(challenge||""))throw Error("Exact issued challenge needed for status.");
+ const snapshot=audit(dir),origin=snapshot.issued.get(challenge);
+ if(!origin)throw Error("Challenge does not exist in original reviewer ledger.");
+ const spent=snapshot.consumed.get(challenge);
+ return Object.freeze({
+  challengeSha256:SHA("ETERNYX_DOCKER_CHALLENGE_ID_V1\n"+challenge),
+  status:spent?"consumed":"issued_unconsumed",
+  originalIssuanceSha256:origin.sha256,
+  durableConsumptionSha256:spent?.sha256||null,
+  manuallyResettable:false,
+  readOnlyObservation:true,
+  productionDeploymentAuthorized:false
+ });
+}
