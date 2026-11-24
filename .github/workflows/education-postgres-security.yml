@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/sql/staging-education-*.sql'
       - 'scripts/sql/education-staging-synthetic-fixtures.sql'
+      - 'scripts/sql/education-staging-fixture-discovery.sql'
+      - 'scripts/staging/educationStagingFixtureDiscovery.mjs'
       - 'scripts/staging/educationStagingSyntheticFixtures.mjs'
       - 'tests/education-staging-synthetic-fixtures.test.mjs'
       - 'tests/sql/education-db-*.sql'
@@ -114,7 +116,11 @@ jobs:
       - name: Exercise one-time synthetic staging fixture SQL in disposable foundation
         run: |
           docker exec eternyx-education-db-ci psql -X -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 -c "ALTER TABLE auth.users ADD COLUMN email text; UPDATE auth.users SET email=CASE id WHEN '00000000-0000-4000-8000-000000000001' THEN 'rls-op@example.invalid' WHEN '00000000-0000-4000-8000-000000000002' THEN 'rls-i@example.invalid' WHEN '00000000-0000-4000-8000-000000000004' THEN 'rls-a@example.invalid' WHEN '00000000-0000-4000-8000-000000000005' THEN 'rls-b@example.invalid' ELSE NULL END;"
-          docker exec -i -e ETERNYX_RLS_TEST_A_EMAIL=rls-a@example.invalid -e ETERNYX_RLS_TEST_B_EMAIL=rls-b@example.invalid -e ETERNYX_RLS_INSTRUCTOR_EMAIL=rls-i@example.invalid -e ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL=rls-op@example.invalid -e ETERNYX_EDU_FIXTURE_APPROVAL=I_APPROVE_ONE_TIME_EDUCATION_STAGING_FIXTURES eternyx-education-db-ci psql -X -qAt -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 < scripts/sql/education-staging-synthetic-fixtures.sql | python3 -c 'import json,sys; x=json.load(sys.stdin); assert len(x)==24 and x["ETERNYX_EDU_RESULT_A_SCORE"]=="7" and x["ETERNYX_EDU_REVIEW_ATTEMPT_ID"]==x["ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT"]; print("PASS: 24 fixture variables")'
+          docker exec -i -e ETERNYX_RLS_TEST_A_EMAIL=rls-a@example.invalid -e ETERNYX_RLS_TEST_B_EMAIL=rls-b@example.invalid -e ETERNYX_RLS_INSTRUCTOR_EMAIL=rls-i@example.invalid -e ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL=rls-op@example.invalid -e ETERNYX_EDU_FIXTURE_APPROVAL=I_APPROVE_ONE_TIME_EDUCATION_STAGING_FIXTURES eternyx-education-db-ci psql -X -qAt -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 < scripts/sql/education-staging-synthetic-fixtures.sql > "$RUNNER_TEMP/edu-fixture-synthetic.json"
+          python3 -c 'import json,sys; x=json.load(sys.stdin); assert len(x)==24 and x["ETERNYX_EDU_RESULT_A_SCORE"]=="7" and x["ETERNYX_EDU_REVIEW_ATTEMPT_ID"]==x["ETERNYX_EDU_RESULT_FINAL_A_ATTEMPT"]; print("PASS: 24 fixture variables")' < "$RUNNER_TEMP/edu-fixture-synthetic.json"
+          docker exec -i -e ETERNYX_RLS_TEST_A_EMAIL=rls-a@example.invalid -e ETERNYX_RLS_TEST_B_EMAIL=rls-b@example.invalid -e ETERNYX_RLS_INSTRUCTOR_EMAIL=rls-i@example.invalid eternyx-education-db-ci psql -X -qAt -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 < scripts/sql/education-staging-fixture-discovery.sql > "$RUNNER_TEMP/edu-fixture-discovered.json"
+          python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))==json.load(open(sys.argv[2])); print("PASS: exact read-only discovery equals provisioned manifest")' "$RUNNER_TEMP/edu-fixture-synthetic.json" "$RUNNER_TEMP/edu-fixture-discovered.json"
+          rm -f "$RUNNER_TEMP/edu-fixture-synthetic.json" "$RUNNER_TEMP/edu-fixture-discovered.json"
           docker exec -i eternyx-education-db-ci psql -X -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 <<'SQL'
           DO $$ BEGIN IF (SELECT count(*) FROM public.tests)<>7 OR (SELECT count(*) FROM public.user_attempts)<>6 OR (SELECT count(*) FROM public.education_final_grades)<>2 OR EXISTS (SELECT 1 FROM public.user_attempts a JOIN public.tests t ON t.id=a.test_id WHERE t.title LIKE '% / fresh') THEN RAISE EXCEPTION 'fixture state mismatch'; END IF; END $$;
           SQL
