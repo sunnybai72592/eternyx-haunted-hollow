@@ -104,7 +104,7 @@ test("quick status edits refuse out-of-team, stale, illegal transitions and unli
 test("rendered board shares list cards, filters and scope checks rather than mock states",()=>{
  const ui=source();
  for(const anchor of [
-   'const [taskLayout,setTaskLayout]=useState<"list"|"board">("list");',
+   'const [taskLayout,setTaskLayout]=useState<"list"|"board"|"schedule">("list");',
    "workspaceTeamBoardColumns(visibleTasks,selected.id)",
    'aria-label="Team task layout"',
    'aria-pressed={taskLayout==="board"}',

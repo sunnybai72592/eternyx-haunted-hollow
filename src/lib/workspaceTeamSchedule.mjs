@@ -99,7 +99,7 @@ export function buildWorkspaceTeamScheduleIcs(tasks,owner,spaceId,now=new Date()
     throw Error("Invalid calendar export identity or timestamp");
   const rows=authorizedTaskRows(tasks,spaceId);
   const stamp=now.toISOString().replaceAll("-","").replaceAll(":","").replace(/\.\d{3}Z$/,"Z");
-  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ETERNELYX//Workspace Team Tasks//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH"];
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ETERNYX//Workspace Team Tasks//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH"];
   let exported=0;
   for(const task of rows){
     // Completed tasks and undated tasks aren't future planning events.
