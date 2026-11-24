@@ -68,3 +68,22 @@ No silent fallback, unsigned sources, relaxed freshness checks, or automatic
 repin. If the exact version is no longer published, use a separately reviewed
 Ubuntu snapshot (https://ubuntu.com/server/docs/how-to/software/snapshot-service/).
 Dedicated hardware and provider activation remain false.
+
+## Archive path correction after PR #809
+
+Live operator output confirmed runner independence (AWS guest, Azure host),
+exact signing-key fingerprint and successful APT update, before the filename
+validator rejected the matching metadata record. The prior keyring inode
+was root-owned mode 0777, explaining the earlier permission predicate failure;
+trust now rests on the exact pinned signing fingerprint, not file mode.
+The previous filename grammar excluded the legitimate Debian version character
+~ in the pinned 7.0.0-1014.14~24.04.1 version. The rejected raw filename was not
+logged. Admit ~ within strictly bounded relative pool paths with regular .deb
+suffixes; continue rejecting traversal, empty components, URLs, percent
+escapes, whitespace, query/fragment delimiters and backslashes. Add four
+regression tests including the exact historical package/version filename
+fixture. Log successful signed metadata selection, downloaded digest/size
+verification and extracted kernel hash separately. These logs are diagnostics,
+not a release approval. The immutable kernel pin, exact signer, authenticated
+metadata and package integrity gates remain unchanged. Live download and
+kernel member equality are not yet verified.

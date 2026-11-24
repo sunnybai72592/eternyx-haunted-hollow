@@ -43,6 +43,17 @@ def validate_identity(release, package, version, architecture):
     require(re.fullmatch(r"[0-9][a-zA-Z0-9.+:~_-]{0,120}", version), "invalid package version")
     require(architecture == "amd64", "expected amd64 package")
 
+def validate_archive_path(name):
+    # Debian versions legitimately contain '~' (and '+' and '.').
+    # Keep a narrow relative pool path grammar; no URL decoding, query,
+    # fragments, absolute paths, escapes, or traversal components.
+    require(isinstance(name, str) and 0 < len(name) <= 1024
+            and re.fullmatch(r"pool/(?:[A-Za-z0-9.+_~-]+/)+[A-Za-z0-9.+_~-]+\.deb", name)
+            and all(part not in ("", ".", "..") and len(part) <= 255
+                    for part in name.split("/")),
+            "unexpected package archive path")
+    return name
+
 def metadata_pin(text, package, version):
     candidates = set()
     for record in text.split("\n\n"):
@@ -61,9 +72,7 @@ def metadata_pin(text, package, version):
         require(re.fullmatch(r"[a-f0-9]{64}", sha), "invalid archive package digest")
         require(size.isascii() and size.isdecimal() and 0 < int(size) <= MAX_PACKAGE,
                 "invalid archive package size")
-        require(re.fullmatch(r"pool/[a-zA-Z0-9.+_/-]+\.deb", name)
-                and all(part not in ("", ".", "..") for part in name.split("/")),
-                "unexpected package archive path")
+        validate_archive_path(name)
         candidates.add((sha, int(size)))
     require(len(candidates) == 1, "exact pinned guest package absent or conflicting in signed archive")
     return candidates.pop()
@@ -238,17 +247,23 @@ def main(observed):
         command(["/usr/bin/apt-get", "update"], env, work, 180)
         metadata = command(["/usr/bin/apt-cache", "show", package], env, work)
         pin = metadata_pin(metadata, package, version)
+        print(json.dumps({"exactSignedArchiveMetadataSelected": True,
+                          "archivePackageSha256": pin[0], "archivePackageBytes": pin[1]}),
+              flush=True)
         downloads = work / "downloads"
         command(["/usr/bin/apt-get", "download", package + "=" + version], env, downloads, 90)
         files = list(downloads.iterdir())
         require(len(files) == 1 and files[0].suffix == ".deb", "unexpected download contents")
         verify_deb(files[0], pin)
+        print(json.dumps({"downloadedPackageDigestAndSizeVerified": True}), flush=True)
         tar = work / "package.tar"
         with tar.open("wb") as output:
             subprocess.run(["/usr/bin/dpkg-deb", "--fsys-tarfile", str(files[0])],
                 check=True, timeout=30, stdout=output, stderr=subprocess.PIPE,
                 env=BASE_ENV, preexec_fn=limit_tar)
         archive_hash = kernel_digest_from_tar(tar, release)
+        print(json.dumps({"archiveKernelMemberSha256": archive_hash,
+                          "archiveKernelMemberMatchesPhase41Pin": archive_hash == PIN}), flush=True)
         evidence = provenance_result(archive_hash, observed_hash)
         print(json.dumps({"archivePackageSha256": pin[0], "archivePackageBytes": pin[1],
                           "archiveKernelSha256": archive_hash, "runnerKernelSha256": observed_hash,
