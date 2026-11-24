@@ -55,3 +55,36 @@ export const WORKSPACE_TEAM_EVENT_LABELS=Object.freeze({
   step_added:"Checklist step added",step_checked:"Checklist step completed",
   step_unchecked:"Checklist step reopened",step_removed:"Checklist step removed",
 });
+
+/** Client-side review only. The existing server membership RPCs authorize changes. */
+export function workspaceTeamMemberImpact(tasks,spaceId,userId){
+  if(!Array.isArray(tasks)||tasks.length>500||typeof spaceId!=="string"||!spaceId||
+     typeof userId!=="string"||!userId||tasks.some(t=>!t||t.space_id!==spaceId||
+       typeof t.id!=="string"||!t.id||!WORKSPACE_TEAM_STATUSES.includes(t.status))||
+     new Set(tasks.map(t=>t.id)).size!==tasks.length)
+    throw Error("Invalid membership impact snapshot");
+  const assigned=tasks.filter(t=>t.assignee_id===userId);
+  return {total:assigned.length,open:assigned.filter(t=>t.status!=="done").length,
+    completed:assigned.filter(t=>t.status==="done").length};
+}
+export function workspaceTeamInviteState(invite,now){
+  if(!invite||!Number.isFinite(now)||!["editor","viewer"].includes(invite.role)||
+    typeof invite.expires_at!=="string"||!Number.isFinite(Date.parse(invite.expires_at))||
+    !(invite.revoked_at===null||(typeof invite.revoked_at==="string"&&Number.isFinite(Date.parse(invite.revoked_at))))||
+    !(invite.consumed_by===null||(typeof invite.consumed_by==="string"&&invite.consumed_by))||
+    !(invite.consumed_at===null||(typeof invite.consumed_at==="string"&&Number.isFinite(Date.parse(invite.consumed_at))))||
+    Boolean(invite.consumed_by)!==Boolean(invite.consumed_at)||
+    (invite.revoked_at&&invite.consumed_by))throw Error("Invalid invitation metadata");
+  if(invite.consumed_by)return "accepted";
+  if(invite.revoked_at)return "revoked";
+  return Date.parse(invite.expires_at)<=now?"expired":"pending";
+}
+export function workspaceTeamInviteReceipt(value,expectedRole,now){
+  if(!value||!["editor","viewer"].includes(expectedRole)||value.role!==expectedRole||
+     typeof value.invite_id!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.invite_id)||
+     typeof value.expires_at!=="string"||!Number.isFinite(now)||
+     !Number.isFinite(Date.parse(value.expires_at))||Date.parse(value.expires_at)<=now||
+     typeof value.token!=="string"||!TOKEN.test(value.token))
+    throw Error("Server did not return a verified one-time invitation");
+  return {id:value.invite_id,token:value.token,role:value.role,expires:value.expires_at};
+}

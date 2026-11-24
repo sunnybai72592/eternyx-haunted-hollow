@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {
   validateTeamInviteToken, teamCanEdit, teamCanInvite,
   normalizeTeamTaskDraft, teamMemberLabel, WORKSPACE_TEAM_EVENT_LABELS,
+  workspaceTeamMemberImpact,workspaceTeamInviteState,workspaceTeamInviteReceipt,
 } from "../src/lib/workspaceTeamUtils.mjs";
 
 const owner="11111111-1111-4111-8111-111111111111";
@@ -60,4 +62,41 @@ test("member labels and activity events avoid invented names or fabricated timel
   assert.match(teamMemberLabel(editor,owner),/Member 22222222/);
   assert.equal(WORKSPACE_TEAM_EVENT_LABELS.member_joined,"Member joined");
   assert.equal(WORKSPACE_TEAM_EVENT_LABELS.task_deleted,"Task deleted");
+});
+
+test("membership impact counts completed and outstanding assignments without changing tasks",()=>{
+ const tasks=[{id:"a",space_id:"s",status:"todo",assignee_id:editor},
+  {id:"b",space_id:"s",status:"done",assignee_id:editor},
+  {id:"c",space_id:"s",status:"in_progress",assignee_id:owner}];
+ const original=structuredClone(tasks);
+ assert.deepEqual(workspaceTeamMemberImpact(tasks,"s",editor),{total:2,open:1,completed:1});
+ assert.deepEqual(workspaceTeamMemberImpact(tasks,"s",viewer),{total:0,open:0,completed:0});
+ assert.throws(()=>workspaceTeamMemberImpact(tasks,"foreign",editor));
+ assert.throws(()=>workspaceTeamMemberImpact([tasks[0],tasks[0]],"s",editor));
+ assert.deepEqual(tasks,original);
+});
+const now=Date.parse("2026-11-24T12:00:00Z");
+const invitation={role:"editor",expires_at:"2026-11-25T12:00:00Z",revoked_at:null,consumed_at:null,consumed_by:null};
+test("invitation lifecycle distinguishes accepted, revoked, expired and pending",()=>{
+ assert.equal(workspaceTeamInviteState(invitation,now),"pending");
+ assert.equal(workspaceTeamInviteState(invitation,Date.parse(invitation.expires_at)),"expired");
+ assert.equal(workspaceTeamInviteState({...invitation,consumed_by:viewer,consumed_at:"2026-11-24T12:00:00Z"},now),"accepted");
+ assert.equal(workspaceTeamInviteState({...invitation,revoked_at:"2026-11-24T12:00:00Z"},now),"revoked");
+ for(const change of [{role:"owner"},{expires_at:"bad"},{consumed_by:viewer}])
+  assert.throws(()=>workspaceTeamInviteState({...invitation,...change},now));
+});
+test("one-time invitation receipt requires exact token, server id, role and future expiry",()=>{
+ const raw={invite_id:owner,role:"editor",token,expires_at:invitation.expires_at};
+ assert.deepEqual(workspaceTeamInviteReceipt(raw,"editor",now),{id:owner,role:"editor",token,expires:invitation.expires_at});
+ for(const change of [{invite_id:"bad"},{role:"viewer"},{token:" "+token},{expires_at:"2026-11-23T12:00:00Z"}])
+  assert.throws(()=>workspaceTeamInviteReceipt({...raw,...change},"editor",now));
+});
+test("governance controls remain scoped, invitation history is bounded and raw member IDs are not tooltips",()=>{
+ const source=readFileSync(new URL("../src/components/workspace/WorkspaceTeamsPanel.tsx",import.meta.url),"utf8");
+ for(const anchor of ["const canManage=Boolean(selected","workspaceTeamMemberImpact(tasks,selected.id,member.user_id)",
+   "workspaceTeamInviteReceipt(data,inviteRole,Date.now())","Hide code permanently",
+   "These are not complete historical totals.","Date.parse(revealedToken.expires)<=Date.now()",
+   'state==="pending"||state==="expired"','setInviteView("pending");setMemberView("all")'])
+  assert.ok(source.includes(anchor),anchor);
+ assert.ok(!source.includes("title={member.user_id}"));
 });

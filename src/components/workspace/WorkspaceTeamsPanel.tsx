@@ -30,7 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
   normalizeTeamTaskDraft, teamCanEdit, teamCanInvite, teamMemberLabel,
-  validateTeamInviteToken,
+  validateTeamInviteToken,workspaceTeamMemberImpact,workspaceTeamInviteState,workspaceTeamInviteReceipt,
   WORKSPACE_TEAM_PRIORITIES, WORKSPACE_TEAM_STATUSES,
 } from "@/lib/workspaceTeamUtils.mjs";
 
@@ -60,7 +60,19 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [teamDescription,setTeamDescription]=useState("");
   const [joinToken,setJoinToken]=useState("");
   const [inviteRole,setInviteRole]=useState("editor");
-  const [revealedToken,setRevealedToken]=useState<{token:string;role:string;expires:string}|null>(null);
+  const [revealedToken,setRevealedToken]=useState<{id:string;token:string;role:string;expires:string}|null>(null);
+  const [inviteView,setInviteView]=useState("pending");
+  const [memberView,setMemberView]=useState("all");
+  const [inviteClock,setInviteClock]=useState(()=>Date.now());
+  useEffect(()=>{
+    const tick=()=>setInviteClock(Date.now());
+    const timer=window.setInterval(tick,30000);
+    window.addEventListener("focus",tick);
+    return ()=>{window.clearInterval(timer);window.removeEventListener("focus",tick);};
+  },[]);
+  useEffect(()=>{
+    if(revealedToken&&Date.parse(revealedToken.expires)<=inviteClock)setRevealedToken(null);
+  },[inviteClock,revealedToken]);
   const [draft,setDraft]=useState<Draft>(freshDraft);
   const [taskFilter,setTaskFilter]=useState("all");
   const [taskQuery,setTaskQuery]=useState("");
@@ -93,6 +105,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     : null;
   const editor=teamCanEdit(currentRole,selected?.status);
   const canInvite=teamCanInvite(currentRole,selected?.status);
+  const canManage=Boolean(selected&&currentRole==="owner"&&spaceListVerified&&
+    verifiedSpaceId===selected.id&&!disabled&&!busy&&!loading);
+  const invitationRows=useMemo(()=>currentRole==="owner"&&selected?
+    invites.map(invite=>({invite,state:workspaceTeamInviteState(invite,inviteClock)})):[],
+    [invites,currentRole,selected,inviteClock]);
+  const visibleInvitations=invitationRows.filter(row=>inviteView==="all"||row.state===inviteView);
+  const visibleMembers=members.filter(member=>memberView==="all"||member.role===memberView);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
   const [today,setToday]=useState(()=>workspaceTeamLocalDay(new Date()));
   useEffect(()=>{
@@ -243,7 +262,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     setCalendarDay(null);setShowWorkload(false);
     setDragOverColumn(null);
-    setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
+    setJoinToken("");setInviteRole("editor");setInviteView("pending");setMemberView("all");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
     setLoading(true);
     void (async()=>{
@@ -263,6 +282,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setMembers([]);setTasks([]);setEvents([]);setInvites([]);
     setVerifiedSpaceId(null);
     setRevealedToken(null);setDraft(freshDraft());
+    setInviteRole("editor");setInviteView("pending");setMemberView("all");
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
@@ -470,20 +490,18 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     ()=>setJoinToken(""));
   };
   const invite=()=>{
-    if(!selected||!canInvite)return;
+    if(!selected||!canInvite||!canManage||!["editor","viewer"].includes(inviteRole))return;
+    setRevealedToken(null);
     void run(async()=>{
       const {data,error:queryError}=await supabase.rpc("workspace_team_invite",{
         p_space_id:selected.id,p_role:inviteRole,
       });
       if(queryError||!data)throw new Error(queryError?.message??"Invitation could not be created");
-      const receipt=data as {token?:string;role?:string;expires_at?:string};
-      if(!receipt.token||!receipt.role||!receipt.expires_at)
-        throw new Error("Server did not return a one-time invitation code");
-      return receipt;
+      return workspaceTeamInviteReceipt(data,inviteRole,Date.now());
     },"One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",false,
     result=>{
-      const receipt=result as {token:string;role:string;expires_at:string};
-      setRevealedToken({token:receipt.token,role:receipt.role,expires:receipt.expires_at});
+      const receipt=result as {id:string;token:string;role:string;expires:string};
+      if(Date.parse(receipt.expires)>Date.now())setRevealedToken(receipt);
     });
   };
   const saveTask=(event:FormEvent)=>{
@@ -515,9 +533,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     ()=>{if(discussionTaskId===task.id)setDiscussionTaskId(null);});
   };
   const changeRole=(member:Member,role:string|null)=>{
-    if(!selected || currentRole!=="owner" || member.role==="owner")return;
-    if(!window.confirm(role===null?"Remove this member and clear their assignments?":
-        "Change this member's role to "+role+"?"))return;
+    if(!selected||!canManage||member.space_id!==selected.id||member.role==="owner"||
+      !members.some(row=>row.user_id===member.user_id&&row.role===member.role)||
+      (role!==null&&(!["editor","viewer"].includes(role)||role===member.role)))return;
+    const impact=workspaceTeamMemberImpact(tasks,selected.id,member.user_id);
+    if(!window.confirm(role===null?"Remove this member? "+impact.total+
+        " assigned tasks ("+impact.open+" outstanding, "+impact.completed+" completed) will become unassigned. Tasks remain in the team.":
+        "Change this member's role to "+role+"? Existing assignments remain."))return;
     void run(async()=>{
       const {data,error:queryError}=await supabase.rpc("workspace_team_member_change",{
         p_space_id:selected.id,p_user_id:member.user_id,p_role:role,
@@ -526,7 +548,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     },role===null?"Member removed. Their tasks remain but are unassigned.":"Member role changed.");
   };
   const setArchive=()=>{
-    if(!selected||currentRole!=="owner")return;
+    if(!selected||!canManage)return;
     const next=selected.status==="active"?"archived":"active";
     if(!window.confirm(next==="archived"?"Archive this team? Tasks become read-only until reopened.":"Reopen this team for editing?"))return;
     void run(async()=>{
@@ -537,8 +559,11 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     },"Team status updated.");
   };
   const leave=()=>{
-    if(!selected||currentRole==="owner"||!window.confirm(
-      "Leave this team? Your membership will be removed and your assignments cleared."))return;
+    if(!selected||!["editor","viewer"].includes(currentRole??"")||disabled||busy||loading||
+      !spaceListVerified||verifiedSpaceId!==selected.id)return;
+    const impact=workspaceTeamMemberImpact(tasks,selected.id,owner);
+    if(!window.confirm("Leave this team? Your "+impact.total+
+      " assigned tasks will become unassigned. Shared tasks remain in the team."))return;
     void run(async()=>{
       const {data,error:queryError}=await supabase.rpc("workspace_team_leave",{
         p_space_id:selected.id,
@@ -810,20 +835,29 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         <div className="space-y-2 rounded-lg border border-border p-3">
           <h4 className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4"/>
             Members ({members.length}/20)</h4>
-          {members.map(member=><div key={member.user_id}
+          <p className="text-xs text-muted-foreground">Owners manage access; editors can modify active-team tasks; viewers read. Archived tasks are read-only, but owners can still manage membership.</p>
+          <p className="text-xs">{["owner","editor","viewer"].map(role=>role+": "+members.filter(member=>member.role===role).length).join(" · ")}</p>
+          <label className="text-xs">Member role <select value={memberView} onChange={event=>setMemberView(event.target.value)}
+            className="rounded border border-border bg-background p-1">
+            <option value="all">All</option><option value="owner">Owners</option>
+            <option value="editor">Editors</option><option value="viewer">Viewers</option>
+          </select></label>
+          {!visibleMembers.length&&<p className="text-xs text-muted-foreground">No members match this role.</p>}
+          {visibleMembers.map(member=><div key={member.user_id}
             className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 py-2 text-xs">
-            <span title={member.user_id} className="break-all">
-              {teamMemberLabel(member.user_id,owner)} · {member.role}
-            </span>
+            <div className="min-w-0">
+              <span className="break-words">{teamMemberLabel(member.user_id,owner)} · {member.role}</span>
+              <p className="text-muted-foreground">{tasks.filter(task=>task.assignee_id===member.user_id&&task.status!=="done").length} outstanding assigned · {tasks.filter(task=>task.assignee_id===member.user_id&&task.status==="done").length} completed assigned</p>
+            </div>
             {currentRole==="owner"&&member.role!=="owner"&&<div className="flex gap-1">
               <Button type="button" size="sm" variant="outline"
-                disabled={busy||disabled||member.role==="editor"}
+                disabled={!canManage||member.role==="editor"}
                 onClick={()=>changeRole(member,"editor")}>Editor</Button>
               <Button type="button" size="sm" variant="outline"
-                disabled={busy||disabled||member.role==="viewer"}
+                disabled={!canManage||member.role==="viewer"}
                 onClick={()=>changeRole(member,"viewer")}>Viewer</Button>
               <Button type="button" size="sm" variant="ghost"
-                disabled={busy||disabled} onClick={()=>changeRole(member,null)}>Remove</Button>
+                disabled={!canManage} onClick={()=>changeRole(member,null)}>Remove</Button>
             </div>}
           </div>)}
         </div>
@@ -839,9 +873,9 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
               <option value="editor">Editor</option><option value="viewer">Viewer</option>
             </select>
             <Button size="sm" variant="outline" type="button"
-              disabled={busy||disabled} onClick={invite}>Create one-time code</Button>
+              disabled={!canManage} onClick={invite}>Create one-time code</Button>
           </div>}
-          {revealedToken && canInvite&&<div className="space-y-2 rounded-md border border-amber-600/50 p-2">
+          {revealedToken && canInvite&&Date.parse(revealedToken.expires)>inviteClock&&<div className="space-y-2 rounded-md border border-amber-600/50 p-2">
             <p className="text-xs text-amber-400">
               Share securely. This code is displayed once; anyone holding it can use it
               while valid, so do not post it publicly.
@@ -851,24 +885,38 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
               {revealedToken.role} · expires {new Date(revealedToken.expires).toLocaleString()}
             </p>
             <Button size="sm" type="button" variant="outline"
-              onClick={()=>void navigator.clipboard.writeText(revealedToken.token).catch(
-                ()=>setError("Clipboard copy failed. Select the visible code manually."))}>
+              disabled={!canManage}
+              onClick={()=>{
+                if(!canManage||Date.parse(revealedToken.expires)<=Date.now()){setRevealedToken(null);return;}
+                void navigator.clipboard.writeText(revealedToken.token).catch(
+                  ()=>setError("Clipboard copy failed. Select the visible code manually."));
+              }}>
               <ClipboardCopy className="mr-1 h-4 w-4"/> Copy invitation code
             </Button>
+            <Button size="sm" type="button" variant="ghost" onClick={()=>setRevealedToken(null)}>Hide code permanently</Button>
           </div>}
-          {currentRole==="owner"&&invites.filter(i=>!i.consumed_by && !i.revoked_at)
-            .map(i=><div key={i.id} className="flex flex-wrap items-center gap-2 border-b border-border/50 py-2 text-xs">
-            <span>{i.role} · expires {new Date(i.expires_at).toLocaleString()}</span>
-            <Button size="sm" variant="ghost" type="button" disabled={busy||disabled}
+          {currentRole==="owner"&&<>
+            <p className="text-xs text-muted-foreground">Latest {invitationRows.length} loaded invitation records (up to 30); refresh after creating a code. These are not complete historical totals.</p>
+            <label className="text-xs">Invitation status <select value={inviteView} onChange={event=>setInviteView(event.target.value)}
+              className="rounded border border-border bg-background p-1">
+              <option value="pending">Pending</option><option value="accepted">Accepted</option>
+              <option value="expired">Expired</option><option value="revoked">Revoked</option><option value="all">All loaded</option>
+            </select></label>
+            {!visibleInvitations.length&&<p className="text-xs text-muted-foreground">No loaded invitations match this status.</p>}
+          </>}
+          {currentRole==="owner"&&visibleInvitations
+            .map(({invite:i,state})=><div key={i.id} className="flex flex-wrap items-center gap-2 border-b border-border/50 py-2 text-xs">
+            <span>{i.role} · {state} · expires {new Date(i.expires_at).toLocaleString()}</span>
+            {(state==="pending"||state==="expired")&&<Button size="sm" variant="ghost" type="button" disabled={!canManage}
               onClick={()=>{
-                if(!window.confirm("Revoke this invitation code?"))return;
+                if(!canManage||i.space_id!==selected.id||!window.confirm("Revoke this invitation code?"))return;
                 void run(async()=>{
                   const {data,error:queryError}=await supabase.rpc("workspace_team_revoke_invite",{
                     p_invite_id:i.id,
                   });
                   if(queryError||data!==true)throw new Error(queryError?.message??"Revoke not confirmed");
                 },"Invitation revoked.",true,()=>setRevealedToken(null));
-              }}>Revoke</Button>
+              }}>Revoke</Button>}
           </div>)}
           {!canInvite&&<p className="text-xs text-muted-foreground">
             Only the team owner can create invitations while active.
