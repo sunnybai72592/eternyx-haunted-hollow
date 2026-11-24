@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/lib/ai/document-corpus*.ts'
       - 'src/lib/ai/document-compare-tools.ts'
+      - 'src/lib/ai/studio-chat-request.ts'
       - 'src/pages/AIDocumentIntelligence.tsx'
       - 'src/pages/AIArsenal.tsx'
       - 'tests/ai-corpus-*.test.mjs'
@@ -26,4 +27,4 @@ jobs:
           mkdir -p node_modules
           ln -s "$RUNNER_TEMP/ai-recovery-compiler/node_modules/typescript" node_modules/typescript
       - name: Run actual recovery regressions
-        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs tests/ai-corpus-version-review-phase18.test.mjs tests/ai-corpus-checkpoint-phase19.test.mjs tests/ai-corpus-knowledge-phase20.test.mjs tests/ai-corpus-knowledge-evidence-phase21.test.mjs
+        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs tests/ai-corpus-version-review-phase18.test.mjs tests/ai-corpus-checkpoint-phase19.test.mjs tests/ai-corpus-knowledge-phase20.test.mjs tests/ai-corpus-knowledge-evidence-phase21.test.mjs tests/ai-corpus-rag-phase22.test.mjs
