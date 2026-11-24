@@ -7,6 +7,8 @@ import io
 import json
 import pathlib
 import re
+import resource
+import shutil
 import subprocess
 import tarfile
 
@@ -15,6 +17,8 @@ p=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
 
 MAX_CONFIG=2*1024*1024
+MAX_MODULES_PACKAGE=512*1024*1024
+MAX_MODULES_TAR=2*1024*1024*1024
 REQUIRED=("CONFIG_BLOCK","CONFIG_VIRTIO","CONFIG_VIRTIO_MMIO","CONFIG_VIRTIO_BLK",
           "CONFIG_EXT4_FS","CONFIG_VSOCKETS","CONFIG_VIRTIO_VSOCKETS",
           "CONFIG_VIRTIO_VSOCKETS_COMMON")
@@ -78,20 +82,37 @@ def classify(config,source,package_sha):
             "hardwareAcceptanceVerified":False,"providerActivationAllowed":False,
             "productionReleaseReady":False}
 
+def limit_file(size):
+    resource.setrlimit(resource.RLIMIT_FSIZE,(size,size))
+
 def module_package_config(release,version,env,work):
+    p.require((release,version)==(p.GUEST_RELEASE,p.GUEST_VERSION),
+              "modules audit requires exact immutable guest identity")
     package="linux-modules-"+release
-    pin=p.metadata_pin(p.command(["/usr/bin/apt-cache","show",package],env,work),package,version)
+    pin=p.metadata_pin(p.command(["/usr/bin/apt-cache","show",package],env,work),
+                       package,version,max_bytes=MAX_MODULES_PACKAGE)
+    print(json.dumps({"authenticatedModulesPackage":package,
+                      "modulesPackageBytes":pin[1],"modulesPackageSha256":pin[0],
+                      "modulesPackageLimitBytes":MAX_MODULES_PACKAGE,
+                      "modulesTarLimitBytes":MAX_MODULES_TAR}),flush=True)
+    p.require(shutil.disk_usage(work).free >= pin[1]+MAX_MODULES_TAR+64*1024*1024,
+              "insufficient private workspace capacity for bounded modules archive")
     downloads=work/"config-download"
     downloads.mkdir(mode=0o700)
-    p.command(["/usr/bin/apt-get","download",package+"="+version],env,downloads,90)
+    subprocess.run(["/usr/bin/apt-get","download",package+"="+version],
+        check=True,timeout=180,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,env=env,cwd=downloads,
+        preexec_fn=lambda: limit_file(pin[1]))
     files=list(downloads.iterdir())
     p.require(len(files)==1 and files[0].suffix==".deb","unexpected modules download")
     p.verify_deb(files[0],pin)
+    print(json.dumps({"downloadedModulesPackageDigestAndSizeVerified":True}),flush=True)
     tar=work/"modules.tar"
     with tar.open("xb") as output:
         subprocess.run(["/usr/bin/dpkg-deb","--fsys-tarfile",str(files[0])],
-            check=True,timeout=60,stdout=output,stderr=subprocess.PIPE,
-            env=p.BASE_ENV,preexec_fn=p.limit_tar)
+            check=True,timeout=180,stdout=output,stderr=subprocess.PIPE,
+            env=p.BASE_ENV,preexec_fn=lambda: limit_file(MAX_MODULES_TAR))
+    p.require(0<tar.stat().st_size<=MAX_MODULES_TAR,"modules tar exceeds bounded size")
     data=read_member(tar,"boot/config-"+release,MAX_CONFIG)
     p.require(data is not None,"exact authenticated modules package contains no boot config")
     return data,pin[0]

@@ -23,3 +23,19 @@ modules and a boot-time load plan, or a new reviewed kernel. Even all y is
 only configuration evidence: actual device enumeration, root mounting and
 vsock service still require a live isolated guest. No VM, production, paid
 resources or dedicated-host acceptance. Seven new offline tests.
+
+## Modules archive size correction after PR #814
+
+Operator log independently authenticated the image package (16,695,418 bytes,
+SHA256 bb4e1aae90d41945b100459233ee440c3494e019467f9a2e60ec931f988cf00b)
+and exact immutable kernel SHA256. Config fallback reached the exact modules
+metadata but failed the generic image package size predicate. Actual modules
+size was not printed, so exceeding the 128 MiB cap is likely, not established.
+Retain the original 128 MiB compressed/256 MiB tar image limits; only the exact
+historical modules package may use a separate 512 MiB compressed and 2 GiB
+uncompressed budget. Check free workspace capacity, enforce child file-size
+limits on download and decompression, verify exact signed package size/hash,
+and log selected size and digest. No module extraction to the host filesystem,
+installation or loading. The configuration member remains limited to 2 MiB.
+Four new offline regressions; live config availability and compatibility remain
+pending. If the larger limits are exceeded, stop and review the observed size.

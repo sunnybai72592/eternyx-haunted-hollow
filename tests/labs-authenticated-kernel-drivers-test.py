@@ -69,6 +69,48 @@ class DriverAuditTest(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         d.read_member(tar,"boot/config-test",d.MAX_CONFIG)
 
+    def test_modules_size_policy_separate_from_kernel_image(self):
+        package="linux-modules-"+d.p.GUEST_RELEASE
+        version=d.p.GUEST_VERSION
+        def metadata(size):
+            return (f"Package: {package}\nVersion: {version}\nArchitecture: amd64\n"
+                    f"Filename: pool/main/l/linux/pkg_1~24.04_amd64.deb\n"
+                    f"SHA256: {'a'*64}\nSize: {size}\n")
+        size=d.p.MAX_PACKAGE+1
+        with self.assertRaisesRegex(RuntimeError,"archive package size"):
+            d.p.metadata_pin(metadata(size),package,version)
+        self.assertEqual(d.p.metadata_pin(metadata(size),package,version,
+            max_bytes=d.MAX_MODULES_PACKAGE),("a"*64,size))
+        for n in (0,d.MAX_MODULES_PACKAGE+1):
+            with self.assertRaisesRegex(RuntimeError,"archive package size"):
+                d.p.metadata_pin(metadata(n),package,version,max_bytes=d.MAX_MODULES_PACKAGE)
+
+    def test_modules_identity_cannot_be_replaced(self):
+        with patch.object(d.p,"command") as command:
+            with self.assertRaisesRegex(RuntimeError,"exact immutable"):
+                d.module_package_config("other",d.p.GUEST_VERSION,{},None)
+            command.assert_not_called()
+
+    def test_modules_file_limits_are_explicit(self):
+        with patch.object(d.resource,"setrlimit") as setter:
+            d.limit_file(d.MAX_MODULES_PACKAGE)
+            setter.assert_called_once_with(d.resource.RLIMIT_FSIZE,
+                (d.MAX_MODULES_PACKAGE,d.MAX_MODULES_PACKAGE))
+        self.assertEqual(d.p.MAX_PACKAGE,128*1024*1024)
+        self.assertEqual(d.p.MAX_TAR,256*1024*1024)
+        self.assertEqual(d.MAX_MODULES_TAR,2*1024*1024*1024)
+
+    def test_modules_insufficient_disk_stops_before_download(self):
+        from types import SimpleNamespace
+        with patch.object(d.p,"command",return_value="metadata"), \
+             patch.object(d.p,"metadata_pin",return_value=("a"*64,d.p.MAX_PACKAGE+1)) as pin, \
+             patch.object(d.shutil,"disk_usage",return_value=SimpleNamespace(free=0)), \
+             patch.object(d.subprocess,"run") as run:
+            with self.assertRaisesRegex(RuntimeError,"workspace capacity"):
+                d.module_package_config(d.p.GUEST_RELEASE,d.p.GUEST_VERSION,{},pathlib.Path("/tmp"))
+            self.assertEqual(pin.call_args.kwargs,{"max_bytes":d.MAX_MODULES_PACKAGE})
+            run.assert_not_called()
+
     def test_kernel_mismatch_blocks_audit_before_metadata(self):
         with patch.object(d,"read_member",return_value=b"wrong"),patch.object(d.p,"command") as command:
             with self.assertRaisesRegex(RuntimeError,"pin mismatch"):
