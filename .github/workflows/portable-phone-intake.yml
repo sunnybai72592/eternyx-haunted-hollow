@@ -10,6 +10,8 @@ on:
       - "gpu-worker/finish_phone_movie.py"
       - "gpu-worker/render_video_timeline.py"
       - "tests/portable-phone-movie.test.mjs"
+      - "tests/phone-movie-edit-draft.test.mjs"
+      - "src/lib/ai/phoneMovieEditDraft.mjs"
       - "gpu-worker/prepare_video_sources.py"
       - "tests/portable-phone-intake.test.mjs"
       - ".github/workflows/portable-phone-intake.yml"
@@ -23,6 +25,8 @@ on:
       - "gpu-worker/finish_phone_movie.py"
       - "gpu-worker/render_video_timeline.py"
       - "tests/portable-phone-movie.test.mjs"
+      - "tests/phone-movie-edit-draft.test.mjs"
+      - "src/lib/ai/phoneMovieEditDraft.mjs"
       - "gpu-worker/prepare_video_sources.py"
       - "tests/portable-phone-intake.test.mjs"
       - ".github/workflows/portable-phone-intake.yml"
@@ -55,6 +59,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           OMP_NUM_THREADS: "1"
         run: node --test tests/portable-phone-intake.test.mjs
+      - name: Verify native 24 FPS re-edit draft integrity and exact source SHA-256
+        run: node --test tests/phone-movie-edit-draft.test.mjs
       - name: Create verified finished H264 movie directly from real original phone clips
         env:
           CUDA_VISIBLE_DEVICES: ""
