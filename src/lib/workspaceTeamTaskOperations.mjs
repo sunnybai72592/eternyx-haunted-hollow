@@ -43,18 +43,30 @@ export function workspaceTeamTaskSummary(tasks,today){
   }
   return summary;
 }
-export function selectWorkspaceTeamTasks(tasks,{filter="all",search="",sort="updated",owner="",today}={}){
+export function selectWorkspaceTeamTasks(tasks,{
+  filter="all",search="",sort="updated",owner="",today,
+  priority="all",assignee="all",memberIds=[],
+}={}){
   if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT||
      !WORKSPACE_TEAM_TASK_FILTERS.includes(filter)||
      !WORKSPACE_TEAM_TASK_SORTS.includes(sort)||
      typeof search!=="string"||search.length>WORKSPACE_TEAM_TASK_SEARCH_LIMIT||
-     typeof owner!=="string"||!validDay(today))
+     typeof owner!=="string"||!validDay(today)||
+     !(priority==="all"||WORKSPACE_TEAM_PRIORITIES.includes(priority))||
+     typeof assignee!=="string"||!assignee||!Array.isArray(memberIds)||
+     memberIds.some(id=>typeof id!=="string"||!id)||
+     !(["all","mine","unassigned"].includes(assignee)||memberIds.includes(assignee)))
     throw Error("Invalid team task view controls");
   const query=search.trim().toLocaleLowerCase();
   const selected=tasks.filter(task=>{
     if(!task||typeof task.title!=="string"||typeof task.details!=="string")
       throw Error("Malformed team task view row");
     if(query&&!(task.title+" "+task.details).toLocaleLowerCase().includes(query))return false;
+    if(priority!=="all"&&task.priority!==priority)return false;
+    if(assignee==="mine"&&task.assignee_id!==owner)return false;
+    if(assignee==="unassigned"&&task.assignee_id!==null)return false;
+    if(!["all","mine","unassigned"].includes(assignee)&&
+       task.assignee_id!==assignee)return false;
     if(filter==="done")return task.status==="done";
     if(filter==="overdue"||filter==="upcoming")
       return workspaceTeamTaskDueBucket(task,today)===filter;
