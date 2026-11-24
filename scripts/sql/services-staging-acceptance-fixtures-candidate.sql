@@ -66,15 +66,33 @@ BEGIN
  VALUES(question_id,a,'Synthetic owner clarification answer.');
  INSERT INTO public.service_brief_amendments(request_id,author_id,category,summary,details)
  VALUES(ra,a,'requirements','Synthetic revised scope','Synthetic owner amendment for journal provenance and cross-customer isolation.');
- PERFORM pg_catalog.set_config('request.jwt.claim.sub','',true);
- -- Require the persisted sources needed by the existing real-auth probe.
+ -- The journal has an explicit auth.uid()/is_admin() predicate, even
+ -- when queried by the table owner. Verify it as the dedicated approved
+ -- admin, NOT as a cleared identity. Never weaken the journal predicate.
+ PERFORM pg_catalog.set_config('request.jwt.claim.sub',adm::text,true);
+ IF NOT public.is_admin() THEN
+   RAISE EXCEPTION 'Services fixture administrator identity verification failed';
+ END IF;
  IF (SELECT count(*) FROM public.service_requests WHERE id IN (ra,rb))<>2
- OR (SELECT count(*) FROM public.service_request_activity WHERE request_id IN (ra,rb))<2
- OR (SELECT count(*) FROM public.service_request_journal WHERE request_id=ra)<6
- OR (SELECT count(*) FROM public.service_request_journal WHERE request_id=rb)<1
- OR NOT EXISTS(SELECT 1 FROM public.service_request_triage WHERE request_id=ra)
+ OR NOT EXISTS(SELECT 1 FROM public.service_request_activity WHERE request_id=ra AND actor_id=a AND event_type='request_created')
+ OR NOT EXISTS(SELECT 1 FROM public.service_request_activity WHERE request_id=rb AND actor_id=b AND event_type='request_created')
+ OR NOT EXISTS(SELECT 1 FROM public.service_request_triage WHERE request_id=ra AND assigned_admin_id=adm)
  OR (SELECT count(*) FROM public.admin_users)<>1 THEN
-   RAISE EXCEPTION 'Services fixture completeness failure';
+   RAISE EXCEPTION 'Services fixture source completeness failure';
+ END IF;
+ -- Require each distinct persisted event, rather than allowing unrelated
+ -- events to satisfy a total count. These checks retain the view's real
+ -- participant predicate, with real owner/admin roles tested again in CI.
+ IF (SELECT count(DISTINCT event_kind) FROM public.service_request_journal
+     WHERE request_id=ra AND event_kind IN ('request_created','scope_published','scope_response','question_published','answer_submitted','amendment_submitted'))<>6
+ OR (SELECT count(*) FROM public.service_request_journal WHERE request_id=ra)<>6
+ OR (SELECT count(*) FROM public.service_request_journal WHERE request_id=rb AND event_kind='request_created')<>1
+ OR (SELECT count(*) FROM public.service_request_journal WHERE request_id=rb)<>1 THEN
+   RAISE EXCEPTION 'Services fixture journal completeness failure';
+ END IF;
+ PERFORM pg_catalog.set_config('request.jwt.claim.sub','',true);
+ IF EXISTS(SELECT 1 FROM public.service_request_journal WHERE request_id IN (ra,rb)) THEN
+   RAISE EXCEPTION 'Services fixture journal exposed rows to cleared identity';
  END IF;
 END
 $seed$;
