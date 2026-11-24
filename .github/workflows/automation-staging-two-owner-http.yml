@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      ETERNYX_AUTOMATION_STAGING_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+      ETERNYX_AUTOMATION_STAGING_REF: mhodwvypfbxafamkrgsk
       ETERNYX_AUTOMATION_PRODUCTION_REF: wcncuarekaofmfurbtbh
       ETERNYX_AUTOMATION_TWO_OWNER_MODE: "${{ inputs.run_mode }}"
       ETERNYX_AUTOMATION_TWO_OWNER_REVIEW: "${{ inputs.test_accounts_review }}"
@@ -52,7 +52,13 @@ jobs:
       - name: Check out reviewed main without persisted checkout credentials
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          submodules: false
+      - name: Strip checkout authorization before executing repository code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          if git config --local --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1; then exit 1; fi
       - name: Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -79,6 +85,10 @@ jobs:
           if(verifyDeployedCore(functions).length!==3)throw Error("Staging core functions unverified");
           console.log("Verified independent staging project and three active core handlers with expected JWT policies.");
           NODE
+      - name: Verify five credentialless denials before any account secret enters the runner
+        env:
+          ETERNYX_AUTOMATION_NEGATIVE_HTTP_CONSENT: I_APPROVE_STAGING_NEGATIVE_HTTP
+        run: node scripts/automation-staging-negative-http.mjs --run-negative-only > "$RUNNER_TEMP/automation-pre-auth-denials.json"
       - name: Authenticate two dedicated staging accounts with fresh access JWTs and verify private ownership
         shell: bash
         timeout-minutes: 6

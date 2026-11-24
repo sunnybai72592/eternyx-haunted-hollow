@@ -320,3 +320,29 @@ test("approved one-workflow mode reuses only two fresh sign-ins across inspect, 
     "/auth/v1/token","/auth/v1/user","/functions/v1/automation-control",
   ].includes(x)));
 });
+
+test("real clock default reaches the consent gate rather than throwing a TypeError",async()=>{
+  let calls=0;
+  await assert.rejects(runFreshTwoOwnerAcceptance(env({ETERNYX_AUTOMATION_TWO_OWNER_REVIEW:"NOT_REVIEWED"}),{
+    fetcher:async()=>{calls++;throw Error("must not connect");}
+  }),/automation_two_owner_gate_accounts_not_reviewed/);
+  assert.equal(calls,0);
+});
+test("fresh auth rejects missing anonymous-status evidence",()=>{
+  const [session]=sessions();
+  delete session.user.is_anonymous;
+  assert.throws(()=>checkFreshSession(session,stage,alice,now),/invalid_staging_session/);
+});
+test("protected workflows are pinned to actual Eternyx Staging and strip checkout authorization",async()=>{
+  for(const filename of ["automation-staging-two-owner-http.yml","automation-staging-negative-http.yml"]){
+    const w=await readFile(path.join(root,".github/workflows",filename),"utf8");
+    assert.ok(w.includes("ETERNYX_AUTOMATION_STAGING_REF: mhodwvypfbxafamkrgsk"));
+    assert.ok(w.includes("submodules: false"));
+    assert.ok(w.includes("git config --local --unset-all http.https://github.com/.extraheader"));
+    assert.equal(w.split("actions/setup-node@v4").length,2);
+    assert.ok(w.indexOf("Strip checkout authorization")<w.indexOf("actions/setup-node@v4"));
+  }
+  const w=await readFile(path.join(root,".github/workflows/automation-staging-two-owner-http.yml"),"utf8");
+  assert.ok(w.indexOf("Verify five credentialless denials")>w.indexOf("Independently verify the exact separate staging project"));
+  assert.ok(w.indexOf("Verify five credentialless denials")<w.indexOf("secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD"));
+});
