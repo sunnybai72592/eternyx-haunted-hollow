@@ -11,7 +11,7 @@ the Phase 40 SHA/size-pinned release and two fixed diskless guests, no arbitrary
 user input, NIC, disk, vsock, API, secrets, or external target. No provider,
 staging, production, new paid infrastructure, or host rollout.
 
-The root supervisor uses a private root-owned /run directory, a unique cgroup
+The root supervisor uses a private root-owned mode-0700 directory under /var/lib, a unique cgroup
 v2 leaf with bounded memory, process count and CPU, and a unique network
 namespace. No global controller configuration or existing service is changed.
 Jailer v1.18.0 performs the mount/pivot/chroot, UID/GID drop and new PID
@@ -38,3 +38,16 @@ diagnostic code. The built-in early credential removal traverses the legacy
 unmapped gitlink and fails before tests; deferred action cleanup may still
 warn. No gitlink changes and no credentials are used by the diagnostics. The existing Phase 40 workflow is
 unchanged.
+
+## Hosted runner execution preflight correction
+
+Operator output after PR #805 showed matching release and kernel hashes, then
+EACCES at exec of /run/eternyx-jailed-*/jailer before any guest boot. A noexec
+mount is suspected, not proven by that output. The correction records the
+/run mount's noexec flag, uses a fixed root-owned /var/lib parent with trusted
+non-symlink ancestors, checks its mount flags and private directory mode, and
+executes both pinned binaries with --version before creating per-VM resources.
+If execution is prohibited there, fail closed: no remount, policy override,
+untrusted fallback or relaxation of isolation. The namespace handles remain
+under /run/netns; they do not need executable storage. Phase 41 live acceptance
+remains pending until both scenarios and scoped cleanup succeed.

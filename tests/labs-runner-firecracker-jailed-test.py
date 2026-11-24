@@ -1,5 +1,9 @@
 import importlib.util
 import pathlib
+import os
+import stat
+from types import SimpleNamespace
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -12,6 +16,43 @@ class JailedTest(unittest.TestCase):
         return {"Uid": "65534 65534 65534 65534", "Gid": "65534 65534 65534 65534",
                 "CapEff": "0000", "CapPrm": "0000", "Seccomp": "2",
                 "NoNewPrivs": "1", "NSpid": "222 1"}
+
+    def test_exec_directory_rejects_noexec(self):
+        info = SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=0)
+        with patch.object(pathlib.Path, "lstat", return_value=info), \
+             patch.object(j.os, "statvfs", return_value=SimpleNamespace(f_flag=os.ST_NOEXEC)):
+            with self.assertRaisesRegex(RuntimeError, "noexec"):
+                j.verify_exec_directory(pathlib.Path("/var/lib/fixed"))
+
+    def test_exec_directory_rejects_untrusted_ancestors(self):
+        for info in (SimpleNamespace(st_mode=stat.S_IFDIR | 0o777, st_uid=0),
+                     SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=1000),
+                     SimpleNamespace(st_mode=stat.S_IFLNK | 0o777, st_uid=0)):
+            with patch.object(pathlib.Path, "lstat", return_value=info):
+                with self.assertRaisesRegex(RuntimeError, "untrusted"):
+                    j.verify_exec_directory(pathlib.Path("/var/lib/fixed"))
+
+    def test_exec_directory_accepts_trusted_executable_mount(self):
+        info = SimpleNamespace(st_mode=stat.S_IFDIR | 0o755, st_uid=0)
+        with patch.object(pathlib.Path, "lstat", return_value=info), \
+             patch.object(j.os, "statvfs", return_value=SimpleNamespace(f_flag=0)):
+            j.verify_exec_directory(pathlib.Path("/var/lib/fixed"))
+
+    def test_release_preflight_rejects_denied_exec(self):
+        info = SimpleNamespace(st_mode=stat.S_IFREG | 0o500, st_uid=0)
+        with patch.object(pathlib.Path, "lstat", return_value=info), \
+             patch.object(j.os, "statvfs", return_value=SimpleNamespace(f_flag=0)), \
+             patch.object(j.subprocess, "run", side_effect=PermissionError("denied")):
+            with self.assertRaisesRegex(RuntimeError, "no policy bypass"):
+                j.verify_release_executable(pathlib.Path("/var/lib/fixed/jailer"))
+
+    def test_release_preflight_rejects_wrong_version(self):
+        info = SimpleNamespace(st_mode=stat.S_IFREG | 0o500, st_uid=0)
+        with patch.object(pathlib.Path, "lstat", return_value=info), \
+             patch.object(j.os, "statvfs", return_value=SimpleNamespace(f_flag=0)), \
+             patch.object(j.subprocess, "run", return_value=SimpleNamespace(stdout=b"Jailer v0.0.0\n")):
+            with self.assertRaisesRegex(RuntimeError, "unexpected release version"):
+                j.verify_release_executable(pathlib.Path("/var/lib/fixed/jailer"))
 
     def test_good_status(self):
         j.verify_status(self.good())
