@@ -50,6 +50,7 @@ import {
 import {
   compareCorpusImport, formatPrivateCorpusImportReview,
 } from "@/lib/ai/document-corpus-import-review";
+import { listCorpusRecovery, planCorpusRecovery, CorpusRecoveryError } from "@/lib/ai/document-corpus-recovery";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -135,6 +136,7 @@ const AIDocumentIntelligence = () => {
   const [rotateOldPassword, setRotateOldPassword] = useState("");
   const [rotateNewPassword, setRotateNewPassword] = useState("");
   const [rotateConfirmPassword, setRotateConfirmPassword] = useState("");
+  const [corpusRecoveryIds, setCorpusRecoveryIds] = useState<string[]>([]);
   const pendingCorpusReview = useMemo(
     () => pendingCorpusWorkspace ? compareCorpusImport({
       documents:corpusFiles, query:corpusQuery, mode:corpusMode,
@@ -142,9 +144,25 @@ const AIDocumentIntelligence = () => {
     },pendingCorpusWorkspace) : null,
     [corpusFiles,corpusQuery,corpusMode,corpusFilter,corpusQuestion,pendingCorpusWorkspace],
   );
+  const recoveryCandidates = useMemo(() => pendingCorpusWorkspace
+    ? listCorpusRecovery(corpusFiles, pendingCorpusWorkspace) : [], [corpusFiles,pendingCorpusWorkspace]);
+  const recoveryPreview = useMemo(() => {
+    if (!pendingCorpusWorkspace) return null;
+    try {
+      return {plan:planCorpusRecovery(corpusFiles,pendingCorpusWorkspace,corpusRecoveryIds),error:null};
+    } catch (reason) {
+      const error = reason instanceof CorpusRecoveryError
+        ? ({invalid_selection:"Selection is stale or invalid; choose the sources again.",
+          file_limit:"Selection exceeds the eight-document workspace limit.",
+          too_large:"Selection exceeds the 400,000-character workspace limit."}[reason.code])
+        : "Local recovery preview failed; no source was added.";
+      return {plan:null,error};
+    }
+  },[corpusFiles,pendingCorpusWorkspace,corpusRecoveryIds]);
   const invalidateCorpusWorkspace = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
+    setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setEncryptedExportPassword("");
     setEncryptedExportConfirm("");
@@ -289,6 +307,7 @@ const AIDocumentIntelligence = () => {
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
     setPendingCorpusWorkspace(null);
+    setCorpusRecoveryIds([]);
     setCorpusWorkspaceExporting(true);
     try {
       const serialized = await exportCorpusWorkspace({
@@ -326,6 +345,7 @@ const AIDocumentIntelligence = () => {
     setEncryptedExportPassword("");
     setEncryptedExportConfirm("");
     setPendingCorpusWorkspace(null);
+    setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
@@ -368,6 +388,7 @@ const AIDocumentIntelligence = () => {
     setRotateNewPassword("");
     setRotateConfirmPassword("");
     setPendingCorpusWorkspace(null);
+    setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
@@ -395,6 +416,7 @@ const AIDocumentIntelligence = () => {
     const operation = ++corpusWorkspaceEpoch.current;
     setEncryptedImportPassword("");
     setPendingCorpusWorkspace(null);
+    setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
@@ -417,6 +439,7 @@ const AIDocumentIntelligence = () => {
   const previewCorpusWorkspace = async (file: File | null) => {
     const operation = ++corpusWorkspaceEpoch.current;
     setPendingCorpusWorkspace(null);
+    setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
@@ -433,6 +456,28 @@ const AIDocumentIntelligence = () => {
       if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceError(workspaceErrorText(reason));
     } finally {
       if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceLoading(false);
+    }
+  };
+  const recoverSelectedCorpus = () => {
+    if (!pendingCorpusWorkspace || !corpusRecoveryIds.length || !recoveryPreview?.plan ||
+        corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+    try {
+      const plan = planCorpusRecovery(corpusFiles,pendingCorpusWorkspace,corpusRecoveryIds);
+      if (!plan.additions.length || !window.confirm(
+        "Add "+plan.additions.length+" selected backup source(s), including "+plan.copiedCount+
+        " renamed conflict copies? Existing files and search settings remain unchanged. "+
+        "Current search results, selected excerpts and AI results will be cleared."
+      )) return;
+      ++corpusReadVersion.current;
+      setCorpusBusy(false);
+      invalidateCorpusWorkspace();
+      invalidateCorpusFingerprints();
+      invalidateCorpus();
+      setCorpusFiles(plan.documents);
+      setCorpusWorkspaceNotice("Recovered "+plan.additions.length+
+        " local source(s), including "+plan.copiedCount+" conflict copy/copies. Existing sources and settings were kept. Search again for fresh evidence.");
+    } catch {
+      setCorpusWorkspaceError("Recovery rejected; no source was added. Review the selection and workspace limits.");
     }
   };
   const restoreCorpusWorkspace = () => {
@@ -1473,6 +1518,7 @@ const AIDocumentIntelligence = () => {
                     onChange={e => {
                       ++corpusWorkspaceEpoch.current;
                       setPendingCorpusWorkspace(null);
+                      setCorpusRecoveryIds([]);
                       setPendingCorpusEncrypted(false);
                       setCorpusWorkspaceLoading(false);
                       setCorpusWorkspaceError(null);
@@ -1625,6 +1671,46 @@ const AIDocumentIntelligence = () => {
                       </Button>
                     </section>
                   )}
+                  <section aria-label="Selective non-destructive backup recovery" className="space-y-3 rounded-lg border border-emerald-500/30 p-3">
+                    <h4 className="text-sm font-semibold text-white">Recover selected sources without replacing existing files</h4>
+                    <p className="text-xs text-slate-300">Choose explicitly. Existing source text, IDs, names, order and search settings are preserved. Conflicting versions can only be added as separately named copies. Exact existing sources are skipped. Backup verification does not establish authorship.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline"
+                        disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting || !recoveryCandidates.some(c=>c.kind==="add")}
+                        onClick={()=>setCorpusRecoveryIds(recoveryCandidates.filter(c=>c.kind==="add").map(c=>c.id))}>Select new sources only</Button>
+                      <Button type="button" size="sm" variant="outline" disabled={!corpusRecoveryIds.length}
+                        onClick={()=>setCorpusRecoveryIds([])}>Clear selection</Button>
+                    </div>
+                    {recoveryCandidates.length===0 && <p className="text-xs text-slate-400">This backup contains no sources to recover.</p>}
+                    <fieldset className="space-y-2">
+                      <legend className="text-xs text-slate-400">Backup sources (none selected by default)</legend>
+                      {recoveryCandidates.map(candidate=>(
+                        <label key={candidate.id} className="flex items-start gap-2 break-all text-xs text-slate-300">
+                          <input type="checkbox" className="mt-0.5"
+                            disabled={candidate.kind==="already-present" || corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}
+                            checked={corpusRecoveryIds.includes(candidate.id)}
+                            onChange={e=>{
+                              const checked=e.target.checked;
+                              setCorpusRecoveryIds(ids=>checked?[...ids.filter(id=>id!==candidate.id),candidate.id]:ids.filter(id=>id!==candidate.id));
+                            }}/>
+                          <span>{candidate.name} · {candidate.reason}
+                            {candidate.kind==="copy" ? " · Recover as separate copy" : ""}
+                          </span>
+                        </label>
+                      ))}
+                    </fieldset>
+                    {recoveryPreview?.error && <p role="alert" className="text-xs text-amber-200">{recoveryPreview.error} Nothing will be added until the selection fits.</p>}
+                    {recoveryPreview?.plan && <div className="space-y-1 text-xs text-slate-300" aria-live="polite">
+                      <p>{recoveryPreview.plan.additions.length} selected · {recoveryPreview.plan.copiedCount} conflict copies · projected {recoveryPreview.plan.fileCount}/8 files · {recoveryPreview.plan.characterCount.toLocaleString()}/400,000 decoded characters.</p>
+                      {recoveryPreview.plan.additions.filter(a=>a.kind==="copy").map(a=>(
+                        <p key={a.sourceId} className="break-all">New copy filename: {a.document.name}</p>
+                      ))}
+                    </div>}
+                    <Button type="button" onClick={recoverSelectedCorpus}
+                      disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting || !recoveryPreview?.plan?.additions.length}>
+                      Recover selected sources (keep current workspace)
+                    </Button>
+                  </section>
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" onClick={restoreCorpusWorkspace}
                       disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting ||
