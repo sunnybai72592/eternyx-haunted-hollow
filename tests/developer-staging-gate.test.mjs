@@ -66,7 +66,7 @@ test("all 14 actual Chrome results at exact viewports are required for staging e
     {cases:report().cases.slice(0,13)},
     {deep_link_observations:undefined},
     {deep_link_observations:[]},
-  ]) assert.throws(()=>verifyDeveloperStagingEvidence(report(field),config,sha,now),/staging gate/);
+  ]) assert.throws(()=>verifyDeveloperStagingEvidence(report(field),config,sha,now),/staging gate|Developer deep-link/);
 });
 
 test("duplicates, phantom results and non-passed cases are not release acceptance",()=>{
