@@ -22,7 +22,7 @@ export function auditLocalVideoExport({
 }={}){
   if(!Array.isArray(sources)||!Array.isArray(shots))
     throw new Error("Expected editable shot and media arrays.");
-  const fps=localVideoFps(quality),sourceLimit=60*fps,timelineLimit=30*fps;
+  const fps=quality==="cinematic"?24:16,sourceLimit=60*fps,timelineLimit=30*fps;
   const errors=[],warnings=[],rows=[];
   if(!sources.length||sources.length>LOCAL_VIDEO_LIMITS.maxClips)
     errors.push(issue("SOURCE_COUNT","Choose 1–8 original MP4 source files."));
