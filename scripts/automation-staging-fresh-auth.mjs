@@ -82,7 +82,7 @@ export function checkFreshSession(session,stage,email,now=Math.floor(Date.now()/
      session.expires_in>86400||
      !session.user||typeof session.user!=="object"||
      session.user.email?.toLowerCase?.()!==email||
-     session.user.is_anonymous===true||!UUID.test(session.user.id))
+     session.user.is_anonymous!==false||!UUID.test(session.user.id))
     fail("invalid_staging_session");
   let claims;
   try{
@@ -141,7 +141,7 @@ export async function freshStageSignIn(env,fetcher=fetch,{now=Math.floor(Date.no
   };
 }
 export async function runFreshTwoOwnerAcceptance(env={},{
-  fetcher=fetch,now=Math.floor(Date.now()/1000()),uuid,
+  fetcher=fetch,now=Math.floor(Date.now()/1000),uuid,
 }={}){
   const gate=validateTwoOwnerGate(env);
   const tokens=await freshStageSignIn(env,fetcher,{now});
