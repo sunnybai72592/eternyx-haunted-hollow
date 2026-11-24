@@ -5,6 +5,8 @@ import {readFileSync,openSync,closeSync,lstatSync,fstatSync,constants} from "nod
 import {isAbsolute} from "node:path";
 import {verifyDockerReadOnlyHostEvidence,HOST_EVIDENCE_EXPECTED_KEYS}
  from "../src/lib/dockerSignedHostEvidenceReview.mjs";
+import {consumeDockerHostChallenge}
+ from "../src/lib/dockerHostChallengeLedger.mjs";
 function boundedFile(path,max,{trusted=false}={}){
  if(typeof path!=="string"||!isAbsolute(path)||!path.startsWith("/")||
     path.length>512||path.includes("//")||path.split("/").some(s=>s==="."||s===".."))
@@ -43,8 +45,9 @@ function parseCanonicalJSON(raw,max){
 }
 try{
  const args=process.argv.slice(2);
- if(args.length!==3)
-  throw Error("Usage: node scripts/docker-lab-host-evidence-review.mjs /ABS/SIGNED-EVIDENCE.json /ABS/TRUSTED-ED25519-PUBLIC.key /ABS/REVIEWER-PINS.json");
+ if(!(args.length===3||
+      (args.length===5&&args[3]==="--consume-ledger")))
+  throw Error("Usage: node scripts/docker-lab-host-evidence-review.mjs /ABS/SIGNED-EVIDENCE.json /ABS/TRUSTED-ED25519-PUBLIC.key /ABS/REVIEWER-PINS.json [--consume-ledger /ABS/PRIVATE-LEDGER]");
  const signed=parseCanonicalJSON(boundedFile(args[0],8192),8192);
  const rawKey=boundedFile(args[1],128,{trusted:true});
  if(!/^[A-Za-z0-9_-]{43}\n$/.test(rawKey))
@@ -53,7 +56,14 @@ try{
  if(Object.keys(expected).join("|")!==HOST_EVIDENCE_EXPECTED_KEYS.join("|"))
   throw Error("Reviewer expectations are missing independently approved pinned fields.");
  const checked=verifyDockerReadOnlyHostEvidence(signed,rawKey.trim(),expected);
- process.stdout.write(JSON.stringify(checked)+"\n");
+ // Signature-only review remains supported for backward compatibility but
+ // MUST never be mistaken for a reviewer-issued, single-use accepted result.
+ const result=args.length===5?
+   consumeDockerHostChallenge(args[4],signed,rawKey.trim(),expected):
+   {...checked,challengeConsumedExactlyOnce:false,
+    reviewerOwnedLedgerVerified:false,
+    reviewStatus:"signature_only_challenge_replay_not_checked"};
+ process.stdout.write(JSON.stringify(result)+"\n");
 }catch(error){
  process.stderr.write((error instanceof Error?error.message:
   "Offline host evidence verification failed.")+"\n");

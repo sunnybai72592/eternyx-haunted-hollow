@@ -1,0 +1,52 @@
+name: Docker Phase 40 one-time challenge ledger and concurrent review (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-one-time-host-challenge-phase40.yml'
+      - 'src/lib/dockerHostChallengeLedger.mjs'
+      - 'scripts/docker-lab-host-challenge.mjs'
+      - 'scripts/docker-lab-host-evidence-review.mjs'
+      - 'tests/docker-host-challenge-ledger-phase40.test.mjs'
+      - 'docs/DOCKER_HOST_ONE_TIME_EVIDENCE_PHASE40.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  once-only:
+    name: Prove exactly-once signed host challenge, concurrent verifier and permanent crash holds
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check real issuer, reviewer and durable forensic ledger
+        run: |
+          node --check src/lib/dockerHostChallengeLedger.mjs
+          node --check scripts/docker-lab-host-challenge.mjs
+          node --check scripts/docker-lab-host-evidence-review.mjs
+          node --check tests/docker-host-challenge-ledger-phase40.test.mjs
+      - name: Prove one-time host evidence acceptance and previous Docker security controls offline
+        env:
+          CI: 'true'
+        run: |
+          node --test tests/docker-host-challenge-ledger-phase40.test.mjs
+          node --test tests/docker-signed-host-evidence-phase39.test.mjs
+          node --test tests/docker-signed-host-readonly-preflight-phase38.test.mjs
+          node --test tests/docker-signed-client-config-phase37.test.mjs
+          node --test tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --test tests/docker-signed-cli-executable-pin.test.mjs
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
