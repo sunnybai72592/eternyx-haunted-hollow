@@ -142,6 +142,7 @@ const AIDocumentIntelligence = () => {
       ({invalid_selection:"Select one to three current ranked passages.",invalid_question:"Enter a nonempty question of at most 250 characters.",stale_source:"Source evidence is stale; rebuild and search again.",too_large:"Evidence packet exceeds 5,000 characters. Select fewer passages."}[reason.code])
       :"Could not prepare the local evidence packet.");}
   };
+  const invalidateKnowledgeIndex=()=>{setKnowledgeIndex(null);setKnowledgeFilter("");invalidateKnowledgeResults();};
   const getCurrentRag=()=>{
     if(!activeKnowledgeIndex||!knowledgeResults||!knowledgePacket||corpusBusy)throw new Error("stale");
     const packet=prepareKnowledgeEvidence(corpusFiles,activeKnowledgeIndex,knowledgeResults,knowledgeSelected,knowledgeQuestion);
@@ -166,7 +167,6 @@ const AIDocumentIntelligence = () => {
     }catch{invalidateRag();setRagError("The reviewed request is no longer valid. Prepare it again before sending.");}
   };
   const ragReview=knowledgeAI.result&&knowledgePacket&&ragPrepared?reviewKnowledgeRagResponse(knowledgeAI.result,knowledgePacket):null;
-  const invalidateKnowledgeIndex=()=>{setKnowledgeIndex(null);setKnowledgeFilter("");invalidateKnowledgeResults();};
   const buildLocalKnowledge=()=>{
     if(corpusBusy||!corpusFiles.length)return;
     invalidateKnowledgeIndex();
