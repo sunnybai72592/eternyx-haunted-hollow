@@ -39,3 +39,18 @@ test("acceptance evidence stores no source text, token values or downloaded arti
   assert.match(browser,/"staging_executed":/);
   assert.doesNotMatch(browser,/page\.screenshot|record_video_dir|trace\.start/);
 });
+
+test("resized preview remains contained and accepts a real pointer click in the opaque frame",()=>{
+  const studio=readFileSync(new URL("../src/pages/DeveloperProjectLab.tsx",import.meta.url),"utf8");
+  assert.match(studio,/grid min-w-0 grid-cols-\[minmax\(0,1fr\)\]/);
+  assert.match(studio,/previewViewportRef\.current\.scrollLeft = 0/);
+  assert.match(studio,/data-testid="project-preview-viewport"/);
+  assert.match(studio,/max-w-full overflow-x-auto overscroll-x-contain/);
+  assert.match(studio,/sandbox="allow-scripts"/);
+  assert.match(browser,/el\.scrollWidth > el\.clientWidth/);
+  assert.match(browser,/box\.scrollLeft === 0/);
+  assert.match(browser,/document\.elementFromPoint\(r\.x\+offset\.x,r\.y\+offset\.y\) === frame/);
+  assert.match(browser,/page\.mouse\.click\(rect\["x"\] \+ offset\["x"\]/);
+  assert.match(browser,/to_have_text\("Hello from the isolated preview!"\)/);
+  assert.doesNotMatch(browser,/dispatch_event\("click"\)|evaluate\([^\\n]*\.click\(\)/);
+});
