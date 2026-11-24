@@ -48,3 +48,19 @@ test("invalid UTF-8 replacement expansion cannot exceed the display byte budget"
   assert.ok(new TextEncoder().encode(result.body).byteLength<=1_000_000);
   assert.equal(result.truncated,true);
 });
+
+test("browser acceptance requests real HTML and targets accessible response controls",()=>{
+  const view=readFileSync(new URL("../src/pages/ApiEngineeringWorkbench.tsx",import.meta.url),"utf8");
+  const browser=readFileSync(new URL("./browser/developer_project_lab_smoke.py",import.meta.url),"utf8");
+  assert.match(view,/htmlFor="api-response-body"/);
+  assert.match(view,/id="api-response-body"/);
+  assert.match(view,/aria-label="Copy response body"/);
+  assert.match(view,/aria-label="Copy cURL command"/);
+  assert.match(browser,/#api-headers"\)\.fill\("Accept: text\/html"\)/);
+  assert.match(browser,/with page\.expect_response\(/);
+  assert.match(browser,/response\.status == 200/);
+  assert.match(browser,/response_body\)\.to_have_value/);
+  assert.match(browser,/expect\(copy_body\)\.to_be_enabled\(\)/);
+  assert.match(browser,/expect\(copy_body\)\.to_be_disabled\(\)/);
+  assert.doesNotMatch(browser,/name="Copy", exact=True\)\.last/);
+});

@@ -643,14 +643,32 @@ def api_project_link(page, staging):
         assert rejected["summary"]["failed"] == 1
         assert rejected["cases"][1]["reason"] == "content-type-mismatch"
         assert rejected["cases"][1]["contentTypeCheck"] == "mismatch"
-        # The interactive composer uses the real loopback server, with no external calls.
-        page.locator("#api-url").fill(ORIGIN + "/")
-        page.get_by_role("button", name="Send request", exact=True).click()
-        expect(page.get_by_role("button", name="Copy", exact=True).last).to_be_enabled(timeout=15000)
-        expect(page.get_by_text("Headers:", exact=False)).to_be_visible()
+        # Request actual HTML from the disposable server, not the default JSON
+        # Accept header (which can produce a different SPA fallback response).
+        target = ORIGIN + "/"
+        page.locator("#api-method").select_option("GET")
+        page.locator("#api-url").fill(target)
+        page.locator("#api-headers").fill("Accept: text/html")
+        with page.expect_response(
+            lambda response: response.url == target and response.request.method == "GET"
+                and response.request.resource_type == "fetch", timeout=15000
+        ) as received:
+            page.get_by_role("button", name="Send request", exact=True).click()
+        response = received.value
+        assert response.status == 200, "Local composer did not receive HTTP 200"
+        assert "text/html" in response.headers.get("content-type", "").lower()
+        # Prove transport completion and actual non-empty HTML rendering before
+        # checking the named action; never select an arbitrary Copy button.
+        response_body = page.get_by_label("Response body", exact=True)
+        expect(response_body).to_have_value(re.compile(r"(?is)<html\b"), timeout=15000)
+        expect(page.get_by_text(re.compile(r"^Headers: \d+ ms$"))).to_be_visible()
+        copy_body = page.get_by_role("button", name="Copy response body", exact=True)
+        expect(copy_body).to_be_enabled()
         page.locator("#api-url").fill(ORIGIN + "/?next=1")
         expect(page.get_by_text("Request changed. This response is from the previous request", exact=False)).to_be_visible()
-        expect(page.get_by_role("button", name="Copy", exact=True).last).to_be_disabled()
+        expect(copy_body).to_be_disabled()
+        # The stale response remains visible for inspection, not current evidence.
+        expect(response_body).to_have_value(re.compile(r"(?is)<html\b"))
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")
