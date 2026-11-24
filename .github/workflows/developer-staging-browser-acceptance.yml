@@ -50,8 +50,18 @@ jobs:
             --base-url "$DEVELOPER_STAGING_ORIGIN" --staging --confirmed-staging \
             --expected-host "$DEVELOPER_STAGING_HOST"
       - name: Reject partial, stale, misdirected, deep-link or fabricated staging evidence
+        env:
+          DEVELOPER_VERIFIED_SUMMARY_PATH: test-results/developer-staging-verified-summary.json
         run: |
           node scripts/developer-staging-gate.mjs --verify-report test-results/developer-project-browser-acceptance.json
+      - name: Preserve independently checked staging summary only on success
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eternyx-developer-verified-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/developer-staging-verified-summary.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve sanitized staging acceptance evidence even if a browser test failed
         if: always()
         uses: actions/upload-artifact@v4
