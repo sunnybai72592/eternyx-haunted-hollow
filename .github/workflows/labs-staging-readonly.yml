@@ -1,0 +1,42 @@
+name: LABS isolated staging read-only acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Authorize staging identity GET and fixed read-only Edge POST requests"
+        required: true
+        type: choice
+        options:
+          - DENY
+          - I_APPROVE_LABS_READONLY_STAGING
+
+permissions:
+  contents: read
+
+jobs:
+  labs-staging-readonly:
+    if: ${{ inputs.approval == 'I_APPROVE_LABS_READONLY_STAGING' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: eternyx-staging
+    env:
+      ETERNYX_LABS_STAGING_CONSENT: ${{ inputs.approval }}
+      ETERNYX_LABS_STAGING_REF: ${{ vars.ETERNYX_LABS_STAGING_REF }}
+      ETERNYX_LABS_PRODUCTION_REF: ${{ vars.ETERNYX_LABS_PRODUCTION_REF }}
+      ETERNYX_LABS_STAGING_PUBLIC_KEY: ${{ secrets.ETERNYX_LABS_STAGING_PUBLIC_KEY }}
+      ETERNYX_LABS_STAGING_JWT_A: ${{ secrets.ETERNYX_LABS_STAGING_JWT_A }}
+      ETERNYX_LABS_STAGING_JWT_B: ${{ secrets.ETERNYX_LABS_STAGING_JWT_B }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test strict read-only LABS acceptance contracts
+        run: node --test tests/eternyx-labs-staging-readonly.test.mjs
+      - name: Check protected staging environment without network
+        run: node scripts/labs-staging-readonly.mjs --check-config
+      - name: Verify two staging users, real Edge reads and negative access
+        run: node scripts/labs-staging-readonly.mjs --run
