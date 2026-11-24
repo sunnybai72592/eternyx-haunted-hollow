@@ -119,8 +119,8 @@ jobs:
           ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
           ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
           ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
-          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
-          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL || '' }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD || '' }}
         run: node scripts/staging/educationStagingConfigurationInventory.mjs
       - name: Reject production, unapproved modes, malformed fixtures and unsafe grant configuration
         env:
@@ -131,8 +131,8 @@ jobs:
           ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
           ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
           ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
-          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
-          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL || '' }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD || '' }}
         run: |
           node --input-type=module -e '
             import {validateEducationReleaseConfig} from "./scripts/staging/educationReleaseGate.mjs";
@@ -143,6 +143,13 @@ jobs:
               process.stderr.write("Education staging release blocked by preflight.\n");
               process.exitCode=1;
             }
+          '
+      - name: Independently require current-run offline inventory before remote checks
+        run: |
+          node --input-type=module -e '
+            import {readFileSync} from "node:fs";
+            import {assertEducationInventoryEvidence,INVENTORY_PATH} from "./scripts/staging/educationStagingConfigurationInventory.mjs";
+            assertEducationInventoryEvidence(JSON.parse(readFileSync(INVENTORY_PATH,"utf8")),process.env);
           '
       - name: Install locked dependencies
         run: npm ci
@@ -168,22 +175,9 @@ jobs:
           ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
           ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
           ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
-          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
-          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL || '' }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD || '' }}
         run: node scripts/staging/educationJourneyFixturePreflight.mjs
-      - name: Run ordered real-JWT protected backend acceptance and issue staging-only verdict
-        timeout-minutes: 35
-        env:
-          ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
-          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
-          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
-          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
-          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
-          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
-          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
-          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
-          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
-        run: node scripts/staging/runEducationHostedRelease.mjs
       - name: Build disposable frontend against staging only for the newly finalized attempt
         if: inputs.run_mode == 'journey'
         timeout-minutes: 3
@@ -214,6 +208,34 @@ jobs:
           done
           echo "BLOCKED: local staged-journey preview unavailable"
           exit 1
+      - name: Prove Chromium can launch locally before consuming the synthetic attempt
+        if: inputs.run_mode == 'journey'
+        timeout-minutes: 1
+        run: |
+          "$RUNNER_TEMP/edu-journey-browser/bin/python" - <<'PY'
+          from playwright.sync_api import sync_playwright, expect
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              try:
+                  page = browser.new_page(offline=True)
+                  page.set_content("<main>Education browser preflight</main>")
+                  expect(page.locator("main")).to_have_text("Education browser preflight")
+              finally:
+                  browser.close()
+          PY
+      - name: Run ordered real-JWT protected backend acceptance and issue staging-only verdict
+        timeout-minutes: 35
+        env:
+          ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL || '' }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD || '' }}
+        run: node scripts/staging/runEducationHostedRelease.mjs
       - name: Verify newly finalized owned attempt in real desktop and mobile browser
         if: inputs.run_mode == 'journey'
         timeout-minutes: 8
