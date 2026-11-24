@@ -121,6 +121,30 @@ export function makeEducationStagingInventory(env,mode){
   production_tested:false,production_release_approved:false,
  });
 }
+/** Require exact sanitized, current-run configuration proof; never authorize a hosted write. */
+export function assertEducationInventoryEvidence(report,env){
+ const mode=env?.ETERNYX_EDU_RELEASE_MODE;
+ const required=requiredConfigurationNames(mode);
+ const keys=["schema","suite","source_sha","github_run_id","github_run_attempt","run_mode",
+  "required_count","missing_configuration_names","checks","outcome","network_checks_performed",
+  "hosted_staging_verified","production_tested","production_release_approved"];
+ if(!report||typeof report!=="object"||Array.isArray(report)||
+   JSON.stringify(Object.keys(report).sort())!==JSON.stringify(keys.sort())||
+   !/^[a-f0-9]{40}$/.test(env.GITHUB_SHA||"")||
+   !/^[1-9][0-9]*$/.test(String(env.GITHUB_RUN_ID||""))||
+   !/^[1-9][0-9]*$/.test(String(env.GITHUB_RUN_ATTEMPT||""))||
+   report.schema!==1||report.suite!=="education-hosted-configuration-inventory"||
+   report.source_sha!==env.GITHUB_SHA||report.github_run_id!==String(env.GITHUB_RUN_ID)||
+   report.github_run_attempt!==String(env.GITHUB_RUN_ATTEMPT)||report.run_mode!==mode||
+   report.required_count!==required.length||report.outcome!=="configuration_syntax_ready"||
+   !Array.isArray(report.missing_configuration_names)||report.missing_configuration_names.length!==0||
+   !Array.isArray(report.checks)||report.checks.length!==FLAGS.length||
+   report.checks.some((c,i)=>!c||Object.keys(c).sort().join(",")!=="check,result"||
+      c.check!==FLAGS[i]||c.result!=="passed")||
+   report.network_checks_performed!==false||report.hosted_staging_verified!==false||
+   report.production_tested!==false||report.production_release_approved!==false)fail();
+ return true;
+}
 export function runInventory(env=process.env){
  try{
   // Invalid provenance or malformed mode must never leave an old successful report.
