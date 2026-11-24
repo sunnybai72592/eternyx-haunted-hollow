@@ -8,6 +8,16 @@ import {ETERNYX_PRODUCTION_REF} from "../../scripts/automation-staging-db-readon
 import {parseRangeProviderStatus,parseRangeSessionsResponse} from "./eternyxRangeSessionClient.mjs";
 import {VERIFIED_CTF_MISSIONS,tallyVerifiedCtfSolves} from "./eternyxVerifiedCtf.mjs";
 
+export const LABS_STAGING_REF="mhodwvypfbxafamkrgsk";
+const validatedConfigs=new WeakSet();
+export function isLabsPublicKey(key){
+  if(typeof key!=="string"||key.length>4096)return false;
+  if(/^sb_publishable_[A-Za-z0-9_-]{20,200}$/.test(key))return true;
+  if(!JWT.test(key))return false;
+  try{const payload=JSON.parse(Buffer.from(key.split(".")[1],"base64url").toString("utf8"));
+    return payload.role==="anon"&&payload.ref===LABS_STAGING_REF;
+  }catch{return false;}
+}
 export const LABS_STAGING_SCHEMA="eternyx.labs.staging-readonly.v2";
 export const PUBLIC_RANGE_COLUMNS=Object.freeze(["id","challenge_pack","status","requested_at","updated_at","expires_at","started_at","finished_at"]);
 export const PRIVATE_RANGE_COLUMNS=Object.freeze(["user_id","provider_instance_ref","worker_fence_id","claimed_at"]);
@@ -38,16 +48,17 @@ export function validateLabsStagingConfig(env={}){
   const publicKey=env.ETERNYX_LABS_STAGING_PUBLIC_KEY;
   const tokenA=env.ETERNYX_LABS_STAGING_JWT_A,tokenB=env.ETERNYX_LABS_STAGING_JWT_B;
   if(env.ETERNYX_LABS_STAGING_CONSENT!==LABS_STAGING_APPROVAL)deny("approval_required");
-  if(typeof ref!=="string"||!REF.test(ref)||ref===ETERNYX_PRODUCTION_REF||
+  if(ref!==LABS_STAGING_REF||!REF.test(ref)||ref===ETERNYX_PRODUCTION_REF||
     prod!==ETERNYX_PRODUCTION_REF||ref===prod)deny("target_not_isolated");
-  if(typeof publicKey!=="string"||publicKey.length<20||publicKey.length>4096||
-    /\s/.test(publicKey)||!JWT.test(tokenA??"")||!JWT.test(tokenB??"")||
+  if(!isLabsPublicKey(publicKey)||!JWT.test(tokenA??"")||!JWT.test(tokenB??"")||
     tokenA===tokenB||tokenA===publicKey||tokenB===publicKey)
     deny("two_real_auth_sessions_required");
-  return Object.freeze({
+  const config=Object.freeze({
     ref,origin:"https://"+ref+".supabase.co",
     publicKey,tokenA,tokenB,stagingOnly:true,productionExcluded:true,
   });
+  validatedConfigs.add(config);
+  return config;
 }
 async function readBounded(response,decodeJson){
   if(!response||!Number.isInteger(response.status)||response.status<100||response.status>599||
@@ -246,7 +257,7 @@ async function verifyRangeRestIsolation(config,fetcher,accounts,ids){
 }
 
 export async function runLabsStagingReadOnly(config,fetcher=globalThis.fetch){
-  if(!config?.stagingOnly||!config.productionExcluded||!REF.test(config.ref)||
+  if(!validatedConfigs.has(config)||!config?.stagingOnly||!config.productionExcluded||config.ref!==LABS_STAGING_REF||
     config.ref===ETERNYX_PRODUCTION_REF||
     config.origin!=="https://"+config.ref+".supabase.co"||
     typeof fetcher!=="function")deny("unverified_configuration");

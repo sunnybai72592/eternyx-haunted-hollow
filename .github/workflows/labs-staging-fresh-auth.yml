@@ -1,0 +1,42 @@
+name: LABS fresh staging account acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Create two sign-in sessions for dedicated staging accounts and run read-only probes"
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_LABS_STAGING_TEST_SIGNIN
+permissions:
+  contents: read
+jobs:
+  fresh-staging-auth:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_LABS_STAGING_TEST_SIGNIN' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: eternyx-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization before tests
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/eternyx-labs-fresh-auth.test.mjs tests/eternyx-labs-staging-readonly.test.mjs
+      - name: Obtain fresh dedicated account sessions and run acceptance
+        env:
+          ETERNYX_LABS_AUTH_CONSENT: ${{ inputs.approval }}
+          ETERNYX_LABS_STAGING_REF: ${{ vars.ETERNYX_LABS_STAGING_REF }}
+          ETERNYX_LABS_PRODUCTION_REF: ${{ vars.ETERNYX_LABS_PRODUCTION_REF }}
+          ETERNYX_LABS_STAGING_PUBLIC_KEY: ${{ secrets.ETERNYX_LABS_STAGING_PUBLIC_KEY }}
+          ETERNYX_LABS_TEST_EMAIL_A: ${{ secrets.ETERNYX_LABS_TEST_EMAIL_A }}
+          ETERNYX_LABS_TEST_EMAIL_B: ${{ secrets.ETERNYX_LABS_TEST_EMAIL_B }}
+          ETERNYX_LABS_TEST_PASSWORD_A: ${{ secrets.ETERNYX_LABS_TEST_PASSWORD_A }}
+          ETERNYX_LABS_TEST_PASSWORD_B: ${{ secrets.ETERNYX_LABS_TEST_PASSWORD_B }}
+        run: |
+          node scripts/labs-staging-fresh-auth.mjs --check-config
+          node scripts/labs-staging-fresh-auth.mjs --run
