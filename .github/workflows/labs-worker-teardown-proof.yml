@@ -1,0 +1,23 @@
+name: LABS worker teardown proof
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/provider/**'
+      - 'tests/ctf-range-fenced-worker.test.mjs'
+      - 'tests/ctf-range-watchdog.test.mjs'
+      - '.github/workflows/labs-worker-teardown-proof.yml'
+permissions:
+  contents: read
+jobs:
+  worker-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/ctf-range-fenced-worker.test.mjs tests/ctf-range-watchdog.test.mjs

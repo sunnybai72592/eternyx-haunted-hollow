@@ -123,7 +123,9 @@ export async function runOrphanSweep({
         candidate.containerIds.join(",") !== entry.containerIds.join(",")) {
       throw new Error("Docker project changed during sweep; cleanup refused");
     }
-    await runtime.stop(entry.sessionId);
+    if(await runtime.stop(entry.sessionId,entry.containerIds)!==true)throw new Error('Watchdog teardown not confirmed');
+    const remaining=planVerifiedCleanup(await runtime.listVerifiedManagedProjects(),new Date(),emergency);
+    if(remaining.some(x=>x.project===entry.project))throw new Error('Managed project still present after teardown');
     outcome.removed++;
   }
   return { outcome, plan };

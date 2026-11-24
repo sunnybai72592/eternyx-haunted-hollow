@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,7 +42,7 @@ function makeRuntime(items, {changeOnSecondScan=false,stopFails=false}={}) {
       if(scans === 2 && changeOnSecondScan) {
         return items.map((x,i)=>i===0 ? {...x,Id:"f".repeat(64)} : x);
       }
-      return items;
+      return items.filter(x=>!stopped.includes(sessionFromProject(x.Config.Labels['com.docker.compose.project'])));
     },
     async stop(sessionId) {
       stopped.push(sessionId);
@@ -199,4 +199,24 @@ test("managed Compose services are labeled and runtime does not inherit Supabase
   assert.match(cli,/runOrphanSweep/);
   assert.equal(pkg.scripts["range:watchdog"],"node scripts/cyber-range-watchdog.mjs");
   assert.doesNotMatch(compose,/docker\.sock|privileged:\s*true/);
+});
+
+test("watchdog refuses successful-looking stop when managed containers remain",async()=>{
+ const items=[container(pa,"gateway",2000,"a")],runtime={async listVerifiedManagedProjects(){return items;},async stop(id,ids){assert.equal(id,a);assert.deepEqual(ids,["a".repeat(64)]);return true;}};
+ await assert.rejects(runOrphanSweep({runtime,now,apply:true,approved:true}),/still present/);
+});
+test("dangling halt symlink blocks new launches",async(t)=>{
+ const folder=await mkdtemp(join(tmpdir(),"eternyx-halt-link-"));
+ t.after(()=>rm(folder,{recursive:true,force:true}));
+ const marker=join(folder,"halt");
+ await symlink(join(folder,"missing"),marker);
+ await assert.rejects(assertLocalLaunchAllowed(marker),/emergency stop active/);
+});
+test("runtime attempts cleanup even after partial compose failure and verifies exact project before and after",async()=>{
+ const source=await read("infrastructure/cyber-range/provider/docker-runtime.mjs");
+ assert.match(source,/launchAttempted = true;\s*executeDocker/);
+ assert.match(source,/if \(launchAttempted\)/);
+ assert.match(source,/#projectMembers\(sessionId\)/);
+ assert.match(source,/Managed containers remain after teardown/);
+ assert.doesNotMatch(source,/"down", "--volumes", "--remove-orphans"/);
 });
