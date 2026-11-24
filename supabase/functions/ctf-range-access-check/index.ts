@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { rangeActivationPermitted, readBoundedRangeJson, BoundedRangeBodyError } from "../_shared/ctf-range-dormant-rollout.mjs";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { getSupabaseSecretKey } from "../_shared/supabase.ts";
 import { verifyWorkerToken } from "../_shared/ctf-range-worker-contract.mjs";
@@ -21,7 +22,7 @@ const reply = (body: unknown, status = 200) =>
 
 serve(async (req: Request) => {
   if (req.method !== "POST") return reply({ authorized: false }, 405);
-  if (Deno.env.get("CTF_RANGE_PROXY_VALIDATION_ENABLED") !== "true" ||
+  if (!rangeActivationPermitted() || Deno.env.get("CTF_RANGE_PROXY_VALIDATION_ENABLED") !== "true" ||
       Deno.env.get("CTF_RANGE_INGRESS_REVIEWED") !== "true") {
     return reply({ authorized: false }, 503);
   }
@@ -38,11 +39,9 @@ serve(async (req: Request) => {
 
   let body: unknown;
   try {
-    const raw = await req.text();
-    if (raw.length > 256) return reply({ authorized: false }, 413);
-    body = JSON.parse(raw);
-  } catch {
-    return reply({ authorized: false }, 400);
+    body = await readBoundedRangeJson(req, 256);
+  } catch (error) {
+    return reply({ authorized: false }, error instanceof BoundedRangeBodyError ? error.status : 400);
   }
   const parsed = parseProxyVerification(body);
   if (!parsed) return reply({ authorized: false }, 400);

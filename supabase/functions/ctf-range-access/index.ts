@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { rangeActivationPermitted, readBoundedRangeJson, BoundedRangeBodyError } from "../_shared/ctf-range-dormant-rollout.mjs";
 import { authenticateUser } from "../_shared/user-auth.ts";
 import {
   authorizedAccessExpiry, generateAccessToken, hashAccessToken, parseAccessRequest,
@@ -22,18 +23,16 @@ serve(async (req: Request) => {
 
   // Operator activation requires two independently configured server-only flags.
   // Neither is changed by a GitHub merge or by database migration alone.
-  if (Deno.env.get("CTF_RANGE_ACCESS_ISSUANCE_ENABLED") !== "true" ||
+  if (!rangeActivationPermitted() || Deno.env.get("CTF_RANGE_ACCESS_ISSUANCE_ENABLED") !== "true" ||
       Deno.env.get("CTF_RANGE_INGRESS_REVIEWED") !== "true") {
     return reply({ error: "Hosted cyber range access is not enabled" }, 503);
   }
 
   let body: unknown;
   try {
-    const raw = await req.text();
-    if (raw.length > 256) return reply({ error: "Request too large" }, 413);
-    body = JSON.parse(raw);
-  } catch {
-    return reply({ error: "Invalid request" }, 400);
+    body = await readBoundedRangeJson(req, 256);
+  } catch (error) {
+    return reply({ error: "Invalid request body" }, error instanceof BoundedRangeBodyError ? error.status : 400);
   }
   const parsed = parseAccessRequest(body);
   if (!parsed) return reply({ error: "Invalid session access request" }, 400);

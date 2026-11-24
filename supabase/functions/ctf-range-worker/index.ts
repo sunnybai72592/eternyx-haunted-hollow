@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { rangeActivationPermitted, readBoundedRangeJson, BoundedRangeBodyError } from "../_shared/ctf-range-dormant-rollout.mjs";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { getSupabaseSecretKey } from "../_shared/supabase.ts";
 import { verifyWorkerToken, safeWorkerSession } from "../_shared/ctf-range-worker-contract.mjs";
@@ -22,7 +23,7 @@ const reply = (body: unknown, status = 200) =>
 
 serve(async (req: Request) => {
   if (req.method !== "POST") return reply({ error: "Method not allowed" }, 405);
-  if (Deno.env.get("CTF_RANGE_WORKER_ENABLED") !== "true") {
+  if (!rangeActivationPermitted() || Deno.env.get("CTF_RANGE_WORKER_ENABLED") !== "true") {
     return reply({ error: "Range worker endpoint is disabled" }, 503);
   }
 
@@ -40,11 +41,9 @@ serve(async (req: Request) => {
 
   let parsed: ReturnType<typeof parseFencedWorkerRequest>;
   try {
-    const raw = await req.text();
-    if (raw.length > 512) return reply({ error: "Request is too large" }, 413);
-    parsed = parseFencedWorkerRequest(JSON.parse(raw));
-  } catch {
-    return reply({ error: "Invalid JSON" }, 400);
+    parsed = parseFencedWorkerRequest(await readBoundedRangeJson(req, 512));
+  } catch (error) {
+    return reply({ error: "Invalid request body" }, error instanceof BoundedRangeBodyError ? error.status : 400);
   }
   if (!parsed) return reply({ error: "Invalid worker action" }, 400);
 
