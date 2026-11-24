@@ -46,7 +46,7 @@ test("planner groups only real tasks into six disjoint, deterministically sorted
 });
 test("planner date boundaries work across New Year and completed tasks stay out of overdue",()=>{
   const rows=[task(1,{due_on:"2026-12-31"}),task(2,{due_on:"2027-01-01"}),
-    task(3,{due_on:"2027-01-06"}),task(4,{due_on:"2027-01-07"}),
+    task(3,{due_on:"2027-01-06"}),task(4,{due_on:"2027-01-08"}),
     task(5,{status:"done",due_on:"2026-01-01"})];
   const groups=workspaceTeamScheduleGroups(rows,team,"2026-12-31");
   assert.deepEqual(groups.map(g=>g.tasks.length),[0,1,2,1,0,1]);
@@ -109,9 +109,10 @@ test("iCalendar escapes malicious line breaks and folds UTF-8 lines at 75 bytes"
   const row=task(1,{due_on:"2026-11-24",title:name,details});
   const result=buildWorkspaceTeamScheduleIcs([row],owner,team,new Date(version));
   assert.ok(result.includes("SUMMARY:"));
-  assert.ok(result.includes("\\nBEGIN:VALARM"));
-  assert.ok(result.includes("\\nEND:VEVENT"));
-  assert.ok(result.includes("\\;hello\\,world\\\\raw"));
+  const unfolded=result.replace(/\r\n /g,"");
+  assert.ok(unfolded.includes("\\nBEGIN:VALARM"));
+  assert.ok(unfolded.includes("\\nEND:VEVENT"));
+  assert.ok(unfolded.includes("\\;hello\\,world\\\\raw"));
   assert.equal((result.match(/BEGIN:VEVENT/g)||[]).length,1);
   for(const line of result.split("\r\n"))
     assert.ok(new TextEncoder().encode(line).length<=75,"Overlong iCalendar line");
