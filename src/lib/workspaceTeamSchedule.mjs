@@ -120,3 +120,39 @@ export function buildWorkspaceTeamScheduleIcs(tasks,owner,spaceId,now=new Date()
   if(exported===0)throw Error("No scheduled outstanding tasks to export");
   return lines.concat(["END:VCALENDAR"]).map(calendarLine).join("\r\n")+"\r\n";
 }
+
+function validMonth(month){
+  return typeof month==="string"&&/^\d{4}-\d{2}$/.test(month)&&
+    !month.startsWith("0000-")&&workspaceValidTaskDay(month+"-01");
+}
+export function workspaceTeamShiftMonth(month,delta){
+  if(!validMonth(month)||![-1,1].includes(delta))throw Error("Invalid planner month");
+  const [year,number]=month.split("-").map(Number);
+  const index=year*12+number-1+delta;
+  const nextYear=Math.floor(index/12);
+  if(nextYear<1||nextYear>9999)return null;
+  return String(nextYear).padStart(4,"0")+"-"+String(index%12+1).padStart(2,"0");
+}
+export function workspaceTeamMonthPlan(tasks,spaceId,month){
+  if(!validMonth(month))throw Error("Invalid planner month");
+  const rows=authorizedTaskRows(tasks,spaceId);
+  const first=new Date(month+"-01T00:00:00.000Z");
+  const year=first.getUTCFullYear(),number=first.getUTCMonth()+1;
+  const leap=year%4===0&&(year%100!==0||year%400===0);
+  const days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31][number-1];
+  const byDay=new Map();
+  for(const task of rows){
+    if(!task.due_on?.startsWith(month+"-"))continue;
+    const bucket=byDay.get(task.due_on)??[];
+    bucket.push(task);byDay.set(task.due_on,bucket);
+  }
+  const cells=Array.from({length:first.getUTCDay()},()=>null);
+  for(let i=1;i<=days;i++){
+    const date=month+"-"+String(i).padStart(2,"0");
+    const tasks=[...(byDay.get(date)??[])].sort((a,b)=>a.id.localeCompare(b.id));
+    const done=tasks.filter(task=>task.status==="done").length;
+    cells.push({date,day:i,tasks,done,outstanding:tasks.length-done});
+  }
+  while(cells.length%7)cells.push(null);
+  return cells;
+}

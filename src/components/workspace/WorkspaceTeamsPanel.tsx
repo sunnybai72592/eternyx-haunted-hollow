@@ -7,7 +7,7 @@ import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTas
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
 import {
   workspaceTeamScheduleGroups,workspaceTeamTaskDueDatePatch,
-  buildWorkspaceTeamScheduleIcs,
+  buildWorkspaceTeamScheduleIcs,workspaceTeamMonthPlan,workspaceTeamShiftMonth,
 } from "@/lib/workspaceTeamSchedule.mjs";
 import {
   workspaceTeamBoardColumns,workspaceTeamNextTaskStatus,
@@ -68,6 +68,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [taskPriorityFilter,setTaskPriorityFilter]=useState("all");
   const [taskAssigneeFilter,setTaskAssigneeFilter]=useState("all");
   const [taskLayout,setTaskLayout]=useState<"list"|"board"|"schedule">("list");
+  const [calendarDay,setCalendarDay]=useState<string|null>(null);
   const [dragOverColumn,setDragOverColumn]=useState<string|null>(null);
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
@@ -93,7 +94,20 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const editor=teamCanEdit(currentRole,selected?.status);
   const canInvite=teamCanInvite(currentRole,selected?.status);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
-  const today=workspaceTeamLocalDay(new Date());
+  const [today,setToday]=useState(()=>workspaceTeamLocalDay(new Date()));
+  useEffect(()=>{
+    const refreshDay=()=>setToday(workspaceTeamLocalDay(new Date()));
+    const timer=window.setInterval(refreshDay,30000);
+    window.addEventListener("focus",refreshDay);
+    document.addEventListener("visibilitychange",refreshDay);
+    return ()=>{
+      window.clearInterval(timer);
+      window.removeEventListener("focus",refreshDay);
+      document.removeEventListener("visibilitychange",refreshDay);
+    };
+  },[]);
+  const plannerDay=calendarDay??today;
+  const plannerMonth=plannerDay.slice(0,7);
   const effectiveAssigneeFilter=resolveWorkspaceAssigneeFilter(taskAssigneeFilter,memberIds);
   const taskSummary=useMemo(()=>workspaceTeamTaskSummary(tasks,today),[tasks,today]);
   const visibleTasks=useMemo(
@@ -108,6 +122,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const scheduleGroups=useMemo(
     ()=>selected&&currentRole?workspaceTeamScheduleGroups(visibleTasks,selected.id,today):[],
     [visibleTasks,selected,currentRole,today]);
+  const monthCells=useMemo(
+    ()=>selected&&currentRole&&taskLayout==="schedule"
+      ?workspaceTeamMonthPlan(visibleTasks,selected.id,plannerMonth):[],
+    [visibleTasks,selected,currentRole,taskLayout,plannerMonth]);
+  const selectedDayCell=monthCells.find(cell=>cell?.date===plannerDay);
+  const previousMonth=workspaceTeamShiftMonth(plannerMonth,-1);
+  const nextMonth=workspaceTeamShiftMonth(plannerMonth,1);
   const scheduledCount=visibleTasks.filter(task=>task.due_on&&task.status!=="done").length;
   const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
@@ -216,6 +237,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
+    setCalendarDay(null);
     setDragOverColumn(null);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
@@ -240,6 +262,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
+    setCalendarDay(null);
     setDragOverColumn(null);
     if(!selectedId)return;
     setLoading(true);
@@ -992,7 +1015,54 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
               A read-only calendar grouping of currently visible tasks. Dates
               are local calendar days; completed tasks are separated.
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
+            <section className="space-y-3 rounded-lg border border-border p-3"
+               aria-label="Monthly team task planner">
+               <div className="flex flex-wrap items-center justify-between gap-2">
+                 <h5 className="text-sm font-semibold" aria-live="polite">
+                   {new Intl.DateTimeFormat(undefined,{month:"long",year:"numeric",timeZone:"UTC"})
+                     .format(new Date(plannerMonth+"-01T00:00:00.000Z"))}
+                 </h5>
+                 <div className="flex flex-wrap gap-1">
+                   <Button type="button" size="sm" variant="outline"
+                     aria-label="Previous month" disabled={!previousMonth}
+                     onClick={()=>previousMonth&&setCalendarDay(previousMonth+"-01")}>Previous</Button>
+                   <Button type="button" size="sm" variant="outline"
+                     onClick={()=>setCalendarDay(null)}>Today</Button>
+                   <Button type="button" size="sm" variant="outline"
+                     aria-label="Next month" disabled={!nextMonth}
+                     onClick={()=>nextMonth&&setCalendarDay(nextMonth+"-01")}>Next</Button>
+                 </div>
+               </div>
+               <p className="text-xs text-muted-foreground">
+                 Counts reflect visible filtered tasks. Select a date to review its work.
+                 Undated tasks remain in the groups below.
+               </p>
+               <div className="grid grid-cols-7 gap-1 text-center" aria-label="Calendar dates">
+                 {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(day=>
+                   <span key={day} className="text-[10px] text-muted-foreground">{day}</span>)}
+                 {monthCells.map((cell,index)=>cell?
+                   <button key={cell.date} type="button"
+                     aria-label={cell.date+": "+cell.outstanding+" outstanding, "+cell.done+" completed"}
+                     aria-pressed={plannerDay===cell.date}
+                     aria-current={cell.date===today?"date":undefined}
+                     onClick={()=>setCalendarDay(cell.date)}
+                     className={"min-w-0 min-h-12 rounded-md border p-1 text-xs focus-visible:outline focus-visible:outline-2 "+
+                       (plannerDay===cell.date?"border-primary bg-primary/10":"border-border hover:bg-muted")}>
+                     <span className="block font-medium">{cell.day}</span>
+                     {cell.tasks.length>0&&<span className="block text-[10px]">{cell.tasks.length} task{cell.tasks.length===1?"":"s"}</span>}
+                   </button>:<span key={"blank-"+index} aria-hidden="true"/>)}
+               </div>
+               <div className="space-y-2" aria-label="Selected day tasks">
+                 <h6 className="text-xs font-semibold" aria-live="polite">
+                   {plannerDay} · {selectedDayCell?.tasks.length??0} matching tasks
+                 </h6>
+                 {selectedDayCell&&selectedDayCell.tasks.length>0?
+                   <div className="max-h-[24rem] space-y-2 overflow-y-auto">
+                     {selectedDayCell.tasks.map(task=><div key={task.id} className="rounded-md border border-border p-2 text-xs"><p className="break-words font-medium">{task.title}</p><p className="text-muted-foreground">{task.status} · {task.priority}</p></div>)}
+                   </div>:<p className="text-xs text-muted-foreground">No matching tasks due on this date.</p>}
+               </div>
+             </section>
+             <div className="grid gap-3 md:grid-cols-2">
               {scheduleGroups.map(group=><section key={group.key}
                 className="min-w-0 rounded-lg border border-border p-3"
                 aria-label={group.label+" schedule group"}>

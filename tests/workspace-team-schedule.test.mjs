@@ -5,6 +5,7 @@ import {
   workspaceValidTaskDay,workspaceTeamScheduleGroups,
   workspaceTeamTaskDueDatePatch,escapeWorkspaceCalendarText,
   buildWorkspaceTeamScheduleIcs,WORKSPACE_TEAM_SCHEDULE_BUCKETS,
+  workspaceTeamMonthPlan,workspaceTeamShiftMonth,
 } from "../src/lib/workspaceTeamSchedule.mjs";
 const team="33333333-3333-4333-8333-333333333333";
 const owner="11111111-1111-4111-8111-111111111111";
@@ -154,4 +155,59 @@ test("schedule UI uses existing verified rows, proper role checks, CSV and calen
   const changes=panel.slice(panel.indexOf("const changeTaskDueDate="),
     panel.indexOf("const startBoardDrag="));
   assert.ok(!changes.includes("setTasks("),"No optimistic fake task reschedule");
+});
+
+test("monthly navigation crosses years and stops at supported boundaries",()=>{
+  assert.equal(workspaceTeamShiftMonth("2026-12",1),"2027-01");
+  assert.equal(workspaceTeamShiftMonth("2026-01",-1),"2025-12");
+  assert.equal(workspaceTeamShiftMonth("0001-01",-1),null);
+  assert.equal(workspaceTeamShiftMonth("9999-12",1),null);
+  for(const month of ["2026-13","2026-1","0000-01",null])
+    assert.throws(()=>workspaceTeamShiftMonth(month,1));
+  assert.throws(()=>workspaceTeamShiftMonth("2026-11",2));
+});
+test("month cells align weekdays and Gregorian leap days",()=>{
+  const feb=workspaceTeamMonthPlan([],team,"2024-02");
+  assert.equal(feb.findIndex(Boolean),4);
+  assert.equal(feb.filter(Boolean).length,29);
+  assert.equal(feb.length,35);
+  assert.equal(workspaceTeamMonthPlan([],team,"1900-02").filter(Boolean).length,28);
+  assert.equal(workspaceTeamMonthPlan([],team,"2000-02").filter(Boolean).length,29);
+  assert.equal(workspaceTeamMonthPlan([],team,"9999-12").filter(Boolean).length,31);
+});
+test("month counts reflect only supplied filtered rows and preserve the snapshot",()=>{
+  const rows=[task(3,{due_on:"2026-11-24",status:"done"}),task(1,{due_on:"2026-11-24"}),
+    task(2,{due_on:"2026-12-01"}),task(4),task(5,{due_on:"2026-11-01"})];
+  const copy=structuredClone(rows);
+  const cells=workspaceTeamMonthPlan(rows,team,"2026-11");
+  const day=cells.find(cell=>cell?.date===today);
+  assert.deepEqual(day.tasks.map(t=>t.id),[id(1),id(3)]);
+  assert.equal(day.outstanding,1);assert.equal(day.done,1);
+  assert.equal(cells.reduce((sum,cell)=>sum+(cell?.tasks.length??0),0),3);
+  assert.deepEqual(rows,copy);
+  assert.equal(workspaceTeamMonthPlan(rows.filter(t=>t.status==="done"),team,"2026-11")
+    .find(cell=>cell?.date===today).outstanding,0);
+});
+test("month rejects foreign, duplicate and malformed rows even outside its month",()=>{
+  for(const rows of [[task(1),task(1)],[task(1,{space_id:"foreign",due_on:"2027-01-01"})],
+    [task(1,{due_on:"2026-02-30"})],Array.from({length:501},(_,i)=>task(i))])
+    assert.throws(()=>workspaceTeamMonthPlan(rows,team,"2026-11"));
+  assert.throws(()=>workspaceTeamMonthPlan([],team,"2026-00"));
+});
+test("monthly UI uses verified filtered data and resets dates on scope changes",()=>{
+  const panel=readPanel();
+  for(const anchor of [
+    'selected&&currentRole&&taskLayout==="schedule"',
+    'workspaceTeamMonthPlan(visibleTasks,selected.id,plannerMonth)',
+    'aria-label="Monthly team task planner"',
+    'aria-pressed={plannerDay===cell.date}',
+    'aria-current={cell.date===today?"date":undefined}',
+    'selectedDayCell.tasks.map(task=><div key={task.id}',
+    'onClick={()=>setCalendarDay(null)}',
+    'window.setInterval(refreshDay,30000)',
+    'window.clearInterval(timer)',
+    'document.removeEventListener("visibilitychange",refreshDay)',
+    'setCalendarDay(null);',
+  ])assert.ok(panel.includes(anchor),anchor);
+  assert.equal(panel.split('setCalendarDay(null);').length-1,2);
 });
