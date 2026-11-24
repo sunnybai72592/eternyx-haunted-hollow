@@ -18,7 +18,7 @@ import {
 import {
   workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
   selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
-  resolveWorkspaceAssigneeFilter,
+  resolveWorkspaceAssigneeFilter,workspaceTeamWorkload,
 } from "@/lib/workspaceTeamTaskOperations.mjs";
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
@@ -130,6 +130,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const previousMonth=workspaceTeamShiftMonth(plannerMonth,-1);
   const nextMonth=workspaceTeamShiftMonth(plannerMonth,1);
   const scheduledCount=visibleTasks.filter(task=>task.due_on&&task.status!=="done").length;
+  const workload=useMemo(
+    ()=>selected&&currentRole?workspaceTeamWorkload(tasks,members,owner,selected.id,today):[],
+    [tasks,members,owner,selected,currentRole,today]);
+  const [showWorkload,setShowWorkload]=useState(false);
   const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
   const assureOwner=async(expectedOwner:string)=>{
@@ -237,7 +241,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
-    setCalendarDay(null);
+    setCalendarDay(null);setShowWorkload(false);
     setDragOverColumn(null);
     setJoinToken("");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
@@ -262,7 +266,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
-    setCalendarDay(null);
+    setCalendarDay(null);setShowWorkload(false);
     setDragOverColumn(null);
     if(!selectedId)return;
     setLoading(true);
@@ -401,6 +405,14 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     }finally{
       if(current()){actionBusyRef.current=false;setBusy(false);}
     }
+  };
+  const openWorkloadTasks=(filter:string,overdue=false)=>{
+    if(!selected||!currentRole||disabled||busy||loading||!spaceListVerified||
+       verifiedSpaceId!==selected.id||
+       !workload.some(row=>row.filter===filter))return;
+    setTaskQuery("");setTaskPriorityFilter("all");setTaskSort("due");
+    setTaskAssigneeFilter(filter);setTaskFilter(overdue?"overdue":"outstanding");
+    setTaskLayout("list");
   };
   const exportTaskView=()=>{
     if(!selected||!currentRole||verifiedSpaceId!==selected.id||
@@ -874,6 +886,51 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
           <p className="rounded-md border border-border p-2">Next 7 days <strong>{taskSummary.upcoming}</strong></p>
           <p className="rounded-md border border-border p-2">Completed <strong>{taskSummary.done}</strong></p>
         </div>
+        <section className="space-y-2 rounded-lg border border-border p-3"
+          aria-label="Team workload overview">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h5 className="text-sm font-semibold">Team workload</h5>
+            <Button type="button" size="sm" variant="outline"
+              aria-expanded={showWorkload} onClick={()=>setShowWorkload(value=>!value)}>
+              {showWorkload?"Hide workload":"Show workload"}
+            </Button>
+          </div>
+          {showWorkload&&<>
+            <p className="text-xs text-muted-foreground">
+              All {tasks.length} authorized team tasks, before task filters.
+              Counts measure task volume, not hours, capacity or member performance.
+              Select a count to replace task filters with that assignment and status.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead><tr className="border-b border-border">
+                  {["Assignment","Outstanding","In progress","Overdue","Due within 7 days","Urgent open","Completed"].map(label=>
+                    <th key={label} scope="col" className="p-2 font-medium">{label}</th>)}
+                </tr></thead>
+                <tbody>{workload.map(row=><tr key={row.key} className="border-b border-border/50">
+                  <th scope="row" className="p-2 font-medium whitespace-nowrap">{row.label}</th>
+                  <td className="p-2">{row.filter!==null&&row.outstanding>0?
+                    <Button type="button" size="sm" variant="outline"
+                      disabled={disabled||busy||loading}
+                      aria-label={"Show outstanding tasks for "+row.label}
+                      onClick={()=>openWorkloadTasks(row.filter)}>{row.outstanding}</Button>:row.outstanding}</td>
+                  <td className="p-2">{row.inProgress}</td>
+                  <td className="p-2">{row.filter!==null&&row.overdue>0?
+                    <Button type="button" size="sm" variant="outline"
+                      disabled={disabled||busy||loading}
+                      aria-label={"Show overdue tasks for "+row.label}
+                      onClick={()=>openWorkloadTasks(row.filter,true)}>{row.overdue}</Button>:row.overdue}</td>
+                  <td className="p-2">{row.upcoming}</td>
+                  <td className="p-2">{row.urgent}</td>
+                  <td className="p-2">{row.done}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            {workload.some(row=>row.key==="unknown")&&<p className="text-xs text-muted-foreground">
+              Assignments outside the current roster are counted together without revealing member identities.
+            </p>}
+          </>}
+        </section>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1 text-xs">Search team tasks
             <Input type="search" value={taskQuery} maxLength={120}

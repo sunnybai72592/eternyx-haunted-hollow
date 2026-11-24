@@ -128,3 +128,48 @@ export function resolveWorkspaceAssigneeFilter(value,memberIds){
   return ["all","mine","unassigned"].includes(value)||memberIds.includes(value)
     ?value:"all";
 }
+
+/** Current task counts, not effort, capacity, or historical performance. */
+export function workspaceTeamWorkload(tasks,members,owner,spaceId,today){
+  if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT||
+    !Array.isArray(members)||members.length>20||
+    typeof owner!=="string"||!owner||typeof spaceId!=="string"||!spaceId||!validDay(today))
+    throw Error("Invalid team workload scope");
+  const roster=new Map();
+  const newRow=(key,label,filter)=>({key,label,filter,total:0,outstanding:0,
+    inProgress:0,done:0,overdue:0,upcoming:0,urgent:0});
+  for(const member of members){
+    if(!member||member.space_id!==spaceId||typeof member.user_id!=="string"||
+       !member.user_id||roster.has(member.user_id)||
+       !["owner","editor","viewer"].includes(member.role))
+      throw Error("Invalid or cross-team workload member");
+    roster.set(member.user_id,newRow("member:"+member.user_id,
+      teamMemberLabel(member.user_id,owner),member.user_id===owner?"mine":member.user_id));
+  }
+  if(!roster.has(owner))throw Error("Workload membership not verified");
+  const unassigned=newRow("unassigned","Unassigned","unassigned");
+  const unknown=newRow("unknown","Outside current roster",null);
+  const seen=new Set();
+  for(const task of tasks){
+    if(!task||task.space_id!==spaceId||typeof task.id!=="string"||!task.id||
+       seen.has(task.id)||!WORKSPACE_TEAM_STATUSES.includes(task.status)||
+       !WORKSPACE_TEAM_PRIORITIES.includes(task.priority)||
+       !(task.due_on===null||validDay(task.due_on))||
+       !(task.assignee_id===null||(typeof task.assignee_id==="string"&&task.assignee_id)))
+      throw Error("Invalid or cross-team workload task");
+    seen.add(task.id);
+    const row=task.assignee_id===null?unassigned:roster.get(task.assignee_id)??unknown;
+    row.total++;
+    if(task.status==="done"){row.done++;continue;}
+    row.outstanding++;
+    if(task.status==="in_progress")row.inProgress++;
+    if(task.priority==="urgent")row.urgent++;
+    const due=workspaceTeamTaskDueBucket(task,today);
+    if(due==="overdue")row.overdue++;
+    if(due==="upcoming")row.upcoming++;
+  }
+  const rows=[...roster.values(),unassigned];
+  if(unknown.total)rows.push(unknown);
+  return rows.sort((a,b)=>b.overdue-a.overdue||b.outstanding-a.outstanding||
+    b.urgent-a.urgent||a.key.localeCompare(b.key));
+}
