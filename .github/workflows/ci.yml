@@ -92,6 +92,11 @@ jobs:
         run: |
           node --check src/lib/workspaceTeamTaskBoard.mjs
           node --check tests/workspace-team-board-drag-drop.test.mjs
+      - name: Verify Phase 35 quick ownership and priority triage
+        run: |
+          node --check src/lib/workspaceTeamTaskBoard.mjs
+          node --check src/lib/workspaceTeamTaskOperations.mjs
+          node --check tests/workspace-team-quick-triage.test.mjs
       - name: Generate offline Automation migration-risk report (not deployment authorization)
         run: node scripts/automation-staging-deployment-plan.mjs > "$RUNNER_TEMP/automation-staging-plan.json"
       - name: Verify historical cross-pillar migration collision baseline (no DB access)
