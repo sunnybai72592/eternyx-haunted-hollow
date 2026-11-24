@@ -24,8 +24,9 @@ GRANT SELECT (id,challenge_pack,status,requested_at,updated_at,expires_at,starte
 -- Fail transaction if inherited or accidental grants still expose a column.
 -- No new policy, bypass, privileged function or service-role grants are introduced.
 DO $$
-DECLARE col record;
-DECLARE allowed boolean;
+DECLARE
+  col record;
+  allowed boolean;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_catalog.pg_class

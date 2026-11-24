@@ -15,7 +15,7 @@ permissions:
   contents: read
 jobs:
   composed-labs:
-    name: Replay all five LABS migrations together without network
+    name: Replay all six LABS migrations together without network
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

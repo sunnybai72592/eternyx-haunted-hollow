@@ -17,8 +17,9 @@ RESET ROLE;
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
 DO $$
-DECLARE col text;
-DECLARE n integer;
+DECLARE
+  col text;
+  n integer;
 BEGIN
   IF (SELECT count(id) FROM public.ctf_range_sessions)<>1
     OR NOT EXISTS (SELECT id,challenge_pack,status,requested_at,updated_at,expires_at,started_at,finished_at

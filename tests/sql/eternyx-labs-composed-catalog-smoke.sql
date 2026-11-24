@@ -64,8 +64,9 @@ END;
 $$;
 -- Strict final column gate. Refuse any future unreviewed browser-visible column.
 DO $$
-DECLARE col record;
-DECLARE allowed boolean;
+DECLARE
+  col record;
+  allowed boolean;
 BEGIN
   IF has_table_privilege('authenticated','public.ctf_range_sessions','SELECT')
     THEN RAISE EXCEPTION 'Table-level session SELECT bypasses allowlist'; END IF;
