@@ -43,7 +43,7 @@ const plannedStudios = [
   },
   {
     name: "AI Document Intelligence",
-    description: "Private document search and source-context review, text/JSON/CSV comparisons, opt-in AES-256-GCM encrypted or legacy plaintext workspace backups, verified restoration and AI Chat. PDF OCR remains pending.",
+    description: "Local evidence search and source review, verified backup change previews, AES-256-GCM encrypted workspace import/export and passphrase rotation, legacy plaintext compatibility and opt-in AI Chat. PDF OCR remains pending.",
     icon: FileSearch,
   },
   {

@@ -8,7 +8,7 @@
  */
 import {
   MAX_CORPUS_WORKSPACE_BYTES,
-  parseCorpusWorkspace,
+  parseCorpusWorkspace, exportCorpusWorkspace,
   type CorpusWorkspace,
 } from "./document-corpus-workspace";
 
@@ -27,7 +27,8 @@ export const MAX_ENCRYPTED_CORPUS_BYTES = 4 * 1024 * 1024 + 4096;
 export class EncryptedCorpusError extends Error {
   readonly code:
     "invalid_password" | "invalid_file" | "too_large" | "invalid_envelope" |
-    "crypto_unavailable" | "authentication_failed" | "encrypt_failed";
+    "crypto_unavailable" | "authentication_failed" | "encrypt_failed" |
+    "unchanged_password";
   constructor(code: EncryptedCorpusError["code"]) {
     super(code);
     this.name = "EncryptedCorpusError";
@@ -213,4 +214,34 @@ export async function readEncryptedCorpusFile(
   try { encoded = await file.text(); }
   catch { throw new EncryptedCorpusError("invalid_file"); }
   return decryptCorpusWorkspace(encoded, password);
+}
+
+/**
+ * Rotate a downloaded encrypted backup into a NEW encrypted file. The original
+ * file is never mutated/deleted and no plaintext copy is downloaded. The old
+ * passphrase must decrypt and authenticate the complete source first.
+ *
+ * No authorization/authenticity claim: anyone who knows the old passphrase
+ * can rotate their own copy. The decrypted source exists in JS memory briefly.
+ */
+export async function rotateEncryptedCorpusFile(
+  file: Pick<File, "name"|"size"|"type"|"text">,
+  oldPassword: string,
+  newPassword: string,
+): Promise<string> {
+  strictPassword(oldPassword);
+  strictPassword(newPassword);
+  if (oldPassword === newPassword) {
+    throw new EncryptedCorpusError("unchanged_password");
+  }
+  // Existing reader rejects invalid files/algorithms/tampering before any output.
+  const verified = await readEncryptedCorpusFile(file, oldPassword);
+  // Recompute the decoded-text SHA-256 from verified sources using the existing
+  // canonical v1 exporter rather than trusting JSON from the uploaded archive.
+  const plaintext = await exportCorpusWorkspace({
+    documents: verified.documents.map(({id,name,kind,text}) => ({id,name,kind,text})),
+    query:verified.query, mode:verified.mode, sourceFilter:verified.sourceFilter,
+    question:verified.question,
+  });
+  return encryptCorpusWorkspace(plaintext,newPassword);
 }

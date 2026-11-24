@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
@@ -45,7 +45,11 @@ import {
   ENCRYPTED_CORPUS_ITERATIONS, MAX_ENCRYPTED_CORPUS_BYTES,
   MIN_ENCRYPTED_CORPUS_PASSWORD, MAX_ENCRYPTED_CORPUS_PASSWORD,
   EncryptedCorpusError, encryptCorpusWorkspace, readEncryptedCorpusFile,
+  rotateEncryptedCorpusFile,
 } from "@/lib/ai/document-corpus-crypto";
+import {
+  compareCorpusImport, formatPrivateCorpusImportReview,
+} from "@/lib/ai/document-corpus-import-review";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -128,6 +132,16 @@ const AIDocumentIntelligence = () => {
   const [encryptedExportConfirm, setEncryptedExportConfirm] = useState("");
   const [encryptedImportPassword, setEncryptedImportPassword] = useState("");
   const [pendingCorpusEncrypted, setPendingCorpusEncrypted] = useState(false);
+  const [rotateOldPassword, setRotateOldPassword] = useState("");
+  const [rotateNewPassword, setRotateNewPassword] = useState("");
+  const [rotateConfirmPassword, setRotateConfirmPassword] = useState("");
+  const pendingCorpusReview = useMemo(
+    () => pendingCorpusWorkspace ? compareCorpusImport({
+      documents:corpusFiles, query:corpusQuery, mode:corpusMode,
+      sourceFilter:corpusFilter || null, question:corpusQuestion,
+    },pendingCorpusWorkspace) : null,
+    [corpusFiles,corpusQuery,corpusMode,corpusFilter,corpusQuestion,pendingCorpusWorkspace],
+  );
   const invalidateCorpusWorkspace = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
@@ -135,6 +149,9 @@ const AIDocumentIntelligence = () => {
     setEncryptedExportPassword("");
     setEncryptedExportConfirm("");
     setEncryptedImportPassword("");
+    setRotateOldPassword("");
+    setRotateNewPassword("");
+    setRotateConfirmPassword("");
     setCorpusWorkspaceLoading(false);
     setCorpusWorkspaceExporting(false);
     setCorpusWorkspaceError(null);
@@ -149,6 +166,7 @@ const AIDocumentIntelligence = () => {
       crypto_unavailable: "This browser cannot perform secure AES-GCM/PBKDF2; encrypted backup is unavailable.",
       authentication_failed: "Incorrect passphrase or altered ciphertext. No workspace data was imported.",
       encrypt_failed: "Unable to encrypt the backup. No encrypted download was created.",
+      unchanged_password: "New passphrase must differ from the current passphrase. No new backup was created.",
     }[reason.code]);
     if (!(reason instanceof CorpusWorkspaceError)) return "Could not validate the local evidence workspace.";
     return ({
@@ -336,6 +354,42 @@ const AIDocumentIntelligence = () => {
       if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceExporting(false);
     }
   };
+  const rotateEncryptedBackup = async (file: File | null) => {
+    const oldPassphrase = rotateOldPassword;
+    const newPassphrase = rotateNewPassword;
+    const confirmation = rotateConfirmPassword;
+    if (!file) return;
+    if (newPassphrase !== confirmation) {
+      setCorpusWorkspaceError("New passphrases do not match. Existing backup remains untouched.");
+      return;
+    }
+    const operation = ++corpusWorkspaceEpoch.current;
+    setRotateOldPassword("");
+    setRotateNewPassword("");
+    setRotateConfirmPassword("");
+    setPendingCorpusWorkspace(null);
+    setPendingCorpusEncrypted(false);
+    setCorpusWorkspaceError(null);
+    setCorpusWorkspaceNotice(null);
+    setCorpusWorkspaceExporting(true);
+    try {
+      const updated = await rotateEncryptedCorpusFile(file, oldPassphrase, newPassphrase);
+      if (operation !== corpusWorkspaceEpoch.current) return;
+      const url = URL.createObjectURL(new Blob([updated], {type:"application/json"}));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "eternyx-local-evidence-rekeyed-v1.json";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setCorpusWorkspaceNotice(
+        "Re-encrypted archive downloaded locally with a fresh salt and nonce. The old file still exists: delete it yourself only after testing the new passphrase. No plaintext download or AI call.",
+      );
+    } catch (reason) {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceError(workspaceErrorText(reason));
+    } finally {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceExporting(false);
+    }
+  };
   const previewEncryptedCorpusWorkspace = async (file: File | null) => {
     const passphrase = encryptedImportPassword;
     const operation = ++corpusWorkspaceEpoch.current;
@@ -382,9 +436,12 @@ const AIDocumentIntelligence = () => {
     }
   };
   const restoreCorpusWorkspace = () => {
-    if (!pendingCorpusWorkspace || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+    if (!pendingCorpusWorkspace || !pendingCorpusReview?.replacementHasEffects ||
+        corpusWorkspaceLoading || corpusWorkspaceExporting) return;
     if (!window.confirm(
       "REPLACE every current local evidence file and search setting with this validated backup? " +
+      pendingCorpusReview.counts.removed + " existing file(s) will be REMOVED; " +
+      pendingCorpusReview.counts["content-changed"] + " file(s) will have their text OVERWRITTEN. " +
       "The existing in-memory documents, selected excerpts and AI results will be discarded. " +
       "Save your existing workspace first if you need to keep it. No automatic merge or upload.",
     )) return;
@@ -1436,6 +1493,53 @@ const AIDocumentIntelligence = () => {
                 </label>
                 <p className="text-xs text-slate-400">Entering the passphrase and choosing a file only decrypts locally for a preview. Replacing your workspace still requires separate confirmation. Passphrase fields are cleared after use.</p>
               </section>
+              <section aria-label="Rotate encrypted backup passphrase" className="space-y-3 rounded-lg border border-cyan-500/25 p-3">
+                <h4 className="font-semibold text-white">Rotate passphrase on an existing encrypted backup</h4>
+                <p className="text-xs text-slate-300">
+                  Decrypts the selected encrypted file locally using its current passphrase, validates all
+                  documents and SHA-256 values, then immediately re-encrypts with a different new passphrase,
+                  fresh random salt and nonce. No plaintext file is downloaded or sent to a server.
+                  The original encrypted file is not deleted or overwritten.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label htmlFor="corpus-rotation-old" className="space-y-1 text-xs text-slate-300">
+                    <span>Current passphrase</span>
+                    <input id="corpus-rotation-old" type="password" autoComplete="off"
+                      value={rotateOldPassword} maxLength={MAX_ENCRYPTED_CORPUS_PASSWORD}
+                      onChange={e => setRotateOldPassword(e.target.value)}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-white"/>
+                  </label>
+                  <label htmlFor="corpus-rotation-new" className="space-y-1 text-xs text-slate-300">
+                    <span>New unique passphrase</span>
+                    <input id="corpus-rotation-new" type="password" autoComplete="new-password"
+                      value={rotateNewPassword} maxLength={MAX_ENCRYPTED_CORPUS_PASSWORD}
+                      onChange={e => setRotateNewPassword(e.target.value)}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-white"/>
+                  </label>
+                  <label htmlFor="corpus-rotation-confirm" className="space-y-1 text-xs text-slate-300">
+                    <span>Confirm new passphrase</span>
+                    <input id="corpus-rotation-confirm" type="password" autoComplete="new-password"
+                      value={rotateConfirmPassword} maxLength={MAX_ENCRYPTED_CORPUS_PASSWORD}
+                      onChange={e => setRotateConfirmPassword(e.target.value)}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-white"/>
+                  </label>
+                </div>
+                <label htmlFor="corpus-rotation-file" className="block space-y-1 text-xs text-slate-300">
+                  <span>Choose existing encrypted JSON to re-encrypt (replaces no live workspace data)</span>
+                  <input id="corpus-rotation-file" type="file" accept=".json,application/json"
+                    disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting ||
+                      !rotateOldPassword || !rotateNewPassword || !rotateConfirmPassword}
+                    onChange={e => {
+                      void rotateEncryptedBackup(e.target.files?.[0] ?? null);
+                      e.currentTarget.value = "";
+                    }}
+                    className="block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-700 file:px-2 file:py-1 file:text-white"/>
+                </label>
+                <p className="text-xs text-amber-200">
+                  Verify the newly downloaded backup with its new passphrase before manually deleting
+                  the old file. Rotating one copy cannot revoke other copies or recover a lost passphrase.
+                </p>
+              </section>
               <section aria-label="Legacy plaintext local evidence backup" className="space-y-3 rounded-lg border border-amber-500/20 p-3">
                 <h4 className="font-semibold text-white">Legacy plaintext backup · unencrypted</h4>
                 <p className="text-xs text-amber-200">This compatibility format exposes full document text, filenames, search terms and questions to anyone who obtains the file. It is not encrypted.</p>
@@ -1475,16 +1579,56 @@ const AIDocumentIntelligence = () => {
                     Restored mode: {pendingCorpusWorkspace.mode}; saved query:
                     {" "}{pendingCorpusWorkspace.query || "(empty)"}. Matching excerpts and AI results are NOT restored.
                   </p>
-                  <ul className="max-h-36 space-y-1 overflow-auto text-xs text-slate-300">
-                    {pendingCorpusWorkspace.documents.map(doc => (
-                      <li key={doc.id} className="break-all">
-                        {doc.name} · {doc.kind.toUpperCase()} · {doc.text.length.toLocaleString()} characters
-                      </li>
-                    ))}
-                  </ul>
+                  {pendingCorpusReview && (
+                    <section aria-label="Local before-restore change preview" className="space-y-2 rounded-lg border border-slate-700 p-3">
+                      <h4 className="text-sm font-semibold text-white">Exactly what replacement changes</h4>
+                      <p className="text-xs text-slate-300">
+                        {pendingCorpusReview.counts.added} added · {pendingCorpusReview.counts.removed} removed ·
+                        {" "}{pendingCorpusReview.counts["content-changed"]} text changed ·
+                        {" "}{pendingCorpusReview.counts["metadata-changed"]} filename/type changed ·
+                        {" "}{pendingCorpusReview.counts.unchanged} unchanged
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Search term changed: {pendingCorpusReview.changedSettings.query ? "yes" : "no"};
+                        {" "}match mode: {pendingCorpusReview.changedSettings.mode ? "yes" : "no"};
+                        {" "}source filter: {pendingCorpusReview.changedSettings.sourceFilter ? "yes" : "no"};
+                        {" "}AI question: {pendingCorpusReview.changedSettings.question ? "yes" : "no"}.
+                        The report never copies these values.
+                      </p>
+                      {pendingCorpusReview.counts.removed > 0 && <p role="alert" className="text-xs text-amber-200">
+                        Warning: {pendingCorpusReview.counts.removed} current source(s) will disappear from this
+                        in-memory workspace if you confirm replacement.
+                      </p>}
+                      {pendingCorpusReview.counts["content-changed"] > 0 && <p role="alert" className="text-xs text-amber-200">
+                        Warning: {pendingCorpusReview.counts["content-changed"]} existing source text(s) will be overwritten.
+                        Make your own backup first if you want to keep the current version.
+                      </p>}
+                      {!pendingCorpusReview.replacementHasEffects && <p role="status" className="text-xs text-emerald-200">
+                        Source contents, metadata, and saved search settings are already identical. No replacement needed.
+                      </p>}
+                      <ul className="max-h-40 space-y-1 overflow-auto text-xs text-slate-300">
+                        {pendingCorpusReview.changes.map(change => (
+                          <li key={change.id} className="break-words">
+                            {change.status.toUpperCase()} · {change.name} ·
+                            {" "}{change.oldChars.toLocaleString()} → {change.newChars.toLocaleString()} characters
+                            {change.beforeName && change.afterName && change.beforeName !== change.afterName
+                              ? " · renamed from " + change.beforeName : ""}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-slate-400">{pendingCorpusReview.warning}</p>
+                      <Button type="button" variant="outline" onClick={() => void copy(
+                        formatPrivateCorpusImportReview(pendingCorpusReview),
+                        "Privacy-safe backup change summary",
+                      )}>
+                        Copy privacy-safe change report (counts only)
+                      </Button>
+                    </section>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" onClick={restoreCorpusWorkspace}
-                      disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}>
+                      disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting ||
+                        !pendingCorpusReview?.replacementHasEffects}>
                       Confirm replacement with validated backup
                     </Button>
                     <Button type="button" variant="outline" onClick={() => {
