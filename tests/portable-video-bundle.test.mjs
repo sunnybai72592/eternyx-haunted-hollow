@@ -262,7 +262,7 @@ test("REAL 24 FPS native cinematic portable ZIP renders verified 1280x720 video 
   assert.equal(board.shots[0].frames,48);
   assert.equal(board.shots[0].fade_in_frames,6);
   assert.equal(JSON.parse(readFileSync(join(extracted,"bundle-manifest.json"),"utf8")).fps,24);
-  assert.match(readFileSync(join(extracted,"README.txt"),"utf8"),/48/);
+  assert.match(readFileSync(join(extracted,"README.txt"),"utf8"),/2\.00 seconds at 24 FPS/);
   assert.match(readFileSync(join(extracted,"README.txt"),"utf8"),/24 FPS/);
   assert.match(readFileSync(join(extracted,"captions-preview.srt"),"utf8"),
     /00:00:00,000 --> 00:00:02,000/);
