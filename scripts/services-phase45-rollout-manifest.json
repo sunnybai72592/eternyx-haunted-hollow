@@ -1,0 +1,131 @@
+{
+  "schema": "eternyx-services-staging-rollout-review-v1",
+  "targetClass": "separate_registered_staging_only",
+  "observedHistoryDate": "2026-11-24",
+  "observedExistingHistory": [
+    {
+      "version": "20261123215132",
+      "name": "pentest_engagement_management_staging_baseline"
+    },
+    {
+      "version": "20261123215141",
+      "name": "pentest_evidence_and_audit_staging_baseline"
+    },
+    {
+      "version": "20261123215211",
+      "name": "security_case_indexed_ledger_staging_v1"
+    },
+    {
+      "version": "20261124121732",
+      "name": "labs_20261122170000_ctf_verified_missions"
+    },
+    {
+      "version": "20261124121741",
+      "name": "labs_20261122180000_ctf_range_session_control"
+    },
+    {
+      "version": "20261124121744",
+      "name": "labs_20261122190000_ctf_range_access_grants"
+    },
+    {
+      "version": "20261124121747",
+      "name": "labs_20261122200000_ctf_worker_fencing_budget"
+    },
+    {
+      "version": "20261124121749",
+      "name": "labs_20261123041000_ctf_hosted_spend_reservations"
+    },
+    {
+      "version": "20261124121752",
+      "name": "labs_20261124123000_ctf_range_session_column_privacy"
+    }
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "sourcePath": "scripts/sql/services-staging-trusted-admin-foundation-candidate.sql",
+      "gitBlobSha": "e158f704052417cbe75f49b24013958c29aa62ed",
+      "managedName": "services_staging_trusted_admin_foundation"
+    },
+    {
+      "step": 2,
+      "sourcePath": "supabase/migrations/20261122201000_service_requests.sql",
+      "gitBlobSha": "4b2303857da02509b3c7c85d737c49b5616f76df",
+      "managedName": "service_requests"
+    },
+    {
+      "step": 3,
+      "sourcePath": "supabase/migrations/20261122213000_service_request_activity.sql",
+      "gitBlobSha": "209cce760f6dd29bc1eb89f760fc5fd8fb5c99fd",
+      "managedName": "service_request_activity"
+    },
+    {
+      "step": 4,
+      "sourcePath": "supabase/migrations/20261122223000_service_scope_triage.sql",
+      "gitBlobSha": "13bef368dcf6e2c6d831d68687bbf5694a7f1e54",
+      "managedName": "service_scope_triage"
+    },
+    {
+      "step": 5,
+      "sourcePath": "supabase/migrations/20261122234000_services_delivery_gate.sql",
+      "gitBlobSha": "0e6994ed77551d3f5d3b4aa8865680e32697ead5",
+      "managedName": "services_delivery_gate"
+    },
+    {
+      "step": 6,
+      "sourcePath": "supabase/migrations/20261122235500_service_admin_attention_queue.sql",
+      "gitBlobSha": "8d691e801e85a05334681280cf5fce0c9a980f8c",
+      "managedName": "service_admin_attention_queue"
+    },
+    {
+      "step": 7,
+      "sourcePath": "supabase/migrations/20261123000500_service_write_rate_limits.sql",
+      "gitBlobSha": "6ba2476b85d25759e6cddbadbaa6f38fd27ce266",
+      "managedName": "service_write_rate_limits"
+    },
+    {
+      "step": 8,
+      "sourcePath": "supabase/migrations/20261123003000_service_review_planner.sql",
+      "gitBlobSha": "0a249866d445e61c2f92e13fcb6d22493c8b6c28",
+      "managedName": "service_review_planner"
+    },
+    {
+      "step": 9,
+      "sourcePath": "supabase/migrations/20261123011500_service_triage_history.sql",
+      "gitBlobSha": "63aa1c9841d01301e9d07d65aacc3f8e49f57380",
+      "managedName": "service_triage_history"
+    },
+    {
+      "step": 10,
+      "sourcePath": "supabase/migrations/20261123014500_service_request_checkpoints.sql",
+      "gitBlobSha": "c07ab6d44171b723f256683a985a12270fb3823f",
+      "managedName": "service_request_checkpoints"
+    },
+    {
+      "step": 11,
+      "sourcePath": "supabase/migrations/20261123023000_service_clarifications.sql",
+      "gitBlobSha": "912169c47c01d63309b9fa886bd8d3fc56e7495f",
+      "managedName": "service_clarifications"
+    },
+    {
+      "step": 12,
+      "sourcePath": "supabase/migrations/20261123031500_service_clarification_followthrough.sql",
+      "gitBlobSha": "4b9b43d2141657c793f6ecb28ed2f13478387b1b",
+      "managedName": "service_clarification_followthrough"
+    },
+    {
+      "step": 13,
+      "sourcePath": "supabase/migrations/20261123040000_service_brief_amendments.sql",
+      "gitBlobSha": "a3f8aeaa0835c3e18d2726d3e497a6c15324d687",
+      "managedName": "service_brief_amendments"
+    },
+    {
+      "step": 14,
+      "sourcePath": "supabase/migrations/20261123050000_service_request_journal.sql",
+      "gitBlobSha": "de875e40631a0acdbdde2adc09a031ec2c72ad06",
+      "managedName": "service_request_journal"
+    }
+  ],
+  "requiresSeparateExplicitStagingApproval": true,
+  "productionDeploymentAuthorized": false
+}
