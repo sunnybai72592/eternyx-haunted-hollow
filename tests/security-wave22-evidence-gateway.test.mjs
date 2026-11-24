@@ -6,9 +6,9 @@ const url='https://staging.example.invalid',publicKey='public-fixture',serviceKe
 const row={id,owner_id:owner,engagement_id:eng,storage_path:owner+'/'+eng+'/file.txt',file_size:3};
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status});
 const req=(action='download',extra={},body)=>new Request(url,{method:'POST',headers:{Authorization:'Bearer a.b.c','x-evidence-action':action,'x-evidence-id':action==='upload'?eng:id,'x-evidence-request-id':id,...extra},body});
-function setup({rows=[row,row],enabled=true,user={id:owner},registered=201,reservation='reserved',digest='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',sealed=201}={}){
+function setup({rows=[row,row],enabled=true,user={id:owner},registered=201,reservation='reserved',digest='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',sealed=201,allowedOwners=null}={}){
  const calls=[];let n=0;
- const handler=createEvidenceHandler({url,publicKey,serviceKey,enabled,randomId:()=>id,fetcher:async(path,opts)=>{
+ const handler=createEvidenceHandler({url,publicKey,serviceKey,enabled,allowedOwners,randomId:()=>id,fetcher:async(path,opts)=>{
   calls.push({path,opts});
   if(path.endsWith('/rest/v1/rpc/security_evidence_gateway_reserve_v2'))return json(reservation);
   if(path.includes('/rest/v1/security_evidence_gateway_digests?'))return json([{owner_id:owner,byte_count:3,sha256:digest}]);
@@ -87,4 +87,14 @@ test('upload seals exact digest before metadata registration; missing seal block
  assert.equal(seal.opts.headers.Authorization,'Bearer '+serviceKey);
  const b=setup({sealed:409});assert.equal((await b.handler(req('upload',{'Content-Type':'text/plain','x-evidence-name':'sample.txt'},'abc'))).status,409);
  assert.ok(b.calls.every(c=>!c.path.endsWith('/rest/v1/pentest_evidence')));
+});
+
+test('staging allowlist prevents all non-approved owners from reaching metadata or privileged controls',async()=>{
+ for(const allowedOwners of [new Set([eng,id]),new Set(),[]]){
+  const {handler,calls}=setup({allowedOwners});
+  const res=await handler(req());assert.equal(res.status,403);
+  assert.equal(calls.length,1);assert.ok(calls[0].path.endsWith('/auth/v1/user'));
+ }
+ const {handler}=setup({allowedOwners:new Set([owner,eng])});
+ assert.equal((await handler(req())).status,200);
 });
