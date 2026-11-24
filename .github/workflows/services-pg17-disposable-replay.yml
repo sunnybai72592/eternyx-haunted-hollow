@@ -42,6 +42,9 @@ on:
       - "tests/services-phase41-registered-project.test.mjs"
       - "scripts/services-phase42-staging-inventory.mjs"
       - "tests/services-phase42-staging-inventory.test.mjs"
+      - "scripts/services-phase43-trusted-admin-foundation.mjs"
+      - "tests/services-phase43-trusted-admin-foundation.test.mjs"
+      - "docs/ETERNYX_SERVICES_TRUSTED_ADMIN_FOUNDATION_PHASE43.md"
       - ".github/workflows/services-staging-readonly-inventory.yml"
       - ".github/workflows/services-staging-acceptance.yml"
       - ".github/workflows/services-pg17-disposable-replay.yml"
@@ -71,7 +74,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
