@@ -51,6 +51,7 @@ import {
   compareCorpusImport, formatPrivateCorpusImportReview,
 } from "@/lib/ai/document-corpus-import-review";
 import { listCorpusRecovery, planCorpusRecovery, CorpusRecoveryError } from "@/lib/ai/document-corpus-recovery";
+import { compareCorpusVersions, formatRecoveryReceipt, selectiveRecoveryReceipt, replacementReceipt, type RecoveryReceipt } from "@/lib/ai/document-corpus-version-review";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -137,6 +138,14 @@ const AIDocumentIntelligence = () => {
   const [rotateNewPassword, setRotateNewPassword] = useState("");
   const [rotateConfirmPassword, setRotateConfirmPassword] = useState("");
   const [corpusRecoveryIds, setCorpusRecoveryIds] = useState<string[]>([]);
+  const [versionCurrentId, setVersionCurrentId] = useState("");
+  const [versionBackupId, setVersionBackupId] = useState("");
+  const [versionReview, setVersionReview] = useState<ReturnType<typeof compareCorpusVersions> | null>(null);
+  const [versionError, setVersionError] = useState(false);
+  const [recoveryReceipt, setRecoveryReceipt] = useState<RecoveryReceipt | null>(null);
+  const resetVersionReview = () => {
+    setVersionCurrentId(""); setVersionBackupId(""); setVersionReview(null); setVersionError(false);
+  };
   const pendingCorpusReview = useMemo(
     () => pendingCorpusWorkspace ? compareCorpusImport({
       documents:corpusFiles, query:corpusQuery, mode:corpusMode,
@@ -162,6 +171,7 @@ const AIDocumentIntelligence = () => {
   const invalidateCorpusWorkspace = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
+    resetVersionReview();
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setEncryptedExportPassword("");
@@ -280,6 +290,7 @@ const AIDocumentIntelligence = () => {
     ++corpusReadVersion.current;
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
+    setRecoveryReceipt(null);
     setCorpusBusy(false);
     setCorpusFilter("");
     setCorpusQuery("");
@@ -307,6 +318,7 @@ const AIDocumentIntelligence = () => {
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
     setPendingCorpusWorkspace(null);
+    resetVersionReview();
     setCorpusRecoveryIds([]);
     setCorpusWorkspaceExporting(true);
     try {
@@ -345,6 +357,7 @@ const AIDocumentIntelligence = () => {
     setEncryptedExportPassword("");
     setEncryptedExportConfirm("");
     setPendingCorpusWorkspace(null);
+    resetVersionReview();
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -388,6 +401,7 @@ const AIDocumentIntelligence = () => {
     setRotateNewPassword("");
     setRotateConfirmPassword("");
     setPendingCorpusWorkspace(null);
+    resetVersionReview();
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -416,6 +430,7 @@ const AIDocumentIntelligence = () => {
     const operation = ++corpusWorkspaceEpoch.current;
     setEncryptedImportPassword("");
     setPendingCorpusWorkspace(null);
+    resetVersionReview();
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -439,6 +454,7 @@ const AIDocumentIntelligence = () => {
   const previewCorpusWorkspace = async (file: File | null) => {
     const operation = ++corpusWorkspaceEpoch.current;
     setPendingCorpusWorkspace(null);
+    resetVersionReview();
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -458,6 +474,15 @@ const AIDocumentIntelligence = () => {
       if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceLoading(false);
     }
   };
+  const reviewBackupVersions = () => {
+    setVersionReview(null);
+    setVersionError(false);
+    if (!pendingCorpusWorkspace || !versionCurrentId || !versionBackupId ||
+        corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+    try {
+      setVersionReview(compareCorpusVersions(corpusFiles,pendingCorpusWorkspace,versionCurrentId,versionBackupId));
+    } catch { setVersionError(true); }
+  };
   const recoverSelectedCorpus = () => {
     if (!pendingCorpusWorkspace || !corpusRecoveryIds.length || !recoveryPreview?.plan ||
         corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
@@ -474,6 +499,7 @@ const AIDocumentIntelligence = () => {
       invalidateCorpusFingerprints();
       invalidateCorpus();
       setCorpusFiles(plan.documents);
+      setRecoveryReceipt(selectiveRecoveryReceipt(plan,pendingCorpusEncrypted));
       setCorpusWorkspaceNotice("Recovered "+plan.additions.length+
         " local source(s), including "+plan.copiedCount+" conflict copy/copies. Existing sources and settings were kept. Search again for fresh evidence.");
     } catch {
@@ -502,6 +528,7 @@ const AIDocumentIntelligence = () => {
     setCorpusMode(imported.mode);
     setCorpusFilter(imported.sourceFilter ?? "");
     setCorpusQuestion(imported.question);
+    setRecoveryReceipt(replacementReceipt(pendingCorpusReview,pendingCorpusEncrypted));
     setCorpusWorkspaceNotice(
       "Validated local workspace restored. Search again to recompute fresh evidence; no cached hits or AI interpretation were imported.",
     );
@@ -1518,6 +1545,7 @@ const AIDocumentIntelligence = () => {
                     onChange={e => {
                       ++corpusWorkspaceEpoch.current;
                       setPendingCorpusWorkspace(null);
+                      resetVersionReview();
                       setCorpusRecoveryIds([]);
                       setPendingCorpusEncrypted(false);
                       setCorpusWorkspaceLoading(false);
@@ -1671,6 +1699,45 @@ const AIDocumentIntelligence = () => {
                       </Button>
                     </section>
                   )}
+                  <section aria-label="Local document version comparison" className="space-y-3 rounded-lg border border-slate-700 p-3">
+                    <h4 className="text-sm font-semibold text-white">Compare current and backup document versions</h4>
+                    <p className="text-xs text-slate-400">Choose both sources explicitly. A matching ID or filename is not proof of shared provenance. Comparison is local, with line endings normalized only for the line diff. Exact decoded text equality is reported separately.</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="text-xs text-slate-300">Current source
+                        <select className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2" value={versionCurrentId}
+                          onChange={e=>{setVersionCurrentId(e.target.value);setVersionReview(null);setVersionError(false);}}>
+                          <option value="">Choose current source</option>
+                          {corpusFiles.map(doc=><option key={doc.id} value={doc.id}>{doc.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs text-slate-300">Backup source
+                        <select className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2" value={versionBackupId}
+                          onChange={e=>{setVersionBackupId(e.target.value);setVersionReview(null);setVersionError(false);}}>
+                          <option value="">Choose backup source</option>
+                          {pendingCorpusWorkspace.documents.map(doc=><option key={doc.id} value={doc.id}>{doc.name}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <Button type="button" variant="outline" onClick={reviewBackupVersions}
+                      disabled={!versionCurrentId || !versionBackupId || corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}>Compare selected versions locally</Button>
+                    {versionError && <p role="alert" className="text-xs text-amber-200">Comparison could not be completed. Choose a valid current and backup source.</p>}
+                    {versionReview && <div className="space-y-2 text-xs text-slate-300" aria-live="polite">
+                      <p>Exact decoded text: {versionReview.exactText?"identical":"different"} · ID: {versionReview.sameId?"same":"different"} · Filename: {versionReview.sameName?"same":"different"} · Kind: {versionReview.sameKind?"same":"different"}.</p>
+                      <p>Decoded characters: {versionReview.beforeChars.toLocaleString()} → {versionReview.afterChars.toLocaleString()}.</p>
+                      {versionReview.lineLimitExceeded && <p role="status">Line diff unavailable: one source exceeds 1,200 lines. Exact text and metadata comparison remains valid.</p>}
+                      {versionReview.lines && <>
+                        <p>{versionReview.lines.unchangedLines} unchanged · {versionReview.lines.removedLines} removed · {versionReview.lines.addedLines} added lines. Reordering may appear as removal/addition.</p>
+                        {!versionReview.exactText && versionReview.lines.identical && <p>Exact text differs despite identical normalized lines (line endings differ).</p>}
+                        <ul className="max-h-64 space-y-1 overflow-auto">
+                          {versionReview.preview.map((change,i)=><li key={i} className="whitespace-pre-wrap break-all">
+                            {change.kind==="removed"?"− Current line "+change.beforeLine:"+ Backup line "+change.afterLine}: {change.text}{change.truncated?" [preview truncated]":""}
+                          </li>)}
+                        </ul>
+                        {versionReview.omittedRows>0 && <p>{versionReview.omittedRows} additional changed lines not displayed in this bounded preview.</p>}
+                      </>}
+                      <Button type="button" size="sm" variant="outline" onClick={()=>{setVersionReview(null);setVersionError(false);}}>Hide comparison</Button>
+                    </div>}
+                  </section>
                   <section aria-label="Selective non-destructive backup recovery" className="space-y-3 rounded-lg border border-emerald-500/30 p-3">
                     <h4 className="text-sm font-semibold text-white">Recover selected sources without replacing existing files</h4>
                     <p className="text-xs text-slate-300">Choose explicitly. Existing source text, IDs, names, order and search settings are preserved. Conflicting versions can only be added as separately named copies. Exact existing sources are skipped. Backup verification does not establish authorship.</p>
@@ -1728,6 +1795,15 @@ const AIDocumentIntelligence = () => {
                   </Button>
                 </section>
               )}
+              {recoveryReceipt && <section aria-label="Latest local recovery receipt" className="space-y-2 rounded-lg border border-slate-700 p-3">
+                <h4 className="text-sm font-semibold text-white">Latest completed local recovery receipt</h4>
+                <p className="text-xs text-slate-400">Counts only, in memory until cleared or this page is closed. Not a durable or tamper-proof audit log. This receipt describes the completed action, not the current workspace.</p>
+                <pre className="whitespace-pre-wrap break-words text-xs text-slate-300">{formatRecoveryReceipt(recoveryReceipt)}</pre>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={()=>void copy(formatRecoveryReceipt(recoveryReceipt),"Local recovery receipt")}>Copy recovery receipt</Button>
+                  <Button type="button" variant="outline" onClick={()=>setRecoveryReceipt(null)}>Clear receipt</Button>
+                </div>
+              </section>}
               {corpusWorkspaceError && <Alert role="alert" variant="destructive">
                 <XCircle className="h-4 w-4"/><AlertDescription>{corpusWorkspaceError}</AlertDescription>
               </Alert>}
