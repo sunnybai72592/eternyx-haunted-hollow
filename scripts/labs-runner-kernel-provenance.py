@@ -264,7 +264,7 @@ APT::Sandbox::User "{pwd.getpwuid(os.getuid()).pw_name}";
 def limit_tar():
     resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_TAR, MAX_TAR))
 
-def main(observed, export=None):
+def main(observed, export=None, audit=None):
     require(os.geteuid() != 0, "run archive inspection unprivileged")
     release, package, version = fixed_guest_identity()
     runner_release, observed_hash = observe_runner_kernel(observed)
@@ -301,6 +301,8 @@ def main(observed, export=None):
         evidence = provenance_result(archive_hash, observed_hash)
         if export is not None:
             export_verified_kernel(tar, release, export)
+        if audit is not None:
+            audit(tar, release, version, env, work)
         print(json.dumps({"archivePackageSha256": pin[0], "archivePackageBytes": pin[1],
                           "archiveKernelSha256": archive_hash, "runnerKernelSha256": observed_hash,
                           "immutablePhase41KernelSha256": PIN, "ubuntuArchiveKeyringSha256": digest(keyring),
