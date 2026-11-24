@@ -31,3 +31,34 @@ test("legacy UUID and mixed-case migration names are valid inventory but remain 
   assert.deepEqual(selectCandidate([...valid,...legacy]),[...valid].sort());
   assert.throws(()=>selectCandidate([...valid,"20250828011106_legacy/name.sql"]),/invalid_source/);
 });
+
+test("additive workflow retains exactly one ordered checkout, replay, catalog and cleanup sequence",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const workflow=await readFile(new URL("../.github/workflows/automation-additive-pg17.yml",import.meta.url),"utf8");
+  const steps=[
+    "uses: actions/checkout@v4",
+    "name: Remove checkout authorization before executing repository code",
+    "uses: actions/setup-node@v4",
+    "name: Validate candidate and produce source-hashed inventory",
+    "name: Start networkless disposable PostgreSQL",
+    "name: Seed synthetic preservation markers (not a copy of staging)",
+    "name: Apply each exact source hash in candidate order, stopping on failure",
+    "name: Verify actual four-backend SQL dependencies and RLS",
+    "name: Exercise real Automation owner isolation and preserve all seven markers",
+    "name: Remove disposable database"
+  ];
+  let previous=-1;
+  for(const step of steps){
+    assert.equal(workflow.split(step).length,2,step+" must occur exactly once");
+    const index=workflow.indexOf(step);
+    assert.ok(index>previous,step+" must follow its prerequisite");
+    previous=index;
+  }
+  assert.ok(workflow.includes("submodules: false"));
+  assert.ok(workflow.includes("git config --local --unset-all http.https://github.com/.extraheader"));
+  assert.match(workflow,/extraheader\$' >\/dev\/null 2>&1; then/);
+  assert.match(workflow,/permissions:\n  contents: read/);
+  assert.match(workflow,/push:\n    branches: \[main\]/);
+  assert.match(workflow,/--network none/);
+  assert.doesNotMatch(workflow,/continue-on-error:\s*true|supabase functions deploy|supabase db push/);
+});

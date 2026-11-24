@@ -43,18 +43,30 @@ export function workspaceTeamTaskSummary(tasks,today){
   }
   return summary;
 }
-export function selectWorkspaceTeamTasks(tasks,{filter="all",search="",sort="updated",owner="",today}={}){
+export function selectWorkspaceTeamTasks(tasks,{
+  filter="all",search="",sort="updated",owner="",today,
+  priority="all",assignee="all",memberIds=[],
+}={}){
   if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT||
      !WORKSPACE_TEAM_TASK_FILTERS.includes(filter)||
      !WORKSPACE_TEAM_TASK_SORTS.includes(sort)||
      typeof search!=="string"||search.length>WORKSPACE_TEAM_TASK_SEARCH_LIMIT||
-     typeof owner!=="string"||!validDay(today))
+     typeof owner!=="string"||!validDay(today)||
+     !(priority==="all"||WORKSPACE_TEAM_PRIORITIES.includes(priority))||
+     typeof assignee!=="string"||!assignee||!Array.isArray(memberIds)||
+     memberIds.some(id=>typeof id!=="string"||!id)||
+     !(["all","mine","unassigned"].includes(assignee)||memberIds.includes(assignee)))
     throw Error("Invalid team task view controls");
   const query=search.trim().toLocaleLowerCase();
   const selected=tasks.filter(task=>{
     if(!task||typeof task.title!=="string"||typeof task.details!=="string")
       throw Error("Malformed team task view row");
     if(query&&!(task.title+" "+task.details).toLocaleLowerCase().includes(query))return false;
+    if(priority!=="all"&&task.priority!==priority)return false;
+    if(assignee==="mine"&&task.assignee_id!==owner)return false;
+    if(assignee==="unassigned"&&task.assignee_id!==null)return false;
+    if(!["all","mine","unassigned"].includes(assignee)&&
+       task.assignee_id!==assignee)return false;
     if(filter==="done")return task.status==="done";
     if(filter==="overdue"||filter==="upcoming")
       return workspaceTeamTaskDueBucket(task,today)===filter;
@@ -104,4 +116,60 @@ export function buildWorkspaceTeamTasksCsv(tasks,owner,spaceId){
       new Date(task.updated_at).toISOString()].map(csvCell).join(",");
   });
   return "\uFEFF"+[headers.map(csvCell).join(","),...rows].join("\r\n")+"\r\n";
+}
+
+
+// A member can leave or be removed during a background reconciliation.
+// Never retain an inaccessible, formerly authorized member filter.
+export function resolveWorkspaceAssigneeFilter(value,memberIds){
+  if(typeof value!=="string"||!Array.isArray(memberIds)||
+     memberIds.some(id=>typeof id!=="string"||!id))
+    throw Error("Invalid Workspace assignee selection");
+  return ["all","mine","unassigned"].includes(value)||memberIds.includes(value)
+    ?value:"all";
+}
+
+/** Current task counts, not effort, capacity, or historical performance. */
+export function workspaceTeamWorkload(tasks,members,owner,spaceId,today){
+  if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT||
+    !Array.isArray(members)||members.length>20||
+    typeof owner!=="string"||!owner||typeof spaceId!=="string"||!spaceId||!validDay(today))
+    throw Error("Invalid team workload scope");
+  const roster=new Map();
+  const newRow=(key,label,filter)=>({key,label,filter,total:0,outstanding:0,
+    inProgress:0,done:0,overdue:0,upcoming:0,urgent:0});
+  for(const member of members){
+    if(!member||member.space_id!==spaceId||typeof member.user_id!=="string"||
+       !member.user_id||roster.has(member.user_id)||
+       !["owner","editor","viewer"].includes(member.role))
+      throw Error("Invalid or cross-team workload member");
+    roster.set(member.user_id,newRow("member:"+member.user_id,
+      teamMemberLabel(member.user_id,owner),member.user_id===owner?"mine":member.user_id));
+  }
+  if(!roster.has(owner))throw Error("Workload membership not verified");
+  const unassigned=newRow("unassigned","Unassigned","unassigned");
+  const unknown=newRow("unknown","Outside current roster",null);
+  const seen=new Set();
+  for(const task of tasks){
+    if(!task||task.space_id!==spaceId||typeof task.id!=="string"||!task.id||
+       seen.has(task.id)||!WORKSPACE_TEAM_STATUSES.includes(task.status)||
+       !WORKSPACE_TEAM_PRIORITIES.includes(task.priority)||
+       !(task.due_on===null||validDay(task.due_on))||
+       !(task.assignee_id===null||(typeof task.assignee_id==="string"&&task.assignee_id)))
+      throw Error("Invalid or cross-team workload task");
+    seen.add(task.id);
+    const row=task.assignee_id===null?unassigned:roster.get(task.assignee_id)??unknown;
+    row.total++;
+    if(task.status==="done"){row.done++;continue;}
+    row.outstanding++;
+    if(task.status==="in_progress")row.inProgress++;
+    if(task.priority==="urgent")row.urgent++;
+    const due=workspaceTeamTaskDueBucket(task,today);
+    if(due==="overdue")row.overdue++;
+    if(due==="upcoming")row.upcoming++;
+  }
+  const rows=[...roster.values(),unassigned];
+  if(unknown.total)rows.push(unknown);
+  return rows.sort((a,b)=>b.overdue-a.overdue||b.outstanding-a.outstanding||
+    b.urgent-a.urgent||a.key.localeCompare(b.key));
 }

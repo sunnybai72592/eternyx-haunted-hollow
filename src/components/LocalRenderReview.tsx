@@ -205,7 +205,7 @@ export default function LocalRenderReview({project, profile, quality, original}:
               <CheckCircle2 className="h-5 w-5"/>Local MP4 and receipt hashes match
             </h4>
             <p className="text-xs text-slate-300">
-              {verified.frameCount} frames · 16 FPS (from receipt) · {verified.durationSeconds.toFixed(2)} seconds
+              {verified.frameCount} frames · {verified.fps} FPS (from receipt) · {verified.durationSeconds.toFixed(2)} seconds
               · {verified.width} × {verified.height} · {verified.withAudio ? "soundtrack recorded" : "silent output"}
               {verified.projectMatch ? " · Current project inputs and settings matched" : " · No current Studio project match checked"}
               {srtCount !== null ? " · " + srtCount + " subtitle cues matched" : " · Subtitles not checked"}

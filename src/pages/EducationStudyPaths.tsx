@@ -1,4 +1,4 @@
-import {useMemo,useRef,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import type {ChangeEvent} from "react";
 import {Link} from "react-router-dom";
 import {
@@ -56,12 +56,18 @@ export default function EducationStudyPaths(){
   const [focusBudget,setFocusBudget]=useState(30);
   const [current,setCurrent]=useState(1);
   const [filter,setFilter]=useState<LessonFilter>("all");
+  const [lessonQuery,setLessonQuery]=useState("");
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
   const lesson=path?.lessons[current-1]??null;
   const record=records[current-1]??null;
   const revisionRow=revision[current-1]??null;
+  // Restore the selected lesson’s saved confidence rather than carrying a different lesson’s choice.
+  useEffect(()=>{
+    const saved=revisionRow?.confidence;
+    setReviewConfidence(saved&&saved!=="unrated"?saved:"developing");
+  },[path,current,revisionRow?.confidence]);
   // Local UTC date is a transparent snapshot, not a timer or background reminder.
   const [asOfUtc,setAsOfUtc]=useState(()=>new Date().toISOString().slice(0,10));
   const authorLesson=draft.lessons[draftIndex]??null;
@@ -81,6 +87,8 @@ export default function EducationStudyPaths(){
     return path.lessons.filter(l=>{
       const r=records[l.number-1];
       if(!r)return false;
+      const query=lessonQuery.trim().toLocaleLowerCase();
+      if(query&&!`${l.title} ${l.objective}`.toLocaleLowerCase().includes(query))return false;
       return filter==="all" ||
         (filter==="remaining"&&!r.completed) ||
         (filter==="completed"&&r.completed) ||
@@ -89,7 +97,10 @@ export default function EducationStudyPaths(){
           (revision[l.number-1]?.next_due_on??"")<=asOfUtc) ||
         (filter==="unscheduled"&&r.completed&&revision[l.number-1]?.review_count===0);
     });
-  },[path,records,revision,filter,asOfUtc]);
+  },[path,records,revision,filter,asOfUtc,lessonQuery]);
+  const previousVisible=shownLessons.filter(l=>l.number<current).at(-1)?.number;
+  const nextVisible=shownLessons.find(l=>l.number>current)?.number;
+  const currentVisible=shownLessons.some(l=>l.number===current);
 
   const importFile=async(e:ChangeEvent<HTMLInputElement>)=>{
     const file=e.target.files?.[0];if(!file)return;
@@ -102,7 +113,7 @@ export default function EducationStudyPaths(){
       setPath(imported.path as Path);
       setRecords(imported.records as Record[]);
       setRevision(imported.revision as Revision[]);
-      setCurrent(1);setFilter("all");setMode("learn");
+      setCurrent(1);setFilter("all");setLessonQuery("");setMode("learn");
       setMessage("Study path imported. Your learning notes remain in this browser tab unless you export them.");
     }catch{
       setError("Import rejected. Choose a valid ETERNYX study path JSON or resume JSON. Unrecognized fields and oversized files are blocked.");
@@ -147,10 +158,11 @@ export default function EducationStudyPaths(){
   const startOwnPath=()=>{
     try{
       const valid=authorStudyPath(draft);
+      if(path&&!window.confirm("Replace your current study session? Export its resume JSON first if needed."))return;
       setPath(valid as Path);
       setRecords(emptyStudyRecords(valid) as Record[]);
       setRevision(blankStudyRevision(valid) as Revision[]);
-      setCurrent(1);setFilter("all");setMode("learn");
+      setCurrent(1);setFilter("all");setLessonQuery("");setMode("learn");
       setError("");setMessage("Your authored lessons are ready for local, ungraded study.");
     }catch{setError("Complete the path title and each lesson's objective, reading, activity and reflection before studying.");}
   };
@@ -179,7 +191,7 @@ export default function EducationStudyPaths(){
   };
   const clearSession=()=>{
     if(!path||!window.confirm("Clear this local study session? Export your resume JSON before clearing."))return;
-    setPath(null);setRecords([]);setRevision([]);setCurrent(1);setFilter("all");
+    setPath(null);setRecords([]);setRevision([]);setCurrent(1);setFilter("all");setLessonQuery("");
     setError("");setMessage("Study session cleared from this tab.");
   };
   const resetDraft=()=>{
@@ -427,7 +439,7 @@ export default function EducationStudyPaths(){
             <Button variant="outline" onClick={()=>exportRevisionCalendar()}>
               <CalendarDays aria-hidden="true" className="mr-2 h-4 w-4"/>Export private revision plan (.csv)</Button>
             {progress.nextLesson!==null&&<Button variant="ghost" onClick={()=>{
-              setCurrent(progress.nextLesson!);setFilter("all");
+              setCurrent(progress.nextLesson!);setFilter("all");setLessonQuery("");
             }}>Continue next unfinished lesson</Button>}
           </div>
           {progress.remaining===0&&<p role="status" className="mt-4 flex items-center gap-2 text-sm">
@@ -445,7 +457,7 @@ export default function EducationStudyPaths(){
             </div>
             {insights.nextReviewLesson!==null&&
               <Button variant="outline" size="sm" onClick={()=>{
-                setCurrent(insights.nextReviewLesson!);setFilter("all");
+                setCurrent(insights.nextReviewLesson!);setFilter("all");setLessonQuery("");
               }}>Open next revision</Button>}
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -471,8 +483,8 @@ export default function EducationStudyPaths(){
             <div className="space-y-2">
               <h3 className="font-semibold">Priority revision agenda</h3>
               {agenda.length===0?<p className="text-sm text-muted-foreground">No completed lessons to schedule.</p>:
-                <ol className="space-y-2">{agenda.slice(0,12).map(item=><li key={item.number}>
-                  <button type="button" onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                <ol className="space-y-2">{agenda.map(item=><li key={item.number}>
+                  <button type="button" onClick={()=>{setCurrent(item.number);setFilter("all");setLessonQuery("");}}
                     className="w-full rounded-lg border border-border p-3 text-left text-sm hover:bg-muted/50">
                     <span className="font-medium">{item.number}. {item.title}</span>
                     <span className="block text-xs text-muted-foreground">{item.status}{item.due_on?" · "+item.due_on+" UTC":""}</span>
@@ -485,14 +497,14 @@ export default function EducationStudyPaths(){
                 <strong>Overdue backlog · {overdueBacklog.length}</strong>
                 <p className="mt-1 text-xs text-muted-foreground">Past-due reviews remain visible separately from upcoming dates.</p>
                 {overdueBacklog.map(item=><button type="button" key={item.number}
-                  onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                  onClick={()=>{setCurrent(item.number);setFilter("all");setLessonQuery("");}}
                   className="mt-1 block w-full text-left text-primary hover:underline">
                   {item.number}. {item.title} · {item.due_on}</button>)}
               </div>}
               {week.map(day=><div key={day.date} className="rounded-lg border border-border p-3 text-sm">
                 <strong>{day.date}</strong> · {day.lessons.length} scheduled
                 {day.lessons.map(item=><button type="button" key={item.number}
-                  onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                  onClick={()=>{setCurrent(item.number);setFilter("all");setLessonQuery("");}}
                   className="mt-1 block w-full text-left text-primary hover:underline">
                   {item.number}. {item.title}</button>)}
               </div>)}
@@ -521,7 +533,7 @@ export default function EducationStudyPaths(){
             <p className="text-sm text-muted-foreground">{focusPlan.items.length} suggested tasks · {focusPlan.estimated_minutes} estimated minutes · {focusPlan.remaining_minutes} unallocated minutes. {focusPlan.excluded_count} other tasks not selected for this budget.</p>
             {focusPlan.items.length===0?<p className="text-sm text-muted-foreground">No tasks fit your selected time budget. Choose a longer session or continue with a lesson manually.</p>:
               <ol className="space-y-2">{focusPlan.items.map(item=><li key={item.number}>
-                <button type="button" onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                <button type="button" onClick={()=>{setCurrent(item.number);setFilter("all");setLessonQuery("");}}
                   className="w-full rounded-lg border border-border p-3 text-left text-sm hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="font-medium">{item.number}. {item.title}</span>
                   <span className="block text-xs text-muted-foreground">{item.kind} · ~{item.estimated_minutes} min{item.due_on?" · "+item.due_on+" UTC":""}</span>
@@ -641,10 +653,10 @@ export default function EducationStudyPaths(){
                   Respond to both activity and reflection to mark complete.</p>}
               </div>
               <div className="flex justify-between gap-3">
-                <Button variant="outline" disabled={current===1}
-                  onClick={()=>setCurrent(x=>Math.max(1,x-1))}>Previous lesson</Button>
-                <Button disabled={current===path.lessons.length}
-                  onClick={()=>setCurrent(x=>Math.min(path.lessons.length,x+1))}>Next lesson</Button>
+                <Button variant="outline" disabled={previousVisible===undefined}
+                  onClick={()=>{if(previousVisible!==undefined)setCurrent(previousVisible);}}>Previous lesson</Button>
+                <Button disabled={nextVisible===undefined}
+                  onClick={()=>{if(nextVisible!==undefined)setCurrent(nextVisible);}}>Next lesson</Button>
               </div>
             </CardContent>
           </Card>
@@ -661,9 +673,16 @@ export default function EducationStudyPaths(){
               <option value="due">Due for revision</option>
               <option value="unscheduled">Completed, needs schedule</option>
             </select>
+            <label htmlFor="study-lesson-search" className="block text-sm text-muted-foreground">Search lesson titles and objectives</label>
+            <input id="study-lesson-search" type="search" maxLength={160} value={lessonQuery}
+              onChange={e=>setLessonQuery(e.target.value)} placeholder="Find a lesson…"
+              className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"/>
+            <p className="text-xs text-muted-foreground">{shownLessons.length} of {path.lessons.length} lessons match. Previous and next follow this list.</p>
+            {!currentVisible&&shownLessons.length>0&&<Button size="sm" variant="outline"
+              onClick={()=>setCurrent(shownLessons[0].number)}>Open first matching lesson</Button>}
             {shownLessons.length===0?<div className="space-y-2">
               <p className="text-sm text-muted-foreground">No lessons match this filter.</p>
-              <Button size="sm" variant="outline" onClick={()=>setFilter("all")}>Show all lessons</Button>
+              <Button size="sm" variant="outline" onClick={()=>{setFilter("all");setLessonQuery("");}}>Show all lessons</Button>
             </div>:<div className="space-y-2">
               {shownLessons.map(l=>{
                 const r=records[l.number-1];

@@ -1,0 +1,69 @@
+{
+  "schema": "eternyx.labs.staging-deployment-observation.v1",
+  "observedOn": "2026-11-24",
+  "projectRef": "mhodwvypfbxafamkrgsk",
+  "sourceCommit": "36ac171d50c82a566c40c405fded1c53280de692",
+  "originalUnrelatedVersions": [
+    "20261123215132",
+    "20261123215141",
+    "20261123215211"
+  ],
+  "migrations": [
+    {
+      "source": "20261122170000_ctf_verified_missions.sql",
+      "version": "20261124121732",
+      "name": "labs_20261122170000_ctf_verified_missions",
+      "gitBlobSha1": "1f13814c8af89d7da57da857a21979c19c98957b"
+    },
+    {
+      "source": "20261122180000_ctf_range_session_control.sql",
+      "version": "20261124121741",
+      "name": "labs_20261122180000_ctf_range_session_control",
+      "gitBlobSha1": "239ebc0477bcc0a40be93e5787ca10042cb36c83"
+    },
+    {
+      "source": "20261122190000_ctf_range_access_grants.sql",
+      "version": "20261124121744",
+      "name": "labs_20261122190000_ctf_range_access_grants",
+      "gitBlobSha1": "01f8124379ead2ee435f869c4437a7f33329422b"
+    },
+    {
+      "source": "20261122200000_ctf_worker_fencing_budget.sql",
+      "version": "20261124121747",
+      "name": "labs_20261122200000_ctf_worker_fencing_budget",
+      "gitBlobSha1": "aadb22768fbc62d946402db167c3d845230fa85f"
+    },
+    {
+      "source": "20261123041000_ctf_hosted_spend_reservations.sql",
+      "version": "20261124121749",
+      "name": "labs_20261123041000_ctf_hosted_spend_reservations",
+      "gitBlobSha1": "6294ed1fdcfcfe073620874443c7a82852b643c6"
+    },
+    {
+      "source": "20261124123000_ctf_range_session_column_privacy.sql",
+      "version": "20261124121752",
+      "name": "labs_20261124123000_ctf_range_session_column_privacy",
+      "gitBlobSha1": "7e5e3fb09cc046374d99254c25f27b6e1a0094c9"
+    }
+  ],
+  "functions": [
+    {
+      "slug": "ctf-verified",
+      "version": 1,
+      "status": "ACTIVE",
+      "verifyJwt": true
+    },
+    {
+      "slug": "ctf-range-control",
+      "version": 1,
+      "status": "ACTIVE",
+      "verifyJwt": true
+    }
+  ],
+  "catalogChecksPassed": true,
+  "providerEnabled": false,
+  "spendEnabled": false,
+  "authUserCountObserved": 0,
+  "authenticatedAcceptanceVerified": false,
+  "productionReady": false
+}

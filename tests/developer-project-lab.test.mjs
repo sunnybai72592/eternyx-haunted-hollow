@@ -104,3 +104,23 @@ test("destructive replacement prompts on dirty changes and checkpoint restores a
   assert.match(studio, /setCheckpoints\(\(items\) => \[\.\.\.items, project\]\.slice\(-5\)/);
   assert.match(studio, /setPreviewHtml\(null\)/);
 });
+
+test("preview widths remain contained and reset horizontal scroll without remounting source", () => {
+  assert.ok(studio.includes('ref={previewScroller} aria-label="Preview scroll area"'));
+  assert.ok(studio.includes('min-w-0 max-w-full overflow-x-auto'));
+  assert.ok(studio.includes('previewScroller.current.scrollLeft = 0'));
+  assert.ok(studio.includes('}, [previewMode]);'));
+  assert.ok(studio.includes('<iframe key={previewRun} title="Isolated project preview" srcDoc={previewHtml}'));
+  assert.ok(!studio.includes('key={previewMode}'));
+});
+
+test("fluid layout uses a shrinkable grid and nonanimated iframe dimensions", () => {
+  assert.ok(studio.includes('grid grid-cols-1 gap-5 lg:grid-cols-2'));
+  assert.ok(studio.includes('min-w-0 max-w-none border-0 transition-none'));
+  const smoke = readFileSync(new URL("./browser/developer_project_lab_smoke.py", import.meta.url), "utf8");
+  assert.ok(smoke.includes("Math.abs(area.clientWidth - frame.offsetWidth) <= 1"));
+  assert.ok(smoke.includes("area.scrollWidth <= area.clientWidth + 1"));
+  assert.ok(smoke.includes("document.elementFromPoint(point.x, point.y) === frame"));
+  assert.ok(smoke.includes('hello.click()'));
+  assert.ok(smoke.includes('to_have_text("Hello from the isolated preview!")'));
+});

@@ -1,0 +1,79 @@
+name: Native cinematic 24 FPS visual timeline
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/ai/localVideoEditor.mjs'
+      - 'src/lib/ai/localVideoDraft.mjs'
+      - 'src/lib/ai/localVideoTimeline.mjs'
+      - 'src/lib/ai/localVideoSequenceReview.mjs'
+      - 'src/lib/ai/localRenderReview.mjs'
+      - 'src/lib/ai/portableVideoBundle.mjs'
+      - 'src/components/LocalVideoEditor.tsx'
+      - 'src/components/LocalVideoTimeline.tsx'
+      - 'src/components/LocalVideoSequenceReview.tsx'
+      - 'src/components/LocalRenderReview.tsx'
+      - 'gpu-worker/launch_portable_video.py'
+      - 'tests/local-video-native-cinematic.test.mjs'
+      - 'tests/portable-video-bundle.test.mjs'
+      - '.github/workflows/native-cinematic-main-timeline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/ai/localVideoEditor.mjs'
+      - 'src/lib/ai/localVideoDraft.mjs'
+      - 'src/lib/ai/localVideoTimeline.mjs'
+      - 'src/lib/ai/localVideoSequenceReview.mjs'
+      - 'src/lib/ai/localRenderReview.mjs'
+      - 'src/lib/ai/portableVideoBundle.mjs'
+      - 'src/components/LocalVideoEditor.tsx'
+      - 'src/components/LocalVideoTimeline.tsx'
+      - 'src/components/LocalVideoSequenceReview.tsx'
+      - 'src/components/LocalRenderReview.tsx'
+      - 'gpu-worker/launch_portable_video.py'
+      - 'tests/local-video-native-cinematic.test.mjs'
+      - 'tests/portable-video-bundle.test.mjs'
+      - '.github/workflows/native-cinematic-main-timeline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-timebase-contracts:
+    name: Verify real 16 and 24 FPS editor, re-edit drafts and frame boundaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exercise 24 FPS native mode and all 16 FPS compatibility contracts
+        run: |
+          node --test tests/local-video-native-cinematic.test.mjs
+          node --test tests/local-video-editor.test.mjs tests/local-video-draft.test.mjs tests/local-video-timeline.test.mjs tests/local-video-sequence-review.test.mjs tests/local-render-review.test.mjs
+
+  native-real-ffmpeg:
+    name: Extract native 24 FPS ZIP, render real 720p MP4 and verify decoded frames
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require real FFmpeg, FFprobe and libx264
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Render genuine native 24 FPS landscape/portrait and legacy 16 FPS videos
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          CUDA_VISIBLE_DEVICES: ''
+          OMP_NUM_THREADS: '1'
+        run: node --test tests/portable-video-bundle.test.mjs

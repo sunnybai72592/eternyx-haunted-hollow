@@ -503,22 +503,25 @@ def preview_isolation(page):
     expect(frame).to_have_css("width", "768px", timeout=5000)
     page.get_by_role("button", name="Desktop 1200").click()
     expect(frame).to_have_css("width", "1200px", timeout=5000)
-    viewport = page.get_by_test_id("project-preview-viewport")
-    # Wide previews must scroll inside the card, not stretch the grid.
-    assert viewport.evaluate("(el) => el.getBoundingClientRect().width <= window.innerWidth")
-    assert viewport.evaluate("(el) => el.scrollWidth > el.clientWidth")
-    viewport.evaluate("(el) => { el.scrollLeft = el.scrollWidth; }")
-    assert viewport.evaluate("(el) => el.scrollLeft > 0")
-    fluid = page.get_by_role("button", name="Fluid", exact=True)
-    fluid.click()
-    expect(fluid).to_have_attribute("aria-pressed", "true")
+    scroller=page.get_by_label("Preview scroll area", exact=True)
+    assert scroller.evaluate("(element) => element.clientWidth <= window.innerWidth")
+    assert scroller.evaluate("(element) => element.scrollWidth > element.clientWidth")
+    # Simulate real horizontal navigation while the 1200px preview is wider
+    # than its panel, then verify Fluid restores the scroll origin.
+    scroller.evaluate("(element) => { element.scrollLeft = element.scrollWidth; }")
+    assert scroller.evaluate("(element) => element.scrollLeft > 0")
+    page.get_by_role("button", name="Fluid", exact=True).click()
+    expect(page.get_by_role("button", name="Fluid", exact=True)).to_have_attribute("aria-pressed", "true")
+    assert scroller.evaluate("(element) => element.scrollLeft") == 0
+    # Compare untransformed layout widths after React and the browser settle.
+    # A bounding-client rectangle may include an ancestor animation transform.
     page.wait_for_function("""() => {
-      const box = document.querySelector('[data-testid="project-preview-viewport"]');
-      const frame = box?.querySelector("iframe");
-      return box && frame && box.scrollLeft === 0 &&
-        Math.abs(frame.getBoundingClientRect().width - box.clientWidth) <= 1 &&
-        box.getBoundingClientRect().width <= window.innerWidth;
-    }""", timeout=15000)
+      const area = document.querySelector('[aria-label="Preview scroll area"]');
+      const frame = area?.querySelector('iframe');
+      return !!frame && area.clientWidth > 0 && frame.style.width === '100%' &&
+        Math.abs(area.clientWidth - frame.offsetWidth) <= 1 &&
+        area.scrollLeft === 0 && area.scrollWidth <= area.clientWidth + 1;
+    }""", timeout=10000)
     assert frame.get_attribute("sandbox") == "allow-scripts"
     assert frame.get_attribute("referrerpolicy") == "no-referrer"
     doc=frame.get_attribute("srcdoc")
@@ -540,30 +543,31 @@ def preview_isolation(page):
     # This does not retry a failed click or conceal broken script execution.
     expect(preview.locator("#hello")).to_have_attribute(
         "data-handler-ready", "true", timeout=15000)
-    # Require visible hit targets in both documents before a real pointer
-    # click; never dispatch a synthetic DOM click or retry a failed action.
-    frame.evaluate("(el) => el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})")
-    hello = preview.locator("#hello")
-    hello.scroll_into_view_if_needed(timeout=15000)
+    # Bring the outer frame away from sticky navigation and viewport edges.
+    # The real pointer click must still work; no forced click, synthetic
+    # dispatch, keyboard fallback, or retry that could hide a broken preview.
+    frame.evaluate("(element) => element.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'})")
+    hello=preview.locator("#hello")
+    expect(hello).to_be_visible()
+    # Wait for parent hit-testing to agree with the actual child button location.
+    # Opaque-origin content is inspected only through Playwright's frame API.
+    # No parent-side script reaches into the sandbox or dispatches a click.
+    hello.scroll_into_view_if_needed()
+    # Validate the inner hit target independently of the parent iframe hit
+    # test. No handler invocation, synthetic click or fallback is allowed.
     isolated_frame.wait_for_function("""() => {
       const button = document.querySelector("#hello");
       if (!button) return false;
       const r = button.getBoundingClientRect();
       return button.contains(document.elementFromPoint(r.x+r.width/2, r.y+r.height/2));
     }""", timeout=15000)
-    offset = hello.evaluate("""el => {
-      const r = el.getBoundingClientRect();
-      return {x:r.x+r.width/2, y:r.y+r.height/2};
-    }""")
-    page.wait_for_function("""offset => {
+    box=hello.bounding_box()
+    assert box is not None and box["width"] > 0 and box["height"] > 0
+    page.wait_for_function("""point => {
       const frame = document.querySelector('iframe[title="Isolated project preview"]');
-      if (!frame) return false;
-      const r = frame.getBoundingClientRect();
-      return document.elementFromPoint(r.x+offset.x,r.y+offset.y) === frame;
-    }""", arg=offset, timeout=15000)
-    rect = frame.bounding_box()
-    assert rect is not None, "Resized preview iframe has no visible geometry"
-    page.mouse.click(rect["x"] + offset["x"], rect["y"] + offset["y"])
+      return document.elementFromPoint(point.x, point.y) === frame;
+    }""", arg={"x":box["x"]+box["width"]/2,"y":box["y"]+box["height"]/2}, timeout=10000)
+    hello.click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
     page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html").click()
     editor=page.locator("#project-editor")

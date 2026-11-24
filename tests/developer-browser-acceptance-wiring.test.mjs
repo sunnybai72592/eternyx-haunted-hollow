@@ -40,17 +40,17 @@ test("acceptance evidence stores no source text, token values or downloaded arti
   assert.doesNotMatch(browser,/page\.screenshot|record_video_dir|trace\.start/);
 });
 
-test("resized preview remains contained and accepts a real pointer click in the opaque frame",()=>{
+test("wide preview scrolls inside its viewport and checks both real pointer hit targets",()=>{
   const studio=readFileSync(new URL("../src/pages/DeveloperProjectLab.tsx",import.meta.url),"utf8");
-  assert.match(studio,/grid min-w-0 grid-cols-\[minmax\(0,1fr\)\]/);
-  assert.match(studio,/previewViewportRef\.current\.scrollLeft = 0/);
-  assert.match(studio,/data-testid="project-preview-viewport"/);
+  assert.match(studio,/previewScroller\.current\.scrollLeft = 0/);
   assert.match(studio,/max-w-full overflow-x-auto overscroll-x-contain/);
   assert.match(studio,/sandbox="allow-scripts"/);
-  assert.match(browser,/el\.scrollWidth > el\.clientWidth/);
-  assert.match(browser,/box\.scrollLeft === 0/);
-  assert.match(browser,/document\.elementFromPoint\(r\.x\+offset\.x,r\.y\+offset\.y\) === frame/);
-  assert.match(browser,/page\.mouse\.click\(rect\["x"\] \+ offset\["x"\]/);
+  assert.match(browser,/element\.scrollWidth > element\.clientWidth/);
+  assert.match(browser,/element\.scrollLeft > 0/);
+  assert.match(browser,/area\.scrollLeft === 0/);
+  assert.match(browser,/button\.contains\(document\.elementFromPoint\(r\.x\+r\.width\/2, r\.y\+r\.height\/2\)\)/);
+  assert.match(browser,/document\.elementFromPoint\(point\.x, point\.y\) === frame/);
+  assert.match(browser,/hello\.click\(\)/);
   assert.match(browser,/to_have_text\("Hello from the isolated preview!"\)/);
   assert.doesNotMatch(browser,/dispatch_event\("click"\)|evaluate\([^\\n]*\.click\(\)/);
 });

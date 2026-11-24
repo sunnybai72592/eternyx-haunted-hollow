@@ -1,0 +1,34 @@
+name: LABS offline staging acceptance contracts
+on:
+  pull_request:
+    paths:
+      - 'src/lib/eternyxLabsStagingReadiness.mjs'
+      - 'src/lib/eternyxRangeSessionClient.mjs'
+      - 'src/lib/eternyxVerifiedCtf.mjs'
+      - 'scripts/labs-staging-readonly.mjs'
+      - 'scripts/labs-staging-fresh-auth.mjs'
+      - 'scripts/labs-staging-ctf-lifecycle.mjs'
+      - 'tests/eternyx-labs-ctf-lifecycle.test.mjs'
+      - '.github/workflows/labs-staging-ctf-lifecycle.yml'
+      - 'tests/eternyx-labs-fresh-auth.test.mjs'
+      - 'docs/examples/labs-staging-deployment-observation.json'
+      - 'tests/eternyx-labs-staging-readonly.test.mjs'
+      - '.github/workflows/labs-staging-readonly.yml'
+      - '.github/workflows/labs-staging-offline-contract.yml'
+permissions:
+  contents: read
+jobs:
+  offline-labs-staging-contract:
+    name: Offline injected-transport REST and identity regressions (not live)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization before tests
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/eternyx-labs-ctf-lifecycle.test.mjs tests/eternyx-labs-fresh-auth.test.mjs tests/eternyx-labs-staging-readonly.test.mjs tests/eternyx-labs-bootstrap.test.mjs tests/eternyx-labs-session-client.test.mjs

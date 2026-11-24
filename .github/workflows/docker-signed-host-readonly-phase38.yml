@@ -1,0 +1,48 @@
+name: Docker signed host read-only preflight regression (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-host-readonly-phase38.yml'
+      - 'src/lib/dockerSignedHostReadOnlyPreflight.mjs'
+      - 'scripts/docker-lab-host-preflight.mjs'
+      - 'tests/docker-signed-host-readonly-preflight-phase38.test.mjs'
+      - 'docs/DOCKER_SIGNED_HOST_READONLY_PREFLIGHT_PHASE38.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-readonly:
+    name: Prove isolated host preflight stays read-only, denies stale state and cannot authorize deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check actual preflight and pure evidence contracts
+        run: |
+          node --check scripts/docker-lab-host-preflight.mjs
+          node --check src/lib/dockerSignedHostReadOnlyPreflight.mjs
+          node --check tests/docker-signed-host-readonly-preflight-phase38.test.mjs
+      - name: Verify synthetic rootless observations, private recovery fences and previous Docker proofs
+        env:
+          CI: 'true'
+        run: |
+          node --test tests/docker-signed-host-readonly-preflight-phase38.test.mjs
+          node --test tests/docker-signed-client-config-phase37.test.mjs
+          node --test tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --test tests/docker-signed-cli-executable-pin.test.mjs
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs

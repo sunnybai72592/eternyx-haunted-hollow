@@ -21,6 +21,8 @@ reservation is created; the only container is the disposable CI database.
 
 ## Release blockers (not silently waived)
 
+Historical Phase 16 findings: Phase 17 introduces a forward-only column privilege repair and a strict six-migration CI gate. Live deployment and REST verification still remain outstanding.
+
 - Direct authenticated SELECT on the sessions table currently includes internal
   provider_instance_ref and worker_fence_id fields for the row owner. The final
   check reports this risk explicitly. Before rollout, use a reviewed forward

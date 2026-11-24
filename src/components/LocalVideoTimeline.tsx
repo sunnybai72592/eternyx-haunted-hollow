@@ -15,13 +15,13 @@ type Shot={
 type Source={name:string;url:string;sha256:string;size:number};
 type Props={
   shots:Shot[];sources:Source[];onChange:(next:Shot[])=>void;
-  disabled?:boolean;canUndo?:boolean;canRedo?:boolean;
+  disabled?:boolean;canUndo?:boolean;canRedo?:boolean;fps?:16|24;
   onUndo?:()=>void;onRedo?:()=>void;
 };
 
 export default function LocalVideoTimeline({
   shots,sources,onChange,disabled=false,
-  canUndo=false,canRedo=false,onUndo=()=>{},onRedo=()=>{},
+  canUndo=false,canRedo=false,onUndo=()=>{},onRedo=()=>{},fps=16,
 }:Props){
   const [selected,setSelected]=useState(0);
   const [playhead,setPlayhead]=useState(0);
@@ -32,15 +32,15 @@ export default function LocalVideoTimeline({
   const previewPlaying=useRef(false);
   const [previewActive,setPreviewActive]=useState(false);
   const state=useMemo(()=>{
-    try{return {timeline:timelineSegments(shots),error:""};}
+    try{return {timeline:timelineSegments(shots,fps),error:""};}
     catch(err){return {timeline:null,error:err instanceof Error?err.message:"Invalid edited timeline."};}
-  },[shots]);
+  },[shots,fps]);
   const timeline=state.timeline;
   const max=timeline?timeline.frames-1:0;
   const safeFrame=Math.max(0,Math.min(playhead,max));
   const current=useMemo(()=>{
     if(!timeline)return null;
-    try{return timelineSeek(shots,safeFrame);}
+    try{return timelineSeek(shots,safeFrame,fps);}
     catch{return null;}
   },[timeline,shots,safeFrame]);
   const active=timeline?.segments[Math.min(selected,shots.length-1)]??null;
@@ -68,7 +68,7 @@ export default function LocalVideoTimeline({
       if(previewPlaying.current){stopPreview();return;}
       stopPreview();
       const element=video.current;
-      const first=timelineSeek(shots,active.startFrame);
+      const first=timelineSeek(shots,active.startFrame,fps);
       element.currentTime=first.sourceSeconds;
       setPlayhead(active.startFrame);
       previewPlaying.current=true;
@@ -91,7 +91,7 @@ export default function LocalVideoTimeline({
     if(disabled)return;
     try{
       const updated=fn();
-      const next=timelineSegments(updated);
+      const next=timelineSegments(updated,fps);
       const index=Math.max(0,Math.min(nextIndex,updated.length-1));
       stopPreview();
       onChange(updated);
@@ -109,7 +109,7 @@ export default function LocalVideoTimeline({
   const seek=(frame:number)=>{
     if(!timeline)return;
     try{
-      const target=timelineSeek(shots,frame);
+      const target=timelineSeek(shots,frame,fps);
       stopPreview();
       setPlayhead(target.globalFrame);
       setSelected(target.index);
@@ -139,14 +139,14 @@ export default function LocalVideoTimeline({
       }}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="local-precision-timeline" className="flex items-center gap-2 font-semibold text-cyan-100">
-          <Clapperboard className="h-4 w-4"/>Interactive 16 FPS editing timeline
+          <Clapperboard className="h-4 w-4"/>Interactive {fps} FPS editing timeline
         </h3>
         <p className="text-xs tabular-nums text-slate-300">
-          {timeline?timelineTimecode(timeline.frames):"Invalid timeline"} · {shots.length}/8 cuts
+          {timeline?timelineTimecode(timeline.frames,fps):"Invalid timeline"} · {shots.length}/8 cuts
         </p>
       </div>
       <p className="text-sm text-slate-300">
-        Select a cut, scrub by individual 16 FPS frames, and preview its <strong>original
+        Select a cut, scrub by individual {fps} FPS frames, and preview its <strong>original
         source</strong>. Split, duplicate, join, reorder, or nudge source in/out
         boundaries while preserving the same editable storyboard.
       </p>
@@ -170,7 +170,7 @@ export default function LocalVideoTimeline({
           <div className="flex min-w-full gap-1">
             {timeline.segments.map(s=><button type="button" key={s.index}
               aria-label={"Select shot "+(s.index+1)+", "+s.sourceName+", "+
-                timelineTimecode(s.startFrame)+" to "+timelineTimecode(s.endFrame)}
+                timelineTimecode(s.startFrame,fps)+" to "+timelineTimecode(s.endFrame,fps)}
               aria-pressed={selected===s.index}
               disabled={disabled} draggable={!disabled}
               onDragStart={event=>{
@@ -187,7 +187,7 @@ export default function LocalVideoTimeline({
                 event.preventDefault();
                 const from=dragging.current;dragging.current=null;
                 if(from!==null&&from!==s.index){
-                  apply(()=>repositionTimelineShot(shots,from,s.index),s.index);
+                  apply(()=>repositionTimelineShot(shots,from,s.index,fps),s.index);
                 }
               }}
               onDragEnd={()=>{dragging.current=null;}}
@@ -209,13 +209,13 @@ export default function LocalVideoTimeline({
               <span className="block font-semibold">#{s.index+1} · {s.frames}f</span>
               <span className="block max-w-full truncate" title={s.sourceName}>{s.sourceName}</span>
               <span className="block tabular-nums text-[11px] opacity-80">
-                {timelineTimecode(s.startFrame)}–{timelineTimecode(s.endFrame)}
+                {timelineTimecode(s.startFrame,fps)}–{timelineTimecode(s.endFrame,fps)}
               </span>
             </button>)}
           </div>
           <div className="mt-2 flex justify-between text-[11px] tabular-nums text-slate-400">
             {[0,1,2,3,4].map(n=><span key={n}>
-              {timelineTimecode(Math.round(timeline.frames*n/4))}
+              {timelineTimecode(Math.round(timeline.frames*n/4),fps)}
             </span>)}
           </div>
         </div>
@@ -223,7 +223,7 @@ export default function LocalVideoTimeline({
           <span className="flex items-center justify-between gap-2">
             <span className="font-medium">Timeline playhead · scrub to original source frame</span>
             <span className="tabular-nums text-cyan-200">
-              {timelineTimecode(safeFrame)} · frame {safeFrame+1}/{timeline.frames}
+              {timelineTimecode(safeFrame,fps)} · frame {safeFrame+1}/{timeline.frames}
             </span>
           </span>
           <Input type="range" min={0} max={max} step={1} value={safeFrame}
@@ -289,13 +289,13 @@ export default function LocalVideoTimeline({
             <p className="text-xs text-amber-200">
               This is the original source clip, NOT the assembled, faded or
               caption-burned final video. Browser seeks are approximate;
-              the offline FFmpeg renderer checks actual constant-frame-rate 16 FPS.
+              the offline FFmpeg renderer checks actual constant-frame-rate {fps} FPS.
             </p>
           </div>
           <div className="space-y-3 rounded border border-slate-700 bg-slate-950 p-3 text-xs">
             <p className="font-semibold text-cyan-200">Selected cut · {active?active.index+1:"none"}</p>
             {active&&<p className="tabular-nums">
-              Timeline {timelineTimecode(active.startFrame)}–{timelineTimecode(active.endFrame)}
+              Timeline {timelineTimecode(active.startFrame,fps)}–{timelineTimecode(active.endFrame,fps)}
               {" · "}{active.frames} frames / {(active.frames/16).toFixed(2)}s
             </p>}
             {active&&<p>
@@ -320,29 +320,29 @@ export default function LocalVideoTimeline({
           <Button size="sm" variant="outline" disabled={disabled||!canSplit||!sameSelected}
             title="Splits at the selected source playhead while retaining original endpoint fade effects"
             onClick={()=>active&&apply(
-              ()=>splitTimelineShot(shots,selected,splitOffset),selected+1,safeFrame)}>
+              ()=>splitTimelineShot(shots,selected,splitOffset,fps),selected+1,safeFrame)}>
             <Scissors className="mr-1 h-4 w-4"/>Split at playhead
           </Button>
           <Button size="sm" variant="outline"
-            disabled={disabled||shots.length>=8||!active||timeline.frames+active.frames>480}
-            onClick={()=>apply(()=>duplicateTimelineShot(shots,selected),selected+1)}>
+            disabled={disabled||shots.length>=8||!active||timeline.frames+active.frames>fps*30}
+            onClick={()=>apply(()=>duplicateTimelineShot(shots,selected,fps),selected+1)}>
             <Copy className="mr-1 h-4 w-4"/>Duplicate cut
           </Button>
           <Button size="sm" variant="outline" disabled={disabled||!active||selected>=shots.length-1}
             title="Join source-contiguous cuts only when captions, rights and internal fades match"
-            onClick={()=>apply(()=>joinTimelineShots(shots,selected),selected)}>
+            onClick={()=>apply(()=>joinTimelineShots(shots,selected,fps),selected)}>
             <GitMerge className="mr-1 h-4 w-4"/>Join next (compatible only)
           </Button>
           <Button size="sm" variant="outline" disabled={disabled||selected<=0}
-            onClick={()=>apply(()=>moveTimelineShot(shots,selected,-1),selected-1)}>
+            onClick={()=>apply(()=>moveTimelineShot(shots,selected,-1,fps),selected-1)}>
             Move left
           </Button>
           <Button size="sm" variant="outline" disabled={disabled||selected>=shots.length-1}
-            onClick={()=>apply(()=>moveTimelineShot(shots,selected,1),selected+1)}>
+            onClick={()=>apply(()=>moveTimelineShot(shots,selected,1,fps),selected+1)}>
             Move right
           </Button>
           <Button size="sm" variant="outline" disabled={disabled||shots.length<=1}
-            onClick={()=>apply(()=>removeTimelineShot(shots,selected),Math.min(selected,shots.length-2))}>
+            onClick={()=>apply(()=>removeTimelineShot(shots,selected,fps),Math.min(selected,shots.length-2))}>
             <Trash2 className="mr-1 h-4 w-4"/>Remove cut
           </Button>
         </div>
@@ -353,7 +353,7 @@ export default function LocalVideoTimeline({
             {label:"Extend 1f at end",edge:"out",amount:1},
             {label:"Trim 1f from end",edge:"out",amount:-1},
           ].map(x=><Button key={x.label} size="sm" variant="outline" disabled={disabled||!active}
-            onClick={()=>apply(()=>nudgeTimelineShot(shots,selected,x.edge,x.amount),selected)}>
+            onClick={()=>apply(()=>nudgeTimelineShot(shots,selected,x.edge,x.amount,fps),selected)}>
             {x.label}
           </Button>)}
         </div>

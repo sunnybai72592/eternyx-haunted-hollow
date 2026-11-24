@@ -42,11 +42,41 @@ test("runner installs the exact chain, exercises old RPCs before fencing and rol
   assert.match(s,/eternyx-labs-composed-catalog-smoke.sql/);
   assert.doesNotMatch(s,/supabase db push|https:\/\/.*supabase\.co|PGHOST=|--link/);
 });
-test("final catalog explicitly reports internal-column deployment risk, and checks disabled budgets",async()=>{
+test("final catalog enforces the column allowlist and checks disabled budgets",async()=>{
   const s=await read("tests/sql/eternyx-labs-composed-catalog-smoke.sql");
   assert.match(s,/has_column_privilege/);
-  assert.match(s,/BLOCKED: internal session column visibility/);
+  assert.match(s,/Session column boundary failed/);
+  assert.match(s,/Table-level session SELECT bypasses allowlist/);
   assert.match(s,/max_24h_micro_usd=0/);
   assert.match(s,/max_reserved_minutes_per_24h=0/);
   assert.match(s,/Legacy unfenced RPC callable/);
+});
+
+test("forward repair exactly matches the server public session projection",async()=>{
+  const migration=await read("supabase/migrations/20261124123000_ctf_range_session_column_privacy.sql");
+  const contract=await read("supabase/functions/_shared/ctf-range-contract.mjs");
+  const fields=[...contract.match(/const SESSION_FIELDS = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+  const grant=migration.match(/GRANT SELECT \(([^)]+)\)\s+ON TABLE public.ctf_range_sessions TO authenticated/)[1].split(",");
+  assert.deepEqual(grant,fields);
+  assert.match(migration,/REVOKE ALL PRIVILEGES ON TABLE/);
+  assert.match(migration,/REVOKE ALL PRIVILEGES \(%I\)/);
+  assert.doesNotMatch(migration,/\b(?:CREATE POLICY|SECURITY DEFINER|DROP TABLE|DELETE FROM)\b/);
+  const smoke=await read("tests/sql/eternyx-labs-session-privacy-smoke.sql");
+  assert.match(smoke,/SET ROLE service_role/);
+  assert.match(smoke,/Private column filter accepted/);
+  assert.match(smoke,/Wildcard select leaked/);
+  assert.match(smoke,/Owner B visibility failed/);
+});
+
+test("terminal fixture operator script has consent, exact staged history, zero budget and no active allocation",async()=>{
+ const sql=await read("scripts/sql/labs-staging-terminal-fixtures.sql");
+ const runner=await read("scripts/labs-bootstrap-rehearsal.sh");
+ assert.match(sql,/I_APPROVE_TWO_TERMINAL_STAGING_FIXTURES/);
+ assert.match(sql,/Staging deployment history mismatch/);
+ assert.match(sql,/max_active_sessions=0/);
+ assert.match(sql,/max_24h_micro_usd=0/);
+ assert.match(sql,/interval '72 hours'/);
+ assert.match(sql,/ON CONFLICT \(id\) DO NOTHING/);
+ assert.doesNotMatch(sql,/\b(?:UPDATE|DELETE FROM|DROP TABLE|CREATE FUNCTION|GRANT)\b/);
+ assert.match(runner,/labs-staging-terminal-fixtures\.sql scripts\/sql\/labs-staging-terminal-fixtures\.sql/);
 });

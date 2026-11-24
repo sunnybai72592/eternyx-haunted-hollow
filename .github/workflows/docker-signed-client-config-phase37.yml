@@ -1,0 +1,73 @@
+name: Docker signed-agent sealed root-owned client config (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-signed-client-config-phase37.yml'
+      - 'src/lib/dockerSignedClientConfigGate.mjs'
+      - 'src/lib/dockerSignedCliExecutableGate.mjs'
+      - 'scripts/docker-lab-agent.mjs'
+      - 'tests/docker-signed-client-config-phase37.test.mjs'
+      - 'tests/docker-signed-cli-fd-exec-phase36.test.mjs'
+      - 'tests/docker-signed-cli-executable-pin.test.mjs'
+      - 'docs/DOCKER_SIGNED_AGENT_SEALED_CONFIG_PHASE37.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sealed-client-config:
+    name: Prove root-owned exact Docker --config and restricted CLI grammar (NO DOCKER)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ETERNYX_PHASE37_ROOT_FIXTURE: /etc/eternyx-ci-phase37-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check signed agent, config scanner and offline tests
+        run: |
+          node --check src/lib/dockerSignedClientConfigGate.mjs
+          node --check scripts/docker-lab-agent.mjs
+          node --check tests/docker-signed-client-config-phase37.test.mjs
+          node --check tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --check tests/docker-signed-cli-executable-pin.test.mjs
+      - name: Create minimal read-only root-owned synthetic local context WITHOUT a Docker daemon
+        run: |
+          node --input-type=module <<'NODE'
+          import {createHash} from "node:crypto";
+          import {writeFileSync} from "node:fs";
+          import {join} from "node:path";
+          const name="eternyx-phase37-ci";
+          const endpoint="unix:///run/user/1001/docker.sock";
+          const root=process.env.RUNNER_TEMP;
+          writeFileSync(join(root,"phase37-config.json"),JSON.stringify({currentContext:name})+"\n");
+          writeFileSync(join(root,"phase37-meta.json"),JSON.stringify({
+            Name:name,Metadata:{},Endpoints:{docker:{Host:endpoint,SkipTLSVerify:false}}
+          })+"\n");
+          writeFileSync(join(root,"phase37-context-hash"),
+            createHash("sha256").update(name).digest("hex"));
+          NODE
+          HASH="$(cat "$RUNNER_TEMP/phase37-context-hash")"
+          sudo install -d -o root -g root -m 0755 "$ETERNYX_PHASE37_ROOT_FIXTURE/contexts/meta/$HASH"
+          sudo install -o root -g root -m 0444 "$RUNNER_TEMP/phase37-config.json" "$ETERNYX_PHASE37_ROOT_FIXTURE/config.json"
+          sudo install -o root -g root -m 0444 "$RUNNER_TEMP/phase37-meta.json" "$ETERNYX_PHASE37_ROOT_FIXTURE/contexts/meta/$HASH/meta.json"
+          test "$(stat -c %u "$ETERNYX_PHASE37_ROOT_FIXTURE/config.json")" = 0
+      - name: Verify exact two-file manifest, fd3 ELF execution and all previous Docker recovery holds
+        run: |
+          node --test tests/docker-signed-client-config-phase37.test.mjs
+          node --test tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --test tests/docker-signed-cli-executable-pin.test.mjs
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs

@@ -5,7 +5,7 @@
  */
 import {
   buildLocalVideoBoard,checkLocalMediaName,localVideoSrt,
-  LOCAL_VIDEO_LIMITS,LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,
+  LOCAL_VIDEO_LIMITS,LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps,
 } from "./localVideoEditor.mjs";
 
 export const PORTABLE_BUNDLE_LIMITS=Object.freeze({
@@ -158,14 +158,14 @@ function readme(profile,quality,shotCount,seconds){
     "Do not run an extracted script unless you trust where it came from.",
     "All media and source code are included; no cloning the ETERNYX repository.",
     "This ZIP contains NO completed rendered video until you run the local script.",
-    "The renderer checks real input SHA-256, source dimensions, decoded 16 FPS",
+    "The renderer checks real input SHA-256, source dimensions, decoded "+localVideoFps(quality)+" FPS",
     "constant-frame-rate frame counts, rights references, and FFmpeg output.",
     "It refuses to overwrite an existing eternyx-video-output/ directory.",
     "Local desktop render uses a fresh private staging folder before final",
     "promotion, so failed or cancelled jobs cannot publish partial outputs.",
     "To render again, rename/move the finished output directory first.",
     "",
-    "Requested project: "+shotCount+" shots, "+seconds.toFixed(2)+" seconds at 16 FPS.",
+    "Requested project: "+shotCount+" shots, "+seconds.toFixed(2)+" seconds at "+localVideoFps(quality)+" FPS.",
     "Output profile: "+profile+". Quality: "+quality+".",
     "Source-video audio is removed; any licensed soundtrack is mixed separately.",
     "Caption text is delivered as captions.srt, not burned into the MP4.",
@@ -182,7 +182,7 @@ export async function buildPortableVideoBundle({
   if(!LOCAL_VIDEO_PROFILES.includes(profile)||!LOCAL_VIDEO_QUALITIES.includes(quality))
     throw new Error("Unsupported portable CPU output preset.");
   if(typeof onProgress!=="function")throw new Error("Invalid CPU bundle progress callback.");
-  const project=buildLocalVideoBoard({sources,shots,soundtrack});
+  const project=buildLocalVideoBoard({sources,shots,soundtrack,quality});
   const required=["render_video_timeline.py","assemble_video_storyboard.py",
     "audit_video_render.py","launch_portable_video.py"];
   if(!rendererSources||typeof rendererSources!=="object"||
@@ -229,7 +229,7 @@ export async function buildPortableVideoBundle({
   const manifest={
     format:"eternyx-portable-cpu-video",
     version:1,profile,quality,
-    fps:LOCAL_VIDEO_LIMITS.fps,shots:project.board.shots.length,
+    fps:project.fps,shots:project.board.shots.length,
     frames:project.totalFrames,
     private_original_media:true,
     sources:mitems,

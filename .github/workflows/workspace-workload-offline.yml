@@ -1,0 +1,20 @@
+name: Workspace workload offline
+on:
+  pull_request:
+    paths:
+      - 'src/lib/workspaceTeam*.mjs'
+      - 'src/components/workspace/WorkspaceTeamsPanel.tsx'
+      - 'tests/workspace-team-task-operations.test.mjs'
+      - '.github/workflows/workspace-workload-offline.yml'
+permissions:
+  contents: read
+jobs:
+  workload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs

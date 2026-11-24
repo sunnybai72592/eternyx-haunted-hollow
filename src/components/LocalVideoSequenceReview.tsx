@@ -27,9 +27,9 @@ export default function LocalVideoSequenceReview({
     catch(cause){return {value:null,error:cause instanceof Error?cause.message:"Cannot audit this project."};}
   },[sources,shots,soundtrack,profile,quality]);
   const scheduled=useMemo(()=>{
-    try{return {value:localSequencePlan(shots,sources),error:""};}
+    try{return {value:localSequencePlan(shots,sources,quality==="cinematic"?24:16),error:""};}
     catch(cause){return {value:null,error:cause instanceof Error?cause.message:"Cannot preview original sequence."};}
-  },[shots,sources]);
+  },[shots,sources,quality]);
   const plan=scheduled.value;
   const [index,setIndex]=useState(0);
   const [frame,setFrame]=useState(0);
@@ -135,7 +135,7 @@ export default function LocalVideoSequenceReview({
         <p className="text-xs text-slate-400">
           This readiness status checks the current project metadata.
           It does not establish original source licenses, decode validity,
-          constant 16 FPS or a successful finished render.
+          constant {quality==="cinematic"?24:16} FPS or a successful finished render.
         </p>
         <div className="space-y-2">
           {audit.value.shots.map(row=><div key={row.index}

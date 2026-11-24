@@ -26,6 +26,10 @@ CHECKS=(
     "privileged_key_import_fails_closed",
     "reopened_lesson_invalidates_review_schedule",
     "no_private_study_data_sent_to_external_hosts",
+    "focus_budget_and_checklist_are_real",
+    "saved_confidence_restores_on_resume",
+    "cancelled_replacement_preserves_study",
+    "lesson_search_and_navigation_respect_matches",
 )
 SENSITIVE="=WEBSERVICE"
 
@@ -119,6 +123,14 @@ def exercise(browser,label,viewport,out):
               page.get_by_text("Due in 7 days",exact=True).is_visible() and
               page.get_by_text("Next review:",exact=False).is_visible())
 
+        page.get_by_role("button",name="Create lesson pack").click()
+        page.once("dialog",lambda d:d.dismiss())
+        page.get_by_role("button",name="Open this path for study").click()
+        page.get_by_role("button",name="Study lessons").click()
+        expect(page.get_by_role("button",name="Reopen lesson")).to_be_visible()
+        check(out,label,"cancelled_replacement_preserves_study",
+              page.locator("#study-private-note").input_value()=="@SUM(1,2) Private observation notes" and
+              page.get_by_text("Reviews recorded: 1",exact=False).is_visible())
         with page.expect_download() as result:
             page.get_by_role("button",name="Save study resume (.json)").click()
         resume_text=Path(result.value.path()).read_text(encoding="utf8")
@@ -140,6 +152,24 @@ def exercise(browser,label,viewport,out):
               page.locator("#study-revision-interval").input_value()=="7" and
               page.get_by_text("Reviews recorded: 1",exact=False).is_visible())
 
+        expect(page.locator("#study-review-confidence")).to_have_value("comfortable")
+        check(out,label,"saved_confidence_restores_on_resume",
+              page.locator("#study-review-confidence").input_value()=="comfortable")
+        page.locator("#study-focus-budget").select_option("15")
+        with page.expect_download() as result:
+            page.get_by_role("button",name="Export private checklist (.txt)").click()
+        checklist=Path(result.value.path()).read_text(encoding="utf8")
+        check(out,label,"focus_budget_and_checklist_are_real",
+              "Time budget: 15 min" in checklist and "Selected estimated minutes: 10" in checklist and
+              "Reference Electrode Basics" in checklist and SENSITIVE not in checklist and
+              "Private observation notes" not in checklist and "comfortable" not in checklist)
+        page.locator("#study-lesson-search").fill("not present in course")
+        expect(page.get_by_text("No lessons match this filter.")).to_be_visible()
+        check(out,label,"lesson_search_and_navigation_respect_matches",
+              page.get_by_role("button",name="Next lesson",exact=True).is_disabled() and
+              page.get_by_role("button",name="Previous lesson",exact=True).is_disabled())
+        page.get_by_role("button",name="Show all lessons").click()
+        expect(page.locator("#study-lesson-search")).to_have_value("")
         with page.expect_download() as result:
             page.get_by_role("button",name="Export private notes (.csv)").click()
         csv=Path(result.value.path()).read_text(encoding="utf8")
@@ -202,7 +232,7 @@ def main():
             finally:
                 browser.close()
         assert len(outcomes)==len(CHECKS)*2
-        print("PASS: 28 real desktop/mobile Study Paths and revision browser checks; no external study-data egress.")
+        print(f"PASS: {len(outcomes)} real desktop/mobile Study Paths and revision browser checks; no external study-data egress.")
     except Exception:
         print("BLOCKED: local Study Paths authoring, progress, export or import browser checks.")
         raise SystemExit(1)

@@ -52,6 +52,9 @@ import {
 } from "@/lib/ai/document-corpus-import-review";
 import { listCorpusRecovery, planCorpusRecovery, CorpusRecoveryError } from "@/lib/ai/document-corpus-recovery";
 import { compareCorpusVersions, formatRecoveryReceipt, selectiveRecoveryReceipt, replacementReceipt, type RecoveryReceipt } from "@/lib/ai/document-corpus-version-review";
+import {createCorpusCheckpoint,canUndoCorpusCheckpoint,undoCorpusCheckpoint,summarizeCorpusCheckpoint,type CorpusCheckpoint} from "@/lib/ai/document-corpus-checkpoint";
+import {buildKnowledgeIndex,searchKnowledgeIndex,formatKnowledgePassage,KnowledgeError,type KnowledgeIndex} from "@/lib/ai/document-corpus-knowledge";
+import {suggestKnowledgeTerms,prepareKnowledgeEvidence,KnowledgeEvidenceError,MAX_EVIDENCE_PASSAGES} from "@/lib/ai/document-corpus-knowledge-evidence";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -109,6 +112,47 @@ const AIDocumentIntelligence = () => {
   const corpusReadVersion = useRef(0);
   const [corpusFiles, setCorpusFiles] = useState<CorpusDocument[]>([]);
   const [corpusBusy, setCorpusBusy] = useState(false);
+  const [knowledgeIndex,setKnowledgeIndex] = useState<{index:KnowledgeIndex;sources:CorpusDocument[]}|null>(null);
+  const [knowledgeQuery,setKnowledgeQuery] = useState("");
+  const [knowledgeExpansion,setKnowledgeExpansion] = useState("");
+  const [knowledgeDiversify,setKnowledgeDiversify] = useState(false);
+  const [knowledgeSelected,setKnowledgeSelected] = useState<string[]>([]);
+  const [knowledgeQuestion,setKnowledgeQuestion] = useState("");
+  const [knowledgePacket,setKnowledgePacket] = useState<ReturnType<typeof prepareKnowledgeEvidence>|null>(null);
+  const [knowledgePacketError,setKnowledgePacketError] = useState<string|null>(null);
+  const [knowledgeSuggestions,setKnowledgeSuggestions] = useState<string[]>([]);
+  const [knowledgeMode,setKnowledgeMode] = useState<"all"|"any">("all");
+  const [knowledgeFilter,setKnowledgeFilter] = useState("");
+  const [knowledgeResults,setKnowledgeResults] = useState<ReturnType<typeof searchKnowledgeIndex>|null>(null);
+  const [knowledgeError,setKnowledgeError] = useState<string|null>(null);
+  const activeKnowledgeIndex=knowledgeIndex?.sources===corpusFiles ? knowledgeIndex.index:null;
+  const invalidateKnowledgePacket=()=>{setKnowledgePacket(null);setKnowledgePacketError(null);};
+  const invalidateKnowledgeResults=()=>{setKnowledgeResults(null);setKnowledgeError(null);setKnowledgeSelected([]);setKnowledgeSuggestions([]);invalidateKnowledgePacket();};
+  const prepareLocalKnowledgePacket=()=>{
+    invalidateKnowledgePacket();
+    if(!activeKnowledgeIndex||!knowledgeResults||corpusBusy)return;
+    try{setKnowledgePacket(prepareKnowledgeEvidence(corpusFiles,activeKnowledgeIndex,knowledgeResults,knowledgeSelected,knowledgeQuestion));}
+    catch(reason){setKnowledgePacketError(reason instanceof KnowledgeEvidenceError ?
+      ({invalid_selection:"Select one to three current ranked passages.",invalid_question:"Enter a nonempty question of at most 250 characters.",stale_source:"Source evidence is stale; rebuild and search again.",too_large:"Evidence packet exceeds 5,000 characters. Select fewer passages."}[reason.code])
+      :"Could not prepare the local evidence packet.");}
+  };
+  const invalidateKnowledgeIndex=()=>{setKnowledgeIndex(null);setKnowledgeFilter("");invalidateKnowledgeResults();};
+  const buildLocalKnowledge=()=>{
+    if(corpusBusy||!corpusFiles.length)return;
+    invalidateKnowledgeIndex();
+    try{setKnowledgeIndex({index:buildKnowledgeIndex(corpusFiles),sources:corpusFiles});}
+    catch{setKnowledgeError("Index could not be built within local limits.");}
+  };
+  const runLocalKnowledge=()=>{
+    invalidateKnowledgeResults();
+    if(!activeKnowledgeIndex||corpusBusy)return;
+    try{setKnowledgeResults(searchKnowledgeIndex(activeKnowledgeIndex,knowledgeQuery,knowledgeMode,knowledgeFilter||null,{expansion:knowledgeExpansion,diversify:knowledgeDiversify}));}
+    catch(reason){
+      setKnowledgeError(reason instanceof KnowledgeError && reason.code==="empty_index"
+        ?"No searchable word tokens in loaded text."
+        :"Use one to eight distinct words, up to 120 characters, and a valid source.");
+    }
+  };
   const [corpusQuery, setCorpusQuery] = useState("");
   const [corpusMode, setCorpusMode] = useState<CorpusMatchMode>("all");
   const [corpusFilter, setCorpusFilter] = useState("");
@@ -143,6 +187,12 @@ const AIDocumentIntelligence = () => {
   const [versionReview, setVersionReview] = useState<ReturnType<typeof compareCorpusVersions> | null>(null);
   const [versionError, setVersionError] = useState(false);
   const [recoveryReceipt, setRecoveryReceipt] = useState<RecoveryReceipt | null>(null);
+  const [keepRecoveryCheckpoint,setKeepRecoveryCheckpoint] = useState(false);
+  const [recoveryCheckpoint,setRecoveryCheckpoint] = useState<CorpusCheckpoint|null>(null);
+  const currentCorpusSnapshot = {documents:corpusFiles,query:corpusQuery,mode:corpusMode,sourceFilter:corpusFilter||null,question:corpusQuestion};
+  const checkpointSummary = recoveryCheckpoint ? summarizeCorpusCheckpoint(recoveryCheckpoint) : null;
+  const checkpointCanUndo = recoveryCheckpoint ? canUndoCorpusCheckpoint(recoveryCheckpoint,currentCorpusSnapshot) : false;
+  const discardRecoveryCheckpoint = () => {setRecoveryCheckpoint(null);setKeepRecoveryCheckpoint(false);};
   const resetVersionReview = () => {
     setVersionCurrentId(""); setVersionBackupId(""); setVersionReview(null); setVersionError(false);
   };
@@ -172,6 +222,7 @@ const AIDocumentIntelligence = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setEncryptedExportPassword("");
@@ -209,6 +260,7 @@ const AIDocumentIntelligence = () => {
     }[reason.code]);
   };
   const invalidateCorpusFingerprints = () => {
+    invalidateKnowledgeIndex();
     corpusHashVersion.current += 1;
     setCorpusFingerprints(null);
     setCorpusHashBusy(false);
@@ -250,6 +302,7 @@ const AIDocumentIntelligence = () => {
   };
   const loadCorpusFiles = async (files: readonly File[]) => {
     const version = ++corpusReadVersion.current;
+    discardRecoveryCheckpoint();
     invalidateCorpusWorkspace();
     invalidateCorpus();
     setCorpusBusy(files.length > 0);
@@ -274,6 +327,7 @@ const AIDocumentIntelligence = () => {
     }
   };
   const removeCorpusFile = (id: string) => {
+    discardRecoveryCheckpoint();
     invalidateCorpusWorkspace();
     ++corpusReadVersion.current;
     setCorpusBusy(false);
@@ -290,6 +344,8 @@ const AIDocumentIntelligence = () => {
     ++corpusReadVersion.current;
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
+    discardRecoveryCheckpoint();
+    setKnowledgeQuery("");setKnowledgeMode("all");setKnowledgeExpansion("");setKnowledgeDiversify(false);setKnowledgeQuestion("");
     setRecoveryReceipt(null);
     setCorpusBusy(false);
     setCorpusFilter("");
@@ -319,6 +375,7 @@ const AIDocumentIntelligence = () => {
     setCorpusWorkspaceNotice(null);
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setCorpusWorkspaceExporting(true);
     try {
@@ -358,6 +415,7 @@ const AIDocumentIntelligence = () => {
     setEncryptedExportConfirm("");
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -402,6 +460,7 @@ const AIDocumentIntelligence = () => {
     setRotateConfirmPassword("");
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -431,6 +490,7 @@ const AIDocumentIntelligence = () => {
     setEncryptedImportPassword("");
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -455,6 +515,7 @@ const AIDocumentIntelligence = () => {
     const operation = ++corpusWorkspaceEpoch.current;
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -483,6 +544,26 @@ const AIDocumentIntelligence = () => {
       setVersionReview(compareCorpusVersions(corpusFiles,pendingCorpusWorkspace,versionCurrentId,versionBackupId));
     } catch { setVersionError(true); }
   };
+  const undoLastRecovery = () => {
+    if (!recoveryCheckpoint || !checkpointCanUndo || corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+    if (!window.confirm("Undo the latest recovery and return to the previous local documents and search settings? Recovered additions will disappear and current search results will be cleared. This is a one-step undo.")) return;
+    try {
+      const previous=undoCorpusCheckpoint(recoveryCheckpoint,currentCorpusSnapshot);
+      ++corpusReadVersion.current;
+      setCorpusBusy(false);
+      invalidateCorpusWorkspace();
+      invalidateCorpusFingerprints();
+      invalidateCorpus();
+      setCorpusFiles([...previous.documents]);
+      setCorpusQuery(previous.query);
+      setCorpusMode(previous.mode);
+      setCorpusFilter(previous.sourceFilter ?? "");
+      setCorpusQuestion(previous.question);
+      discardRecoveryCheckpoint();
+      setRecoveryReceipt(null);
+      setCorpusWorkspaceNotice("Latest recovery undone locally. Previous documents and draft settings restored; run a new search. No redo checkpoint retained.");
+    } catch {setCorpusWorkspaceError("Undo rejected: checkpoint no longer matches the current workspace.");}
+  };
   const recoverSelectedCorpus = () => {
     if (!pendingCorpusWorkspace || !corpusRecoveryIds.length || !recoveryPreview?.plan ||
         corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
@@ -493,12 +574,15 @@ const AIDocumentIntelligence = () => {
         " renamed conflict copies? Existing files and search settings remain unchanged. "+
         "Current search results, selected excerpts and AI results will be cleared."
       )) return;
+      const nextCheckpoint=keepRecoveryCheckpoint ? createCorpusCheckpoint(currentCorpusSnapshot,{...currentCorpusSnapshot,documents:plan.documents},"selective-recovery") : null;
       ++corpusReadVersion.current;
       setCorpusBusy(false);
       invalidateCorpusWorkspace();
       invalidateCorpusFingerprints();
       invalidateCorpus();
       setCorpusFiles(plan.documents);
+      setRecoveryCheckpoint(nextCheckpoint);
+      setKeepRecoveryCheckpoint(false);
       setRecoveryReceipt(selectiveRecoveryReceipt(plan,pendingCorpusEncrypted));
       setCorpusWorkspaceNotice("Recovered "+plan.additions.length+
         " local source(s), including "+plan.copiedCount+" conflict copy/copies. Existing sources and settings were kept. Search again for fresh evidence.");
@@ -508,7 +592,7 @@ const AIDocumentIntelligence = () => {
   };
   const restoreCorpusWorkspace = () => {
     if (!pendingCorpusWorkspace || !pendingCorpusReview?.replacementHasEffects ||
-        corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+        corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
     if (!window.confirm(
       "REPLACE every current local evidence file and search setting with this validated backup? " +
       pendingCorpusReview.counts.removed + " existing file(s) will be REMOVED; " +
@@ -517,6 +601,10 @@ const AIDocumentIntelligence = () => {
       "Save your existing workspace first if you need to keep it. No automatic merge or upload.",
     )) return;
     const imported = pendingCorpusWorkspace;
+    let nextCheckpoint:CorpusCheckpoint|null=null;
+    try {
+      if (keepRecoveryCheckpoint) nextCheckpoint=createCorpusCheckpoint(currentCorpusSnapshot,imported,"full-replacement");
+    } catch {setCorpusWorkspaceError("Could not create the requested checkpoint. Recovery was not applied.");return;}
     // Stop pending user file reads and fingerprint generation before replacing.
     ++corpusReadVersion.current;
     setCorpusBusy(false);
@@ -529,6 +617,8 @@ const AIDocumentIntelligence = () => {
     setCorpusFilter(imported.sourceFilter ?? "");
     setCorpusQuestion(imported.question);
     setRecoveryReceipt(replacementReceipt(pendingCorpusReview,pendingCorpusEncrypted));
+    setRecoveryCheckpoint(nextCheckpoint);
+    setKeepRecoveryCheckpoint(false);
     setCorpusWorkspaceNotice(
       "Validated local workspace restored. Search again to recompute fresh evidence; no cached hits or AI interpretation were imported.",
     );
@@ -1546,6 +1636,7 @@ const AIDocumentIntelligence = () => {
                       ++corpusWorkspaceEpoch.current;
                       setPendingCorpusWorkspace(null);
                       resetVersionReview();
+                      setKeepRecoveryCheckpoint(false);
                       setCorpusRecoveryIds([]);
                       setPendingCorpusEncrypted(false);
                       setCorpusWorkspaceLoading(false);
@@ -1699,6 +1790,12 @@ const AIDocumentIntelligence = () => {
                       </Button>
                     </section>
                   )}
+                  <label className="flex items-start gap-2 rounded-lg border border-amber-500/30 p-3 text-xs text-slate-300">
+                    <input type="checkbox" className="mt-0.5" checked={keepRecoveryCheckpoint}
+                      onChange={e=>setKeepRecoveryCheckpoint(e.target.checked)}
+                      disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}/>
+                    <span>Keep a temporary one-step undo checkpoint for the next recovery. This retains previous source text and draft search settings in browser memory until undo, discard, workspace edit or page closure. It is not encrypted storage. Unchecked by default. A new recovery replaces or discards the old checkpoint.</span>
+                  </label>
                   <section aria-label="Local document version comparison" className="space-y-3 rounded-lg border border-slate-700 p-3">
                     <h4 className="text-sm font-semibold text-white">Compare current and backup document versions</h4>
                     <p className="text-xs text-slate-400">Choose both sources explicitly. A matching ID or filename is not proof of shared provenance. Comparison is local, with line endings normalized only for the line diff. Exact decoded text equality is reported separately.</p>
@@ -1795,6 +1892,16 @@ const AIDocumentIntelligence = () => {
                   </Button>
                 </section>
               )}
+              {recoveryCheckpoint && checkpointSummary && <section aria-label="Temporary recovery undo checkpoint" className="space-y-2 rounded-lg border border-amber-500/30 p-3">
+                <h4 className="text-sm font-semibold text-white">Undo latest recovery</h4>
+                <p className="text-xs text-slate-300">Restore {checkpointSummary.beforeFiles} previous files from {checkpointSummary.afterFiles} current files; {checkpointSummary.beforeCharacters.toLocaleString()} previous decoded characters; {checkpointSummary.settingsChanged} changed draft settings. One-step only, no redo. Prior source text is retained in memory, not encrypted or persisted.</p>
+                {!checkpointCanUndo && <p role="alert" className="text-xs text-amber-200">Current workspace differs from the checkpoint. Undo is blocked.</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" onClick={undoLastRecovery}
+                    disabled={!checkpointCanUndo || corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}>Undo recovery locally</Button>
+                  <Button type="button" variant="outline" onClick={discardRecoveryCheckpoint}>Discard undo checkpoint</Button>
+                </div>
+              </section>}
               {recoveryReceipt && <section aria-label="Latest local recovery receipt" className="space-y-2 rounded-lg border border-slate-700 p-3">
                 <h4 className="text-sm font-semibold text-white">Latest completed local recovery receipt</h4>
                 <p className="text-xs text-slate-400">Counts only, in memory until cleared or this page is closed. Not a durable or tamper-proof audit log. This receipt describes the completed action, not the current workspace.</p>
@@ -1831,14 +1938,14 @@ const AIDocumentIntelligence = () => {
                   onKeyDown={e => {
                     if (e.key === "Enter" && !e.nativeEvent.isComposing && corpusFiles.length && !corpusBusy) runCorpusSearch();
                   }}
-                  onChange={e => { invalidateCorpusWorkspace(); setCorpusQuery(e.target.value); invalidateCorpus(); }}
+                  onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusQuery(e.target.value); invalidateCorpus(); }}
                   placeholder="e.g. coating inspection"
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
               </label>
               <label htmlFor="document-corpus-mode" className="block space-y-2 text-sm text-slate-300">
                 <span>Keyword matching</span>
                 <select id="document-corpus-mode" value={corpusMode}
-                  onChange={e => { invalidateCorpusWorkspace(); setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
+                  onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                   <option value="all">All query words on the same line</option>
                   <option value="any">Any query word on the line</option>
@@ -1850,7 +1957,7 @@ const AIDocumentIntelligence = () => {
             <label htmlFor="document-corpus-filter" className="block space-y-2 text-sm text-slate-300">
               <span>Optional local file filter</span>
               <select id="document-corpus-filter" value={corpusFilter}
-                onChange={e => { invalidateCorpusWorkspace(); setCorpusFilter(e.target.value); invalidateCorpus(); }}
+                onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusFilter(e.target.value); invalidateCorpus(); }}
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                 <option value="">Search all loaded files</option>
                 {corpusFiles.map(file => <option key={file.id} value={file.id}>{file.name}</option>)}
@@ -1871,6 +1978,84 @@ const AIDocumentIntelligence = () => {
                 {corpusHashBusy ? "Hashing local decoded text…" : "Calculate local SHA-256 fingerprints"}
               </Button>
             </div>
+            <section aria-label="Local indexed knowledge retrieval" className="space-y-3 rounded-xl border border-cyan-400/25 bg-slate-950 p-4">
+              <h4 className="font-semibold text-white">Local knowledge index · ranked passages</h4>
+              <p className="text-xs text-slate-400">Build an in-memory inverted index of loaded text passages. BM25 ranks matching words; it is not semantic AI, OCR, PDF extraction, or independent verification. Passages do not overlap; words or concepts spanning boundaries may be missed.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" disabled={corpusBusy||!corpusFiles.length} onClick={buildLocalKnowledge}>Build local knowledge index</Button>
+                <Button type="button" variant="outline" disabled={!activeKnowledgeIndex} onClick={invalidateKnowledgeIndex}>Discard index</Button>
+              </div>
+              {activeKnowledgeIndex && !corpusBusy && <>
+                <p role="status" className="text-xs text-slate-300">{activeKnowledgeIndex.passages.length} searchable passages · {activeKnowledgeIndex.postings.size.toLocaleString()} distinct word tokens · {activeKnowledgeIndex.documentIds.length} loaded sources.</p>
+                <label className="block text-xs text-slate-300">Passage keyword query
+                  <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeQuery} maxLength={120}
+                    onChange={e=>{setKnowledgeQuery(e.target.value);invalidateKnowledgeResults();}}
+                    onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing)runLocalKnowledge();}} />
+                </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-300">Match terms
+                    <select className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2" value={knowledgeMode}
+                      onChange={e=>{setKnowledgeMode(e.target.value==="any"?"any":"all");invalidateKnowledgeResults();}}>
+                      <option value="all">All words in passage</option><option value="any">Any word in passage</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">Source filter
+                    <select className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2" value={knowledgeFilter}
+                      onChange={e=>{setKnowledgeFilter(e.target.value);invalidateKnowledgeResults();}}>
+                      <option value="">All loaded sources</option>
+                      {corpusFiles.map(doc=><option key={doc.id} value={doc.id}>{doc.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label className="block text-xs text-slate-300">Optional alternative terms (manual lexical expansion)
+                  <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeExpansion} maxLength={120}
+                    onChange={e=>{setKnowledgeExpansion(e.target.value);invalidateKnowledgeResults();}}/>
+                </label>
+                <p className="text-xs text-slate-400">Up to eight distinct words across both fields. Alternative terms have half weight. All mode still requires every primary term; Any mode may match alternatives alone.</p>
+                <Button type="button" size="sm" variant="outline" disabled={!knowledgeQuery.trim()}
+                  onClick={()=>setKnowledgeSuggestions(suggestKnowledgeTerms(activeKnowledgeIndex,knowledgeQuery))}>Find indexed word variants</Button>
+                {knowledgeSuggestions.length>0 && <p className="text-xs text-slate-300 break-words">Literal prefix matches (not synonyms): {knowledgeSuggestions.join(", ")}. Add desired words to the alternative terms field.</p>}
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input type="checkbox" checked={knowledgeDiversify} onChange={e=>{setKnowledgeDiversify(e.target.checked);invalidateKnowledgeResults();}}/>
+                  Diversify ranking across sources (not strict BM25 score order)
+                </label>
+                <Button type="button" disabled={!knowledgeQuery.trim()} onClick={runLocalKnowledge}>Rank local passages</Button>
+                {knowledgeResults && <div className="space-y-2">
+                  <p role="status" className="text-xs text-slate-300">Showing {knowledgeResults.results.length} of {knowledgeResults.totalMatches} matching passages across {knowledgeResults.matchingSources} sources. BM25 scores are relative relevance, not confidence or factual accuracy.</p>
+                  {knowledgeResults.totalMatches===0 && <p className="text-xs text-slate-400">No matching indexed passage. Try fewer words or another source.</p>}
+                  {knowledgeResults.results.map(hit=><article key={hit.id} className="space-y-2 rounded border border-slate-700 p-3">
+                    <p className="break-all text-xs text-cyan-200">{hit.documentName} · lines {hit.startLine}–{hit.endLine} · BM25 {hit.score.toFixed(3)}</p>
+                    <p className="text-xs text-slate-400">Matched: {hit.matchedTerms.join(", ")} · decoded UTF-16 offsets [{hit.startOffset}, {hit.endOffset})</p>
+                    <pre className="whitespace-pre-wrap break-all text-xs text-slate-200">{hit.text}</pre>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox" checked={knowledgeSelected.includes(hit.id)}
+                          disabled={!knowledgeSelected.includes(hit.id)&&knowledgeSelected.length>=MAX_EVIDENCE_PASSAGES}
+                          onChange={e=>{const checked=e.target.checked;setKnowledgeSelected(ids=>checked?[...ids.filter(id=>id!==hit.id),hit.id]:ids.filter(id=>id!==hit.id));invalidateKnowledgePacket();}}/>
+                        Include in evidence packet
+                      </label>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>void copy(formatKnowledgePassage(hit),"Local source passage")}>Copy source passage and location</Button>
+                    </div>
+                  </article>)}
+                  {knowledgeResults.results.length>0 && <section aria-label="Local evidence-grounded answer preparation" className="space-y-2 rounded border border-slate-700 p-3">
+                    <h5 className="text-sm font-semibold text-white">Prepare source-grounded answer draft</h5>
+                    <p className="text-xs text-slate-400">{knowledgeSelected.length}/{MAX_EVIDENCE_PASSAGES} passages selected. No AI answer is generated or sent. Review sensitive content before copying this prompt elsewhere.</p>
+                    <label className="block text-xs text-slate-300">Question (up to 250 characters)
+                      <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeQuestion} maxLength={250}
+                        onChange={e=>{setKnowledgeQuestion(e.target.value);invalidateKnowledgePacket();}}/>
+                    </label>
+                    <Button type="button" variant="outline" disabled={!knowledgeSelected.length||!knowledgeQuestion.trim()} onClick={prepareLocalKnowledgePacket}>Prepare verified local evidence packet</Button>
+                    {knowledgePacketError && <p role="alert" className="text-xs text-amber-200">{knowledgePacketError}</p>}
+                    {knowledgePacket && <>
+                      <p className="text-xs text-slate-300">{knowledgePacket.passages.length} evidence passages · {knowledgePacket.sourceCount} sources. Exact source text checked locally, not independently fact-checked.</p>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-200">{knowledgePacket.draft}</pre>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>void copy(knowledgePacket.draft,"Local evidence packet")}>Copy answer-preparation prompt</Button>
+                    </>}
+                  </section>}
+                </div>}
+              </>}
+              {knowledgeError && <p role="alert" className="text-xs text-amber-200">{knowledgeError}</p>}
+            </section>
             {corpusFingerprints && (
               <section aria-label="Local decoded text fingerprints" className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
                 <p className="text-xs text-amber-200">
@@ -2000,7 +2185,7 @@ const AIDocumentIntelligence = () => {
                   <label htmlFor="document-corpus-ai-question" className="block space-y-2 text-sm text-slate-300">
                     <span>Optional evidence question · maximum 250 characters</span>
                     <input id="document-corpus-ai-question" value={corpusQuestion} maxLength={250}
-                      onChange={e => { invalidateCorpusWorkspace(); setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
+                      onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
                       placeholder="Which lines support this conclusion?"
                       className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white"/>
                   </label>

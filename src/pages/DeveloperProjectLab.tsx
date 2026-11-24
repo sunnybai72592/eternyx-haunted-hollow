@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Download, FilePlus2, FolderOpen, Play, RotateCcw, Save, ShieldCheck, Trash2, Upload, WandSparkles, FileJson, FileCheck2, Files, ListFilter, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -69,11 +69,12 @@ export default function DeveloperProjectLab() {
   const [importingFiles, setImportingFiles] = useState(false);
   const [lineTarget, setLineTarget] = useState("1");
   const [previewMode, setPreviewMode] = useState("fluid");
-  const previewViewportRef = useRef<HTMLDivElement>(null);
-  // Fixed-width previews scroll inside their own viewport, not the page.
-  useEffect(() => {
-    if (previewViewportRef.current) previewViewportRef.current.scrollLeft = 0;
-  }, [previewMode, previewRun]);
+  const previewScroller = useRef<HTMLDivElement>(null);
+  // Width changes must not leave the new viewport horizontally offset.
+  // Reset only on mode changes; ordinary scrolling and iframe state stay intact.
+  useLayoutEffect(() => {
+    if (previewScroller.current) previewScroller.current.scrollLeft = 0;
+  }, [previewMode]);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const quickOpenRef = useRef<HTMLInputElement>(null);
   const [quickOpen, setQuickOpen] = useState("");
@@ -560,7 +561,7 @@ export default function DeveloperProjectLab() {
         </CardContent>
       </Card>
 
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card className="min-w-0 border-slate-800 bg-slate-900/70 text-white">
           <CardHeader><CardTitle className="flex items-center gap-2"><WandSparkles className="h-5 w-5 text-cyan-300" />Run preview</CardTitle><CardDescription className="text-slate-400">Uses index.html, all CSS files and all JavaScript files, assembled locally. Only Run executes the preview. JSON/Markdown are editable but not served as network assets.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
@@ -576,11 +577,10 @@ export default function DeveloperProjectLab() {
                   (previewMode === view.id ? "border-cyan-400 bg-cyan-950 text-cyan-100" : "border-slate-700 text-slate-300")}>{view.label}</button>)}
             </div>
             <p className="text-xs text-slate-400">Preview size: {previewMode === "fluid" ? "container width" : developerPreviewWidth(previewMode) + "px"}; larger widths scroll horizontally on narrow screens.</p>
-            <div ref={previewViewportRef} data-testid="project-preview-viewport"
-              className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-700 bg-white">
+            <div ref={previewScroller} aria-label="Preview scroll area" className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-700 bg-white">
               {previewHtml ? <iframe key={previewRun} title="Isolated project preview" srcDoc={previewHtml}
                 sandbox="allow-scripts" referrerPolicy="no-referrer" style={{width: previewMode === "fluid" ? "100%" : developerPreviewWidth(previewMode) + "px"}}
-                className="block h-[350px] max-w-none border-0" /> :
+                className="block h-[350px] min-w-0 max-w-none border-0 transition-none" /> :
                 <div className="flex h-[350px] items-center justify-center text-sm text-slate-600">Select Run preview to render this project</div>}
             </div>
             <p className="text-xs leading-5 text-amber-200"><ShieldCheck className="mr-1 inline h-4 w-4" />Sandboxed opaque-origin frame with restrictive CSP. External requests, forms, and subresources are blocked by preview policy; browser navigation behavior varies. Never run untrusted code or paste secrets. This is not a VM or production security guarantee.</p>
