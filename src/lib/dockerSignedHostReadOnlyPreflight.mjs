@@ -34,6 +34,18 @@ function safeInventory(i){
   throw Error("Host preflight denied: unresolved or legacy ambiguous local recovery evidence.");
  return i;
 }
+/** Reusable Phase38 complete private recovery inventory fence for both
+ * steady-state host preflight and Phase41 post-action observation. */
+export function assertReadOnlyHostRecoveryInventoryStable(before,after){
+ const a=safeInventory(before),b=safeInventory(after);
+ if(a.inventorySha256!==b.inventorySha256||
+    a.fileCount!==b.fileCount||
+    JSON.stringify(a.claims)!==JSON.stringify(b.claims)||
+    JSON.stringify(a.locks)!==JSON.stringify(b.locks)||
+    JSON.stringify(a.containerLocks)!==JSON.stringify(b.containerLocks))
+  throw Error("Host recovery history changed between read-only observations.");
+ return b;
+}
 export function evaluateSignedDockerHostReadOnly({
  pins,contextBefore,contextAfter,endpointBefore,endpointAfter,
  infoBefore,infoAfter,targetBefore,targetAfter,containerId,operation,
@@ -47,13 +59,8 @@ export function evaluateSignedDockerHostReadOnly({
     config?.onlyOneLocalContext!==true||!FULL.test(config.sha256||"")||
     config.context!==pins.context||config.endpoint!==pins.host)
   throw Error("Host preflight needs approved, rechecked executable and sealed client configuration.");
- const a=safeInventory(inventoryBefore),b=safeInventory(inventoryAfter);
- if(a.inventorySha256!==b.inventorySha256||
-    a.fileCount!==b.fileCount||
-    JSON.stringify(a.claims)!==JSON.stringify(b.claims)||
-    JSON.stringify(a.locks)!==JSON.stringify(b.locks)||
-    JSON.stringify(a.containerLocks)!==JSON.stringify(b.containerLocks))
-  throw Error("Host recovery history changed between read-only observations.");
+ const b=assertReadOnlyHostRecoveryInventoryStable(
+  inventoryBefore,inventoryAfter);
  for(const [name,host,info] of [
   [contextBefore,endpointBefore,infoBefore],
   [contextAfter,endpointAfter,infoAfter]
