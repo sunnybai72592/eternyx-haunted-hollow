@@ -1,15 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createEvidenceHandler,MAX_BYTES } from '../supabase/functions/security-evidence-gateway/handler.mjs';
+import { createEvidenceHandler,MAX_BYTES,sha256 } from '../supabase/functions/security-evidence-gateway/handler.mjs';
 const owner='11111111-1111-4111-8111-111111111111',eng='22222222-2222-4222-8222-222222222222',id='33333333-3333-4333-8333-333333333333';
 const url='https://staging.example.invalid',publicKey='public-fixture',serviceKey='server-fixture';
 const row={id,owner_id:owner,engagement_id:eng,storage_path:owner+'/'+eng+'/file.txt',file_size:3};
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status});
-const req=(action='download',extra={},body)=>new Request(url,{method:'POST',headers:{Authorization:'Bearer a.b.c','x-evidence-action':action,'x-evidence-id':action==='upload'?eng:id,...extra},body});
-function setup({rows=[row,row],enabled=true,user={id:owner},registered=201}={}){
+const req=(action='download',extra={},body)=>new Request(url,{method:'POST',headers:{Authorization:'Bearer a.b.c','x-evidence-action':action,'x-evidence-id':action==='upload'?eng:id,'x-evidence-request-id':id,...extra},body});
+function setup({rows=[row,row],enabled=true,user={id:owner},registered=201,reservation='reserved',digest='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',sealed=201}={}){
  const calls=[];let n=0;
  const handler=createEvidenceHandler({url,publicKey,serviceKey,enabled,randomId:()=>id,fetcher:async(path,opts)=>{
   calls.push({path,opts});
+  if(path.endsWith('/rest/v1/rpc/security_evidence_gateway_reserve'))return json(reservation);
+  if(path.includes('/rest/v1/security_evidence_gateway_digests?'))return json([{owner_id:owner,byte_count:3,sha256:digest}]);
+  if(path.endsWith('/rest/v1/security_evidence_gateway_digests'))return json({},sealed);
   if(path.endsWith('/auth/v1/user'))return json(user);
   if(path.includes('/rest/v1/pentest_engagements?'))return json([{id:eng,owner_id:owner}]);
   if(path.endsWith('/rest/v1/pentest_evidence'))return json({},registered);
@@ -29,8 +32,8 @@ test('owner download checks metadata twice and returns non-cacheable attachment,
  const {handler,calls}=setup();const res=await handler(req());assert.equal(res.status,200);assert.equal(await res.text(),'abc');
  assert.match(res.headers.get('cache-control'),/no-store/);assert.equal(res.headers.get('content-disposition'),'attachment');
  assert.equal(res.headers.get('content-type'),'application/octet-stream');
- assert.equal(calls.length,4);assert.equal(calls[2].opts.headers.Authorization,'Bearer '+serviceKey);
- for(const i of [0,1,3])assert.equal(calls[i].opts.headers.Authorization,'Bearer a.b.c');
+ assert.equal(calls.length,6);assert.equal(calls[4].opts.headers.Authorization,'Bearer '+serviceKey);
+ for(const i of [0,1,5])assert.equal(calls[i].opts.headers.Authorization,'Bearer a.b.c');
  assert.ok(calls.every(c=>c.opts.redirect==='error'));
 });
 test('cross-owner, malformed path and anonymous callers cannot reach privileged Storage',async()=>{
@@ -63,4 +66,25 @@ test('oversize and unapproved MIME never reach privileged Storage',async()=>{
   const {handler,calls}=setup();const res=await handler(req('upload',{'x-evidence-name':'file.txt',...headers},'abc'));
   assert.ok([400,413].includes(res.status));assert.ok(calls.every(c=>c.opts.headers.Authorization!=='Bearer '+serviceKey));
  }
+});
+
+test('same-length altered evidence is denied by server-only SHA-256 digest',async()=>{
+ const {handler}=setup({digest:'0'.repeat(64)});
+ const res=await handler(req());assert.equal(res.status,409);assert.notEqual(await res.text(),'abc');
+ assert.equal(await sha256(new TextEncoder().encode('abc')),'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+});
+test('quota and replay decisions prevent privileged byte operations',async()=>{
+ for(const [reservation,status] of [['quota',429],['replay',409],['unexpected',503]]){
+  const {handler,calls}=setup({reservation});
+  const res=await handler(req('upload',{'Content-Type':'text/plain','x-evidence-name':'sample.txt'},'abc'));
+  assert.equal(res.status,status);assert.ok(calls.every(c=>!c.path.includes('/storage/v1/')));
+ }
+});
+test('upload seals exact digest before metadata registration; missing seal blocks success',async()=>{
+ const a=setup();assert.equal((await a.handler(req('upload',{'Content-Type':'text/plain','x-evidence-name':'sample.txt'},'abc'))).status,201);
+ const seal=a.calls.find(c=>c.path.endsWith('/rest/v1/security_evidence_gateway_digests'));
+ assert.equal(JSON.parse(seal.opts.body).sha256,'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+ assert.equal(seal.opts.headers.Authorization,'Bearer '+serviceKey);
+ const b=setup({sealed:409});assert.equal((await b.handler(req('upload',{'Content-Type':'text/plain','x-evidence-name':'sample.txt'},'abc'))).status,409);
+ assert.ok(b.calls.every(c=>!c.path.endsWith('/rest/v1/pentest_evidence')));
 });

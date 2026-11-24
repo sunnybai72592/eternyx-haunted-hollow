@@ -4,6 +4,8 @@ on:
     paths:
       - 'supabase/functions/security-evidence-gateway/**'
       - 'scripts/sql/staged-security-evidence-gateway.sql'
+      - 'scripts/sql/staged-security-evidence-controls.sql'
+      - 'scripts/sql/test-security-evidence-controls.sql'
       - 'src/components/pentest/PentestEvidencePanel.tsx'
       - 'tests/security-wave22-evidence-gateway.test.mjs'
       - '.github/workflows/cybersecurity-wave22-offline.yml'
@@ -12,6 +14,8 @@ on:
     paths:
       - 'supabase/functions/security-evidence-gateway/**'
       - 'scripts/sql/staged-security-evidence-gateway.sql'
+      - 'scripts/sql/staged-security-evidence-controls.sql'
+      - 'scripts/sql/test-security-evidence-controls.sql'
       - 'src/components/pentest/PentestEvidencePanel.tsx'
       - 'tests/security-wave22-evidence-gateway.test.mjs'
       - '.github/workflows/cybersecurity-wave22-offline.yml'
@@ -21,7 +25,7 @@ jobs:
   offline:
     name: Evidence gateway mocked transport authorization regressions
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Export exact event commit without broken submodule checkout
         shell: bash
@@ -34,7 +38,7 @@ jobs:
           git -C "$source_dir" init -q
           git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
           test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
-          for path in supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs; do
+          for path in supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs scripts/sql/staged-security-evidence-controls.sql scripts/sql/test-security-evidence-controls.sql; do
             mkdir -p "$(dirname "$path")"
             git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
           done
@@ -43,3 +47,18 @@ jobs:
           node-version: '22'
       - run: node --check supabase/functions/security-evidence-gateway/handler.mjs
       - run: node --test tests/security-wave22-evidence-gateway.test.mjs
+      - name: Execute quota and role isolation in disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull postgres:17
+          docker run -d --name wave23-pg --network none -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+          trap 'docker rm -f wave23-pg >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if docker exec wave23-pg pg_isready -q -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec wave23-pg pg_isready -q -U postgres
+          docker cp scripts/sql/staged-security-evidence-controls.sql wave23-pg:/tmp/staged-security-evidence-controls.sql
+          docker cp scripts/sql/test-security-evidence-controls.sql wave23-pg:/tmp/test-security-evidence-controls.sql
+          docker exec wave23-pg psql -X -v ON_ERROR_STOP=1 -U postgres -f /tmp/test-security-evidence-controls.sql
