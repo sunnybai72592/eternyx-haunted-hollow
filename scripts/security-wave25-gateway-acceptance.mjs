@@ -39,7 +39,12 @@ export async function gatewayAcceptance(env,fetcher=fetch){
   mark('engagement-'+label,created.ok&&Array.isArray(created.data)&&created.data.length===1&&uuid.test(created.data[0].id));
   const engagement=created.data[0].id,filename='wave25-'+randomUUID()+'.txt',bytes='Wave25 synthetic '+randomUUID(),requestId=randomUUID();
   const headers={'Content-Type':'text/plain','x-evidence-name':filename,'x-evidence-request-id':requestId};
-  mark('gateway-upload-'+label,explicitDenial(await gateway(user.token,'upload',engagement,headers,bytes),201,'registered'));
+  const competing=await Promise.all([
+   gateway(user.token,'upload',engagement,headers,bytes),
+   gateway(user.token,'upload',engagement,headers,bytes)
+  ]);
+  mark('gateway-upload-'+label,competing.filter(result=>explicitDenial(result,201,'registered')).length===1);
+  mark('concurrent-replay-'+label,competing.filter(result=>explicitDenial(result,409,'request-already-used')).length===1);
   const read=()=>call('/rest/v1/pentest_evidence?select=id,owner_id,engagement_id,storage_path,file_size&engagement_id=eq.'+engagement+'&file_name=eq.'+filename,user.token);
   const record=await read();
   mark('registered-once-'+label,record.ok&&Array.isArray(record.data)&&record.data.length===1&&record.data[0].owner_id===user.id&&record.data[0].engagement_id===engagement&&uuid.test(record.data[0].id)&&record.data[0].file_size===Buffer.byteLength(bytes)&&typeof record.data[0].storage_path==='string'&&record.data[0].storage_path.startsWith(user.id+'/'+engagement+'/')&&/^[a-zA-Z0-9._-]+$/.test(record.data[0].storage_path.split('/')[2]??'')&&record.data[0].storage_path.split('/').length===3);
@@ -65,6 +70,13 @@ export async function gatewayAcceptance(env,fetcher=fetch){
    mark('direct-sign-denied-'+label,deniedStorage(sign.status,sign.data));
    const upload=await call(path+'pentest-evidence/'+own.id+'/'+own.engagement+'/'+randomUUID()+'-denial.txt',own.token,{method:'POST',raw:true,headers:{'Content-Type':'text/plain'},body:'synthetic denial fixture'});
    mark('direct-upload-denied-'+label,deniedStorage(upload.status,upload.data));
+   const listing=await call(path+'list/pentest-evidence',own.token,{method:'POST',body:{prefix:own.id+'/'+own.engagement,limit:100}});
+   mark('direct-list-denied-'+label,deniedStorage(listing.status,listing.data)||(listing.ok&&Array.isArray(listing.data)&&listing.data.length===0));
+   // Never request deletion of registered evidence: verify an absent synthetic
+   // object cannot be reached, and prove the registered bytes remain available.
+   const missing=await call(path+'authenticated/pentest-evidence/'+own.id+'/'+own.engagement+'/'+randomUUID()+'-absent.txt',own.token);
+   mark('direct-absent-object-denied-'+label,deniedStorage(missing.status,missing.data));
+   await positive(own,'after-direct-denials-'+label);
   }else mark('pre-cutover-direct-read-'+label,direct.ok&&direct.text===own.bytes);
  }
  mark('invalid-mime',explicitDenial(await gateway(a.token,'upload',fa.engagement,{...fa.headers,'Content-Type':'text/html','x-evidence-request-id':randomUUID()},'synthetic'),400,'invalid-file-metadata'));
@@ -79,7 +91,7 @@ export async function gatewayAcceptance(env,fetcher=fetch){
  const renewed=await login(accounts[0],'A-new');
  mark('new-session',renewed.id===a.id&&renewed.session!==a.session);
  await positive({...fa,token:renewed.token},'A-recovered');
- return {schema:'eternyx-wave25-gateway-observation-v1',project:'mhodwvypfbxafamkrgsk',phase,checks,checkCount:checks.length,syntheticFixturesRetained:true,quotaExhaustionTested:false,malwareScanningVerified:false,productionAuthorized:false,independentlyAttested:false};
+ return {schema:'eternyx-wave26-gateway-observation-v2',observedAt:new Date().toISOString(),project:'mhodwvypfbxafamkrgsk',phase,checks,checkCount:checks.length,syntheticFixturesRetained:true,quotaExhaustionTested:false,malwareScanningVerified:false,productionAuthorized:false,independentlyAttested:false};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{
