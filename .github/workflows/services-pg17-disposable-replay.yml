@@ -47,6 +47,11 @@ on:
       - "scripts/sql/services-staging-trusted-admin-foundation-candidate.sql"
       - "docs/sql/eternyx/services-phase44-disposable-*.sql"
       - "tests/services-phase44-staging-foundation.test.mjs"
+      - "scripts/services-phase45-pinned-rollout.mjs"
+      - "scripts/services-phase45-rollout-manifest.json"
+      - "tests/services-phase45-pinned-rollout.test.mjs"
+      - "docs/sql/eternyx/services-phase45-staging-default-acl-assert.sql"
+      - "docs/ETERNYX_SERVICES_PINNED_ROLLOUT_PHASE45.md"
       - "docs/ETERNYX_SERVICES_STAGING_FOUNDATION_PHASE44.md"
       - "docs/ETERNYX_SERVICES_TRUSTED_ADMIN_FOUNDATION_PHASE43.md"
       - ".github/workflows/services-staging-readonly-inventory.yml"
@@ -78,7 +83,8 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs tests/services-phase44-staging-foundation.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs tests/services-phase44-staging-foundation.test.mjs tests/services-phase45-pinned-rollout.test.mjs
+          node scripts/services-phase45-pinned-rollout.mjs --check > "$RUNNER_TEMP/services-phase45-reviewed-plan.json"
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
@@ -195,11 +201,8 @@ jobs:
             "$RUNNER_TEMP/services-phase44-foundation.json"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
             < docs/sql/eternyx/services-phase44-disposable-admin-acceptance.sql
-          # Prevent deliberately permissive default ACLs from contaminating
-          # the subsequent Services migration comparison: reset CI defaults
-          # only, leaving the already tested candidate unchanged.
-          docker exec "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
-            -c 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated, service_role; ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role;'
+          # Phase45: retain the live staging-shaped public default ACLs
+          # throughout the entire 13-file replay; do not normalize defaults.
           # The same SQL candidate must refuse an occupied foundation.
           if docker exec -i "$name" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
               < scripts/sql/services-staging-trusted-admin-foundation-candidate.sql > "$RUNNER_TEMP/services-phase44-repeat.log" 2>&1; then
@@ -221,6 +224,14 @@ jobs:
             < docs/sql/eternyx/services-phase29-disposable-catalog-assert.sql
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
             < docs/sql/eternyx/services-phase30-disposable-rls-acceptance.sql
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase45-staging-default-acl-assert.sql
+          docker exec -i "$name" psql -X -q -A -t -F '|' -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase27-readonly-catalog-verdict.sql > "$RUNNER_TEMP/services-phase45-catalog.txt"
+          grep -q '^t|64|0|{}|' "$RUNNER_TEMP/services-phase45-catalog.txt" || {
+            echo "Phase45 64-check catalog failed under staging-shaped defaults"; exit 1;
+          }
+          echo "PASS: Phase45 exact pinned rollout and 64-check catalog under retained staging-shaped default ACLs"
           echo "PASS: Phase44 exact seedless candidate and complete 13-file Services chain with synthetic RLS acceptance"
           echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and hardened SECURITY DEFINER checks (no remote deployment)"
 
