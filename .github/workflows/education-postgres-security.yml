@@ -94,6 +94,20 @@ jobs:
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-full-journey.sql
       - name: Assert 23 finalized-grade owner-tamper and safe-learner-read boundaries
         run: docker exec --interactive eternyx-education-db-ci psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/education-db-immutable-final-grades.sql
+      - name: Rehearse clean staging Education foundation and exact protected SQL on second disposable DB
+        run: |
+          docker exec eternyx-education-db-ci createdb -U postgres education_staging_foundation
+          # Auth/admin fixture is confined to the second disposable database. Never deploy it.
+          python3 - <<'PY' | docker exec -i eternyx-education-db-ci psql -X -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1
+          from pathlib import Path
+          source=Path("tests/sql/education-db-bootstrap.sql").read_text()
+          prefix=source[source.index("CREATE SCHEMA auth;"):source.index("CREATE TABLE public.teachers")]
+          print(prefix)
+          PY
+          for file in scripts/sql/staging-education-empty-foundation.sql supabase/migrations/20251221200912_d6870136-afdc-4c62-bd71-adb4bd852f76.sql scripts/sql/staging-education-cbt-atomic-security.sql scripts/sql/staging-education-verified-instructors.sql scripts/sql/staging-education-instructor-draft-recovery.sql scripts/sql/staging-education-publication-enrollment.sql scripts/sql/staging-education-written-review.sql scripts/sql/staging-education-atomic-final-grading.sql scripts/sql/staging-education-owned-verified-results.sql scripts/sql/staging-education-immutable-final-grade-records.sql; do
+            docker exec -i eternyx-education-db-ci psql -X -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 < "$file"
+          done
+          docker exec -i eternyx-education-db-ci psql -X -q -A -t -U postgres -d education_staging_foundation -v ON_ERROR_STOP=1 < scripts/sql/education-hosted-db-metadata.sql | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["schema"]==1 and len(data["checks"])==31 and all(v is True for v in data["checks"].values()); print("PASS: clean staging foundation, all 31 catalog checks")'
       - name: Destroy temporary database
         if: always()
         run: docker rm --force eternyx-education-db-ci || true
