@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
+import {workspaceTeamCommandCenter,workspaceTeamCommandView} from "@/lib/workspaceTeamCommandCenter.mjs";
 import {
   workspaceTeamScheduleGroups,workspaceTeamTaskDueDatePatch,
   buildWorkspaceTeamScheduleIcs,workspaceTeamMonthPlan,workspaceTeamShiftMonth,
@@ -153,6 +154,21 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     ()=>selected&&currentRole?workspaceTeamWorkload(tasks,members,owner,selected.id,today):[],
     [tasks,members,owner,selected,currentRole,today]);
   const [showWorkload,setShowWorkload]=useState(false);
+  const [queueScope,setQueueScope]=useState("all");
+  const commandCenter=useMemo(()=>selected&&currentRole?
+    workspaceTeamCommandCenter(tasks,members,owner,selected.id,today,queueScope):null,
+    [tasks,members,owner,selected,currentRole,today,queueScope]);
+  const commandResultsRef=useRef<HTMLDivElement>(null);
+  const pendingCommandTask=useRef<string|null>(null);
+  useEffect(()=>{
+    if(pendingCommandTask.current===null)return;
+    if(selected&&currentRole&&discussionTaskId===pendingCommandTask.current&&
+       tasks.some(task=>task.id===discussionTaskId&&task.space_id===selected.id)){
+      pendingCommandTask.current=null;
+      commandResultsRef.current?.scrollIntoView({block:"start"});
+      commandResultsRef.current?.focus({preventScroll:true});
+    }
+  },[selected,currentRole,discussionTaskId,tasks]);
   const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
   const assureOwner=async(expectedOwner:string)=>{
@@ -265,6 +281,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     setCalendarDay(null);setShowWorkload(false);
+    setQueueScope("all");pendingCommandTask.current=null;
     setDragOverColumn(null);
     setJoinToken("");setInviteRole("editor");setInviteView("pending");setMemberView("all");setNotice("");setError("");setDraft(freshDraft());
     actionEpoch.current++;actionBusyRef.current=false;setBusy(false);
@@ -291,6 +308,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
     setTaskLayout("list");setDiscussionTaskId(null);setLiveRevision(0);
     setCalendarDay(null);setShowWorkload(false);
+    setQueueScope("all");pendingCommandTask.current=null;
     setDragOverColumn(null);
     if(!selectedId)return;
     setLoading(true);
@@ -439,6 +457,27 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       setTaskAssigneeFilter(view.assignee);setTaskFilter(view.filter);
       setTaskLayout("list");
     }catch(failure){setError(errorMessage(failure));}
+  };
+  const openCommandMetric=(key:string)=>{
+    if(!selected||!currentRole||!commandCenter||disabled||busy||loading||
+       !spaceListVerified||verifiedSpaceId!==selected.id)return;
+    try{
+      const view=workspaceTeamCommandView(commandCenter,key);
+      setTaskQuery(view.search);setTaskPriorityFilter(view.priority);setTaskSort(view.sort);
+      setTaskAssigneeFilter(view.assignee);setTaskFilter(view.filter);setTaskLayout("list");
+    }catch(failure){setError(errorMessage(failure));}
+  };
+  const openCommandTask=(taskId:string)=>{
+    if(!selected||!currentRole||!commandCenter||disabled||busy||loading||
+       !spaceListVerified||verifiedSpaceId!==selected.id||
+       !commandCenter.queue.some(row=>row.id===taskId)||
+       !tasks.some(task=>task.id===taskId&&task.space_id===selected.id))return;
+    clearTaskFilters();
+    setTaskLayout("list");setDiscussionTaskId(taskId);
+    if(discussionTaskId===taskId){
+      commandResultsRef.current?.scrollIntoView({block:"start"});
+      commandResultsRef.current?.focus({preventScroll:true});
+    }else pendingCommandTask.current=taskId;
   };
   const clearTaskFilters=()=>{
     setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
@@ -948,13 +987,49 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"
-          aria-label="Live team task summary">
-          <p className="rounded-md border border-border p-2">Outstanding <strong>{taskSummary.outstanding}</strong></p>
-          <p className="rounded-md border border-border p-2">Overdue <strong>{taskSummary.overdue}</strong></p>
-          <p className="rounded-md border border-border p-2">Next 7 days <strong>{taskSummary.upcoming}</strong></p>
-          <p className="rounded-md border border-border p-2">Completed <strong>{taskSummary.done}</strong></p>
-        </div>
+        {commandCenter&&<section className="space-y-3 rounded-xl border border-border p-3"
+          aria-label="Team project command center">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h5 className="text-sm font-semibold">Team command center</h5>
+              <p className="text-xs text-muted-foreground">Verified current tasks · {today} (local day)</p></div>
+            <p className="text-xs">{commandCenter.done} of {commandCenter.total} tasks completed</p>
+          </div>
+          <progress aria-label="Current team task completion" className="h-2 w-full"
+            value={commandCenter.done} max={commandCenter.total||1}/>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Live team task summary">
+            {commandCenter.metrics.map(metric=><Button key={metric.key} type="button" variant="outline"
+              className="h-auto min-h-14 flex-col items-start whitespace-normal p-2 text-left"
+              disabled={disabled||busy||loading||metric.count===0}
+              aria-label={"Show "+metric.count+" "+metric.label+" tasks"}
+              onClick={()=>openCommandMetric(metric.key)}>
+              <strong className="text-lg tabular-nums">{metric.count}</strong><span className="text-xs">{metric.label}</span>
+            </Button>)}
+          </div>
+          <p className="text-xs text-muted-foreground">Counts can overlap. Selecting a count replaces task filters below. Completion reflects current records, not historical performance or capacity.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h6 className="text-sm font-semibold">Attention queue</h6>
+            <label className="text-xs">Queue assignment <select value={queueScope}
+              onChange={event=>setQueueScope(event.target.value)}
+              className="ml-2 rounded border border-border bg-background p-1">
+              <option value="all">Entire team</option><option value="mine">Assigned to me</option>
+              <option value="unassigned">Unassigned</option>
+            </select></label>
+          </div>
+          <p className="text-xs text-muted-foreground">Showing {commandCenter.queue.length} of {commandCenter.queueTotal} attention items. Overdue first, then due today, urgent, and assignment gaps; priority and due date break ties.</p>
+          <div className="space-y-2">
+            {commandCenter.queue.map(row=><div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2 text-xs">
+              <div className="min-w-0 flex-1 break-words">
+                <p className="font-medium">{row.title}</p>
+                <p className="text-muted-foreground">{row.priority} · {row.due??"No due date"} · {row.assignment}</p>
+                <p>{row.reasons.join(" · ")}</p>
+              </div>
+              <Button size="sm" type="button" variant="outline" disabled={disabled||busy||loading}
+                aria-label={"Open discussion for attention task "+row.title}
+                onClick={()=>openCommandTask(row.id)}>Open discussion</Button>
+            </div>)}
+            {!commandCenter.queue.length&&<p className="text-xs text-muted-foreground">No attention items in this queue.</p>}
+          </div>
+        </section>}
         <section className="space-y-2 rounded-lg border border-border p-3"
           aria-label="Team workload overview">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1254,12 +1329,14 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
         {!visibleTasks.length&&<p className="py-3 text-xs text-muted-foreground">
           {tasks.length?"No tasks match this filter.":"No shared tasks yet."}
         </p>}
-        {discussionTask&&<WorkspaceTeamTaskDiscussion
+        {discussionTask&&<div ref={commandResultsRef} tabIndex={-1} aria-label="Selected task discussion">
+          <WorkspaceTeamTaskDiscussion
           key={owner+":"+selected.id+":"+discussionTask.id}
           owner={owner} spaceId={selected.id} taskId={discussionTask.id}
           role={currentRole} active={selected.status==="active"}
           disabled={busy||disabled||loading} refreshKey={liveRevision}
-          onChanged={()=>{void refresh().catch(failure=>setError(errorMessage(failure)));}} />}
+          onChanged={()=>{void refresh().catch(failure=>setError(errorMessage(failure)));}} />
+        </div>}
       </div>
 
       <WorkspaceTeamLiveFeed key={owner+":"+selected.id}

@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/lib/workspaceTeam*.mjs'
+      - 'tests/workspace-team-command-center.test.mjs'
       - 'src/components/workspace/WorkspaceTeamsPanel.tsx'
       - 'src/components/workspace/WorkspaceTeamTaskDiscussion.tsx'
       - 'src/components/workspace/WorkspaceTeamLiveFeed.tsx'
@@ -29,4 +30,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs tests/workspace-team-discussion.test.mjs tests/workspace-team-live.test.mjs tests/workspace-team-activity-history.test.mjs tests/workspace-team-utils.test.mjs tests/workspace-team-access.test.mjs tests/workspace-team-complete-pages.test.mjs tests/workspace-team-fresh-snapshot.test.mjs
+      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs tests/workspace-team-discussion.test.mjs tests/workspace-team-live.test.mjs tests/workspace-team-activity-history.test.mjs tests/workspace-team-utils.test.mjs tests/workspace-team-access.test.mjs tests/workspace-team-complete-pages.test.mjs tests/workspace-team-fresh-snapshot.test.mjs tests/workspace-team-command-center.test.mjs
