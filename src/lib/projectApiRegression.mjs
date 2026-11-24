@@ -1,4 +1,5 @@
 import { normalizeProjectApiScenario, isProjectApiRunComplete, projectApiSuiteSignature, MAX_PROJECT_SCENARIOS } from "./projectApiSuite.mjs";
+import { normalizeApiEnvironment } from "./projectApiEnvironment.mjs";
 
 export const API_BASELINE_KEY = "eternyx:project-api-regression-baselines:v1";
 export const API_BASELINE_SCHEMA = "eternyx-project-api-regression-baseline-v1";
@@ -43,7 +44,8 @@ export function normalizeApiBaseline(value) {
       !Array.isArray(value.cases) || !value.cases.length || value.cases.length > MAX_PROJECT_SCENARIOS) throw new Error("Invalid API baseline.");
   const cases = value.cases.map(cleanRow);
   if (new Set(cases.map(r=>r.scenarioId)).size !== cases.length) throw new Error("Duplicate baseline results.");
-  return {schema:API_BASELINE_SCHEMA,projectId:value.projectId,fingerprint:value.fingerprint,savedAt:value.savedAt,cases};
+  const environment = normalizeApiEnvironment(value.environment);
+  return {schema:API_BASELINE_SCHEMA,projectId:value.projectId,environment,fingerprint:value.fingerprint,savedAt:value.savedAt,cases};
 }
 export function readApiBaselines(raw) {
   if (typeof raw !== "string" || raw.length > 150000) return [];
@@ -54,7 +56,8 @@ export function readApiBaselines(raw) {
     for (const entry of data.slice(0,MAX_BASELINES)) {
       try {
         const item=normalizeApiBaseline(entry);
-        if (!seen.has(item.projectId)) { seen.add(item.projectId); result.push(item); }
+        const key = item.projectId + ":" + item.environment;
+        if (!seen.has(key)) { seen.add(key); result.push(item); }
       } catch { /* malformed local records are not trusted */ }
     }
     return result;
@@ -62,9 +65,9 @@ export function readApiBaselines(raw) {
 }
 export function storeApiBaseline(existing, baseline) {
   const item=normalizeApiBaseline(baseline);
-  return [item,...existing.filter(v=>v.projectId!==item.projectId)].slice(0,MAX_BASELINES);
+  return [item,...existing.filter(v=>v.projectId!==item.projectId || normalizeApiEnvironment(v.environment)!==item.environment)].slice(0,MAX_BASELINES);
 }
-export function createApiBaseline(scenarios, results, fingerprint, savedAt = new Date().toISOString()) {
+export function createApiBaseline(scenarios, results, fingerprint, savedAt = new Date().toISOString(), environment = "saved") {
   const normalized=scenarios.map(normalizeProjectApiScenario);
   if (!isProjectApiRunComplete(normalized,results) || !normalized.length ||
       normalized.some(s=>s.projectId!==normalized[0].projectId)) throw new Error("Only a completed current suite can become a baseline.");
@@ -73,11 +76,11 @@ export function createApiBaseline(scenarios, results, fingerprint, savedAt = new
       row.elapsedMs>normalized[i].maxDurationMs ||
       normalized[i].expectedContentType && row.contentTypeCheck!=="passed" ||
       normalized[i].jsonContract && row.jsonCheck!=="passed"))) throw new Error("Result does not satisfy its contract.");
-  return normalizeApiBaseline({schema:API_BASELINE_SCHEMA,projectId:normalized[0].projectId,fingerprint,savedAt,cases});
+  return normalizeApiBaseline({schema:API_BASELINE_SCHEMA,projectId:normalized[0].projectId,environment,fingerprint,savedAt,cases});
 }
 export function compareApiBaselines(previous,current) {
   const a=normalizeApiBaseline(previous), b=normalizeApiBaseline(current);
-  if (a.projectId!==b.projectId || a.fingerprint!==b.fingerprint ||
+  if (a.projectId!==b.projectId || a.environment!==b.environment || a.fingerprint!==b.fingerprint ||
       a.cases.length!==b.cases.length || a.cases.some((row,i)=>row.scenarioId!==b.cases[i].scenarioId)) {
     return {state:"incompatible",cases:[]};
   }
@@ -99,6 +102,6 @@ export function exportApiRegression(previous,current) {
   const compared=compareApiBaselines(previous,current);
   if(compared.state!=="comparable")throw new Error("Suite contracts changed; comparison unavailable.");
   return JSON.stringify({schema:"eternyx-api-regression-report-v1",baselineAt:previous.savedAt,currentAt:current.savedAt,
-    scope:"local-browser-observations",productionVerified:false,summary:{regressed:compared.regressed,recovered:compared.recovered,changed:compared.changed,latencyIncreases:compared.latencyIncreases},
+    scope:"local-browser-observations",environment:normalizeApiEnvironment(current.environment),productionVerified:false,summary:{regressed:compared.regressed,recovered:compared.recovered,changed:compared.changed,latencyIncreases:compared.latencyIncreases},
     cases:compared.cases},null,2);
 }

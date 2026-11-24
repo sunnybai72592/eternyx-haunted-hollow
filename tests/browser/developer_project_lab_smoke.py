@@ -669,6 +669,13 @@ def api_project_link(page, staging):
         expect(copy_body).to_be_disabled()
         # The stale response remains visible for inspection, not current evidence.
         expect(response_body).to_have_value(re.compile(r"<html\b", re.IGNORECASE))
+        # A session-only override must not mutate the saved project suite.
+        page.locator("#api-execution-environment").select_option("development")
+        expect(page.get_by_role("button", name="Run selected project suite")).to_be_disabled()
+        page.locator("#api-execution-origin").fill(ORIGIN)
+        expect(page.get_by_role("button", name="Export sanitized results")).to_be_disabled()
+        expect(page.get_by_role("button", name="Run selected project suite")).to_be_enabled()
+        assert store(page, API_KEY)[0]["url"] == ORIGIN + "/"
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")
