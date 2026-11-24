@@ -8,6 +8,7 @@ import {
   LOCAL_VIDEO_LIMITS,LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps,
 } from "./localVideoEditor.mjs";
 
+export const PORTABLE_DELIVERIES=Object.freeze(["mp4","mp4_with_subtitles","mp4_webm","all"]);
 export const PORTABLE_BUNDLE_LIMITS=Object.freeze({
   maxFiles:21,maxEntryBytes:64*1024*1024,maxTotalBytes:8*64*1024*1024+16*1024*1024+512*1024,
   maxRendererBytes:128*1024,maxZipBytes:0xffffffff,
@@ -131,7 +132,7 @@ function guiWindows(){
     "",
   ].join("\r\n");
 }
-function readme(profile,quality,shotCount,seconds){
+function readme(profile,quality,shotCount,seconds,delivery){
   return [
     "ETERNYX — PORTABLE OFFLINE CPU VIDEO EDITING PROJECT",
     "",
@@ -167,6 +168,12 @@ function readme(profile,quality,shotCount,seconds){
     "",
     "Requested project: "+shotCount+" shots, "+seconds.toFixed(2)+" seconds at "+localVideoFps(quality)+" FPS.",
     "Output profile: "+profile+". Quality: "+quality+".",
+    ...(delivery===undefined?[]:[
+      "Selected delivery: "+delivery+". The guided launcher creates and verifies all requested variants, poster, VTT and watch.html.",
+      "Use the guided launcher or --run (direct render scripts produce the master only).",
+      "WebM requires libvpx-vp9 and libopus for soundtracks; captioned MP4 requires mov_text.",
+      "Licensed soundtrack is retained in every requested movie variant.",
+    ]),
     "Source-video audio is removed; any licensed soundtrack is mixed separately.",
     "Caption text is delivered as captions.srt, not burned into the MP4.",
     "",
@@ -177,10 +184,12 @@ function readme(profile,quality,shotCount,seconds){
 }
 export async function buildPortableVideoBundle({
   sources,shots,soundtrack=null,profile="landscape",quality="standard",
-  rendererSources,onProgress=()=>{},
+  rendererSources,onProgress=()=>{},delivery,
 }){
   if(!LOCAL_VIDEO_PROFILES.includes(profile)||!LOCAL_VIDEO_QUALITIES.includes(quality))
     throw new Error("Unsupported portable CPU output preset.");
+  if(delivery!==undefined&&!PORTABLE_DELIVERIES.includes(delivery))
+    throw new Error("Unsupported portable movie delivery.");
   if(typeof onProgress!=="function")throw new Error("Invalid CPU bundle progress callback.");
   const project=buildLocalVideoBoard({sources,shots,soundtrack,quality});
   const required=["render_video_timeline.py","assemble_video_storyboard.py",
@@ -228,7 +237,7 @@ export async function buildPortableVideoBundle({
   const mitems=items.map(({path,sha256,bytes,kind})=>({path,sha256,bytes,kind}));
   const manifest={
     format:"eternyx-portable-cpu-video",
-    version:1,profile,quality,
+    version:1,profile,quality,...(delivery===undefined?{}:{delivery}),
     fps:project.fps,shots:project.board.shots.length,
     frames:project.totalFrames,
     private_original_media:true,
@@ -248,7 +257,7 @@ export async function buildPortableVideoBundle({
     {path:"render-windows.cmd",blob:new Blob([windows(profile,quality)])},
     {path:"launch-video-windows.cmd",blob:new Blob([guiWindows()])},
     {path:"launch-video-macos-linux.sh",blob:new Blob([guiLinux()])},
-    {path:"README.txt",blob:new Blob([readme(profile,quality,project.board.shots.length,project.seconds)])},
+    {path:"README.txt",blob:new Blob([readme(profile,quality,project.board.shots.length,project.seconds,delivery)])},
     ...Object.entries(scripts).map(([path,blob])=>({path,blob})),
   ];
   const zipMembers=[...extras,...items.map(item=>({path:item.path,blob:item.blob}))];

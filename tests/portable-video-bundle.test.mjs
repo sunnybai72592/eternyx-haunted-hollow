@@ -182,7 +182,7 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   const project=await buildPortableVideoBundle(settings([source],[
     shot(source,{frames:16,caption:"Real approved clip",fadeInFrames:3}),
     shot(source,{startFrame:16,frames:16,caption:"Real second cut",fadeOutFrames:3}),
-  ],{soundtrack:audio}));
+  ],{soundtrack:audio,delivery:"all"}));
   const zip=join(dir,"eternyx-project.zip"),unpacked=join(dir,"unpacked");
   mkdirSync(unpacked);
   writeFileSync(zip,Buffer.from(await project.blob.arrayBuffer()));
@@ -213,6 +213,19 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   assert.equal(summary.shots.length,2);
   assert.equal(summary.model_generation,false);
   assert.equal(summary.video.sha256,digest(readFileSync(join(out,"video.mp4"))));
+  assert.equal(summary.delivery,"all");
+  for(const name of ["video.mp4","video-subtitled.mp4","video.webm","poster.png","captions.srt","captions.vtt","preview.html","watch.html"]){
+    const bytes=readFileSync(join(out,name));
+    assert.equal(summary.deliverables[name].sha256,digest(bytes),name);
+    assert.equal(summary.deliverables[name].file_bytes,bytes.length,name);
+  }
+  assert.equal(summary.deliverables["video-subtitled.mp4"].audio_codec,"aac");
+  assert.equal(summary.deliverables["video-subtitled.mp4"].selectable_subtitles,true);
+  assert.equal(summary.deliverables["video.webm"].audio_codec,"opus");
+  assert.equal(summary.deliverables["video.webm"].frame_count,32);
+  assert.match(readFileSync(join(out,"watch.html"),"utf8"),/Licensed soundtrack/);
+  assert.match(readFileSync(join(out,"watch.html"),"utf8"),/video.webm/);
+  assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/00:00:01\.000 --> 00:00:02\.000/);
   const frames=spawnSync("ffprobe",[
     "-v","error","-count_frames","-show_entries",
     "stream=codec_type,width,height,nb_read_frames",
@@ -250,7 +263,7 @@ test("REAL 24 FPS native cinematic portable ZIP renders verified 1280x720 video 
   const project=await buildPortableVideoBundle(settings([clip],[shot(clip,{
     frames:48,startFrame:0,fadeInFrames:6,fadeOutFrames:6,
     caption:"Real original native 24fps footage",
-  })],{quality:"cinematic",profile:"landscape"}));
+  })],{quality:"cinematic",profile:"landscape",delivery:"all"}));
   assert.equal(project.manifest.fps,24);
   assert.equal(project.manifest.frames,48);
   const zip=join(dir,"movie.zip"),extracted=join(dir,"extracted");
@@ -286,6 +299,15 @@ test("REAL 24 FPS native cinematic portable ZIP renders verified 1280x720 video 
   assert.equal(receipt.video.height,720);
   assert.equal(receipt.video.frame_count,48);
   assert.equal(receipt.video.duration_seconds,2);
+  assert.equal(receipt.deliverables["video.webm"].fps,"24/1");
+  assert.equal(receipt.deliverables["video.webm"].frame_count,48);
+  assert.equal(receipt.deliverables["video.webm"].audio,false);
+  assert.equal(receipt.deliverables["video-subtitled.mp4"].selectable_subtitles,true);
+  const poster=readFileSync(join(output,"poster.png"));
+  assert.equal(poster.readUInt32BE(16),1280);
+  assert.equal(poster.readUInt32BE(20),720);
+  assert.match(readFileSync(join(output,"watch.html"),"utf8"),/1280 × 720 · 24 FPS/);
+  assert.match(readFileSync(join(output,"captions.vtt"),"utf8"),/00:00:00\.000 --> 00:00:02\.000/);
   assert.equal(receipt.video.sha256,digest(readFileSync(join(output,"video.mp4"))));
   const decoded=spawnSync("ffprobe",["-v","error","-count_frames","-show_entries",
     "stream=codec_type,nb_read_frames,width,height,avg_frame_rate",
@@ -326,4 +348,16 @@ test("REAL native cinematic portrait ZIP preserves exact 720x1280 24 FPS frames"
   assert.equal(receipt.video.frame_count,24);
   assert.deepEqual([receipt.video.width,receipt.video.height],[720,1280]);
   assert.equal(receipt.video.sha256,digest(readFileSync(join(folder,"eternyx-video-output/video.mp4"))));
+});
+
+test("portable delivery rejects unsupported values and preserves legacy default manifest",async()=>{
+  const source=media("local.mp4",Buffer.from("local test source"));
+  for(const delivery of [null,"external",{},["all"]])
+    await assert.rejects(()=>buildPortableVideoBundle(settings([source],[shot(source)],{delivery})),/Unsupported portable movie delivery/);
+  const legacy=await buildPortableVideoBundle(settings([source],[shot(source)]));
+  assert.equal(Object.hasOwn(legacy.manifest,"delivery"),false);
+  for(const delivery of ["mp4","mp4_with_subtitles","mp4_webm","all"]){
+    const bundle=await buildPortableVideoBundle(settings([source],[shot(source)],{delivery}));
+    assert.equal(bundle.manifest.delivery,delivery);
+  }
 });
