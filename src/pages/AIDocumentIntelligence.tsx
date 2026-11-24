@@ -127,7 +127,7 @@ const AIDocumentIntelligence = () => {
   const [ragConsent,setRagConsent]=useState(false);
   const [ragError,setRagError]=useState<string|null>(null);
   const [claimAssessments,setClaimAssessments]=useState<Record<number,ClaimAssessment>>({});
-  const [claimDrafts,setClaimDrafts]=useState<Record<number,{label:string;quote:string;verdict:ClaimVerdict}>>({});
+  const [claimDrafts,setClaimDrafts]=useState<Record<number,{label:string;quote:string;verdict:ClaimVerdict|""}>>({});
   const [knowledgeSuggestions,setKnowledgeSuggestions] = useState<string[]>([]);
   const [knowledgeMode,setKnowledgeMode] = useState<"all"|"any">("all");
   const [knowledgeFilter,setKnowledgeFilter] = useState("");
@@ -172,7 +172,7 @@ const AIDocumentIntelligence = () => {
   };
   const ragReview=knowledgeAI.result&&knowledgePacket&&ragPrepared?reviewKnowledgeRagResponse(knowledgeAI.result,knowledgePacket):null;
   const assuranceSummary=ragReview?.valid===true&&knowledgePacket?summarizeClaimAssurance(ragReview,knowledgePacket,claimAssessments):null;
-  const updateClaimDraft=(i:number,draft:{label:string;quote:string;verdict:ClaimVerdict})=>{
+  const updateClaimDraft=(i:number,draft:{label:string;quote:string;verdict:ClaimVerdict|""})=>{
     setClaimDrafts(old=>({...old,[i]:draft}));
     setClaimAssessments(old=>{const next={...old};delete next[i];return next;});
   };
@@ -2115,7 +2115,7 @@ const AIDocumentIntelligence = () => {
                               <Button type="button" size="sm" variant="outline" onClick={()=>void copy(formatAssuranceReport(assuranceSummary),"Counts-only answer review")}>Copy counts-only quality report</Button>
                             </section>}
                             {ragReview.claims.map((claim,i)=>{
-                              const draft=claimDrafts[i]??{label:claim.citations[0],quote:"",verdict:"supported" as ClaimVerdict};
+                              const draft=claimDrafts[i]??{label:claim.citations[0],quote:"",verdict:"" as const};
                               const location=assessClaimQuote(claim,knowledgePacket,draft.label,draft.quote);
                               const suggestions=suggestClaimQuotes(claim,knowledgePacket);
                               const signals=claimReviewSignals(claim,knowledgePacket);
@@ -2143,9 +2143,9 @@ const AIDocumentIntelligence = () => {
                                 {draft.quote&&<p className={location?"text-cyan-200":"text-amber-200"}>{location?"Exact excerpt found at decoded offsets ["+location.startOffset+", "+location.endOffset+").":"Excerpt missing, too short, or ambiguous; choose more context."}</p>}
                                 <label className="block text-slate-300">Your assessment of this claim
                                   <select value={draft.verdict} className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2"
-                                    onChange={e=>updateClaimDraft(i,{...draft,verdict:e.target.value as ClaimVerdict})}>{CLAIM_VERDICTS.map(v=><option key={v} value={v}>{v}</option>)}</select>
+                                    onChange={e=>updateClaimDraft(i,{...draft,verdict:e.target.value as ClaimVerdict|""})}><option value="">Choose assessment</option>{CLAIM_VERDICTS.map(v=><option key={v} value={v}>{v}</option>)}</select>
                                 </label>
-                                <Button type="button" size="sm" variant="outline" disabled={!location} onClick={()=>{if(location)setClaimAssessments(old=>({...old,[i]:{...draft}}));}}>Record manual assessment</Button>
+                                <Button type="button" size="sm" variant="outline" disabled={!location||!draft.verdict} onClick={()=>{const verdict=draft.verdict;if(location&&verdict)setClaimAssessments(old=>({...old,[i]:{...draft,verdict}}));}}>Record manual assessment</Button>
                                 {claimAssessments[i]&&<p role="status" className="text-cyan-200">Recorded: {claimAssessments[i].verdict}</p>}
                               </div>
                             </article>;})}
