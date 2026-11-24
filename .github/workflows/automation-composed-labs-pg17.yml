@@ -1,0 +1,143 @@
+name: Automation plus deployed LABS composed PG17
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/automation-composed-labs-pg17.yml'
+      - 'scripts/automation-*.mjs'
+      - 'scripts/automation-labs-occupied-stage-catalog.sql'
+      - 'scripts/eternyx-backend-rpc-surface.mjs'
+      - 'tests/automation-*.test.mjs'
+      - 'tests/sql/**'
+      - 'supabase/migrations/**'
+      - 'supabase/functions/automation-*/**'
+      - 'supabase/functions/ctf-verified/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  composed:
+    name: Rehearse six LABS then 22 Automation SQL files and preserve catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          if git config --local --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1; then exit 1; fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate exact composed plan
+        run: |
+          node --test tests/automation-composed-labs-replay.test.mjs tests/automation-after-labs-stage-plan.test.mjs
+          node scripts/automation-composed-labs-replay.mjs > "$RUNNER_TEMP/composed.json"
+      - name: Start disposable networkless PostgreSQL 17
+        run: |
+          set -euo pipefail
+          docker run -d --rm --network none --name eternyx-composed-pg17 -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          stable=0
+          for i in $(seq 1 45); do
+            if docker exec eternyx-composed-pg17 pg_isready -U postgres >/dev/null 2>&1; then
+              stable=$((stable+1))
+              if [ "$stable" -ge 4 ]; then break; fi
+            else stable=0; fi
+            sleep 1
+          done
+          test "$stable" -ge 4
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
+      - name: Apply exact LABS baseline with checked SQL hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module - "$RUNNER_TEMP/composed.json" <<'NODE' > "$RUNNER_TEMP/labs.tsv"
+          import {readFileSync} from "node:fs";
+          const plan=JSON.parse(readFileSync(process.argv[2],"utf8"));
+          for(const f of plan.labs)console.log(f.sha256+"\t"+f.name);
+          NODE
+          count=0
+          while IFS=$'\t' read -r digest filename; do
+            [[ "$filename" =~ ^20[0-9]{12}_ctf_[a-z0-9_]+\.sql$ && "$digest" =~ ^[a-f0-9]{64}$ ]]
+            file="supabase/migrations/$filename"
+            printf '%s  %s\n' "$digest" "$file" | sha256sum --check --status
+            echo "LABS baseline $filename"
+            docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < "$file"
+            count=$((count+1))
+          done < "$RUNNER_TEMP/labs.tsv"
+          test "$count" -eq 6
+      - name: Seed synthetic security markers and LABS owner rows
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' > "$RUNNER_TEMP/security-markers.sql"
+          import {PROTECTED_TABLES} from "./scripts/automation-additive-replay-candidate.mjs";
+          for(const t of PROTECTED_TABLES){
+            console.log("CREATE TABLE public."+t+" (marker text PRIMARY KEY); ALTER TABLE public."+t+" ENABLE ROW LEVEL SECURITY; INSERT INTO public."+t+" VALUES ('preserve');");
+          }
+          NODE
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/security-markers.sql"
+          docker exec eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -c "INSERT INTO public.ctf_verified_solves(user_id,mission_id) VALUES ('11111111-1111-4111-8111-111111111111','encoded-access-log'),('22222222-2222-4222-8222-222222222222','header-evidence');"
+          # Capture actual rows from all 15 synthetic/real-schema tables, with stable ordering.
+          node --input-type=module <<'NODE' > "$RUNNER_TEMP/protected-rows.sql"
+          import {TABLES} from "./scripts/automation-after-labs-stage-plan.mjs";
+          for(const t of TABLES)console.log("SELECT '"+t+"', md5(coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text,'[]')) FROM public."+t+" r;");
+          NODE
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < scripts/automation-labs-occupied-stage-catalog.sql > "$RUNNER_TEMP/before.json"
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/protected-rows.sql" > "$RUNNER_TEMP/rows-before.txt"
+          test "$(wc -l < "$RUNNER_TEMP/rows-before.txt")" -eq 15
+      - name: Apply only the 22 Automation migrations in source order
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module - "$RUNNER_TEMP/composed.json" <<'NODE' > "$RUNNER_TEMP/automation.tsv"
+          import {readFileSync} from "node:fs";
+          const plan=JSON.parse(readFileSync(process.argv[2],"utf8"));
+          for(const f of plan.automation)console.log(f.sha256+"\t"+f.name);
+          NODE
+          count=0
+          while IFS=$'\t' read -r digest filename; do
+            [[ "$filename" =~ ^20[0-9]{12}_automation_[a-z0-9_]+\.sql$ && "$digest" =~ ^[a-f0-9]{64}$ ]]
+            file="supabase/migrations/$filename"
+            printf '%s  %s\n' "$digest" "$file" | sha256sum --check --status
+            echo "Automation additive $filename"
+            docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < "$file"
+            count=$((count+1))
+          done < "$RUNNER_TEMP/automation.tsv"
+          test "$count" -eq 22
+      - name: Verify all four backend dependencies and Automation owner isolation
+        run: |
+          set -euo pipefail
+          node scripts/eternyx-backend-rpc-surface.mjs --sql > "$RUNNER_TEMP/composed-catalog.sql"
+          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-composed-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/composed-catalog.sql" > "$RUNNER_TEMP/composed-catalog.txt"
+          node scripts/eternyx-backend-rpc-surface.mjs --parse "$RUNNER_TEMP/composed-catalog.txt" > "$RUNNER_TEMP/composed-catalog-verified.json"
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < tests/sql/automation-control-db-smoke.sql
+      - name: Verify preserved LABS RPC definitions, grants, all 15 schemas and synthetic rows
+        run: |
+          set -euo pipefail
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < scripts/automation-labs-occupied-stage-catalog.sql > "$RUNNER_TEMP/after.json"
+          node scripts/automation-after-labs-stage-plan.mjs --compare "$RUNNER_TEMP/before.json" "$RUNNER_TEMP/after.json" > "$RUNNER_TEMP/preservation.json"
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/protected-rows.sql" > "$RUNNER_TEMP/rows-after.txt"
+          cmp "$RUNNER_TEMP/rows-before.txt" "$RUNNER_TEMP/rows-after.txt"
+          echo "Composed disposable PG17 verified: six LABS + 22 Automation; preserved 15 tables, synthetic row digests and CTF RPCs."
+      - name: Verify actual CTF owner separation and rate limits after Automation
+        run: |
+          set -euo pipefail
+          # Remove only our two synthetic seed rows inside a rolled-back local transaction.
+          { echo 'BEGIN; DELETE FROM public.ctf_verified_solves;'; cat tests/sql/eternyx-labs-verified-ctf-smoke.sql; echo 'ROLLBACK;'; } |
+          docker exec -i eternyx-composed-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1
+      - name: Publish disposable rehearsal evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-composed-labs-pg17-evidence
+          path: |
+            ${{ runner.temp }}/composed.json
+            ${{ runner.temp }}/composed-catalog-verified.json
+            ${{ runner.temp }}/preservation.json
+          retention-days: 7
+      - name: Clean up local container
+        if: always()
+        run: docker rm -f eternyx-composed-pg17 || true
