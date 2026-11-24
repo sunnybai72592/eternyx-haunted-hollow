@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useState} from "react";
 import {Button} from "@/components/ui/button";
 import {discoverCorpus,formatDiscoveryCounts} from "@/lib/ai/document-corpus-discovery";
 import type {CorpusDocument} from "@/lib/ai/document-corpus-tools";
@@ -8,6 +8,7 @@ export default function LocalCorpusDiscovery({documents,disabled,onSearch,onCopy
   const [filter,setFilter]=useState("");
   const [error,setError]=useState("");
   const report=snapshot?.documents===documents?snapshot.report:null;
+  useEffect(()=>{setSnapshot(null);setFilter("");setError("");},[documents]);
   const build=()=>{
     if(disabled||!documents.length)return;
     setSnapshot(null);setFilter("");setError("");
