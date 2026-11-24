@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {
   LABS_STAGING_SCHEMA,LABS_STAGING_APPROVAL,LABS_STAGING_REQUIRED_CHECKS,
-  PUBLIC_RANGE_COLUMNS,PRIVATE_RANGE_COLUMNS,
+  PUBLIC_RANGE_COLUMNS,PRIVATE_RANGE_COLUMNS,LABS_STAGING_REF,isLabsPublicKey,
   validateLabsStagingConfig,runLabsStagingReadOnly,
 } from "../src/lib/eternyxLabsStagingReadiness.mjs";
 import {ETERNYX_PRODUCTION_REF} from "../scripts/automation-staging-db-readonly.mjs";
 import {VERIFIED_CTF_MISSIONS,tallyVerifiedCtfSolves} from "../src/lib/eternyxVerifiedCtf.mjs";
 
-const stage="abcdefghijklmnopqrst",ownerA="123e4567-e89b-42d3-a456-426614174001";
+const stage=LABS_STAGING_REF,ownerA="123e4567-e89b-42d3-a456-426614174001";
 const ownerB="223e4567-e89b-42d3-a456-426614174001";
 const tokenA=["a".repeat(24),"b".repeat(60),"c".repeat(44)].join(".");
 const tokenB=["d".repeat(24),"e".repeat(60),"f".repeat(44)].join(".");
@@ -17,7 +17,7 @@ const env=()=>({
   ETERNYX_LABS_STAGING_CONSENT:LABS_STAGING_APPROVAL,
   ETERNYX_LABS_STAGING_REF:stage,
   ETERNYX_LABS_PRODUCTION_REF:ETERNYX_PRODUCTION_REF,
-  ETERNYX_LABS_STAGING_PUBLIC_KEY:"public-staging-example-only-12345678",
+  ETERNYX_LABS_STAGING_PUBLIC_KEY:"sb_publishable_offline_example_only_12345678",
   ETERNYX_LABS_STAGING_JWT_A:tokenA,ETERNYX_LABS_STAGING_JWT_B:tokenB,
 });
 const json=(body,status=200,extra={})=>new Response(JSON.stringify(body),{status,
@@ -210,4 +210,17 @@ test("unexpected Edge and REST fields, or enabled staging provider, fail closed"
     ({path,action})=>path.endsWith("/ctf-range-control")&&action==="status"?json({...provider(),maxConcurrentSessions:1}):undefined,
   ];
   for(const override of cases)await assert.rejects(run(mock({override}).fetcher));
+});
+
+test("exact staging target and validated config identity cannot be bypassed",async()=>{
+  const other=env();other.ETERNYX_LABS_STAGING_REF="abcdefghijklmnopqrst";
+  assert.throws(()=>validateLabsStagingConfig(other),/target_not_isolated/);
+  assert.equal(isLabsPublicKey("sb_secret_offline_example_only_12345678"),false);
+  const fake=(role,ref)=>["a".repeat(24),Buffer.from(JSON.stringify({role,ref})).toString("base64url"),"c".repeat(44)].join(".");
+  assert.equal(isLabsPublicKey(fake("anon",stage)),true);
+  assert.equal(isLabsPublicKey(fake("anon",ETERNYX_PRODUCTION_REF)),false);
+  assert.equal(isLabsPublicKey(fake("service_role",stage)),false);
+  let calls=0;
+  await assert.rejects(runLabsStagingReadOnly({...validateLabsStagingConfig(env())},async()=>{calls++;}),/unverified_configuration/);
+  assert.equal(calls,0);
 });
