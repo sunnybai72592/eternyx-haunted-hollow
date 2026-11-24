@@ -22,10 +22,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          persist-credentials: false
+          persist-credentials: true
           submodules: false
+      - name: Remove checkout authorization before any diagnostic code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
       - name: Offline preparation and isolation contract
         run: |
           set -euo pipefail
@@ -39,10 +47,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          persist-credentials: false
+          persist-credentials: true
           submodules: false
+      - name: Remove checkout authorization before any diagnostic code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
       - name: Prepare fixed inputs as runner
         shell: bash
         run: |

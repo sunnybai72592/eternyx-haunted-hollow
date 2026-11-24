@@ -32,6 +32,9 @@ a reviewed immutable kernel supply chain; that gate remains false.
 The hosted runner is not a dedicated acceptance host; the result cannot
 activate a provider or indicate production readiness. Live Jailer success is
 not yet established by adding this code, and host controller availability
-may vary. Legacy gitlink maintenance is out of scope. Checkout uses v5
-with credential persistence disabled. The existing Phase 40 workflow is
+may vary. Legacy gitlink maintenance is out of scope. Checkout uses the pinned v5 commit with explicit immediate removal and
+absence verification of the local GitHub authorization header before any
+diagnostic code. The built-in early credential removal traverses the legacy
+unmapped gitlink and fails before tests; deferred action cleanup may still
+warn. No gitlink changes and no credentials are used by the diagnostics. The existing Phase 40 workflow is
 unchanged.
