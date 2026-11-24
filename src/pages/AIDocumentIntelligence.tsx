@@ -178,8 +178,8 @@ const AIDocumentIntelligence = () => {
   const invalidateCorpusWorkspace = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
-    setKeepRecoveryCheckpoint(false);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setEncryptedExportPassword("");
@@ -329,8 +329,8 @@ const AIDocumentIntelligence = () => {
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
     setPendingCorpusWorkspace(null);
-    setKeepRecoveryCheckpoint(false);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setCorpusWorkspaceExporting(true);
     try {
@@ -369,8 +369,8 @@ const AIDocumentIntelligence = () => {
     setEncryptedExportPassword("");
     setEncryptedExportConfirm("");
     setPendingCorpusWorkspace(null);
-    setKeepRecoveryCheckpoint(false);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -414,8 +414,8 @@ const AIDocumentIntelligence = () => {
     setRotateNewPassword("");
     setRotateConfirmPassword("");
     setPendingCorpusWorkspace(null);
-    setKeepRecoveryCheckpoint(false);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -444,8 +444,8 @@ const AIDocumentIntelligence = () => {
     const operation = ++corpusWorkspaceEpoch.current;
     setEncryptedImportPassword("");
     setPendingCorpusWorkspace(null);
-    setKeepRecoveryCheckpoint(false);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -469,8 +469,8 @@ const AIDocumentIntelligence = () => {
   const previewCorpusWorkspace = async (file: File | null) => {
     const operation = ++corpusWorkspaceEpoch.current;
     setPendingCorpusWorkspace(null);
-    setKeepRecoveryCheckpoint(false);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -1590,8 +1590,8 @@ const AIDocumentIntelligence = () => {
                     onChange={e => {
                       ++corpusWorkspaceEpoch.current;
                       setPendingCorpusWorkspace(null);
-                      setKeepRecoveryCheckpoint(false);
                       resetVersionReview();
+                      setKeepRecoveryCheckpoint(false);
                       setCorpusRecoveryIds([]);
                       setPendingCorpusEncrypted(false);
                       setCorpusWorkspaceLoading(false);
