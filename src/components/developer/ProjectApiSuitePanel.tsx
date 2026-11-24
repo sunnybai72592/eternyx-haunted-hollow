@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PROJECT_STORAGE_KEY, normalizeSavedDeveloperProjects } from "@/lib/developerProjectLab.mjs";
+import { resolveApiEnvironmentSuite } from "@/lib/projectApiEnvironment.mjs";
 import { API_BASELINE_KEY, readApiBaselines, storeApiBaseline, fingerprintApiSuite, createApiBaseline, compareApiBaselines, exportApiRegression } from "@/lib/projectApiRegression.mjs";
 import {
   PROJECT_API_SUITE_KEY, MAX_PROJECT_SCENARIOS, addProjectApiScenario, exportProjectApiReport,
@@ -63,16 +64,24 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const [results, setResults] = useState<ReportRow[]>([]);
   const [runProjectId, setRunProjectId] = useState("");
   const [runSignature, setRunSignature] = useState("");
+  const [environment, setEnvironment] = useState("saved");
+  const [targetOrigin, setTargetOrigin] = useState("");
+  const [runEnvironment, setRunEnvironment] = useState("saved");
   const [baselines, setBaselines] = useState<Baseline[]>(loadBaselines);
   const [currentEvidence, setCurrentEvidence] = useState<{signature:string; baseline:Baseline} | null>(null);
   const [baselineError, setBaselineError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
-  const available = scenarios.filter(s => s.projectId === projectId);
+  const savedScenarios = scenarios.filter(s => s.projectId === projectId);
+  let available: Scenario[] = [];
+  let targetError = "";
+  try { available = resolveApiEnvironmentSuite(savedScenarios,environment,targetOrigin); }
+  catch (cause) { targetError = cause instanceof Error ? cause.message : "Invalid environment target."; }
+  const targetOrigins = [...new Set(available.map(item=>new URL(item.url).origin))];
   const summary = summarizeProjectApiResults(results);
-  const stale = runProjectId !== projectId || runSignature !== projectApiSuiteSignature(available);
+  const stale = runProjectId !== projectId || runSignature !== projectApiSuiteSignature(available) || runEnvironment !== environment || !!targetError;
   const complete = !stale && !running && isProjectApiRunComplete(available, results);
   useEffect(() => () => abortRef.current?.abort(), []);
-  const baseline = baselines.find(b => b.projectId === projectId);
+  const baseline = baselines.find(b => b.projectId === projectId && b.environment === environment);
   const current = complete && currentEvidence?.signature === runSignature ? currentEvidence.baseline : null;
   const comparison = baseline && current ? compareApiBaselines(baseline,current) : null;
   useEffect(() => {
@@ -81,17 +90,18 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     setBaselineError("");
     if (complete) {
       fingerprintApiSuite(available).then(fingerprint => {
-        if (active) setCurrentEvidence({signature:runSignature, baseline:createApiBaseline(available,results,fingerprint)});
+        if (active) setCurrentEvidence({signature:runSignature, baseline:createApiBaseline(available,results,fingerprint,undefined,environment)});
       }).catch(() => { if (active) setBaselineError("Unable to create comparable evidence in this browser."); });
     }
     return () => { active = false; };
-  }, [complete, runSignature, results]);
+  }, [complete, runSignature, results, environment]);
   useEffect(() => {
     const refresh = (event: StorageEvent) => { if (event.key === API_BASELINE_KEY || event.key === null) setBaselines(loadBaselines()); };
     window.addEventListener("storage",refresh);
     return () => window.removeEventListener("storage",refresh);
   }, []);
 
+  useEffect(() => { setEnvironment("saved"); setTargetOrigin(""); }, [projectId]);
   useEffect(() => {
     if (projects.some(p => p.id === initialProjectId)) setProjectId(initialProjectId);
   }, [initialProjectId, projects]);
@@ -121,7 +131,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     if (!current || !complete || running) return;
     try {
       const latest = loadBaselines();
-      if (latest.some(b=>b.projectId===projectId) && !window.confirm("Replace the saved baseline for this project with the current completed run?")) return;
+      if (latest.some(b=>b.projectId===projectId && b.environment===environment) && !window.confirm("Replace the saved baseline for this project and selected environment?")) return;
       const next = storeApiBaseline(latest,current);
       localStorage.setItem(API_BASELINE_KEY,JSON.stringify(next));
       setBaselines(next);
@@ -129,9 +139,9 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     } catch { flash("Unable to save baseline in this browser.",true); }
   };
   const removeBaseline = () => {
-    if (running || !window.confirm("Delete this project’s saved API baseline?")) return;
+    if (running || !window.confirm("Delete this project’s baseline for the selected environment?")) return;
     try {
-      const next = loadBaselines().filter(b=>b.projectId!==projectId);
+      const next = loadBaselines().filter(b=>b.projectId!==projectId || b.environment!==environment);
       localStorage.setItem(API_BASELINE_KEY,JSON.stringify(next));
       setBaselines(next);
       flash("Saved regression baseline removed.");
@@ -159,8 +169,8 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     } catch (cause) { flash(cause instanceof Error ? cause.message : "Import failed.", true); }
   };
   const run = async () => {
-    if (running || abortRef.current || !projectId || !available.length) return;
-    const targets = [...new Set(available.map(item => new URL(item.url).origin))];
+    if (running || abortRef.current || !projectId || !available.length || targetError) return;
+    const targets = targetOrigins;
     if (!window.confirm("Run " + available.length + " GET/HEAD check(s) against " + targets.join(", ") +
       "? This will send actual network requests without cookies or authorization headers. Optional JSON checks read up to 64 KiB per response.")) return;
     const abort = new AbortController();
@@ -169,6 +179,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     setCurrentEvidence(null);
     setRunProjectId(projectId);
     setRunSignature(projectApiSuiteSignature(available));
+    setRunEnvironment(environment);
     setRunning(true);
     flash("Running real browser requests, one at a time. The target API must permit CORS.");
     try {
@@ -181,6 +192,8 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const chooseProject = (value: string) => {
     if (running) return;
     setProjectId(value);
+    setEnvironment("saved");
+    setTargetOrigin("");
     setResults([]);
     setRunProjectId("");
     setRunSignature("");
@@ -232,13 +245,13 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           <p className="text-xs text-slate-400 sm:col-span-2">GET only. Checks own JSON fields within 64 KiB. Field values and body content are never retained or exported. Do not put secrets in paths.</p>
         </div>}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={running || available.length >= MAX_PROJECT_SCENARIOS || (!!jsonPath.trim() && draft.method !== "GET")} onClick={add}>
+          <Button type="button" variant="outline" disabled={running || savedScenarios.length >= MAX_PROJECT_SCENARIOS || (!!jsonPath.trim() && draft.method !== "GET")} onClick={add}>
             <Save className="mr-2 h-4 w-4"/>Save current request as check</Button>
-          <span className="self-center text-xs text-slate-400">{available.length} / {MAX_PROJECT_SCENARIOS} checks linked</span>
+          <span className="self-center text-xs text-slate-400">{savedScenarios.length} / {MAX_PROJECT_SCENARIOS} checks linked</span>
         </div>
         <p className="text-xs text-amber-200">Only the current request method, URL without query string or fragment, scenario name, expected status and timeout are saved. Headers, request bodies and credentials are discarded. Do not put secrets in URL paths or names. Only GET/HEAD are supported.</p>
         <div className="space-y-2" aria-label="Saved API scenarios">
-          {available.length ? available.map(s => <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm">
+          {savedScenarios.length ? savedScenarios.map(s => <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm">
             <div className="min-w-0 flex-1">
               <p className="font-medium">{s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms · {s.expectedContentType || "any content type"}{s.jsonContract ? " · JSON " + s.jsonContract.path + " : " + s.jsonContract.type : ""}</p>
             </div>
@@ -246,11 +259,25 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
               <Trash2 className="h-4 w-4"/></Button>
           </div>) : <p className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-400">Add GET or HEAD requests using the composer below.</p>}
         </div>
+        <section aria-label="API execution environment" className="space-y-3 rounded-xl border border-cyan-400/20 p-4">
+          <h3 className="font-semibold">Execution environment</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2"><Label htmlFor="api-execution-environment">Target selection</Label>
+              <select id="api-execution-environment" value={environment} disabled={running} onChange={e=>{setEnvironment(e.target.value);setTargetOrigin("");}} className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+                <option value="saved">Original saved URLs</option><option value="development">Development override</option><option value="staging">Staging override</option><option value="preview">Preview override</option>
+              </select></div>
+            {environment!=="saved" && <div className="space-y-2"><Label htmlFor="api-execution-origin">Exact authorized target origin</Label>
+              <Input id="api-execution-origin" value={targetOrigin} disabled={running} maxLength={512} onChange={e=>setTargetOrigin(e.target.value)} placeholder="https://staging.example.com" className="border-slate-700 bg-slate-950 text-white"/></div>}
+          </div>
+          <p className="text-xs text-slate-400">Overrides replace only the origin of a single-origin suite, never saved paths or contracts. They are session-only. Environment names are labels, not proof of host ownership; use authorized targets only.</p>
+          {targetError && <p role="status" className="text-sm text-amber-300">{targetError}</p>}
+          {!!targetOrigins.length && <p className="break-all text-xs text-cyan-200">Effective targets: {targetOrigins.join(", ")}</p>}
+        </section>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" disabled={running || available.length === 0} onClick={() => void run()}><Play className="mr-2 h-4 w-4"/>Run selected project suite</Button>
+          <Button type="button" disabled={running || !!targetError || available.length === 0} onClick={() => void run()}><Play className="mr-2 h-4 w-4"/>Run selected project suite</Button>
           {running && <Button type="button" variant="destructive" onClick={() => abortRef.current?.abort()}>
             <StopCircle className="mr-2 h-4 w-4"/>Cancel current request and stop</Button>}
-          <Button type="button" size="sm" variant="outline" disabled={!available.length || running}
+          <Button type="button" size="sm" variant="outline" disabled={!savedScenarios.length || running}
             onClick={() => saveJson("eternyx-api-suite.json", exportProjectApiSuite(scenarios, projectId))}>
             <Download className="mr-2 h-4 w-4"/>Export sanitized suite</Button>
         </div>
@@ -267,7 +294,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         </div>}
         <section aria-label="API regression intelligence" className="space-y-3 rounded-xl border border-slate-700 p-4">
           <h3 className="font-semibold">API regression intelligence</h3>
-          <p className="text-xs text-slate-400">Compare completed runs of the exact same saved suite. Only fixed outcomes, identifiers, timings and a SHA-256 configuration fingerprint are saved. Local observations, not production certification.</p>
+          <p className="text-xs text-slate-400">Compare completed runs of the exact same suite and selected environment. Only fixed outcomes, identifiers, timings and a SHA-256 configuration fingerprint are saved. Local observations, not production certification.</p>
           {baseline ? <p className="text-xs text-slate-300">Baseline saved: {new Date(baseline.savedAt).toLocaleString()} · {baseline.cases.length} checks</p> : <p className="text-sm text-slate-400">No saved baseline. Complete a run and save it for comparison.</p>}
           {baselineError && <p role="alert" className="text-xs text-amber-300">{baselineError}</p>}
           {comparison?.state === "incompatible" && <p role="status" className="text-sm text-amber-300">Suite configuration changed. The saved baseline is not comparable.</p>}
