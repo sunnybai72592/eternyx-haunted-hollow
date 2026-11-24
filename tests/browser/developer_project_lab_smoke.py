@@ -614,6 +614,7 @@ if __name__ == "__main__":
     args=parser.parse_args()
     ORIGIN=target_origin(args)
     CASES=[]
+    started_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z")
     try:
         with sync_playwright() as playwright:
             browser=playwright.chromium.launch(channel="chrome")
@@ -624,11 +625,13 @@ if __name__ == "__main__":
                                                 reduced_motion="reduce",service_workers="block",ignore_https_errors=False)
                     def external(route):
                         url=urlsplit(route.request.url)
-                        if url.scheme != urlsplit(ORIGIN).scheme or url.netloc != urlsplit(ORIGIN).netloc:
+                        is_external = url.scheme != urlsplit(ORIGIN).scheme or url.netloc != urlsplit(ORIGIN).netloc
+                        is_write = args.staging and route.request.method not in ("GET", "HEAD")
+                        if is_external:
                             NETWORK_AUDIT["blocked_external_requests"] += 1
-                            return route.abort()
-                        if args.staging and route.request.method not in ("GET", "HEAD"):
+                        if is_write:
                             NETWORK_AUDIT["blocked_write_attempts"] += 1
+                        if is_external or is_write:
                             return route.abort()
                         return route.continue_()
                     context.route("**/*",external)
@@ -667,6 +670,9 @@ if __name__ == "__main__":
             "asset_failures":ASSET_FAILURES,
             "network_audit":NETWORK_AUDIT,
             "api_requests_executed":not bool(args.staging),
+            "started_at":started_at,
+            "run_id":os.getenv("GITHUB_RUN_ID",""),
+            "run_attempt":os.getenv("GITHUB_RUN_ATTEMPT",""),
             "finished_at":datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
             "commit":os.getenv("GITHUB_SHA","local-unknown"),
             "cases":CASES,
