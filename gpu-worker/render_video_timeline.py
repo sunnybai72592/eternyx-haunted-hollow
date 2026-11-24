@@ -289,17 +289,26 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
         duration = total / fps
         if AUDIO_EDIT_KEYS & set(soundtrack):
             edit = audio_edit(soundtrack, total, fps)
-            active = edit["active_ms"] / 1000
-            filters = [f"[{len(shots)}:a:0]atrim=start={edit['source_start_ms']/1000:.6f}",
-                       "asetpts=PTS-STARTPTS", f"atrim=duration={active:.6f}",
-                       "aresample=48000", f"volume={soundtrack['volume_percent']/100:.2f}"]
-            if edit["fade_in_ms"]:
-                filters.append(f"afade=t=in:st=0:d={edit['fade_in_ms']/1000:.6f}")
-            if edit["fade_out_ms"]:
-                filters.append(f"afade=t=out:st={active-edit['fade_out_ms']/1000:.6f}:d={edit['fade_out_ms']/1000:.6f}")
-            if edit["timeline_start_ms"]:
-                filters.append(f"adelay={edit['timeline_start_ms']}:all=1")
-            filters.extend(["apad", f"atrim=duration={duration:.6f}", "asetpts=PTS-STARTPTS"])
+            # Normalize to 48 kHz before trimming, then rebuild timestamps from
+            # sample counts. Both 16 and 24 fps divide 48000 exactly.
+            # Time-based adelay/apad after a timestamp-shifting resample can
+            # lose leading silence or shorten the audio stream.
+            total_samples = total * 48000 // fps
+            source_start = edit["source_start_ms"] * 48
+            delay = edit["timeline_start_ms"] * 48
+            active = edit["duration_ms"] * 48 if edit["duration_ms"] else total_samples - delay
+            fade_in = edit["fade_in_ms"] * 48
+            fade_out = edit["fade_out_ms"] * 48
+            filters = [f"[{len(shots)}:a:0]aresample=48000",
+                       f"atrim=start_sample={source_start}:end_sample={source_start+active}",
+                       "asetpts=N/SR/TB", f"volume={soundtrack['volume_percent']/100:.2f}"]
+            if fade_in:
+                filters.append(f"afade=t=in:ss=0:ns={fade_in}")
+            if fade_out:
+                filters.append(f"afade=t=out:ss={active-fade_out}:ns={fade_out}")
+            if delay:
+                filters.append(f"adelay={delay}S:all=1")
+            filters.extend(["apad", f"atrim=end_sample={total_samples}", "asetpts=N/SR/TB"])
             graph.append(",".join(filters) + "[outa]")
         else:
             graph.append(f"[{len(shots)}:a:0]atrim=duration={duration:.4f},asetpts=PTS-STARTPTS,"
@@ -309,7 +318,13 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
         cmd += ["-an"]
     else:
         cmd += ["-map", "[outa]", "-c:a", "aac", "-b:a", "96k"]
-    cmd += ["-sn", "-dn", "-frames:v", str(total), "-r", str(fps), "-t", f"{total/fps:.4f}",
+    # The finite concat already emits exactly total video frames. For edited
+    # soundtracks, avoid -frames:v terminating muxing before padded audio ends.
+    edited_audio = soundtrack is not None and bool(AUDIO_EDIT_KEYS & set(soundtrack))
+    cmd += ["-sn", "-dn"]
+    if not edited_audio:
+        cmd += ["-frames:v", str(total)]
+    cmd += ["-r", str(fps), "-t", f"{total/fps:.6f}" if edited_audio else f"{total/fps:.4f}",
             "-c:v", "libx264", "-preset", "medium" if quality in ("high", "cinematic") else "veryfast",
             "-crf", "18" if quality == "cinematic" else ("19" if quality == "high" else "23"), "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", str(destination)]

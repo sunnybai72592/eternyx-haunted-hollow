@@ -234,12 +234,15 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
       "-ac","1","-ar","48000","-f","s16le","pipe:1"],{timeout:30000,maxBuffer:1024*1024});
     assert.equal(decoded.status,0,decoded.stderr?.toString());
     const pcm=decoded.stdout;
+    // AAC/Opus may add a small final codec frame, never a missing movie tail.
+    const duration=pcm.length/(2*48000);
+    assert.ok(duration>=1.98&&duration<=2.05,name+" decoded duration "+duration);
     const rms=(a,b)=>{
       let sum=0,n=0;
       for(let i=Math.round(a*48000)*2;i<Math.min(pcm.length,Math.round(b*48000)*2);i+=2){
         sum+=(pcm.readInt16LE(i)/32768)**2;n++;
       }
-      assert.ok(n>100);
+      assert.equal(n,Math.round(b*48000)-Math.round(a*48000),name+" incomplete PCM window");
       return Math.sqrt(sum/n);
     };
     const mid=rms(.65,1.15);
