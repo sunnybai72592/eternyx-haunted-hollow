@@ -31,7 +31,7 @@ export async function sha256(bytes){
  const digest=await crypto.subtle.digest('SHA-256',bytes);
  return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
 }
-export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fetcher=fetch,randomId=()=>crypto.randomUUID()}){
+export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,allowedOwners=null,fetcher=fetch,randomId=()=>crypto.randomUUID()}){
  return async(req)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(req.method!=='POST')return json(405,'method-not-allowed');
@@ -53,6 +53,7 @@ export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fe
    const user=await userResponse.json();
    if(!UUID.test(user.id??'')||user.is_anonymous===true)return json(401,'authentication-required');
    const owner=user.id;
+   if(allowedOwners!==null && (!(allowedOwners instanceof Set)||!allowedOwners.has(owner)))return json(403,'staging-account-not-allowed');
    const reserve=async(requestId,bytes)=>{
     const result=await call('/rest/v1/rpc/security_evidence_gateway_reserve_v2',true,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_owner:owner,p_request:requestId,p_bytes:bytes})});
     if(!result.ok)return 'unavailable';
