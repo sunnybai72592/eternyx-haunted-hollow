@@ -5,7 +5,7 @@ import pathlib
 import stat
 import types
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location("probe", pathlib.Path(__file__).resolve().parents[1] / "scripts/labs-runner-kvm-capability.py")
 probe = importlib.util.module_from_spec(spec)
@@ -54,6 +54,14 @@ class CapabilityTest(unittest.TestCase):
     def test_ioctl_failure(self):
         a = self.run_case("api_probe_failed", ioctl=Mock(side_effect=OSError(errno.ENOTTY, "not supported")))
         a["close_device"].assert_called_once_with(7)
+
+    def test_privileged_probe_never_grants_release(self):
+        with patch.object(probe.os, "geteuid", return_value=0), patch.object(probe, "inspect_kvm", return_value="api_version_12"):
+            result = probe.report()
+        self.assertTrue(result["effectiveRoot"])
+        self.assertTrue(result["kvmApiAvailable"])
+        for key in ("vmBootAttempted", "hardwareAcceptanceVerified", "providerActivationAllowed", "productionReleaseReady"):
+            self.assertIs(result[key], False)
 
 if __name__ == "__main__":
     unittest.main()
