@@ -198,3 +198,24 @@ test("trusted Edge only calls fenced SQL and operator CLI uses the new worker",a
   assert.match(sql,/REVOKE ALL ON FUNCTION public\.ctf_range_report_session\(uuid,text,text\)/);
   assert.doesNotMatch(sql,/SECURITY DEFINER/);
 });
+
+test("entire inventory must validate before any runtime mutation",async()=>{
+ const m=mock({inventory:[inventory("stopping"),{...inventory("running"),id:"invalid"}]}),r=runtime();
+ await assert.rejects(runFencedProviderTick({api:m.api,runtime:r}));
+ assert.deepEqual(r.calls,[]);
+ const duplicate=mock({inventory:[inventory("stopping"),inventory("running")]});
+ await assert.rejects(runFencedProviderTick({api:duplicate.api,runtime:r}),/Unsafe worker inventory/);
+ assert.deepEqual(r.calls,[]);
+});
+test("unconfirmed teardown never releases a fenced reservation",async()=>{
+ const m=mock({inventory:[inventory("stopping")]}),r=runtime();
+ r.stop=async()=>false;
+ await assert.rejects(runFencedProviderTick({api:m.api,runtime:r}),/teardown not confirmed/);
+ assert.equal(m.calls.some(x=>x.action==="report"),false);
+});
+test("worker fails closed on ambiguous startup cleanup",async()=>{
+ const m=mock({claim:{ok:true,sessionId:session,challengePack:"http-basics-v1",expiresAt:future}}),r=runtime({startError:true});
+ r.stop=async()=>false;
+ await assert.rejects(runFencedProviderTick({api:m.api,runtime:r}),/teardown not confirmed/);
+ assert.equal(m.calls.some(x=>x.action==="report"),false);
+});

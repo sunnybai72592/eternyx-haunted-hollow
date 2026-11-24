@@ -50,15 +50,16 @@ export async function runFencedProviderTick({ api, runtime, leaseId = null, now 
       inventory.sessions.length > 12) {
     throw new Error("Worker inventory missing or lease lost");
   }
-  for (const entry of inventory.sessions) {
-    const session = safeWorkerSession({
+  const sessions=inventory.sessions.map(entry=>safeWorkerSession({
       id: entry.id, status: entry.status,
       expires_at: entry.expiresAt, provider_instance_ref: entry.instanceRef,
-    });
+    }));
+  if(new Set(sessions.map(s=>s.id.toLowerCase())).size!==sessions.length||sessions.some(s=>s.status==='queued'))throw new Error('Unsafe worker inventory; no local mutation permitted');
+  for (const session of sessions) {
     const expired = isExpired(session.expiresAt, now);
     if (session.status === "stopping" || session.status === "provisioning" || expired) {
       await verifyOwnership();
-      await runtime.stop(session.id);
+      if(await runtime.stop(session.id)!==true)throw new Error('Local teardown not confirmed; reservation retained');
       await verifyOwnership();
       const state = expired ? "expired" : session.status === "provisioning" ? "failed" : "stopped";
       const reported = await api.call({
@@ -73,7 +74,7 @@ export async function runFencedProviderTick({ api, runtime, leaseId = null, now 
     if (session.status === "running") {
       if (!await runtime.exists(session.id)) {
         await verifyOwnership();
-        await runtime.stop(session.id);
+        if(await runtime.stop(session.id)!==true)throw new Error('Local teardown not confirmed; reservation retained');
         await verifyOwnership();
         const reported = await api.call({
           action: "report", leaseId: fence, sessionId: session.id, state: "failed",
@@ -128,7 +129,7 @@ export async function runFencedProviderTick({ api, runtime, leaseId = null, now 
     // Do not execute cleanup after losing the lease. The new owner, once
     // elected, will adopt and reconcile this session and Docker project.
     await verifyOwnership();
-    await runtime.stop(id);
+    if(await runtime.stop(id)!==true)throw new Error('Local teardown not confirmed; reservation retained');
     await verifyOwnership();
     const ack = await api.call({
       action: "report", leaseId: fence, sessionId: id, state: "failed",

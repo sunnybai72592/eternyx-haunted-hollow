@@ -101,12 +101,13 @@ export class LocalDockerRangeRuntime {
     }
 
     const token = randomBytes(32).toString("hex");
-    let launched = false;
+    let launchAttempted = false;
     let phase = "compose-start";
     try {
       await assertLocalLaunchAllowed();
+      launchAttempted = true;
       executeDocker(composeArgs(sessionId, ["up", "--detach", "--build", "--force-recreate"]), token);
-      launched = true;
+      await assertLocalLaunchAllowed();
       // Only verified live containers on both internal-only Docker bridges
       // can supply a destination to the trusted-host loopback listener.
       phase="verify-private-upstream";
@@ -138,6 +139,7 @@ export class LocalDockerRangeRuntime {
           }
           if (response.ok) {
             await this.attest(sessionId);
+            await assertLocalLaunchAllowed();
             // The private gateway bearer is never stored in Supabase or logs.
             return { instanceRef: projectForSession(sessionId), localPort: port, token };
           }
@@ -146,7 +148,7 @@ export class LocalDockerRangeRuntime {
       }
       throw new Error("Internal gateway unavailable to operator host");
     } catch {
-      if (launched) {
+      if (launchAttempted) {
         try { await this.stop(sessionId); }
         catch { /* Do not report successful cleanup. */ }
       }
@@ -280,9 +282,30 @@ export class LocalDockerRangeRuntime {
     return true;
   }
 
-  async stop(sessionId) {
+  // Inspect the exact project even when NONE of its containers carry the
+  // managed label. Never infer authority to remove from a name prefix.
+  #projectMembers(sessionId) {
+    const project=projectForSession(sessionId);
+    const out=executeDocker(["ps","--all","--no-trunc","--quiet","--filter","label=com.docker.compose.project="+project]);
+    const ids=out?out.split(/\r?\n/).filter(Boolean):[];
+    if(ids.length>2||new Set(ids).size!==ids.length||ids.some(id=>!/^[a-f0-9]{64}$/.test(id)))
+      throw new Error("Unsafe exact-project container inventory; teardown refused");
+    const services=new Set();
+    for(const id of ids){
+      const raw=JSON.parse(executeDocker(["inspect","--format","{{json .}}",id]));
+      const member=verifyManagedContainer(raw);
+      if(member.id!==id||member.project!==project||services.has(member.service))
+        throw new Error("Unverified exact-project membership; teardown refused");
+      services.add(member.service);
+    }
+    return ids.sort();
+  }
+
+  async stop(sessionId, expectedIds=null) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
+    const before=this.#projectMembers(sessionId);
+    if(expectedIds!==null&&(!Array.isArray(expectedIds)||before.join(',')!==[...expectedIds].sort().join(',')))throw new Error('Project changed before scoped teardown');
     const relay=this.#hostRelays.get(sessionId);
     let relayFailed=false;
     if(relay) {
@@ -293,7 +316,10 @@ export class LocalDockerRangeRuntime {
     // Always attempt Docker removal, even if stopping the host listener
     // encountered a local error. Never declare the reservation cleaned when
     // either part fails.
-    executeDocker(composeArgs(sessionId, ["down", "--volumes", "--remove-orphans"]));
+    // This template has no named volumes. Never remove unknown volumes or orphans.
+    if(this.#projectMembers(sessionId).join(",")!==before.join(","))throw new Error("Project changed during teardown");
+    executeDocker(composeArgs(sessionId, ["down"]));
+    if(this.#projectMembers(sessionId).length!==0)throw new Error("Managed containers remain after teardown");
     if(relayFailed)throw new Error("Host relay teardown requires operator review");
     return true;
   }
