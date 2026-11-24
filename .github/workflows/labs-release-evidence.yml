@@ -1,0 +1,30 @@
+name: LABS release evidence assessment
+on:
+  pull_request:
+    paths:
+      - 'scripts/labs-release-assessment.mjs'
+      - 'scripts/labs-bootstrap-manifest.mjs'
+      - 'scripts/sql/labs-staging-catalog-readonly.sql'
+      - 'tests/eternyx-labs-release-assessment.test.mjs'
+      - 'docs/examples/labs-*-observation.json'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - 'src/lib/eternyxVerifiedCtf.mjs'
+      - '.github/workflows/labs-release-evidence.yml'
+permissions:
+  contents: read
+jobs:
+  offline-release-assessment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/eternyx-labs-release-assessment.test.mjs
+      - run: node scripts/labs-release-assessment.mjs
