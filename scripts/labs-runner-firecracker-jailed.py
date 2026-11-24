@@ -19,6 +19,7 @@ SPEC = importlib.util.spec_from_file_location(
 boot = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(boot)
 CGROOT = pathlib.Path("/sys/fs/cgroup")
+EXEC_BASE = pathlib.Path("/var/lib")
 MARKER = b"ETERNYX_JAILED_GUEST_INIT_OK"
 OBSERVED_KERNEL = "a6a897d3b8c177c8736e8bce85b6b9cd8e3275f94107221ee93820fcd5388384"
 LIMITS = {"memory.max": "805306368", "pids.max": "64", "cpu.max": "100000 100000"}
@@ -27,6 +28,35 @@ UID = GID = 65534
 def require(ok, message):
     if not ok:
         raise RuntimeError(message)
+
+def verify_exec_directory(path):
+    # Never remount /run, override noexec, or fall back to a user-writable
+    # directory. Every ancestor must be a trusted, non-symlink directory.
+    require(path.is_absolute(), "executable directory must be absolute")
+    for part in (path, *path.parents):
+        info = part.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0
+                and not info.st_mode & 0o022, "untrusted executable directory: " + str(part))
+    require(not os.statvfs(path).f_flag & os.ST_NOEXEC,
+            "executable workspace filesystem is noexec: " + str(path))
+
+def verify_release_executable(path):
+    info = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_uid == 0
+            and info.st_mode & stat.S_IXUSR and not info.st_mode & 0o022,
+            "untrusted release executable: " + path.name)
+    require(not os.statvfs(path).f_flag & os.ST_NOEXEC,
+            "release executable filesystem is noexec: " + path.name)
+    # A real exec verifies more than mode bits (mount and host policy included).
+    try:
+        result = subprocess.run([str(path), "--version"], check=True, timeout=5,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, env={}, cwd="/")
+    except PermissionError as exc:
+        raise RuntimeError("host denied execution of pinned " + path.name
+                           + "; no policy bypass attempted") from exc
+    expected = ("Jailer " if path.name == "jailer" else "Firecracker ") + boot.VERSION
+    require(expected.encode() in result.stdout.splitlines(), "unexpected release version")
 
 def read(path):
     return path.read_text().strip()
@@ -191,12 +221,21 @@ def main(source):
     require(stat.S_ISCHR(pathlib.Path("/dev/kvm").stat().st_mode), "KVM absent")
     require(ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) == 0,
             "cannot become child subreaper")
-    with tempfile.TemporaryDirectory(prefix="eternyx-jailed-", dir="/run") as directory:
+    verify_exec_directory(EXEC_BASE)
+    print(json.dumps({"workspaceBase": str(EXEC_BASE),
+                      "runMountNoexec": bool(os.statvfs("/run").f_flag & os.ST_NOEXEC),
+                      "workspaceMountNoexec": False}), flush=True)
+    with tempfile.TemporaryDirectory(prefix="eternyx-jailed-", dir=EXEC_BASE) as directory:
         work = pathlib.Path(directory)
+        verify_exec_directory(work)
+        require(stat.S_IMODE(work.stat().st_mode) == 0o700, "workspace is not private")
         (work / "jails").mkdir(mode=0o700)
         for name in ("release.tgz", "kernel", "init-normal", "init-timeout"):
             shutil.copyfile(source / name, work / name)
         boot.extract_pinned(work / "release.tgz", work)
+        for name in ("jailer", "firecracker"):
+            verify_release_executable(work / name)
+        print(json.dumps({"pinnedReleaseExecutablesVerified": True}), flush=True)
         kernel = work / "kernel"
         require(0 < kernel.stat().st_size <= 128*1024*1024, "invalid kernel size")
         actual = boot.digest(kernel)
