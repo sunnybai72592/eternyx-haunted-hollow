@@ -1,0 +1,90 @@
+{
+  "schema": "eternyx.labs.full-staging-deployment-observation.v1",
+  "observedOn": "2026-11-24",
+  "projectRef": "mhodwvypfbxafamkrgsk",
+  "sourceCommit": "e9f20906432f40a97331ff5bfee2c60e833f6523",
+  "dormantDeploymentCommit": "29239a784a7746d978c030523f6a88118904cf59",
+  "scope": "historical-management-observation-and-source-readback",
+  "functions": [
+    {
+      "slug": "ctf-verified",
+      "version": 6,
+      "verifyJwt": true,
+      "bundleSha256": "7fbf51aefd4c166ed83b1ad59ba180c75cfee7ed5a1600753f990bd8ae16ab46",
+      "status": "ACTIVE"
+    },
+    {
+      "slug": "ctf-range-control",
+      "version": 6,
+      "verifyJwt": true,
+      "bundleSha256": "41268de2a0c3eb8f3a5515426cc1df888b4f7ebdc0ff9020e4804c2bd2921fb3",
+      "status": "ACTIVE"
+    },
+    {
+      "slug": "ctf-range-access",
+      "version": 1,
+      "verifyJwt": true,
+      "bundleSha256": "bb0fbc5d64b66d8b86f0121f361018e2786f476aee2faa6869dc3930490b753b",
+      "status": "ACTIVE"
+    },
+    {
+      "slug": "ctf-range-worker",
+      "version": 1,
+      "verifyJwt": false,
+      "bundleSha256": "738e8517b4b9a1d2eea6c35a446ab188ca2f98d97afb1970a964d672ae3b91d7",
+      "status": "ACTIVE"
+    },
+    {
+      "slug": "ctf-range-access-check",
+      "version": 1,
+      "verifyJwt": false,
+      "bundleSha256": "d1cbc1e9ddd20b7b1a0179ca1ad5bc7889ab1c8805f65d9bb7ac570df0539979",
+      "status": "ACTIVE"
+    }
+  ],
+  "additionalLocalSourcePins": [
+    {
+      "path": "supabase/functions/_shared/ctf-range-access-contract.mjs",
+      "gitBlobSha1": "4e8a198c7d6395268864629783360e18f54de8b9"
+    },
+    {
+      "path": "supabase/functions/_shared/ctf-range-dormant-rollout.mjs",
+      "gitBlobSha1": "273b28d8356719e958a1fa0f6a727def959bb5c9"
+    },
+    {
+      "path": "supabase/functions/_shared/ctf-range-fenced-contract.mjs",
+      "gitBlobSha1": "ad86fe2e5cf07be83a1ead136a0b45dc5f7f62cf"
+    },
+    {
+      "path": "supabase/functions/_shared/ctf-range-worker-contract.mjs",
+      "gitBlobSha1": "dfcb83efbdf9a2073d0011327d8a93be7bba0c9d"
+    },
+    {
+      "path": "supabase/functions/ctf-range-access-check/index.ts",
+      "gitBlobSha1": "a7f6061f2e3f4061c84b74336bc9904959be67bf"
+    },
+    {
+      "path": "supabase/functions/ctf-range-access/index.ts",
+      "gitBlobSha1": "b1a96f6ea289b79a1bfed101ffaaf13c304cb59c"
+    },
+    {
+      "path": "supabase/functions/ctf-range-worker/index.ts",
+      "gitBlobSha1": "26452f6c681d305825b83f52edc7a643e4cdb098"
+    }
+  ],
+  "dormantBundleReadbackFileCopies": 15,
+  "dormantLockReadback": true,
+  "catalogChecksPassed": true,
+  "providerDisabled": true,
+  "spendDisabled": true,
+  "authUsers": 0,
+  "verifiedSolves": 0,
+  "rangeSessions": 0,
+  "accessGrants": 0,
+  "spendReservations": 0,
+  "liveHttpAcceptanceVerified": false,
+  "authenticatedAcceptanceVerified": false,
+  "physicalHardwareVerified": false,
+  "productionReady": false,
+  "releaseAuthorized": false
+}
