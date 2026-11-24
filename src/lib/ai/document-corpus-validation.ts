@@ -2,6 +2,7 @@ import {analyzeCorpusFields,parseAnalyticsMeasurement,type Observation} from "./
 import {addCorpusDocuments,type CorpusDocument} from "./document-corpus-tools";
 export const MAX_VALIDATION_RULES=20;
 export const MAX_TEMPLATE_CHARS=16000;
+export const MAX_VALIDATION_EVIDENCE=4000;
 export const RULE_OPERATORS=["present","equals","contains","range"] as const;
 export type RuleOperator=typeof RULE_OPERATORS[number];
 export type ValidationRule={id:string;field:string;operator:RuleOperator;expected:string;minimum:string;maximum:string};
@@ -54,17 +55,23 @@ function evaluate(rule:ValidationRule,observations:Observation[],excluded:boolea
   }
   const min=parseAnalyticsMeasurement(rule.minimum)!,max=parseAnalyticsMeasurement(rule.maximum)!;
   if(observations.some(o=>!o.measurement||o.measurement.dimension!==min.dimension))return {status:"review",reason:"At least one value has an unsupported or incompatible measurement unit."};
-  const pass=observations.every(o=>o.measurement!.canonicalValue>=min.canonicalValue&&o.measurement!.canonicalValue<=max.canonicalValue);
+  const near=(a:number,b:number)=>Math.abs(a-b)<=8*Number.EPSILON*Math.max(Math.abs(a),Math.abs(b),Number.MIN_VALUE);
+  const values=observations.map(o=>o.measurement!.canonicalValue);
+  if(values.some(v=>(v<min.canonicalValue&&near(v,min.canonicalValue))||(v>max.canonicalValue&&near(v,max.canonicalValue))))return {status:"review",reason:"A converted value is just outside a bound within floating-point rounding uncertainty; review the original units."};
+  const pass=values.every(v=>v>=min.canonicalValue&&v<=max.canonicalValue);
   return pass?{status:"match",reason:"All recorded measurements fall within the inclusive user-defined bounds."}:{status:"exception",reason:"At least one recorded measurement falls outside the user-defined bounds."};
 }
 export function runValidationTemplate(documents:readonly CorpusDocument[],template:ValidationTemplate,sourceIds:readonly string[]){
   const docs=addCorpusDocuments([],documents),validated=validateTemplate(template);
   if(!sourceIds.length||new Set(sourceIds).size!==sourceIds.length||sourceIds.some(id=>!docs.some(d=>d.id===id)))fail("invalid_validation_sources");
   const rows:ValidationRow[]=[];
+  let evidenceCount=0;
   for(const doc of docs.filter(d=>sourceIds.includes(d.id))){
     const report=analyzeCorpusFields([doc]);
     for(const rule of validated.rules){
       const observations=report.fields.find(f=>f.key===keyOf(rule.field))?.observations??[];
+      evidenceCount+=observations.length;
+      if(evidenceCount>MAX_VALIDATION_EVIDENCE)fail("validation_evidence_limit");
       const result=evaluate(rule,observations,report.excludedLongFields>0);
       rows.push({sourceId:doc.id,sourceName:doc.name,ruleId:rule.id,field:rule.field,operator:rule.operator,...result,observations});
     }
