@@ -54,6 +54,17 @@ class JailedTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "unexpected release version"):
                 j.verify_release_executable(pathlib.Path("/var/lib/fixed/jailer"))
 
+    def test_required_kernel_pin_rejects_drift_before_boot(self):
+        with tempfile.TemporaryDirectory() as d:
+            kernel=pathlib.Path(d)/"kernel"
+            kernel.write_bytes(b"test kernel")
+            actual=j.boot.digest(kernel)
+            self.assertEqual(j.enforce_kernel_pin(kernel,False),actual)
+            with self.assertRaisesRegex(RuntimeError,"immutable"):
+                j.enforce_kernel_pin(kernel,True)
+            with patch.object(j,"OBSERVED_KERNEL",actual):
+                self.assertEqual(j.enforce_kernel_pin(kernel,True),actual)
+
     def test_good_status(self):
         j.verify_status(self.good())
 

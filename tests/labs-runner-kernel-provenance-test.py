@@ -95,6 +95,42 @@ class ProvenanceTest(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         p.kernel_digest_from_tar(path,"6.17")
 
+    def test_export_exact_verified_kernel_and_refuse_overwrite(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            tar=work/"data.tar"
+            payload=b"fixed kernel fixture"
+            with tarfile.open(tar,"w") as archive:
+                member=tarfile.TarInfo("./boot/vmlinuz-test")
+                member.size=len(payload)
+                archive.addfile(member,io.BytesIO(payload))
+            destination=work/"kernel"
+            with patch.object(p,"PIN",p.hashlib.sha256(payload).hexdigest()):
+                p.export_verified_kernel(tar,"test",destination)
+                self.assertEqual(destination.read_bytes(),payload)
+                self.assertEqual(destination.stat().st_mode&0o777,0o400)
+                with self.assertRaises(FileExistsError):
+                    p.export_verified_kernel(tar,"test",destination)
+                self.assertEqual(destination.read_bytes(),payload)
+
+    def test_export_refuses_hash_mismatch_and_untrusted_parent(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            tar=work/"data.tar"
+            with tarfile.open(tar,"w") as archive:
+                member=tarfile.TarInfo("boot/vmlinuz-test")
+                member.size=4
+                archive.addfile(member,io.BytesIO(b"test"))
+            destination=work/"kernel"
+            with self.assertRaisesRegex(RuntimeError,"immutable"):
+                p.export_verified_kernel(tar,"test",destination)
+            self.assertFalse(destination.exists())
+            work.chmod(0o755)
+            with patch.object(p,"PIN",p.hashlib.sha256(b"test").hexdigest()):
+                with self.assertRaisesRegex(RuntimeError,"private"):
+                    p.export_verified_kernel(tar,"test",destination)
+            self.assertFalse(destination.exists())
+
     def test_fixed_guest_identity_not_selected_by_runner(self):
         with patch.object(p,"command",side_effect=AssertionError("host lookup")):
             self.assertEqual(p.fixed_guest_identity(),("7.0.0-1014-aws",

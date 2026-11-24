@@ -215,7 +215,13 @@ def exercise(work, init, forced):
             print(log.read_bytes()[-4096:].decode("utf-8", errors="replace"), flush=True)
     return True
 
-def main(source):
+def enforce_kernel_pin(kernel, required):
+    actual = boot.digest(kernel)
+    if required:
+        require(actual == OBSERVED_KERNEL, "guest kernel does not match immutable Phase 41 pin")
+    return actual
+
+def main(source, require_pinned_kernel=False):
     require(os.geteuid() == 0, "requires approved ephemeral root setup")
     require((CGROOT / "cgroup.controllers").is_file(), "cgroup v2 required")
     require(stat.S_ISCHR(pathlib.Path("/dev/kvm").stat().st_mode), "KVM absent")
@@ -238,7 +244,9 @@ def main(source):
         print(json.dumps({"pinnedReleaseExecutablesVerified": True}), flush=True)
         kernel = work / "kernel"
         require(0 < kernel.stat().st_size <= 128*1024*1024, "invalid kernel size")
-        actual = boot.digest(kernel)
+        actual = enforce_kernel_pin(kernel, require_pinned_kernel)
+        print(json.dumps({"guestKernelMatchesImmutablePin": actual == OBSERVED_KERNEL,
+                          "immutableKernelEnforced": require_pinned_kernel}), flush=True)
         print(json.dumps({"runnerKernelSha256": actual,
                           "phase40ObservedKernelSha256": OBSERVED_KERNEL,
                           "runnerKernelMatchesPhase40": actual == OBSERVED_KERNEL,
@@ -250,10 +258,12 @@ def main(source):
         exercise(work, work / "init-timeout", True)
     print(json.dumps({"jailerIsolationVerified": True, "normalChildExitVerified": True,
                       "forcedDeadlineVerified": True, "ownedResourcesCleaned": True,
-                      "runnerKernelIndependentlyPinned": False, "hardwareAcceptanceVerified": False,
+                      "runnerKernelIndependentlyPinned": False,
+                      "immutableGuestKernelBootVerified": require_pinned_kernel,
+                      "hardwareAcceptanceVerified": False,
                       "providerActivationAllowed": False, "productionReleaseReady": False}), flush=True)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("expected fixed preparation directory")
-    main(pathlib.Path(sys.argv[1]).resolve(strict=True))
+    if len(sys.argv) not in (2, 3) or (len(sys.argv) == 3 and sys.argv[2] != "--require-pinned-kernel"):
+        raise SystemExit("expected fixed preparation directory and optional --require-pinned-kernel")
+    main(pathlib.Path(sys.argv[1]).resolve(strict=True), len(sys.argv) == 3)
