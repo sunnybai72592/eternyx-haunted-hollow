@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PROJECT_STORAGE_KEY, normalizeSavedDeveloperProjects } from "@/lib/developerProjectLab.mjs";
+import { API_BASELINE_KEY, readApiBaselines, storeApiBaseline, fingerprintApiSuite, createApiBaseline, compareApiBaselines, exportApiRegression } from "@/lib/projectApiRegression.mjs";
 import {
   PROJECT_API_SUITE_KEY, MAX_PROJECT_SCENARIOS, addProjectApiScenario, exportProjectApiReport,
   exportProjectApiSuite, importProjectApiSuite, normalizeProjectApiScenarios,
@@ -16,6 +17,8 @@ import {
 type Scenario = { id: string; projectId: string; name: string; method: string; url: string; expectedStatus: number; maxDurationMs: number; expectedContentType?: string; jsonContract?: { path:string; type:string } };
 type ReportRow = { scenarioId: string; method: string; origin: string; status: number | null; elapsedMs: number; passed: boolean; reason: string; contentTypeCheck?: string; jsonCheck?: string };
 type Project = { id: string; name: string };
+type Baseline = ReturnType<typeof createApiBaseline>;
+function loadBaselines(): Baseline[] { try { return readApiBaselines(localStorage.getItem(API_BASELINE_KEY) || "[]"); } catch { return []; } }
 
 function readProjects(): Project[] {
   try {
@@ -60,12 +63,34 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const [results, setResults] = useState<ReportRow[]>([]);
   const [runProjectId, setRunProjectId] = useState("");
   const [runSignature, setRunSignature] = useState("");
+  const [baselines, setBaselines] = useState<Baseline[]>(loadBaselines);
+  const [currentEvidence, setCurrentEvidence] = useState<{signature:string; baseline:Baseline} | null>(null);
+  const [baselineError, setBaselineError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const available = scenarios.filter(s => s.projectId === projectId);
   const summary = summarizeProjectApiResults(results);
   const stale = runProjectId !== projectId || runSignature !== projectApiSuiteSignature(available);
   const complete = !stale && !running && isProjectApiRunComplete(available, results);
   useEffect(() => () => abortRef.current?.abort(), []);
+  const baseline = baselines.find(b => b.projectId === projectId);
+  const current = complete && currentEvidence?.signature === runSignature ? currentEvidence.baseline : null;
+  const comparison = baseline && current ? compareApiBaselines(baseline,current) : null;
+  useEffect(() => {
+    let active = true;
+    setCurrentEvidence(null);
+    setBaselineError("");
+    if (complete) {
+      fingerprintApiSuite(available).then(fingerprint => {
+        if (active) setCurrentEvidence({signature:runSignature, baseline:createApiBaseline(available,results,fingerprint)});
+      }).catch(() => { if (active) setBaselineError("Unable to create comparable evidence in this browser."); });
+    }
+    return () => { active = false; };
+  }, [complete, runSignature, results]);
+  useEffect(() => {
+    const refresh = (event: StorageEvent) => { if (event.key === API_BASELINE_KEY || event.key === null) setBaselines(loadBaselines()); };
+    window.addEventListener("storage",refresh);
+    return () => window.removeEventListener("storage",refresh);
+  }, []);
 
   useEffect(() => {
     if (projects.some(p => p.id === initialProjectId)) setProjectId(initialProjectId);
@@ -91,6 +116,26 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       setScenarios(safe);
       flash("Project API suite saved to this browser. No credentials or response bodies stored.");
     } catch { flash("Browser storage is unavailable; no changes were saved.", true); }
+  };
+  const saveBaseline = () => {
+    if (!current || !complete || running) return;
+    try {
+      const latest = loadBaselines();
+      if (latest.some(b=>b.projectId===projectId) && !window.confirm("Replace the saved baseline for this project with the current completed run?")) return;
+      const next = storeApiBaseline(latest,current);
+      localStorage.setItem(API_BASELINE_KEY,JSON.stringify(next));
+      setBaselines(next);
+      flash("Saved local metadata-only regression baseline.");
+    } catch { flash("Unable to save baseline in this browser.",true); }
+  };
+  const removeBaseline = () => {
+    if (running || !window.confirm("Delete this project’s saved API baseline?")) return;
+    try {
+      const next = loadBaselines().filter(b=>b.projectId!==projectId);
+      localStorage.setItem(API_BASELINE_KEY,JSON.stringify(next));
+      setBaselines(next);
+      flash("Saved regression baseline removed.");
+    } catch { flash("Unable to remove baseline.",true); }
   };
   const add = () => {
     try {
@@ -121,6 +166,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     const abort = new AbortController();
     abortRef.current = abort;
     setResults([]);
+    setCurrentEvidence(null);
     setRunProjectId(projectId);
     setRunSignature(projectApiSuiteSignature(available));
     setRunning(true);
@@ -219,6 +265,23 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           <Button className="mt-3" size="sm" variant="outline" disabled={!complete} onClick={() => { if (complete) saveJson("eternyx-api-smoke-report.json", exportProjectApiReport(results)); }}>
             <Download className="mr-2 h-4 w-4"/>Export sanitized results</Button>
         </div>}
+        <section aria-label="API regression intelligence" className="space-y-3 rounded-xl border border-slate-700 p-4">
+          <h3 className="font-semibold">API regression intelligence</h3>
+          <p className="text-xs text-slate-400">Compare completed runs of the exact same saved suite. Only fixed outcomes, identifiers, timings and a SHA-256 configuration fingerprint are saved. Local observations, not production certification.</p>
+          {baseline ? <p className="text-xs text-slate-300">Baseline saved: {new Date(baseline.savedAt).toLocaleString()} · {baseline.cases.length} checks</p> : <p className="text-sm text-slate-400">No saved baseline. Complete a run and save it for comparison.</p>}
+          {baselineError && <p role="alert" className="text-xs text-amber-300">{baselineError}</p>}
+          {comparison?.state === "incompatible" && <p role="status" className="text-sm text-amber-300">Suite configuration changed. The saved baseline is not comparable.</p>}
+          {comparison?.state === "comparable" && <div className="space-y-2">
+            <p role="status" className="text-sm font-semibold">Regression comparison: {comparison.regressed} regressed · {comparison.recovered} recovered · {comparison.changed} changed</p>
+            <p className="text-xs text-slate-400">{comparison.latencyIncreases} possible latency increases (at least 100 ms and 50% slower; single-run observations).</p>
+            {comparison.cases.map((row,i)=><p key={row.scenarioId} className="break-words text-xs text-slate-300">Check {i+1}: {row.outcome} · latency {row.deltaMs>0?"+":""}{row.deltaMs} ms{row.latencyIncrease?" · possible slowdown":""}</p>)}
+          </div>}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={!current || running} onClick={saveBaseline}>{baseline?"Replace API baseline":"Save API baseline"}</Button>
+            {baseline && <Button size="sm" variant="outline" disabled={running} onClick={removeBaseline}>Delete API baseline</Button>}
+            <Button size="sm" variant="outline" disabled={comparison?.state!=="comparable" || !complete} onClick={()=>{if(baseline && current && complete && comparison?.state==="comparable")saveJson("eternyx-api-regression.json",exportApiRegression(baseline,current));}}>Export regression comparison</Button>
+          </div>
+        </section>
         <div className="space-y-2"><Label htmlFor="api-project-suite-import">Import ETERNYX project API suite JSON</Label>
           <Textarea id="api-project-suite-import" value={importText} onChange={e => setImportText(e.target.value.slice(0, 40001))}
             spellCheck={false} className="min-h-24 border-slate-700 bg-slate-950 font-mono text-xs" placeholder='{"schema":"eternyx-project-api-suite-v1","scenarios":[]}'/>
@@ -227,7 +290,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       </>}
       {message && <p role={error ? "alert" : "status"} className={error ? "text-sm text-rose-200" : "text-sm text-cyan-200"}>{message}</p>}
       <p className="text-xs leading-5 text-slate-500">
-        All tests run sequentially from this browser, only after confirmation. Cookies and authorization headers are never attached by this suite. Network/CORS failures are failures, not fabricated successful tests. Results exist only in current page memory until you export them.
+        All tests run sequentially from this browser, only after confirmation. Cookies and authorization headers are never attached by this suite. Network/CORS failures are failures, not fabricated successful tests. Raw results exist only in current page memory; optional baselines retain sanitized metadata locally.
       </p>
     </CardContent>
   </Card>;

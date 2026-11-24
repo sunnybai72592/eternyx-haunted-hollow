@@ -1,0 +1,7 @@
+# Developer Studio 4.5 — API regression intelligence
+
+A completed project-linked API run can become a manually saved, device-local regression baseline. The configuration is bound using a SHA-256 digest of normalized scenario definitions, including identifiers, order, expected status, timeout, media type and JSON field rules. A secure browser context is needed. The digest is a change detector, not encryption or signed proof. Do not put secrets into scenario definitions.
+
+Only completed, non-cancelled runs with internally consistent results are eligible. Baselines contain scenario IDs, fixed outcome codes, status, elapsed times, project ID, timestamp and digest; no URLs, bodies, raw headers, field values or raw signature. Up to 20 project baselines are retained. Replacement and deletion require confirmation. Local storage is untrusted and not an audit authority.
+
+Comparisons require identical configuration and scenario ordering. A passed-to-failed result is a regression, failed-to-passed is a recovery, and differing failure outcomes are changes. A latency increase requires both runs to pass and a difference of at least 100 ms and 50 percent; this is a single-run observation, not statistically established performance degradation. Incompatible or incomplete results cannot be exported as a comparison. No new requests occur when comparing/exporting. No scheduling, authenticated access, hosted staging or production certification is claimed.
