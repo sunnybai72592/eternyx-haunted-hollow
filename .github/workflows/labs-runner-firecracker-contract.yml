@@ -1,0 +1,23 @@
+name: LABS Firecracker diskless boot contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/labs-runner-firecracker-*'
+      - 'tests/labs-runner-firecracker-boot-test.py'
+      - '.github/workflows/labs-runner-firecracker-*.yml'
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - name: Compile fixed init and run offline tests
+        run: |
+          /usr/bin/cc -static -Os -Wall -Wextra -Werror scripts/labs-runner-firecracker-init.c -o "$RUNNER_TEMP/eternyx-fixed-init"
+          python3 -B tests/labs-runner-firecracker-boot-test.py
