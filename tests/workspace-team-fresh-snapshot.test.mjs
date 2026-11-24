@@ -76,7 +76,12 @@ test("create/join avoid a duplicate refresh and invitation codes remain visible"
     "One-time invitation created. Share the code securely; it will not be shown again after leaving this team.",
   ])assert.ok(source.includes(label+'",false,'),"Should skip duplicate/destructive refresh: "+label);
   assert.ok(source.includes("if(refreshAfter)await refresh();"));
-  assert.ok(source.includes("setRevealedToken({token:receipt.token,role:receipt.role,expires:receipt.expires_at});"));
+  const invite=source.slice(source.indexOf("const invite=()=>"),source.indexOf("const saveTask="));
+  assert.match(invite,/return workspaceTeamInviteReceipt\(data,inviteRole,Date.now\(\)\);[\s\S]*,false,\s*result=>\{[\s\S]*setRevealedToken\(receipt\);/);
+  assert.ok(invite.includes("if(inviteEpoch!==detailsEpoch.current||Date.parse(receipt.expires)<=Date.now())"));
+  assert.ok(!invite.includes("await refresh("));
+  // A valid same-scope code remains available, but an invalidated or expired
+  // receipt must never be published by this callback.
   assert.ok(source.includes('setRevealedToken(null); // one-time invite secrets should not reappear'));
 });
 test("mutation success message is shown only after successful verification refresh",()=>{
