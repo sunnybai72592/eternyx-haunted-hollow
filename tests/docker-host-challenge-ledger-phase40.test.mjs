@@ -135,7 +135,7 @@ test("invalid Ed25519 proof, altered report, wrong key and mismatched reviewer p
 }));
 test("separately issued challenge must predate the original observation, not merely carry a valid signature",()=>testdir(({dir,ledger})=>{
  const past=new Date(Date.now()-3*60000),e=setup(dir,past);
- const future=new Date(past.valueOf()+90*1000);
+ const future=new Date(past.valueOf()+150*1000);
  const issued=issueDockerHostChallenge(ledger,e.template,future);
  const bundle=signDockerReadOnlyHostReport(e.report,issued.challenge,
   e.keys.privateKey,past);
