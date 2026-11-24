@@ -8,8 +8,13 @@ const release=readFileSync(new URL("../.github/workflows/education-hosted-releas
 test("standalone inventory uses exactly the same staging inputs as hosted release",()=>{
  const keys=[...COMMON_KEYS,...WRITE_KEYS];
  for(const key of keys){
-  const target=new RegExp("^[ ]{6,10}"+key+": \\$\\{\\{ (?:vars|secrets)\\."+key+" \\}\\}$","m");
-  assert.match(inventory,target,key);
+  const scoped=["ETERNYX_RLS_INSTRUCTOR_EMAIL","ETERNYX_RLS_INSTRUCTOR_PASSWORD","ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY"];
+  if(scoped.includes(key)){
+   assert.ok(inventory.includes(key+": ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets."+key+" || '' }}"),key);
+  }else{
+   const target=new RegExp("^[ ]{6,10}"+key+": \\$\\{\\{ (?:vars|secrets)\\."+key+" \\}\\}$","m");
+   assert.match(inventory,target,key);
+  }
   assert.ok(release.includes(key+": \${{"),key);
  }
 });
