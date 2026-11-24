@@ -96,18 +96,64 @@ test("all three separately authorized lifecycle types yield internally consisten
   assert.equal(Object.isFrozen(got),true);
  }
 }));
+// Only explicitly approved, shape-validated digest fields may contain PID-like
+// digit sequences. A SHA-256 can contain any four-digit substring by chance.
+function assertPrivateCapture(p,raw){
+ const hashes=["operatorTargetSha256","approvedContextSha256","approvedDaemonIdSha256",
+  "approvedImageSha256","approvedPolicySha256","approvedClientSha256",
+  "approvedConfigManifestSha256","localHistorySha256","observedNetworkSha256",
+  "observedStateSha256","evidenceSha256"];
+ const flags=["doubleReadOnlyObservationVerified","originalPrivateRecoveryVerified",
+  "rootlessNoNetworkTargetVerified","independentHostIdentityProven",
+  "physicalIsolationIndependentlyProven","signedPermitVerified",
+  "stagingMutationAuthorized","productionDeploymentAuthorized",
+  "dockerMutationExecutedByObserver","receiptIssuedByObserver"];
+ assert.deepEqual(Object.keys(p).sort(),
+  ["schema","phase","operation","observedState","inspectedAt",...hashes,...flags].sort());
+ assert.equal(p.schema,"eternyx-docker-staging-lifecycle-capture-v1");
+ assert.ok(["before","after"].includes(p.phase));
+ assert.ok(["stop","start","restart"].includes(p.operation));
+ assert.equal(new Date(p.inspectedAt).toISOString(),p.inspectedAt);
+ for(const key of hashes)assert.match(p[key],/^[a-f0-9]{64}$/,key);
+ for(const key of flags)assert.equal(typeof p[key],"boolean",key);
+ const state=p.observedState;
+ assert.deepEqual(state,{
+  running:raw.State.Running,status:raw.State.Status,
+  startedEpochSha256:SHA("ETERNYX_DOCKER_STAGE_START_EPOCH_V1\n"+raw.State.StartedAt),
+  finishedEpochSha256:SHA("ETERNYX_DOCKER_STAGE_FINISH_EPOCH_V1\n"+raw.State.FinishedAt),
+  pidSha256:SHA("ETERNYX_DOCKER_STAGE_PID_V1\n"+raw.State.Pid),
+  exitCode:raw.State.ExitCode,restartCount:raw.RestartCount,
+  paused:raw.State.Paused,restarting:raw.State.Restarting,dead:raw.State.Dead
+ });
+ // Retain the original textual secret checks across the entire capture.
+ assert.doesNotMatch(JSON.stringify(p),/DO_NOT_PRINT|phase41-pinned-daemon|do-not-export-raw-inspect|\/run\/user/);
+}
 test("both captures contain no raw container JSON, host PID, env secrets or socket",()=>mk(dir=>{
- const {before,after}=pair(dir);
- for(const p of [before,after]){
-  assert.equal(p.doubleReadOnlyObservationVerified,true);
-  assert.equal(p.dockerMutationExecutedByObserver,false);
-  assert.equal(p.productionDeploymentAuthorized,false);
-  assert.equal(p.independentHostIdentityProven,false);
-  assert.equal(p.physicalIsolationIndependentlyProven,false);
-  assert.match(p.observedState.pidSha256,/^[a-f0-9]{64}$/);
-  assert.equal(typeof p.observedState.running,"boolean");
-  assert.doesNotMatch(JSON.stringify(p),/DO_NOT_PRINT|phase41-pinned-daemon|do-not-export-raw-inspect|\/run\/user|5656|4545/);
+ for(const op of ["stop","start","restart"]){
+  const {before,after}=pair(dir,op);
+  for(const p of [before,after]){
+   assert.equal(p.doubleReadOnlyObservationVerified,true);
+   assert.equal(p.dockerMutationExecutedByObserver,false);
+   assert.equal(p.productionDeploymentAuthorized,false);
+   assert.equal(p.independentHostIdentityProven,false);
+   assert.equal(p.physicalIsolationIndependentlyProven,false);
+   assertPrivateCapture(p,target(op,p.phase));
+  }
  }
+}));
+test("privacy assertion accepts valid PID-like digest substrings and rejects actual raw fields",()=>mk(dir=>{
+ const {after}=pair(dir,"stop");
+ // Privacy checks are separate from the canonical checksum verification tests.
+ const withPidDigits={...after,evidenceSha256:"45455656"+"a".repeat(56)};
+ assertPrivateCapture(withPidDigits,target("stop","after"));
+ for(const p of [
+  {...after,rawPid:4545},
+  {...after,observedState:{...after.observedState,pid:5656}},
+  {...after,observedState:{...after.observedState,pidSha256:"4545"}},
+  {...after,observedState:{...after.observedState,exitCode:4545}},
+  {...after,approvedDaemonIdSha256:DAEMON},
+  {...after,inspectedAt:"DO_NOT_PRINT"},
+ ])assert.throws(()=>assertPrivateCapture(p,target("stop","after")));
 }));
 test("post-state admission rejects an unperformed stop or start, while restart requires paired epoch evidence",()=>mk(dir=>{
  for(const op of ["stop","start"]){
