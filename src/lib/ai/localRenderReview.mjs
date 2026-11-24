@@ -164,7 +164,8 @@ export function checkRenderedSubtitles(text, receipt) {
   if (typeof text !== "string" || new TextEncoder().encode(text).length > MAX_SUBTITLES_BYTES) {
     fail("Subtitle file must be UTF-8 text no larger than 32 KiB.");
   }
-  const expected = localVideoSrt({version: 2, shots: receipt.shots});
+  const expected = localVideoSrt({version: 2, shots: receipt.shots,
+    ...(receipt.quality==="cinematic"?{fps:24}:{})});
   if (text.replace(/\r\n/g, "\n") !== expected) {
     fail("Subtitle timing or text differs from the exact renderer-generated sidecar.");
   }
