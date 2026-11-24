@@ -1,0 +1,88 @@
+import importlib.util
+import io
+import pathlib
+import tarfile
+import tempfile
+import unittest
+
+spec = importlib.util.spec_from_file_location("proof", pathlib.Path(__file__).resolve().parents[1] / "scripts/labs-runner-kernel-provenance.py")
+p = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(p)
+
+PKG = "linux-image-6.17.0-1001-azure"
+VER = "6.17.0-1001.1"
+def record(sha="a"*64, size="100", name="pool/main/l/linux/test.deb"):
+    return f"Package: {PKG}\nVersion: {VER}\nArchitecture: amd64\nFilename: {name}\nSHA256: {sha}\nSize: {size}\n"
+
+class ProvenanceTest(unittest.TestCase):
+    def test_exact_metadata_and_duplicate_identical_pockets(self):
+        self.assertEqual(p.metadata_pin(record()+"\n"+record(), PKG, VER), ("a"*64,100))
+
+    def test_missing_or_conflicting_metadata_refused(self):
+        for value in ("", f"Package: {PKG}\nVersion: {VER}\nArchitecture: amd64\n",
+                      record()+"\n"+record("b"*64), record(size="0"),
+                      record(name="pool/../test.deb"), record(sha="bad")):
+            with self.subTest(value=value), self.assertRaises(RuntimeError):
+                p.metadata_pin(value, PKG, VER)
+
+    def test_exact_version_and_package_owner(self):
+        p.validate_identity("6.17.0-1001-azure",PKG,VER,"amd64")
+        for args in (("6.17.0-1001-azure","other",VER,"amd64"),
+                     ("../bad",PKG,VER,"amd64"),
+                     ("6.17.0-1001-azure",PKG,"--bad","amd64")):
+            with self.assertRaises(RuntimeError):
+                p.validate_identity(*args)
+
+    def test_deb_digest_and_size_required(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=pathlib.Path(d)/"test.deb"
+            path.write_bytes(b"test")
+            p.verify_deb(path,(p.digest(path),4))
+            with self.assertRaises(RuntimeError):
+                p.verify_deb(path,("a"*64,4))
+            with self.assertRaises(RuntimeError):
+                p.verify_deb(path,(p.digest(path),5))
+
+    def test_tar_member_regular_unique_exact(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=pathlib.Path(d)/"data.tar"
+            for count,link in ((1,False),(0,False),(2,False),(1,True)):
+                with tarfile.open(path,"w") as tar:
+                    for _ in range(count):
+                        entry=tarfile.TarInfo("./boot/vmlinuz-6.17")
+                        if link:
+                            entry.type=tarfile.SYMTYPE
+                            entry.linkname="/etc/shadow"
+                            tar.addfile(entry)
+                        else:
+                            entry.size=4
+                            tar.addfile(entry,io.BytesIO(b"test"))
+                if count==1 and not link:
+                    self.assertEqual(p.kernel_digest_from_tar(path,"6.17"),
+                        p.hashlib.sha256(b"test").hexdigest())
+                else:
+                    with self.assertRaises(RuntimeError):
+                        p.kernel_digest_from_tar(path,"6.17")
+
+    def test_no_silent_repin_even_if_both_match(self):
+        p.verify_kernel_hashes(p.PIN,p.PIN)
+        for pair in (("a"*64,"a"*64),(p.PIN,"a"*64),("a"*64,p.PIN)):
+            with self.assertRaises(RuntimeError):
+                p.verify_kernel_hashes(*pair)
+
+    def test_apt_has_only_fixed_authenticated_sources(self):
+        with tempfile.TemporaryDirectory() as d:
+            work=pathlib.Path(d)
+            env=p.apt_environment(work)
+            conf=pathlib.Path(env["APT_CONFIG"]).read_text()
+            self.assertIn('APT::Get::AllowUnauthenticated "false";',conf)
+            self.assertIn('Acquire::Check-Valid-Until "true";',conf)
+            self.assertIn('Dir::State::status "/dev/null";',conf)
+            self.assertIn('Dir::Etc::SourceParts "-";',conf)
+            sources=(work/"sources.list").read_text().splitlines()
+            self.assertEqual(len(sources),3)
+            self.assertTrue(all("signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg" in x and
+                                "https://archive.ubuntu.com/ubuntu" in x for x in sources))
+
+if __name__ == "__main__":
+    unittest.main()
