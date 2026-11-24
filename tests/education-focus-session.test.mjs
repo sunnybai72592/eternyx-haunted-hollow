@@ -6,7 +6,7 @@ import {planStudyFocusSession,buildStudyFocusChecklist,STUDY_FOCUS_BUDGETS} from
 
 function fixture(){
  const path=authorStudyPath({title:"Private curriculum",description:"Course description",
-  lessons:[1,2,3,4].map(n=>({number:n,title:"Lesson "+n,objective:"Review",reading:"Study content",
+  lessons:[1,2,3,4].map(n=>({number:n,title:"Lesson "+n,objective:"Review",reading:"Study the lesson material and review the practical example.",
    activity_prompt:"Practice",reflection_prompt:"Reflection",estimated_minutes:n===4?60:20}))});
  let records=emptyStudyRecords(path);
  for(const n of [1,2,3]){
