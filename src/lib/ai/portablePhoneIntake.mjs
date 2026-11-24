@@ -3,6 +3,7 @@
  * downloaded PRIVATE ZIP. No media upload, subscription, GPU or API call.
  */
 import {packPortableArchive} from "./portableVideoBundle.mjs";
+import {serializePhoneMovieEditDraft} from "./phoneMovieEditDraft.mjs";
 
 export const PHONE_INTAKE_LIMITS=Object.freeze({
   maxClips:8,maxBytes:64*1024*1024,maxTotalBytes:512*1024*1024,
@@ -152,12 +153,17 @@ const movieGuide=[
   "Standard/High: genuine 16FPS H264; Cinematic: genuine 24FPS, up to",
   "1280x720 landscape or 720x1280 portrait H264 from real source frames.",
   "Only the requested shot seconds are normalized, not the entire source.",
-  "24FPS cinematic footage is not an editable 16FPS legacy draft.",
+  "Cinematic edits can be reopened from phone-movie-edit-draft.json in Studio.",
+  "Reattach original recordings for exact filename, size and SHA256 proof.",
+  "Cinematic footage is not compatible with the separate legacy 16FPS draft.",
   "All prepared clips remain available privately for further processing.",
   "The prepared source clips live in",
   "local-video-media/, then renders verified final phone-movie-output/",
   "containing video.mp4, captions.srt, preview.html and manifest.json.",
-  "local-video-media/ retains prepared clips and an editable project draft.",
+  "local-video-media/ retains prepared clips; legacy 16FPS projects also get",
+  "their separate compatible editable starter draft.",
+  "The private ZIP includes a media-free phone-movie-edit-draft.json for",
+  "resuming full 16/24FPS editing in the direct phone movie Studio.",
   "No original is overwritten; output folders must be new.",
   "If conversion succeeds but final render fails, prepared clips remain",
   "available for recovery. No partial final movie is published.","",
@@ -224,6 +230,14 @@ export async function buildPortablePhoneIntake({
     ...(checkedMovie?[
       {path:"phone-movie-plan.json",
        blob:new Blob([JSON.stringify(checkedMovie,null,2)+"\n"])},
+      {path:"phone-movie-edit-draft.json",
+       blob:new Blob([serializePhoneMovieEditDraft({
+         originals,start,seconds,moviePlan:{
+           profile:checkedMovie.profile,quality:checkedMovie.quality,
+           delivery:checkedMovie.delivery,framing:checkedMovie.framing,
+           shots:checkedMovie.shots,
+         },
+       }).json])},
       {path:"finish_phone_movie.py",
        blob:script("finish_phone_movie.py",pythonSources["finish_phone_movie.py"])},
       {path:"finish-phone-movie-windows.cmd",blob:new Blob([movieWindows])},
