@@ -31,8 +31,8 @@ permissions:
 jobs:
   portable-real-render:
     name: Extract ZIP and render genuine CPU H264 video with audio, captions and preview
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,7 +46,10 @@ jobs:
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
             sudo apt-get update && sudo apt-get install -y ffmpeg
           fi
-          ffmpeg -hide_banner -encoders | grep -q libx264
+          encoders=$(ffmpeg -hide_banner -encoders)
+          for encoder in libx264 libvpx-vp9 libopus mov_text; do
+            grep -q "$encoder" <<< "$encoders"
+          done
       - name: Build verified ZIP, extract using stdlib zipfile, run included launcher, verify actual H264
         env:
           PYTHONDONTWRITEBYTECODE: "1"
