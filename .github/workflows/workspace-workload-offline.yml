@@ -5,6 +5,9 @@ on:
       - 'src/lib/workspaceTeam*.mjs'
       - 'src/components/workspace/WorkspaceTeamsPanel.tsx'
       - 'tests/workspace-team-task-operations.test.mjs'
+      - 'tests/workspace-team-quick-triage.test.mjs'
+      - 'tests/workspace-team-task-board.test.mjs'
+      - 'tests/workspace-team-schedule.test.mjs'
       - '.github/workflows/workspace-workload-offline.yml'
 permissions:
   contents: read
@@ -17,4 +20,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs
+      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs
