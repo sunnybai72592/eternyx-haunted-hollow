@@ -6,7 +6,7 @@ import {
   authorizedAccessExpiry, generateAccessToken, hashAccessToken,
   parseAccessRequest, parseProxyVerification, validAccessToken, validTokenHash, validUserJwt,
 } from "../supabase/functions/_shared/ctf-range-access-contract.mjs";
-import { RangeAccessVerifier, startLocalIngress } from "../infrastructure/cyber-range/ingress/server.mjs";
+import { RangeAccessVerifier, startLocalIngress, STAGING_VERIFIER_URL } from "../infrastructure/cyber-range/ingress/server.mjs";
 
 const read = (path) => readFile(new URL("../" + path, import.meta.url), "utf8");
 const a = "123e4567-e89b-42d3-a456-426614174001";
@@ -226,4 +226,54 @@ test("Postgres access grant storage is private, short-lived, rate-limited and re
   assert.match(sql, /NEW\.status IS DISTINCT FROM 'running'/);
   assert.match(sql, /CREATE TRIGGER ctf_range_revoke_access_on_status_change/);
   assert.doesNotMatch(sql, /GRANT SELECT ON public\.ctf_range_access_grants TO authenticated|SECURITY DEFINER/);
+});
+
+test("verifier credentials are pinned to staging, responses bounded and exact",async()=>{
+  const secret="k".repeat(64),token=generateAccessToken();
+  for(const url of [
+    "https://wcncuarekaofmfurbtbh.supabase.co/functions/v1/ctf-range-access-check",
+    "https://example.invalid/functions/v1/ctf-range-access-check",
+    STAGING_VERIFIER_URL+"?x=1",
+  ])assert.throws(()=>new RangeAccessVerifier(url,secret),/exact/);
+  const json=(body,status=200,headers={})=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json","cache-control":"no-store",...headers}});
+  let calls=0;
+  const good=new RangeAccessVerifier(STAGING_VERIFIER_URL,secret,async(url,opts)=>{
+    calls++;assert.equal(url,STAGING_VERIFIER_URL);assert.equal(opts.redirect,"error");
+    assert.equal(opts.credentials,"omit");assert.equal(opts.cache,"no-store");
+    return json({authorized:true});
+  });
+  assert.equal(await good.check(a,token,learnerJwt),true);
+  await assert.rejects(good.check("invalid",token,learnerJwt));
+  await assert.rejects(good.check(a,"invalid",learnerJwt));
+  assert.equal(calls,1);
+  const denied=new RangeAccessVerifier(STAGING_VERIFIER_URL,secret,async()=>json({authorized:false},403));
+  assert.equal(await denied.check(a,token,learnerJwt),false);
+  for(const response of [
+    ()=>json({authorized:true,extra:"unexpected"}),
+    ()=>json({authorized:"true"}),
+    ()=>json({authorized:true},201),
+    ()=>json({authorized:true},200,{"cache-control":"public"}),
+    ()=>json({authorized:true},200,{"location":"https://example.invalid"}),
+    ()=>json({authorized:true},200,{"content-type":"text/html"}),
+    ()=>new Response("x".repeat(2048),{headers:{"content-type":"application/json","cache-control":"no-store"}}),
+  ]){
+    const v=new RangeAccessVerifier(STAGING_VERIFIER_URL,secret,async()=>response());
+    await assert.rejects(v.check(a,token,learnerJwt));
+  }
+});
+test("local ingress refuses redirects and bounded streaming overflow, then shuts down",async(t)=>{
+  const upstream=createServer((req,res)=>{
+    if(req.url.includes("redirect")){res.writeHead(302,{Location:"https://example.invalid"});res.end();return;}
+    if(req.url.includes("large")){res.writeHead(200,{"Content-Type":"text/plain"});res.write("x".repeat(20000));res.end("y".repeat(20000));return;}
+    res.end("ok");
+  });
+  const p=await listen(upstream);t.after(()=>shut(upstream));
+  const ingress=await startLocalIngress({sessionId:a,gatewayPort:p,gatewayToken:gatewaySecret,verifier:{async check(){return true;}}});
+  t.after(()=>ingress.close());
+  const root="http://127.0.0.1:"+ingress.port,headers={authorization:"Bearer "+generateAccessToken(),"x-eternyx-auth-jwt":learnerJwt};
+  assert.equal((await fetch(root+"/api/tickets?redirect=1",{headers,redirect:"manual"})).status,502);
+  assert.equal((await fetch(root+"/api/tickets?large=1",{headers})).status,502);
+  assert.equal((await fetch(root+"/api/tickets",{headers})).status,200);
+  await ingress.close();await ingress.close();
+  await assert.rejects(fetch(root+"/api/tickets",{headers}));
 });

@@ -1,0 +1,25 @@
+name: LABS loopback ingress security
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/cyber-range/ingress/**'
+      - 'scripts/cyber-range-ingress.mjs'
+      - 'tests/ctf-range-access.test.mjs'
+      - 'supabase/functions/_shared/ctf-range-access-contract.mjs'
+      - '.github/workflows/labs-loopback-ingress.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Test loopback ingress boundaries (no hosted provider)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/ctf-range-access.test.mjs
