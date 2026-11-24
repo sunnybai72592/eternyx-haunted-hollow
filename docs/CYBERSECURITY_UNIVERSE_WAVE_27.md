@@ -1,0 +1,13 @@
+# Wave 27 — operational recovery rehearsal
+
+PR #787 merged at 2d84315494c58b5a9bad88dcffe69cce5f7eae1b; both reported workflows passed. Read-only staging inspection confirmed 0 confirmed accounts, 0 evidence records, 0 evidence objects and no mediated Storage cutover. No staging or production mutation in Wave 27.
+
+## Recovery rehearsal
+Dedicated CI provisions an isolated PostgreSQL 17 container with networking disabled. It composes the existing Wave 20 synthetic session harness, owner/global quota SQL and proposed mediated Storage fence; seeds one reservation and one digest; performs an actual pg_dump custom-format backup and pg_restore into a separate empty database; verifies nine restrictive policies, restored quotas, replay receipt, digest, role privileges, revoked session denial, active owner visibility and unrelated bucket access. The rehearsal uses synthetic data, emulated JWT claims and preexisting cluster roles. It does not restore a hosted Supabase project, real Auth, actual Storage bytes or cluster-level roles. No dumps are uploaded to CI artifacts.
+
+The separate local verifier accepts a trusted flat synthetic file manifest (schema eternyx-synthetic-evidence-backup-v1, files array of name, bytes, sha256). It checks exact inventory, sizes and SHA-256 bytes, rejects path traversal and symlinks, and bounds file count and total size. Use a private immutable directory and independently authenticated manifest; the tool does not establish manifest authenticity or prove that source data was completely exported. Run node scripts/security-wave27-verify-backup.mjs <directory> <manifest.json>. Never put real evidence, credentials or manifests in GitHub.
+
+## Operational recovery gates
+Database backup alone does not preserve Storage object bytes. Export authorized evidence separately, encrypted at rest, with independently trusted manifest and controlled access. Keep source/target project identity and recovery timestamps; restore only to an isolated approved environment. Do not copy production Auth sessions or secrets. Restoring an older database may resurrect sessions or replay state; keep the gateway disabled, reconcile session invalidation and reservation continuity, and rotate credentials where appropriate before allowing traffic. Confirm RLS, service grants, private bucket and byte integrity, measure RPO/RTO, review actual browser and Auth behavior, and independently approve recovery. No actual hosted backup or restore performed in this wave.
+
+Two disposable confirmed staging Auth accounts remain mandatory for the Wave 26 acceptance path. No production certification, paid resources or automatic destructive recovery.
