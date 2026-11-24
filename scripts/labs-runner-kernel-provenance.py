@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import pathlib
+import pwd
 import re
 import resource
 import stat
@@ -14,6 +15,10 @@ import tempfile
 
 PIN = "a6a897d3b8c177c8736e8bce85b6b9cd8e3275f94107221ee93820fcd5388384"
 KEYRING = pathlib.Path("/usr/share/keyrings/ubuntu-archive-keyring.gpg")
+# Canonical publishes this full archive signing key fingerprint:
+# https://wiki.ubuntu.com/Security/FAQ
+ARCHIVE_FINGERPRINT = "F6ECB3762474EDA9D21B7022871920D1991BC93C"
+MAX_KEYRING = 1024 * 1024
 MAX_PACKAGE = 128 * 1024 * 1024
 MAX_TAR = 256 * 1024 * 1024
 BASE_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
@@ -86,14 +91,67 @@ def command(args, env=BASE_ENV, cwd=None, timeout=30):
     return subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           text=True, timeout=timeout, env=env, cwd=cwd).stdout.strip()
 
-def apt_environment(work):
+def primary_fingerprints(listing):
+    fingerprints = set()
+    primary = False
+    for line in listing.splitlines():
+        fields = line.split(":")
+        if fields[0] in ("pub", "sub", "sec", "ssb"):
+            primary = fields[0] == "pub"
+        elif fields[0] == "fpr" and primary:
+            require(len(fields) > 9 and re.fullmatch(r"[A-F0-9]{40}", fields[9]),
+                    "invalid primary key fingerprint")
+            fingerprints.add(fields[9])
+            primary = False
+    return fingerprints
+
+def read_public_keyring(source):
+    # Public key material is untrusted input. Never execute it, never read
+    # non-regular files, and never use an unpinned key for authentication.
+    # Open nonblocking to avoid hanging on a substituted FIFO.
+    fd = os.open(source, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= MAX_KEYRING,
+                "archive keyring is not a bounded regular file")
+        data = stream.read(MAX_KEYRING + 1)
+        require(0 < len(data) <= MAX_KEYRING, "archive keyring size exceeded")
+    return data
+
+def prepare_archive_keyring(work, source=KEYRING):
+    # Snapshot once in a private directory; trust the published fingerprint,
+    # not ownership, symlink layout, or any other key in the source file.
+    original = source.lstat()
+    data = read_public_keyring(source)
+    print(json.dumps({"sourceKeyringUid": original.st_uid,
+                      "sourceKeyringMode": oct(stat.S_IMODE(original.st_mode)),
+                      "sourceKeyringIsSymlink": stat.S_ISLNK(original.st_mode)}), flush=True)
+    home = work / "gnupg"
+    home.mkdir(mode=0o700)
+    local = work / ("archive.asc" if data.startswith(b"-----BEGIN PGP PUBLIC KEY BLOCK-----")
+                    else "archive.gpg")
+    with local.open("xb") as stream:
+        stream.write(data)
+    local.chmod(0o600)
+    listing = command(["/usr/bin/gpg", "--no-options", "--homedir", str(home),
+        "--batch", "--no-tty", "--with-colons", "--show-keys", str(local)])
+    require(ARCHIVE_FINGERPRINT in primary_fingerprints(listing),
+            "published Ubuntu archive primary fingerprint missing")
+    # APT's Signed-By fingerprint with ! restricts signatures to this exact
+    # primary key, even if other public keys are present in the snapshot.
+    print(json.dumps({"archiveSigningKeyFingerprint": ARCHIVE_FINGERPRINT,
+                      "archiveSigningKeyPinVerified": True,
+                      "archiveKeyringSnapshotSha256": digest(local)}), flush=True)
+    return local
+
+def apt_environment(work, keyring):
     for name in ("lists", "archives", "downloads"):
         (work / name).mkdir(mode=0o700)
     (work / "lists/partial").mkdir()
     (work / "archives/partial").mkdir()
     sources = work / "sources.list"
     sources.write_text("".join(
-        f"deb [arch=amd64 signed-by={KEYRING}] https://archive.ubuntu.com/ubuntu {suite} main restricted\n"
+        f"deb [arch=amd64 signed-by={keyring},{ARCHIVE_FINGERPRINT}!] https://archive.ubuntu.com/ubuntu {suite} main restricted\n"
         for suite in ("noble", "noble-updates", "noble-security")))
     config = work / "apt.conf"
     config.write_text(f'''
@@ -123,7 +181,7 @@ Acquire::Retries "0";
 Acquire::http::Timeout "20";
 Acquire::https::Timeout "20";
 Acquire::PDiffs "false";
-APT::Sandbox::User "{os.getuid()}";
+APT::Sandbox::User "{pwd.getpwuid(os.getuid()).pw_name}";
 ''')
     return {**BASE_ENV, "APT_CONFIG": str(config)}
 
@@ -146,12 +204,10 @@ def main(observed):
     require(status == "install ok installed", "kernel owner not installed")
     validate_identity(release, package, version, arch)
     print(json.dumps({"kernelRelease": release, "package": package, "version": version}), flush=True)
-    key = KEYRING.lstat()
-    require(stat.S_ISREG(key.st_mode) and key.st_uid == 0 and not key.st_mode & 0o022,
-            "untrusted Ubuntu archive keyring")
     with tempfile.TemporaryDirectory(prefix="eternyx-kernel-proof-") as directory:
         work = pathlib.Path(directory)
-        env = apt_environment(work)
+        keyring = prepare_archive_keyring(work)
+        env = apt_environment(work, keyring)
         command(["/usr/bin/apt-get", "update"], env, work, 180)
         metadata = command(["/usr/bin/apt-cache", "show", package], env, work)
         pin = metadata_pin(metadata, package, version)
@@ -169,7 +225,8 @@ def main(observed):
         verify_kernel_hashes(archive_hash, observed_hash)
         print(json.dumps({"archivePackageSha256": pin[0], "archivePackageBytes": pin[1],
                           "archiveKernelSha256": archive_hash, "runnerKernelSha256": observed_hash,
-                          "immutablePhase41KernelSha256": PIN, "ubuntuArchiveKeyringSha256": digest(KEYRING)}))
+                          "immutablePhase41KernelSha256": PIN, "ubuntuArchiveKeyringSha256": digest(keyring),
+                          "ubuntuArchiveSigningKeyFingerprint": ARCHIVE_FINGERPRINT}))
     print(json.dumps({"signedUbuntuArchivePackageVerified": True,
                       "independentArchiveKernelMatchesPhase41Pin": True,
                       "runnerKernelIndependentlyPinned": True,
