@@ -42,7 +42,9 @@ type LocalShot = {
   sourceName: string; startFrame: number; frames: number; caption: string;
   rightsRef: string; fadeInFrames: number; fadeOutFrames: number;
 };
-type LocalSound = LocalFile & { rightsRef: string; volumePercent: number };
+type LocalSound = LocalFile & { rightsRef: string; volumePercent: number;
+  sourceStartMs?: number; timelineStartMs?: number; durationMs?: number;
+  fadeInMs?: number; fadeOutMs?: number; loop?: boolean; };
 type RenderProfile = "landscape" | "portrait" | "square";
 type RenderQuality = "standard" | "high" | "cinematic";
 
@@ -185,6 +187,8 @@ export default function LocalVideoEditor() {
         const item=verified.soundtrack as {
           name:string;size:number;sha256:string;file:File;
           rightsRef:string;volumePercent:number;
+          sourceStartMs?:number;timelineStartMs?:number;durationMs?:number;
+          fadeInMs?:number;fadeOutMs?:number;loop?:boolean;
         };
         newAudio={...item,url:URL.createObjectURL(item.file)};
       }
@@ -618,8 +622,25 @@ export default function LocalVideoEditor() {
               <Input type="range" min={0} max={100} value={soundtrack.volumePercent}
                 onChange={e => updateSound({ volumePercent: Number(e.target.value) })} className="min-h-11" />
             </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([
+                ["Source trim start (ms)","sourceStartMs",60000],
+                ["Movie entrance delay (ms)","timelineStartMs",30000],
+                ["Playback duration (ms; 0 = remaining movie)","durationMs",30000],
+                ["Audio fade in (ms)","fadeInMs",10000],
+                ["Audio fade out (ms)","fadeOutMs",10000],
+              ] as const).map(([label,key,max])=><label key={key} className="block space-y-1 text-sm">{label}
+                <Input type="number" min={0} max={max} step={1} value={soundtrack[key]??0}
+                  onChange={e=>updateSound({[key]:Number(e.target.value)})} className="min-h-11"/>
+              </label>)}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={soundtrack.loop??true} onChange={e=>updateSound({loop:e.target.checked})}/>
+                Loop original soundtrack when needed
+              </label>
+            </div>
+            <p className="text-xs text-slate-400">The audio is silent before its entrance and after its scheduled segment. Non-looping segments must fit the original recording; looping repeats the original after its initial trim. Fades apply within the segment. Original preview does not include these edits.</p>
           </>}
-          <p className="text-xs text-slate-400">Audio loops or trims only in the local FFmpeg renderer. Source-video audio is removed. A rights reference records your assertion; it does not verify a license.</p>
+          <p className="text-xs text-slate-400">Audio editing runs only in the local FFmpeg renderer. Source-video audio is removed. A rights reference records your assertion; it does not verify a license.</p>
         </section>
 
         <section className="space-y-4 rounded-lg border border-slate-700 p-4" aria-labelledby="local-export-heading">

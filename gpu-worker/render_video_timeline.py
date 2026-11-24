@@ -32,6 +32,7 @@ HASH = re.compile(r"[0-9a-f]{64}\Z")
 PROFILES = {"landscape": (256, 144), "portrait": (144, 256), "square": (256, 256)}
 SOURCE_KEYS = {"file", "source_sha256", "start_frame", "frames", "caption", "rights_ref"}
 AUDIO_KEYS = {"file", "source_sha256", "rights_ref", "volume_percent"}
+AUDIO_EDIT_KEYS = {"source_start_ms", "timeline_start_ms", "duration_ms", "fade_in_ms", "fade_out_ms", "loop"}
 
 
 def execute(args, timeout=120):
@@ -186,11 +187,31 @@ def check_shots(board, root, fps=FPS):
     return validated, total
 
 
+def audio_edit(raw, total, fps):
+    """Resolve bounded, integer-ms soundtrack placement; old boards remain valid."""
+    limits = {"source_start_ms": 60000, "timeline_start_ms": 30000,
+              "duration_ms": 30000, "fade_in_ms": 10000, "fade_out_ms": 10000}
+    values = {}
+    for key, maximum in limits.items():
+        value = raw.get(key, 0)
+        if type(value) is not int or not 0 <= value <= maximum:
+            raise ValueError("Invalid soundtrack " + key)
+        values[key] = value
+    loop = raw.get("loop", True)
+    if type(loop) is not bool:
+        raise ValueError("Soundtrack loop must be boolean")
+    available = total * 1000 / fps - values["timeline_start_ms"]
+    length = values["duration_ms"] or available
+    if available <= 0 or not 0 < length <= available or values["fade_in_ms"] + values["fade_out_ms"] > length:
+        raise ValueError("Soundtrack placement, duration or fades exceed the movie timeline")
+    return {**values, "loop": loop, "active_ms": length}
+
+
 def check_soundtrack(board, root):
     raw = board.get("soundtrack")
     if raw is None:
         return None
-    if not isinstance(raw, dict) or set(raw) != AUDIO_KEYS:
+    if not isinstance(raw, dict) or not AUDIO_KEYS <= set(raw) or set(raw) - AUDIO_KEYS - AUDIO_EDIT_KEYS:
         raise ValueError("Soundtrack requires file, digest, rights_ref and volume_percent")
     path = safe_path(root, raw["file"], {".wav", ".mp3", ".m4a"}, MAX_AUDIO_BYTES)
     hash_field(raw["source_sha256"])
@@ -203,6 +224,19 @@ def check_soundtrack(board, root):
     streams = probe(path)
     if len([item for item in streams if item.get("codec_type") == "audio"]) != 1:
         raise ValueError("Exactly one audio stream is required for the soundtrack")
+    if AUDIO_EDIT_KEYS & set(raw):
+        edit = audio_edit(raw, sum(s["frames"] for s in board["shots"]), board.get("fps", FPS))
+        if edit["source_start_ms"] or not edit["loop"]:
+            metadata = json.loads(execute(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe",
+                "-show_entries", "format=duration", "-of", "json", str(path)], timeout=30))
+            try:
+                source_ms = Fraction(metadata["format"]["duration"]) * 1000
+            except (KeyError, ValueError, TypeError, ZeroDivisionError) as error:
+                raise ValueError("Soundtrack source duration is unverifiable") from error
+            if source_ms <= edit["source_start_ms"]:
+                raise ValueError("Soundtrack source start exceeds the original audio duration")
+            if not edit["loop"] and edit["source_start_ms"] + edit["active_ms"] > source_ms + 1:
+                raise ValueError("Non-looping soundtrack segment exceeds original audio; shorten its duration")
     return {**raw, "path": path}
 
 
@@ -227,8 +261,9 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
     for shot in shots:
         cmd += ["-protocol_whitelist", "file,pipe", "-i", str(shot["path"])]
     if soundtrack is not None:
-        cmd += ["-stream_loop", "-1", "-protocol_whitelist", "file,pipe",
-                "-i", str(soundtrack["path"])]
+        if soundtrack.get("loop", True):
+            cmd += ["-stream_loop", "-1"]
+        cmd += ["-protocol_whitelist", "file,pipe", "-i", str(soundtrack["path"])]
     graph = []
     for i, shot in enumerate(shots):
         start, end = shot["start_frame"], shot["start_frame"] + shot["frames"]
@@ -252,8 +287,23 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
                  f"concat=n={len(shots)}:v=1:a=0[outv]")
     if soundtrack is not None:
         duration = total / fps
-        graph.append(f"[{len(shots)}:a:0]atrim=duration={duration:.4f},asetpts=PTS-STARTPTS,"
-                     f"volume={soundtrack['volume_percent']/100:.2f}[outa]")
+        if AUDIO_EDIT_KEYS & set(soundtrack):
+            edit = audio_edit(soundtrack, total, fps)
+            active = edit["active_ms"] / 1000
+            filters = [f"[{len(shots)}:a:0]atrim=start={edit['source_start_ms']/1000:.6f}",
+                       "asetpts=PTS-STARTPTS", f"atrim=duration={active:.6f}",
+                       "aresample=48000", f"volume={soundtrack['volume_percent']/100:.2f}"]
+            if edit["fade_in_ms"]:
+                filters.append(f"afade=t=in:st=0:d={edit['fade_in_ms']/1000:.6f}")
+            if edit["fade_out_ms"]:
+                filters.append(f"afade=t=out:st={active-edit['fade_out_ms']/1000:.6f}:d={edit['fade_out_ms']/1000:.6f}")
+            if edit["timeline_start_ms"]:
+                filters.append(f"adelay={edit['timeline_start_ms']}:all=1")
+            filters.extend(["apad", f"atrim=duration={duration:.6f}", "asetpts=PTS-STARTPTS"])
+            graph.append(",".join(filters) + "[outa]")
+        else:
+            graph.append(f"[{len(shots)}:a:0]atrim=duration={duration:.4f},asetpts=PTS-STARTPTS,"
+                         f"volume={soundtrack['volume_percent']/100:.2f}[outa]")
     cmd += ["-filter_complex", ";".join(graph), "-map", "[outv]"]
     if soundtrack is None:
         cmd += ["-an"]

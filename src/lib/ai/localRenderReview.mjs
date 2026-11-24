@@ -2,7 +2,7 @@
  * These are integrity checks against supplied files, NOT digital signatures,
  * authenticity proofs, visual-quality ratings, or server verification.
  */
-import { checkLocalMediaName, localVideoSrt, LOCAL_VIDEO_LIMITS } from "./localVideoEditor.mjs";
+import { checkLocalMediaName, localVideoSrt, LOCAL_VIDEO_LIMITS, checkSoundtrackEdit } from "./localVideoEditor.mjs";
 
 export const MAX_RENDER_BYTES = 64 * 1024 * 1024;
 export const MAX_RECEIPT_BYTES = 64 * 1024;
@@ -37,13 +37,17 @@ function verifyShot(row, index, position, fps=16) {
   integer(row.fade_out_frames, 0, Math.min(16, Math.floor(row.frames / 2)), "fade out");
   if (!TEXT(row.caption) || !TEXT(row.rights_ref)) fail("Missing or malformed source caption/rights.");
 }
-function verifyAudio(row) {
+function verifyAudio(row,total,fps) {
   if (row === null) return false;
   if (!row || typeof row !== "object" || Array.isArray(row)) fail("Invalid soundtrack receipt.");
   checkLocalMediaName(row.file, "audio");
   hash(row.source_sha256, "soundtrack");
   if (!TEXT(row.rights_ref)) fail("Missing soundtrack rights reference.");
   integer(row.volume_percent, 0, 100, "soundtrack volume");
+  const map={source_start_ms:"sourceStartMs",timeline_start_ms:"timelineStartMs",duration_ms:"durationMs",fade_in_ms:"fadeInMs",fade_out_ms:"fadeOutMs",loop:"loop"};
+  const settings={};
+  for(const [key,value] of Object.entries(map))if(Object.hasOwn(row,key))settings[value]=row[key];
+  checkSoundtrackEdit(settings,total,fps);
   return true;
 }
 function canonical(value) {
@@ -107,7 +111,7 @@ export function readLocalRenderReceipt(raw) {
     cursor += row.frames;
   });
   if (cursor !== receipt.total_frames) fail("Shot lengths do not match the rendered timeline.");
-  const hasAudio = verifyAudio(receipt.soundtrack);
+  const hasAudio = verifyAudio(receipt.soundtrack,receipt.total_frames,fps);
   if (video.audio !== hasAudio) fail("Soundtrack and output audio states disagree.");
   return receipt;
 }

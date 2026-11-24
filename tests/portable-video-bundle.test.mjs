@@ -177,7 +177,8 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   assert.equal(soundRender.status,0,soundRender.stderr);
   const source=media("real-original.mp4",readFileSync(videoPath)),
         audio=media("real-song.wav",readFileSync(audioPath),{
-          rightsRef:"test waveform ownership",volumePercent:25,
+          rightsRef:"test waveform ownership",volumePercent:80,sourceStartMs:200,
+          timelineStartMs:300,durationMs:1200,fadeInMs:200,fadeOutMs:200,loop:false,
         });
   const project=await buildPortableVideoBundle(settings([source],[
     shot(source,{frames:16,caption:"Real approved clip",fadeInFrames:3}),
@@ -223,6 +224,31 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   assert.equal(summary.deliverables["video-subtitled.mp4"].selectable_subtitles,true);
   assert.equal(summary.deliverables["video.webm"].audio_codec,"opus");
   assert.equal(summary.deliverables["video.webm"].frame_count,32);
+  assert.equal(summary.soundtrack.source_start_ms,200);
+  assert.equal(summary.soundtrack.timeline_start_ms,300);
+  assert.equal(summary.soundtrack.duration_ms,1200);
+  assert.equal(summary.soundtrack.loop,false);
+  // Decode actual audio in every delivery; check silence, audible center and fade envelope.
+  for(const name of ["video.mp4","video-subtitled.mp4","video.webm"]){
+    const decoded=spawnSync("ffmpeg",["-v","error","-i",join(out,name),"-map","0:a:0",
+      "-ac","1","-ar","48000","-f","s16le","pipe:1"],{timeout:30000,maxBuffer:1024*1024});
+    assert.equal(decoded.status,0,decoded.stderr?.toString());
+    const pcm=decoded.stdout;
+    const rms=(a,b)=>{
+      let sum=0,n=0;
+      for(let i=Math.round(a*48000)*2;i<Math.min(pcm.length,Math.round(b*48000)*2);i+=2){
+        sum+=(pcm.readInt16LE(i)/32768)**2;n++;
+      }
+      assert.ok(n>100);
+      return Math.sqrt(sum/n);
+    };
+    const mid=rms(.65,1.15);
+    assert.ok(mid>.02,name+" missing audible soundtrack");
+    assert.ok(rms(.05,.2)<mid*.08,name+" entrance delay");
+    assert.ok(rms(.32,.37)<mid*.6,name+" fade in");
+    assert.ok(rms(1.43,1.48)<mid*.65,name+" fade out");
+    assert.ok(rms(1.65,1.85)<mid*.08,name+" trailing silence");
+  }
   assert.match(readFileSync(join(out,"watch.html"),"utf8"),/Licensed soundtrack/);
   assert.match(readFileSync(join(out,"watch.html"),"utf8"),/video.webm/);
   assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/00:00:01\.000 --> 00:00:02\.000/);
@@ -380,4 +406,11 @@ test("portable grade and framing allowlist rejects command/filter injection",asy
   const source=media("local.mp4",Buffer.from("local test source"));
   for(const look of [{grade:"hue=s=0"},{grade:null},{grade:"warm;touch x"},{framing:"crop=1"},{framing:[]}])
     await assert.rejects(()=>buildPortableVideoBundle(settings([source],[shot(source)],look)),/color grade or framing/);
+});
+
+test("soundtrack timing rejects out-of-range, invalid and overlapping fade settings",async()=>{
+  const video=media("local.mp4",Buffer.from("video"));
+  const audio=media("tone.wav",Buffer.from("audio"),{rightsRef:"owned",volumePercent:50});
+  for(const bad of [{timelineStartMs:1000},{durationMs:1001},{fadeInMs:800,fadeOutMs:300},{loop:"false"},{sourceStartMs:-1},{durationMs:1.5}])
+    await assert.rejects(()=>buildPortableVideoBundle(settings([video],[shot(video)],{soundtrack:{...audio,...bad}})),/Soundtrack/);
 });

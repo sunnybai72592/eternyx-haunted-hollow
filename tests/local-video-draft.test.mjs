@@ -174,3 +174,13 @@ test("local drafts roundtrip color grade and crop without changing old draft sch
   assert.equal(Object.hasOwn(createLocalVideoDraft(input).draft,"grade"),false);
   assert.throws(()=>createLocalVideoDraft({...input,grade:"unsafe"}));
 });
+
+test("soundtrack placement and fades roundtrip through metadata-only saved drafts",()=>{
+  const source={name:"camera.mp4",size:20,sha256:"a".repeat(64)};
+  const shot={sourceName:source.name,startFrame:0,frames:24,caption:"",rightsRef:"",fadeInFrames:0,fadeOutFrames:0};
+  const soundtrack={name:"music.wav",size:20,sha256:"b".repeat(64),rightsRef:"owned",volumePercent:60,sourceStartMs:500,timelineStartMs:100,durationMs:700,fadeInMs:100,fadeOutMs:200,loop:false};
+  const input={sources:[source],shots:[shot],soundtrack,quality:"cinematic"};
+  const made=createLocalVideoDraft(input);
+  assert.deepEqual(readLocalVideoDraft(made.json).soundtrack,soundtrack);
+  assert.throws(()=>createLocalVideoDraft({...input,soundtrack:{...soundtrack,fadeOutMs:700}}),/Soundtrack/);
+});
