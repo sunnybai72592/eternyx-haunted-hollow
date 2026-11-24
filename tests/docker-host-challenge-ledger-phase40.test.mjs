@@ -21,7 +21,8 @@ const DAEMON_SHA=sha("ETERNYX_DOCKER_HOST_DAEMON_ID_V1\n"+DAEMON);
 const testdir=fn=>{
  const dir=mkdtempSync(join(tmpdir(),"eternyx-phase40-ledger-"));
  const ledger=join(dir,"ledger");mkdirSync(ledger,{mode:0o700});
- try{return fn({dir,ledger});}finally{rmSync(dir,{recursive:true,force:true});}
+ const journal=join(dir,"journal");mkdirSync(journal,{mode:0o700});
+ try{return fn({dir,ledger,journal});}finally{rmSync(dir,{recursive:true,force:true});}
 };
 function target(){
  return {Id:ID,Name:"/do-not-leak-container",Image:"sha256:"+IMAGE,
@@ -82,8 +83,8 @@ function proof(ledger,e,at=e.now){
 const consume=(ledger,e,p,now=e.now)=>
  consumeDockerHostChallenge(ledger,p.bundle,e.pub,p.expected,now);
 
-test("real Phase38 evidence plus independent Ed25519 pins yields ONE durable review",()=>testdir(({dir,ledger})=>{
- const e=setup(dir),p=proof(ledger,e);
+test("real Phase38 evidence plus independent Ed25519 pins yields ONE durable review",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal),p=proof(ledger,e);
  assert.match(p.issued.challenge,/^[a-f0-9]{64}$/);
  assert.deepEqual(Object.keys(p.expected),[
   "operatorTargetSha256","approvedContextSha256","approvedDaemonIdSha256",
@@ -110,8 +111,8 @@ test("real Phase38 evidence plus independent Ed25519 pins yields ONE durable rev
  const text=JSON.stringify(result);
  assert.doesNotMatch(text,/DO_NOT_EXPOSE|do-not-leak-container|never-run-Docker|\/run\/user/);
 }));
-test("two freshly issued challenges are cryptographically distinct; original consumption cannot be reset",()=>testdir(({dir,ledger})=>{
- const e=setup(dir),one=proof(ledger,e),two=proof(ledger,e);
+test("two freshly issued challenges are cryptographically distinct; original consumption cannot be reset",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal),one=proof(ledger,e),two=proof(ledger,e);
  assert.notEqual(one.issued.challenge,two.issued.challenge);
  assert.notEqual(one.issued.originalIssuanceSha256,two.issued.originalIssuanceSha256);
  consume(ledger,e,one);
@@ -119,8 +120,8 @@ test("two freshly issued challenges are cryptographically distinct; original con
  assert.equal(consume(ledger,e,two).challengeConsumedExactlyOnce,true);
  assert.throws(()=>consume(ledger,e,one),/already consumed/);
 }));
-test("invalid Ed25519 proof, altered report, wrong key and mismatched reviewer pins NEVER consume a challenge",()=>testdir(({dir,ledger})=>{
- const e=setup(dir),p=proof(ledger,e);
+test("invalid Ed25519 proof, altered report, wrong key and mismatched reviewer pins NEVER consume a challenge",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal),p=proof(ledger,e);
  const bad=[
   {...p,bundle:{...p.bundle,signature:"a".repeat(86)}},
   {...p,bundle:{...p.bundle,report:{...p.bundle.report,productionDeploymentAuthorized:true}}},
@@ -133,8 +134,8 @@ test("invalid Ed25519 proof, altered report, wrong key and mismatched reviewer p
  assert.equal(inspectDockerHostChallenge(ledger,p.issued.challenge).status,"issued_unconsumed");
  assert.equal(consume(ledger,e,p).challengeConsumedExactlyOnce,true);
 }));
-test("separately issued challenge must predate the original observation, not merely carry a valid signature",()=>testdir(({dir,ledger})=>{
- const past=new Date(Date.now()-3*60000),e=setup(dir,past);
+test("separately issued challenge must predate the original observation, not merely carry a valid signature",()=>testdir(({dir,ledger,journal})=>{
+ const past=new Date(Date.now()-3*60000),e=setup(journal,past);
  const future=new Date(past.valueOf()+150*1000);
  const issued=issueDockerHostChallenge(ledger,e.template,future);
  const bundle=signDockerReadOnlyHostReport(e.report,issued.challenge,
@@ -142,8 +143,8 @@ test("separately issued challenge must predate the original observation, not mer
  assert.throws(()=>consumeDockerHostChallenge(
   ledger,bundle,e.pub,issued.expected,future),/does not precede/);
 }));
-test("expired issue record is rejected even when the signature is within its own freshness window",()=>testdir(({dir,ledger})=>{
- const now=new Date(),e=setup(dir,now);
+test("expired issue record is rejected even when the signature is within its own freshness window",()=>testdir(({dir,ledger,journal})=>{
+ const now=new Date(),e=setup(journal,now);
  const issued=issueDockerHostChallenge(ledger,e.template,
   new Date(now.valueOf()-16*60000));
  const bundle=signDockerReadOnlyHostReport(e.report,issued.challenge,
@@ -151,8 +152,8 @@ test("expired issue record is rejected even when the signature is within its own
  assert.throws(()=>consumeDockerHostChallenge(
   ledger,bundle,e.pub,issued.expected,now),/expired/);
 }));
-test("unknown files, symlink entries, public readability and incomplete consumption block fail closed",()=>testdir(({dir,ledger})=>{
- const e=setup(dir),p=proof(ledger,e);
+test("unknown files, symlink entries, public readability and incomplete consumption block fail closed",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal),p=proof(ledger,e);
  const path=join(ledger,"issue-"+p.issued.challenge+".json");
  chmodSync(path,0o644);
  assert.throws(()=>consume(ledger,e,p),/private|bounded/);
@@ -163,8 +164,8 @@ test("unknown files, symlink entries, public readability and incomplete consumpt
  assert.equal(readFileSync(bad,"utf8"),"{\n");
  assert.throws(()=>inspectDockerHostChallenge(ledger,p.issued.challenge));
 }));
-test("ledger symlink and non-private directory are never writable by issuer",()=>testdir(({dir,ledger})=>{
- const e=setup(dir);
+test("ledger symlink and non-private directory are never writable by issuer",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal);
  const link=join(dir,"aliased");
  symlinkSync(ledger,link);
  assert.throws(()=>issueDockerHostChallenge(link,e.template),/symlink/);
@@ -173,8 +174,8 @@ test("ledger symlink and non-private directory are never writable by issuer",()=
  chmodSync(ledger,0o700);
  assert.throws(()=>issueDockerHostChallenge(join(dir,"missing"),e.template));
 }));
-test("malformed independent pin templates are rejected before any durable issuance",()=>testdir(({dir,ledger})=>{
- const e=setup(dir);
+test("malformed independent pin templates are rejected before any durable issuance",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal);
  assert.deepEqual(Object.keys(e.template),HOST_CHALLENGE_TEMPLATE_KEYS);
  for(const change of [
   {publicKeySha256:"BAD"},{operation:"start"},
@@ -190,8 +191,9 @@ test("malformed independent pin templates are rejected before any durable issuan
 test("two concurrent independent reviewer CLI processes cannot both consume the same issued challenge",async()=> {
  const dir=mkdtempSync(join(tmpdir(),"eternyx-phase40-concurrency-"));
  const ledger=join(dir,"ledger");mkdirSync(ledger,{mode:0o700});
+ const journal=join(dir,"journal");mkdirSync(journal,{mode:0o700});
  try{
-  const e=setup(dir),p=proof(ledger,e);
+  const e=setup(journal),p=proof(ledger,e);
   const evidence=join(dir,"evidence.json"),pub=join(dir,"pub.key"),pins=join(dir,"pins.json");
   writeFileSync(evidence,JSON.stringify(p.bundle)+"\n",{mode:0o600});
   writeFileSync(pub,e.pub+"\n",{mode:0o600});
@@ -215,8 +217,8 @@ test("two concurrent independent reviewer CLI processes cannot both consume the 
   assert.equal(inspectDockerHostChallenge(ledger,p.issued.challenge).status,"consumed");
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
-test("separate challenge issuer CLI accepts only private independently authored exact template",()=>testdir(({dir,ledger})=>{
- const e=setup(dir),template=join(dir,"independent.json");
+test("separate challenge issuer CLI accepts only private independently authored exact template",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal),template=join(dir,"independent.json");
  writeFileSync(template,JSON.stringify(e.template)+"\n",{mode:0o600});
  const script=new URL("../scripts/docker-lab-host-challenge.mjs",import.meta.url).pathname;
  const run=()=>spawnSync(process.execPath,[script,"issue",ledger,template],{
@@ -230,8 +232,8 @@ test("separate challenge issuer CLI accepts only private independently authored 
  const bad=run();assert.notEqual(bad.status,0);
  assert.equal(bad.stdout,"");
 }));
-test("old signature-only reviewer explicitly cannot claim replay protection",()=>testdir(({dir,ledger})=>{
- const e=setup(dir),p=proof(ledger,e);
+test("old signature-only reviewer explicitly cannot claim replay protection",()=>testdir(({dir,ledger,journal})=>{
+ const e=setup(journal),p=proof(ledger,e);
  const evidence=join(dir,"evidence.json"),pub=join(dir,"pub.key"),pins=join(dir,"pins.json");
  writeFileSync(evidence,JSON.stringify(p.bundle)+"\n",{mode:0o600});
  writeFileSync(pub,e.pub+"\n",{mode:0o600});
