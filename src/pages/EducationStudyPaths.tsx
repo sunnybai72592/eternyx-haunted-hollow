@@ -21,6 +21,7 @@ import {
   STUDY_REVISION_INTERVALS,
 } from "@/lib/educationStudyRevision.mjs";
 import {buildStudyRevisionAgenda,buildStudyOverdueBacklog,buildStudyRevisionWeek,buildStudyRevisionCalendarIcs} from "@/lib/educationRevisionAgenda.mjs";
+import {planStudyFocusSession,buildStudyFocusChecklist,STUDY_FOCUS_BUDGETS} from "@/lib/educationFocusSession.mjs";
 
 type Lesson={
   number:number;title:string;objective:string;reading:string;
@@ -52,6 +53,7 @@ export default function EducationStudyPaths(){
   const [records,setRecords]=useState<Record[]>([]);
   const [revision,setRevision]=useState<Revision[]>([]);
   const [reviewConfidence,setReviewConfidence]=useState<ReviewConfidence>("developing");
+  const [focusBudget,setFocusBudget]=useState(30);
   const [current,setCurrent]=useState(1);
   const [filter,setFilter]=useState<LessonFilter>("all");
   const [message,setMessage]=useState("");
@@ -73,6 +75,7 @@ export default function EducationStudyPaths(){
   const agenda=useMemo(()=>path?buildStudyRevisionAgenda(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
   const week=useMemo(()=>path?buildStudyRevisionWeek(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
   const overdueBacklog=useMemo(()=>path?buildStudyOverdueBacklog(path,records,revision,asOfUtc):[],[path,records,revision,asOfUtc]);
+  const focusPlan=useMemo(()=>path?planStudyFocusSession(path,records,revision,asOfUtc,focusBudget):null,[path,records,revision,asOfUtc,focusBudget]);
   const shownLessons=useMemo(()=>{
     if(!path)return [];
     return path.lessons.filter(l=>{
@@ -225,6 +228,14 @@ export default function EducationStudyPaths(){
       setMessage("Your private revision-plan CSV was exported; it includes self-reported confidence.");
       setError("");
     }catch{setError("Revision calendar export could not be validated.");}
+  };
+  const exportFocusChecklist=()=>{
+    if(!path)return;
+    try{
+      saveFile(buildStudyFocusChecklist(path,records,revision,asOfUtc,focusBudget),
+        "eternyx-private-focus-checklist.txt","text/plain;charset=utf-8");
+      setError("");setMessage("Study checklist exported locally without answers, notes, confidence or grades.");
+    }catch{setError("Could not export this private study checklist.");}
   };
   const exportCalendarIcs=()=>{
     if(!path)return;
@@ -491,6 +502,32 @@ export default function EducationStudyPaths(){
             You choose the revision interval and confidence yourself. No algorithm measures mastery,
             sends reminders or issues grades.
           </p>
+        </section>
+        <section aria-label="Focused study session" className="space-y-4 rounded-2xl border border-border bg-card p-5">
+          <div>
+            <h2 className="text-lg font-semibold">Focused study session</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Build a time-boxed checklist using actual completed and unfinished lessons. Reviews use half the authored lesson estimate; this is planning only, not tracked study time.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="study-focus-budget" className="text-sm font-medium">Available minutes</label>
+            <select id="study-focus-budget" value={focusBudget} onChange={e=>setFocusBudget(Number(e.target.value))}
+              className="min-h-11 rounded-lg border border-input bg-background px-3 text-sm">
+              {STUDY_FOCUS_BUDGETS.map(minutes=><option key={minutes} value={minutes}>{minutes} minutes</option>)}
+            </select>
+            <Button variant="outline" onClick={exportFocusChecklist} disabled={!focusPlan?.items.length}>
+              <Download aria-hidden="true" className="mr-2 h-4 w-4"/>Export private checklist (.txt)</Button>
+          </div>
+          {focusPlan&&<>
+            <p className="text-sm text-muted-foreground">{focusPlan.items.length} suggested tasks · {focusPlan.estimated_minutes} estimated minutes · {focusPlan.remaining_minutes} unallocated minutes. {focusPlan.excluded_count} other tasks not selected for this budget.</p>
+            {focusPlan.items.length===0?<p className="text-sm text-muted-foreground">No tasks fit your selected time budget. Choose a longer session or continue with a lesson manually.</p>:
+              <ol className="space-y-2">{focusPlan.items.map(item=><li key={item.number}>
+                <button type="button" onClick={()=>{setCurrent(item.number);setFilter("all");}}
+                  className="w-full rounded-lg border border-border p-3 text-left text-sm hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="font-medium">{item.number}. {item.title}</span>
+                  <span className="block text-xs text-muted-foreground">{item.kind} · ~{item.estimated_minutes} min{item.due_on?" · "+item.due_on+" UTC":""}</span>
+                </button>
+              </li>)}</ol>}
+          </>}
         </section>
         <section aria-label="Share course without private progress"
           className="space-y-3 rounded-2xl border border-primary/20 bg-card p-5">
