@@ -159,6 +159,20 @@ test('Phase43 is tested in isolated PG17 CI without staging credentials',async()
  assert.doesNotMatch(wf,/secrets\.SERVICES_STAGING_AUDIT_DB_PASSWORD/);
 });
 
+test('Phase43 executes its actual catalog SELECT on networkless PostgreSQL17',async()=>{
+ const workflow=await read('.github/workflows/services-pg17-disposable-replay.yml');
+ const synthetic=await read('docs/sql/eternyx/services-phase29-disposable-bootstrap.sql');
+ assert.match(workflow,/buildFoundationSql\(\)/);
+ assert.match(workflow,/analyzeServicesFoundation\(readFileSync/);
+ assert.match(workflow,/services-phase43-foundation\.sql/);
+ assert.match(workflow,/services-phase43-foundation\.json/);
+ assert.match(workflow,/r\.factsPassed!==12/);
+ assert.match(workflow,/--network none/);
+ assert.match(synthetic,/ALTER TABLE public\.admin_users ENABLE ROW LEVEL SECURITY/);
+ assert.match(synthetic,/REVOKE ALL ON public\.admin_users FROM PUBLIC, anon, authenticated/);
+ assert.match(synthetic,/REVOKE ALL ON FUNCTION public\.is_admin\(\) FROM PUBLIC/);
+});
+
 test('Phase43 instructions explicitly block unreviewed account seeding',async()=>{
  const docs=await read('docs/ETERNYX_SERVICES_TRUSTED_ADMIN_FOUNDATION_PHASE43.md');
  assert.match(docs,/production admin user IDs/i);
