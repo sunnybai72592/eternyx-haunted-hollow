@@ -42,6 +42,9 @@ on:
       - "tests/services-phase41-registered-project.test.mjs"
       - "scripts/services-phase42-staging-inventory.mjs"
       - "tests/services-phase42-staging-inventory.test.mjs"
+      - "scripts/services-phase43-trusted-admin-foundation.mjs"
+      - "tests/services-phase43-trusted-admin-foundation.test.mjs"
+      - "docs/ETERNYX_SERVICES_TRUSTED_ADMIN_FOUNDATION_PHASE43.md"
       - ".github/workflows/services-staging-readonly-inventory.yml"
       - ".github/workflows/services-staging-acceptance.yml"
       - ".github/workflows/services-pg17-disposable-replay.yml"
@@ -71,7 +74,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
 
@@ -163,6 +166,17 @@ jobs:
             > "$RUNNER_TEMP/services-phase39-definer-mutations.sql"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
             < "$RUNNER_TEMP/services-phase39-definer-mutations.sql"
+          # Phase 43: execute the SAME read-only trusted-admin foundation
+          # catalog query against genuine networkless PG17 (no remote Auth).
+          # The synthetic bootstrap mirrors the reviewed trusted-admin
+          # grant/RLS contract, and all twelve metadata facts must be true.
+          node --input-type=module -e "import {buildFoundationSql} from './scripts/services-phase43-trusted-admin-foundation.mjs';process.stdout.write(buildFoundationSql())" \
+            > "$RUNNER_TEMP/services-phase43-foundation.sql"
+          docker exec -i "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            < "$RUNNER_TEMP/services-phase43-foundation.sql" \
+            > "$RUNNER_TEMP/services-phase43-foundation.json"
+          node --input-type=module -e "import {readFileSync} from 'node:fs';import {analyzeServicesFoundation} from './scripts/services-phase43-trusted-admin-foundation.mjs';const r=analyzeServicesFoundation(readFileSync(process.argv[1],'utf8'));if(r.factsPassed!==12||r.state!=='eligible_for_separate_reviewed_staging_deployment'){process.stderr.write('Phase43 synthetic missing fact IDs: '+r.missingSourceDefinedRequirements.join(',')+'\\n');throw Error('Phase43 disposable foundation check failed')}" \
+            "$RUNNER_TEMP/services-phase43-foundation.json"
           echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and hardened SECURITY DEFINER checks (no remote deployment)"
 
       # No Supabase secrets, no linked project, no production/staging database

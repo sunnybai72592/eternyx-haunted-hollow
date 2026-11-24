@@ -66,6 +66,15 @@ jobs:
           SERVICES_STAGING_AUDIT_DB_PASSWORD: ${{ secrets.SERVICES_STAGING_AUDIT_DB_PASSWORD }}
         run: node scripts/services-phase42-staging-inventory.mjs
 
+      - name: Inspect trusted-admin prerequisites in catalog metadata only
+        env:
+          SERVICES_PREFLIGHT_CONFIRM: ${{ inputs.acknowledgment }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_STAGING_AUDIT_POOLER_HOST: ${{ vars.SERVICES_STAGING_AUDIT_POOLER_HOST }}
+          SERVICES_STAGING_AUDIT_DB_PASSWORD: ${{ secrets.SERVICES_STAGING_AUDIT_DB_PASSWORD }}
+        run: node scripts/services-phase43-trusted-admin-foundation.mjs
+
       # No npm application client, Auth accounts, migration application,
       # Supabase deploy, Service business row access, or customer fixtures.
       # Logs contain only six source-defined marker IDs and reviewed file names.

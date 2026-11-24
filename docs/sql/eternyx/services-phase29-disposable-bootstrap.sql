@@ -6,6 +6,8 @@ CREATE ROLE authenticated NOLOGIN;
 CREATE SCHEMA auth;
 CREATE TABLE auth.users (id uuid PRIMARY KEY);
 CREATE TABLE public.admin_users (user_id uuid PRIMARY KEY REFERENCES auth.users(id));
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.admin_users FROM PUBLIC, anon, authenticated;
 CREATE FUNCTION auth.uid() RETURNS uuid
   LANGUAGE sql STABLE SET search_path = ''
   AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid; $$;
