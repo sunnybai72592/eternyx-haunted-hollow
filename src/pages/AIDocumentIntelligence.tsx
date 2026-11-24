@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useAIStudioChat } from "@/hooks/useAIStudioChat";
 import StoredPdfCorpusImport from "@/components/ai/StoredPdfCorpusImport";
+import LocalOfficeCorpusImport from "@/components/ai/LocalOfficeCorpusImport";
 import {useAuthStore} from "@/store/authStore";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
@@ -341,7 +342,7 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
         ? "Too many sensitive-looking strings in the selected evidence; no AI request was made."
         : "Local multi-document search failed.";
   };
-  const importStoredPdfSources = (next:CorpusDocument[])=>{
+  const importStoredPdfSources = (next:CorpusDocument[],origin:"pdf"|"office"="pdf")=>{
     if(corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting||useAuthStore.getState().user?.id!==ownerId)throw new Error("busy_or_stale_owner");
     ++corpusReadVersion.current;
     discardRecoveryCheckpoint();
@@ -349,7 +350,7 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
     invalidateCorpusFingerprints();
     invalidateCorpus();
     setCorpusFiles(next);
-    setCorpusNotice("Selected stored PDF evidence copied into local text sources. Build the local knowledge index or run a new search. Cloud originals remain unchanged.");
+    setCorpusNotice(origin==="pdf"?"Selected stored PDF evidence copied into local text sources. Build the local knowledge index or run a new search. Cloud originals remain unchanged.":"Selected Office text sections copied locally. Build the local knowledge index or run a new search. Nothing uploaded.");
   };
   const loadCorpusFiles = async (files: readonly File[]) => {
     const version = ++corpusReadVersion.current;
@@ -1633,6 +1634,7 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
             <p role="status" className="text-xs text-slate-400">
               {corpusFiles.length} / {MAX_CORPUS_FILES} files · {corpusCharacters.toLocaleString()} / 400,000 characters
             </p>
+            <LocalOfficeCorpusImport existing={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting} onImport={next=>importStoredPdfSources(next,"office")}/>
             <StoredPdfCorpusImport ownerId={ownerId} existing={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting} onImport={importStoredPdfSources}/>
             <section aria-label="Portable local evidence workspace backup and restore"
               className="space-y-3 rounded-xl border border-cyan-500/20 bg-slate-950 p-4">
