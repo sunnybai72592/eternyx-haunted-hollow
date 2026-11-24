@@ -1,5 +1,12 @@
 name: Automation additive staging candidate - isolated PG17
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/automation-additive-pg17.yml'
+      - 'scripts/automation-additive-replay-candidate.mjs'
+      - 'tests/automation-additive-replay-candidate.test.mjs'
+      - 'supabase/migrations/**'
   pull_request:
     paths:
       - '.github/workflows/automation-additive-pg17.yml'
@@ -22,104 +29,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      # Checkout v4's early credential cleanup traverses a legacy gitlink with
-      # no .gitmodules URL. Use the established checkout mode, then remove
-      # the read-only checkout header locally before executing repository code.
+      # Match the working repository checkout path: do not traverse submodules.
+      # Strip the read-only token header before executing any repository code.
       - uses: actions/checkout@v4
         with:
           submodules: false
       - name: Remove checkout authorization before executing repository code
         shell: bash
         run: |
+          set -euo pipefail
           git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
-          if git config --local --get-regexp '^http\..*\.extraheader      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Validate candidate and produce source-hashed inventory
-        run: |
-          node --test tests/automation-additive-replay-candidate.test.mjs
-          node scripts/automation-additive-replay-candidate.mjs > "$RUNNER_TEMP/additive-candidate.json"
-      - name: Start networkless disposable PostgreSQL
-        run: |
-          set -euo pipefail
-          docker run -d --rm --network none --name eternyx-additive-pg17 -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
-          stable=0
-          for i in $(seq 1 45); do
-            if docker exec eternyx-additive-pg17 pg_isready -U postgres >/dev/null 2>&1; then
-              stable=$((stable+1))
-              if [ "$stable" -ge 4 ]; then break; fi
-            else stable=0; fi
-            sleep 1
-          done
-          test "$stable" -ge 4
-          docker exec -i eternyx-additive-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < tests/sql/ctf-range-db-bootstrap.sql
-      - name: Seed synthetic preservation markers (not a copy of staging)
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE' > "$RUNNER_TEMP/marker-seed.sql"
-          import {PROTECTED_TABLES} from "./scripts/automation-additive-replay-candidate.mjs";
-          for(const table of PROTECTED_TABLES){
-            if(!/^[a-z_]+$/.test(table))throw Error("invalid name");
-            console.log("CREATE TABLE public."+table+" (marker text PRIMARY KEY);");
-            console.log("ALTER TABLE public."+table+" ENABLE ROW LEVEL SECURITY;");
-            console.log("INSERT INTO public."+table+" VALUES ('synthetic-preservation-marker');");
-          }
-          NODE
-          docker exec -i eternyx-additive-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/marker-seed.sql"
-          node --input-type=module <<'NODE' > "$RUNNER_TEMP/marker-check.sql"
-          import {PROTECTED_TABLES} from "./scripts/automation-additive-replay-candidate.mjs";
-          for(const table of PROTECTED_TABLES){
-            console.log("SELECT '"+table+"', c.oid, c.relrowsecurity, (SELECT count(*) FROM public."+table+" WHERE marker='synthetic-preservation-marker') FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='"+table+"';");
-          }
-          NODE
-          docker exec -i eternyx-additive-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/marker-check.sql" > "$RUNNER_TEMP/markers-before.txt"
-          test "$(wc -l < "$RUNNER_TEMP/markers-before.txt")" -eq 7
-      - name: Apply each exact source hash in candidate order, stopping on failure
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module - "$RUNNER_TEMP/additive-candidate.json" <<'NODE' > "$RUNNER_TEMP/additive-plan.tsv"
-          import {readFileSync} from "node:fs";
-          const report=JSON.parse(readFileSync(process.argv[2],"utf8"));
-          for(const item of report.files)console.log(item.sha256+"\t"+item.name);
-          NODE
-          count=0
-          while IFS=$'\t' read -r digest filename; do
-            [[ "$filename" =~ ^20[0-9]{12}_[a-z0-9_]+\.sql$ && "$digest" =~ ^[a-f0-9]{64}$ ]]
-            file="supabase/migrations/$filename"
-            printf '%s  %s\n' "$digest" "$file" | sha256sum --check --status
-            echo "Rehearsing $filename"
-            docker exec -i eternyx-additive-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < "$file" > /dev/null
-            count=$((count+1))
-          done < "$RUNNER_TEMP/additive-plan.tsv"
-          test "$count" -ge 23
-          test "$count" -eq "$(wc -l < "$RUNNER_TEMP/additive-plan.tsv")"
-      - name: Verify actual four-backend SQL dependencies and RLS
-        run: |
-          set -euo pipefail
-          node scripts/eternyx-backend-rpc-surface.mjs --sql > "$RUNNER_TEMP/additive-catalog.sql"
-          docker exec -i -e PGOPTIONS="-c default_transaction_read_only=on" eternyx-additive-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/additive-catalog.sql" > "$RUNNER_TEMP/additive-catalog.txt"
-          node scripts/eternyx-backend-rpc-surface.mjs --parse "$RUNNER_TEMP/additive-catalog.txt" > "$RUNNER_TEMP/additive-catalog-verified.json"
-      - name: Exercise real Automation owner isolation and preserve all seven markers
-        run: |
-          set -euo pipefail
-          docker exec -i eternyx-additive-pg17 psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 < tests/sql/automation-control-db-smoke.sql
-          docker exec -i eternyx-additive-pg17 psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/marker-check.sql" > "$RUNNER_TEMP/markers-after.txt"
-          cmp "$RUNNER_TEMP/markers-before.txt" "$RUNNER_TEMP/markers-after.txt"
-          echo "Disposable SQL replay verified; no live staging or production migration performed."
-      - name: Publish candidate and disposable catalog evidence
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: automation-additive-disposable-pg17-evidence
-          path: |
-            ${{ runner.temp }}/additive-candidate.json
-            ${{ runner.temp }}/additive-catalog-verified.json
-          retention-days: 7
-      - name: Remove disposable database
-        if: always()
-        run: docker rm --force eternyx-additive-pg17 || true
- >/dev/null 2>&1; then
+          if git config --local --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1; then
             echo '::error::Unexpected remaining HTTP authorization configuration'
             exit 1
           fi
