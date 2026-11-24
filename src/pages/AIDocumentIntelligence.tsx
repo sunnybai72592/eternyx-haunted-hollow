@@ -327,8 +327,8 @@ const AIDocumentIntelligence = () => {
     ++corpusReadVersion.current;
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
-    setKnowledgeQuery("");setKnowledgeMode("all");
     discardRecoveryCheckpoint();
+    setKnowledgeQuery("");setKnowledgeMode("all");
     setRecoveryReceipt(null);
     setCorpusBusy(false);
     setCorpusFilter("");
