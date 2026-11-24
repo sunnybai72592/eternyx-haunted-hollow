@@ -1,0 +1,52 @@
+name: Docker Phase 42 independent witnessed staging evidence (NO DOCKER)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-independent-staging-witness-phase42.yml'
+      - 'src/lib/dockerStagingWitnessEvidence.mjs'
+      - 'scripts/docker-staging-witness-evidence.mjs'
+      - 'tests/docker-staging-witness-phase42.test.mjs'
+      - 'docs/DOCKER_STAGING_INDEPENDENT_WITNESS_PHASE42.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-witness:
+    name: Test separately pinned witness, cross-phase evidence, one-time concurrent review (NO DOCKER)
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check separate witness signer/reviewer and all new fixtures
+        run: |
+          node --check src/lib/dockerStagingWitnessEvidence.mjs
+          node --check scripts/docker-staging-witness-evidence.mjs
+          node --check tests/docker-staging-witness-phase42.test.mjs
+      - name: Verify independent witness and every previous Docker signed-agent safety gate offline
+        env:
+          CI: 'true'
+        run: |
+          node --test tests/docker-staging-witness-phase42.test.mjs
+          node --test tests/docker-staging-lifecycle-phase41.test.mjs
+          node --test tests/docker-host-challenge-ledger-phase40.test.mjs
+          node --test tests/docker-signed-host-evidence-phase39.test.mjs
+          node --test tests/docker-signed-host-readonly-preflight-phase38.test.mjs
+          node --test tests/docker-signed-client-config-phase37.test.mjs
+          node --test tests/docker-signed-cli-fd-exec-phase36.test.mjs
+          node --test tests/docker-signed-cli-executable-pin.test.mjs
+          node --test tests/docker-signed-normal-receipt-evidence.test.mjs
+          node --test tests/docker-signed-receipt-replay-forensics.test.mjs
+          node --test tests/docker-durable-journal-fsync.test.mjs
+          node --test tests/docker-agent-attempt-disposition.test.mjs
+          node --test tests/docker-strict-recovery-inventory.test.mjs
+          node --test tests/docker-container-lock.test.mjs
+          node --test tests/docker-signed-container-history-fence.test.mjs
+          node --test tests/docker-signed-agent-engine-gate.test.mjs
+          node --test tests/docker-signed-agent-last-moment-gate.test.mjs
+          node --test tests/docker-signed-protocol-integration.test.mjs
