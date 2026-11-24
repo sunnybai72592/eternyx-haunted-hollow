@@ -71,7 +71,7 @@ test("direct-to-movie ZIP stores explicit human captions/rights, real originals 
     pythonSources,onProgress:p=>events.push(p),
   });
   assert.equal(bundle.filename,"eternyx-private-phone-movie.zip");
-  assert.equal(bundle.entryCount,14);
+  assert.equal(bundle.entryCount,15);
   assert.equal(bundle.manifest.originals[0].sha256,
     hash(Buffer.from(await files[0].arrayBuffer())));
   assert.equal(bundle.manifest.private_media,true);
@@ -84,7 +84,7 @@ test("direct-to-movie ZIP stores explicit human captions/rights, real originals 
   try{
     const extracted=extract(await bundle.blob.arrayBuffer(),dir);
     for(const expected of [
-      "phone-clips/owned.mov","phone-movie-plan.json",
+      "phone-clips/owned.mov","phone-movie-plan.json","phone-movie-edit-draft.json",
       "finish_phone_movie.py","finish-phone-movie-windows.cmd",
       "finish-phone-movie-macos-linux.sh","launch_phone_intake.py",
       "prepare_video_sources.py","render_video_timeline.py",
@@ -93,6 +93,12 @@ test("direct-to-movie ZIP stores explicit human captions/rights, real originals 
     assert.equal(movie.kind,"eternyx_offline_phone_movie");
     assert.deepEqual(movie.shots,requested.shots);
     assert.equal(movie.quality,"high");
+    const edit=JSON.parse(readFileSync(join(extracted.folder,"phone-movie-edit-draft.json"),"utf8"));
+    assert.equal(edit.format,"eternyx-private-phone-movie-edit-draft");
+    assert.equal(edit.fps,16);
+    assert.equal(edit.originals[0].sha256,bundle.manifest.originals[0].sha256);
+    assert.equal(edit.contains_private_media,false);
+    assert.equal(edit.movie_plan.shots[0].rights_ref,movie.shots[0].rights_ref);
     assert.deepEqual(readFileSync(join(extracted.folder,"phone-clips/owned.mov")),
       Buffer.from(await files[0].arrayBuffer()));
     assert.match(readFileSync(join(extracted.folder,"README.txt"),"utf8"),
