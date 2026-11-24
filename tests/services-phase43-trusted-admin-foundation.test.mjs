@@ -90,6 +90,8 @@ test('Phase43 inspects metadata only: no direct reads from admin assignments, us
  assert.match(sql,/prosecdef/);
  assert.match(sql,/provolatile='s'/);
  assert.match(sql,/search_path=/);
+ assert.ok(sql.includes("'search_path=\"\"'"), 'PostgreSQL quoted empty search_path is allowed');
+ assert.ok(sql.includes("'search_path='"), 'PostgreSQL unquoted empty search_path is allowed');
  assert.match(sql,/relrowsecurity/);
  assert.match(sql,/BEGIN TRANSACTION READ ONLY/);
  assert.match(sql,/SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/);
