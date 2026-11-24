@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {webcrypto} from "node:crypto";
+import {runProjectApiSuite} from "../src/lib/projectApiSuite.mjs";
 import {readFileSync} from "node:fs";
 import {resolveApiEnvironmentSuite,validateApiTargetOrigin} from "../src/lib/projectApiEnvironment.mjs";
 import {fingerprintApiSuite,createApiBaseline,compareApiBaselines,storeApiBaseline,readApiBaselines} from "../src/lib/projectApiRegression.mjs";
@@ -48,4 +49,24 @@ test("target selection is session-only and stale results cannot be exported afte
   assert.match(ui,/runProjectApiSuite\(available,/);
   assert.match(ui,/b\.environment === environment/);
   assert.doesNotMatch(ui,/localStorage\.setItem\([^;\n]*targetOrigin/);
+});
+
+test("execution uses only the confirmed resolved origin, with no ambient credentials or redirects",async()=>{
+  const resolved=resolveApiEnvironmentSuite([s()],"preview","https://preview.example");
+  let called=0;
+  const rows=await runProjectApiSuite(resolved,{fetcher:async(url,opts)=>{
+    called++;
+    assert.equal(url,"https://preview.example/api/health");
+    assert.equal(opts.credentials,"omit");
+    assert.equal(opts.redirect,"error");
+    assert.equal(opts.referrerPolicy,"no-referrer");
+    return new Response(null,{status:200});
+  }});
+  assert.equal(called,1);
+  assert.equal(rows[0].origin,"https://preview.example");
+  assert.equal(rows[0].passed,true);
+});
+test("rebasing cannot silently truncate a long saved path",()=>{
+  const saved=[s({url:"https://x.io/"+ "a".repeat(4070)})];
+  assert.throws(()=>resolveApiEnvironmentSuite(saved,"staging","https://longer-staging-environment.example"),/URL boundary/);
 });

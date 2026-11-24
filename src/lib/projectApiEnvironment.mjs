@@ -30,6 +30,8 @@ export function resolveApiEnvironmentSuite(scenarios, environment = "saved", tar
     if (destination.origin !== target || destination.pathname !== originals[i].pathname || destination.search || destination.hash) {
       throw new Error("Cannot preserve the saved request path safely.");
     }
-    return normalizeProjectApiScenario({...item,url:destination.href});
+    const resolved = normalizeProjectApiScenario({...item,url:destination.href});
+    if (resolved.url !== destination.href) throw new Error("Resolved target exceeds the supported URL boundary.");
+    return resolved;
   });
 }
