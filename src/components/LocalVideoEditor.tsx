@@ -44,7 +44,7 @@ type LocalShot = {
 };
 type LocalSound = LocalFile & { rightsRef: string; volumePercent: number };
 type RenderProfile = "landscape" | "portrait" | "square";
-type RenderQuality = "standard" | "high";
+type RenderQuality = "standard" | "high" | "cinematic";
 
 function saveDownload(text: string, filename: string, mime: string) {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -57,8 +57,8 @@ function saveDownload(text: string, filename: string, mime: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-function newShot(name: string): LocalShot {
-  return { sourceName: name, startFrame: 0, frames: 16, caption: "",
+function newShot(name: string, fps=16): LocalShot {
+  return { sourceName: name, startFrame: 0, frames: fps, caption: "",
     rightsRef: "", fadeInFrames: 0, fadeOutFrames: 0 };
 }
 
@@ -89,6 +89,7 @@ export default function LocalVideoEditor() {
   const [soundtrack, setSoundtrack] = useState<LocalSound | null>(null);
   const [profile, setProfile] = useState<RenderProfile>("landscape");
   const [quality, setQuality] = useState<RenderQuality>("standard");
+  const fps:16|24=quality==="cinematic"?24:16;
   const [selectedSource, setSelectedSource] = useState("");
   const [working, setWorking] = useState(false);
   const [audioWorking, setAudioWorking] = useState(false);
@@ -217,6 +218,34 @@ export default function LocalVideoEditor() {
     }
   };
 
+  // Never reinterpret an existing 16 FPS frame as a 24 FPS frame.
+  // Only permit mode switches when every exact time-based value can be
+  // converted without rounding source position, duration or fades.
+  const switchQuality=(next:RenderQuality)=>{
+    const target=next==="cinematic"?24:16;
+    if(target===fps){setQuality(next);return;}
+    try{
+      const mapped=shots.map(shot=>{
+        const scaled={...shot};
+        for(const key of ["startFrame","frames","fadeInFrames","fadeOutFrames"] as const){
+          const exact=shot[key]*target/fps;
+          if(!Number.isSafeInteger(exact))
+            throw new Error("Switching FPS would round an existing cut or fade. Save this draft first or adjust to whole shared frame boundaries.");
+          scaled[key]=exact;
+        }
+        if(scaled.startFrame+scaled.frames>target*60||
+           scaled.frames>target*30||scaled.fadeInFrames>16||scaled.fadeOutFrames>16)
+          throw new Error("Selected cuts or fades exceed the destination FPS limits.");
+        return scaled;
+      });
+      if(mapped.reduce((sum,shot)=>sum+shot.frames,0)>target*30)
+        throw new Error("Converted timeline exceeds 30 seconds.");
+      if(mapped.length)setShots(mapped);
+      setQuality(next);setMessage("");setNotice("Timeline switched to "+target+" FPS without changing cut timings.");
+    }catch(cause){
+      setMessage(cause instanceof Error?cause.message:"Cannot safely change frame rate.");
+    }
+  };
   const changeShot = (index: number, changes: Partial<LocalShot>) => {
     setShots(old => old.map((shot, i) => i === index ? { ...shot, ...changes } : shot));
     setMessage("");
@@ -248,7 +277,7 @@ export default function LocalVideoEditor() {
       urls.current = prepared.map(item => item.url);
       committed = true;
       setSources(prepared);
-      setTimelineHistory(resetTimelineHistory(prepared.map(file => newShot(file.name))));
+      setTimelineHistory(resetTimelineHistory(prepared.map(file => newShot(file.name,fps))));
       setSelectedSource(prepared[0].name);
       setNotice("Files hashed locally. Add captions and rights references before exporting.");
     } catch (error) {
@@ -294,7 +323,7 @@ export default function LocalVideoEditor() {
   let validation = "";
   if (sources.length) {
     try {
-      ready = buildLocalVideoBoard({ sources, shots, soundtrack });
+      ready = buildLocalVideoBoard({ sources, shots, soundtrack, quality });
     } catch (error) {
       validation = error instanceof Error ? error.message : "Check the selected timeline.";
     }
@@ -369,7 +398,7 @@ export default function LocalVideoEditor() {
           <AlertDescription>
             Media is read and SHA-256 hashed in this browser. Nothing is uploaded or submitted to an AI API.
             Your selected files are not saved as a persistent draft. Reloading clears the selection.
-            The local Python renderer must still verify exact 16 FPS, frame counts, source hashes and available codecs.
+            The local Python renderer must verify exact {fps} FPS, frame counts, source hashes and available codecs.
           </AlertDescription>
         </Alert>
 
@@ -475,13 +504,13 @@ export default function LocalVideoEditor() {
               {chosen && <video key={chosen.url} controls playsInline preload="metadata" src={chosen.url}
                 aria-label={"Original source clip " + chosen.name}
                 className="max-h-72 w-full rounded-lg border border-slate-700 bg-black" />}
-              <p className="text-xs text-amber-100">This player previews the selected <strong>original</strong> MP4, not the edited output. Browsers cannot guarantee the source is constant-frame-rate 16 FPS.</p>
+              <p className="text-xs text-amber-100">This player previews the selected <strong>original</strong> MP4, not the edited output. Browsers cannot guarantee the source is constant-frame-rate {fps} FPS.</p>
             </div>
           )}
         </div>
 
         {sources.length > 0 && (
-          <LocalVideoTimeline shots={shots} sources={sources}
+          <LocalVideoTimeline shots={shots} sources={sources} fps={fps}
             disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
             canUndo={historyStatus.undo} canRedo={historyStatus.redo}
             onUndo={undoShotEdit} onRedo={redoShotEdit}
@@ -507,9 +536,9 @@ export default function LocalVideoEditor() {
         {sources.length > 0 && (
           <section className="space-y-4" aria-labelledby="local-shot-title">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 id="local-shot-title" className="font-semibold">Real shot cuts · {shots.length} / 8 · {(total / 16).toFixed(2)} / 30 seconds</h3>
+              <h3 id="local-shot-title" className="font-semibold">Real shot cuts · {shots.length} / 8 · {(total / fps).toFixed(2)} / 30 seconds</h3>
               <Button variant="outline" size="sm" disabled={shots.length >= 8} onClick={() => {
-                setShots(old => [...old, newShot(selectedSource || sources[0].name)]); setNotice("");
+                setShots(old => [...old, newShot(selectedSource || sources[0].name,fps)]); setNotice("");
               }}><Plus className="mr-1 h-4 w-4"/>Add another cut</Button>
             </div>
             {shots.map((shot, i) => (
@@ -537,8 +566,8 @@ export default function LocalVideoEditor() {
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {([
-                    ["Start frame (16 FPS)", "startFrame", 0, 960],
-                    ["Frames (up to 480)", "frames", 1, 480],
+                    [`Start frame (${fps} FPS)`, "startFrame", 0, fps*60],
+                    [`Frames (up to ${fps*30})`, "frames", 1, fps*30],
                     ["Fade in frames", "fadeInFrames", 0, 16],
                     ["Fade out frames", "fadeOutFrames", 0, 16],
                   ] as const).map(([label, key, min, max]) => (
@@ -559,7 +588,7 @@ export default function LocalVideoEditor() {
                 </label>
               </div>
             ))}
-            <p className="text-xs text-slate-400">Offsets and lengths are frame counts at 16 FPS; 16 frames = 1 second. The Python renderer rejects cuts beyond the actual decoded source length.</p>
+            <p className="text-xs text-slate-400">Offsets and lengths are frame counts at {fps} FPS; {fps} frames = 1 second. The Python renderer rejects cuts beyond the actual decoded source length.</p>
           </section>
         )}
 
@@ -598,9 +627,9 @@ export default function LocalVideoEditor() {
               </select>
             </label>
             <label className="block space-y-1 text-sm">Output resolution
-              <select value={quality} onChange={e => setQuality(e.target.value as RenderQuality)}
+              <select value={quality} onChange={e => switchQuality(e.target.value as RenderQuality)}
                 className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
-                {LOCAL_VIDEO_QUALITIES.map(name => <option key={name} value={name}>{name}</option>)}
+                {LOCAL_VIDEO_QUALITIES.map(name => <option key={name} value={name}>{name==="cinematic"?"Cinematic · native 24 FPS / up to 720p":name}</option>)}
               </select>
             </label>
           </div>
@@ -611,7 +640,7 @@ export default function LocalVideoEditor() {
           <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-950/10 p-3">
             <p className="font-semibold text-emerald-100">One ZIP · Real CPU renderer + guided local launch</p>
             <p className="text-sm text-slate-300">
-              Download a runnable project with the edited storyboard, only its referenced
+              Download a runnable {fps} FPS project with the edited storyboard, only its referenced
               original MP4s, any licensed soundtrack, SRT preview, three reviewed Python
               renderer modules, and Windows/macOS/Linux launch instructions.
               Includes preflight checks, verified output and a cancel-capable desktop runner.
