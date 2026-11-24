@@ -68,6 +68,28 @@ function validateUniqueClips(files) {
 }
 
 /** Produce exact v2 JSON accepted by gpu-worker/render_video_timeline.py. */
+export const SOUNDTRACK_EDIT_FIELDS=Object.freeze({
+  sourceStartMs:60000,timelineStartMs:30000,durationMs:30000,fadeInMs:10000,fadeOutMs:10000,
+});
+export function checkSoundtrackEdit(soundtrack,totalFrames,fps){
+  const result={};
+  const map={sourceStartMs:"source_start_ms",timelineStartMs:"timeline_start_ms",
+    durationMs:"duration_ms",fadeInMs:"fade_in_ms",fadeOutMs:"fade_out_ms"};
+  for(const [key,max] of Object.entries(SOUNDTRACK_EDIT_FIELDS)){
+    if(Object.hasOwn(soundtrack,key))result[map[key]]=integer(soundtrack[key],0,max,"Soundtrack "+key);
+  }
+  if(Object.hasOwn(soundtrack,"loop")){
+    if(typeof soundtrack.loop!=="boolean")throw new Error("Soundtrack loop must be boolean.");
+    result.loop=soundtrack.loop;
+  }
+  const available=totalFrames*1000/fps-(result.timeline_start_ms??0);
+  const length=result.duration_ms||available;
+  if(available<=0||length<=0||length>available||
+     (result.fade_in_ms??0)+(result.fade_out_ms??0)>length)
+    throw new Error("Soundtrack placement, duration or fades exceed the movie timeline.");
+  return result;
+}
+
 export function buildLocalVideoBoard({ sources, shots, soundtrack = null, quality = "standard" }) {
   const fps=localVideoFps(quality),maxFrames=localVideoMaxFrames(fps),maxSource=localVideoMaxSourceFrames(fps);
   const clips = validateUniqueClips(sources);
@@ -103,6 +125,7 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null, qualit
       source_sha256: audio.sha256,
       rights_ref: label(soundtrack.rightsRef, "Soundtrack rights reference"),
       volume_percent: integer(soundtrack.volumePercent, 0, 100, "Soundtrack volume"),
+      ...checkSoundtrackEdit(soundtrack,totalFrames,fps),
     };
   }
   const json = JSON.stringify(board, null, 2);

@@ -4,7 +4,7 @@
  * before any timeline, soundtrack or profile is restored to the live editor.
  */
 import {
-  checkLocalMediaName,LOCAL_VIDEO_LIMITS,checkLocalVideoLook,
+  checkLocalMediaName,LOCAL_VIDEO_LIMITS,checkLocalVideoLook,checkSoundtrackEdit,SOUNDTRACK_EDIT_FIELDS,
   LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps,localVideoMaxFrames,localVideoMaxSourceFrames,
 } from "./localVideoEditor.mjs";
 
@@ -38,7 +38,7 @@ function wording(value,max,what,empty=false){
   return value;
 }
 function mediaRecord(item,kind){
-  const keys=kind==="audio"?AUDIO:MEDIA;
+  const keys=kind==="audio"?[...AUDIO,...[...Object.keys(SOUNDTRACK_EDIT_FIELDS),"loop"].filter(k=>item&&Object.hasOwn(item,k))]:MEDIA;
   fields(item,keys,kind+" source");
   checkLocalMediaName(item.name,kind);
   int(item.size,1,kind==="audio"?LOCAL_VIDEO_LIMITS.maxAudioBytes:
@@ -49,6 +49,11 @@ function mediaRecord(item,kind){
   if(kind==="audio"){
     base.rightsRef=wording(item.rightsRef,180,"Audio rights reference",true);
     base.volumePercent=int(item.volumePercent,0,100,"Audio volume");
+    for(const [key,max] of Object.entries(SOUNDTRACK_EDIT_FIELDS))if(Object.hasOwn(item,key))base[key]=int(item[key],0,max,"Soundtrack "+key);
+    if(Object.hasOwn(item,"loop")){
+      if(typeof item.loop!=="boolean")throw new Error("Soundtrack loop must be boolean.");
+      base.loop=item.loop;
+    }
   }
   return base;
 }
@@ -106,6 +111,7 @@ function normalize(data){
   if(!LOCAL_VIDEO_PROFILES.includes(data.profile)||
      !LOCAL_VIDEO_QUALITIES.includes(data.quality))
     throw new Error("Unsupported saved local CPU output profile or quality.");
+  if(soundtrack)checkSoundtrackEdit(soundtrack,total,fps);
   return {
     format:"eternyx-local-video-edit-draft",version:1,
     name,contains_private_media:false,sources,soundtrack,shots,
@@ -127,6 +133,7 @@ export function createLocalVideoDraft({
     soundtrack:soundtrack?{
       name:soundtrack.name,size:soundtrack.size,sha256:soundtrack.sha256,
       rightsRef:soundtrack.rightsRef,volumePercent:soundtrack.volumePercent,
+      ...Object.fromEntries([...Object.keys(SOUNDTRACK_EDIT_FIELDS),"loop"].filter(k=>Object.hasOwn(soundtrack,k)).map(k=>[k,soundtrack[k]])),
     }:null,
     shots:(shots??[]).map(s=>({
       sourceName:s.sourceName,startFrame:s.startFrame,frames:s.frames,
