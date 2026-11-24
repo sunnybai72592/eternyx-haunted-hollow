@@ -54,6 +54,7 @@ import { listCorpusRecovery, planCorpusRecovery, CorpusRecoveryError } from "@/l
 import { compareCorpusVersions, formatRecoveryReceipt, selectiveRecoveryReceipt, replacementReceipt, type RecoveryReceipt } from "@/lib/ai/document-corpus-version-review";
 import {createCorpusCheckpoint,canUndoCorpusCheckpoint,undoCorpusCheckpoint,summarizeCorpusCheckpoint,type CorpusCheckpoint} from "@/lib/ai/document-corpus-checkpoint";
 import {buildKnowledgeIndex,searchKnowledgeIndex,formatKnowledgePassage,KnowledgeError,type KnowledgeIndex} from "@/lib/ai/document-corpus-knowledge";
+import {suggestKnowledgeTerms,prepareKnowledgeEvidence,KnowledgeEvidenceError,MAX_EVIDENCE_PASSAGES} from "@/lib/ai/document-corpus-knowledge-evidence";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -113,12 +114,28 @@ const AIDocumentIntelligence = () => {
   const [corpusBusy, setCorpusBusy] = useState(false);
   const [knowledgeIndex,setKnowledgeIndex] = useState<{index:KnowledgeIndex;sources:CorpusDocument[]}|null>(null);
   const [knowledgeQuery,setKnowledgeQuery] = useState("");
+  const [knowledgeExpansion,setKnowledgeExpansion] = useState("");
+  const [knowledgeDiversify,setKnowledgeDiversify] = useState(false);
+  const [knowledgeSelected,setKnowledgeSelected] = useState<string[]>([]);
+  const [knowledgeQuestion,setKnowledgeQuestion] = useState("");
+  const [knowledgePacket,setKnowledgePacket] = useState<ReturnType<typeof prepareKnowledgeEvidence>|null>(null);
+  const [knowledgePacketError,setKnowledgePacketError] = useState<string|null>(null);
+  const [knowledgeSuggestions,setKnowledgeSuggestions] = useState<string[]>([]);
   const [knowledgeMode,setKnowledgeMode] = useState<"all"|"any">("all");
   const [knowledgeFilter,setKnowledgeFilter] = useState("");
   const [knowledgeResults,setKnowledgeResults] = useState<ReturnType<typeof searchKnowledgeIndex>|null>(null);
   const [knowledgeError,setKnowledgeError] = useState<string|null>(null);
   const activeKnowledgeIndex=knowledgeIndex?.sources===corpusFiles ? knowledgeIndex.index:null;
-  const invalidateKnowledgeResults=()=>{setKnowledgeResults(null);setKnowledgeError(null);};
+  const invalidateKnowledgePacket=()=>{setKnowledgePacket(null);setKnowledgePacketError(null);};
+  const invalidateKnowledgeResults=()=>{setKnowledgeResults(null);setKnowledgeError(null);setKnowledgeSelected([]);setKnowledgeSuggestions([]);invalidateKnowledgePacket();};
+  const prepareLocalKnowledgePacket=()=>{
+    invalidateKnowledgePacket();
+    if(!activeKnowledgeIndex||!knowledgeResults||corpusBusy)return;
+    try{setKnowledgePacket(prepareKnowledgeEvidence(corpusFiles,activeKnowledgeIndex,knowledgeResults,knowledgeSelected,knowledgeQuestion));}
+    catch(reason){setKnowledgePacketError(reason instanceof KnowledgeEvidenceError ?
+      ({invalid_selection:"Select one to three current ranked passages.",invalid_question:"Enter a nonempty question of at most 250 characters.",stale_source:"Source evidence is stale; rebuild and search again.",too_large:"Evidence packet exceeds 5,000 characters. Select fewer passages."}[reason.code])
+      :"Could not prepare the local evidence packet.");}
+  };
   const invalidateKnowledgeIndex=()=>{setKnowledgeIndex(null);setKnowledgeFilter("");invalidateKnowledgeResults();};
   const buildLocalKnowledge=()=>{
     if(corpusBusy||!corpusFiles.length)return;
@@ -129,7 +146,7 @@ const AIDocumentIntelligence = () => {
   const runLocalKnowledge=()=>{
     invalidateKnowledgeResults();
     if(!activeKnowledgeIndex||corpusBusy)return;
-    try{setKnowledgeResults(searchKnowledgeIndex(activeKnowledgeIndex,knowledgeQuery,knowledgeMode,knowledgeFilter||null));}
+    try{setKnowledgeResults(searchKnowledgeIndex(activeKnowledgeIndex,knowledgeQuery,knowledgeMode,knowledgeFilter||null,{expansion:knowledgeExpansion,diversify:knowledgeDiversify}));}
     catch(reason){
       setKnowledgeError(reason instanceof KnowledgeError && reason.code==="empty_index"
         ?"No searchable word tokens in loaded text."
@@ -328,7 +345,7 @@ const AIDocumentIntelligence = () => {
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
     discardRecoveryCheckpoint();
-    setKnowledgeQuery("");setKnowledgeMode("all");
+    setKnowledgeQuery("");setKnowledgeMode("all");setKnowledgeExpansion("");setKnowledgeDiversify(false);setKnowledgeQuestion("");
     setRecoveryReceipt(null);
     setCorpusBusy(false);
     setCorpusFilter("");
@@ -1990,16 +2007,51 @@ const AIDocumentIntelligence = () => {
                     </select>
                   </label>
                 </div>
+                <label className="block text-xs text-slate-300">Optional alternative terms (manual lexical expansion)
+                  <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeExpansion} maxLength={120}
+                    onChange={e=>{setKnowledgeExpansion(e.target.value);invalidateKnowledgeResults();}}/>
+                </label>
+                <p className="text-xs text-slate-400">Up to eight distinct words across both fields. Alternative terms have half weight. All mode still requires every primary term; Any mode may match alternatives alone.</p>
+                <Button type="button" size="sm" variant="outline" disabled={!knowledgeQuery.trim()}
+                  onClick={()=>setKnowledgeSuggestions(suggestKnowledgeTerms(activeKnowledgeIndex,knowledgeQuery))}>Find indexed word variants</Button>
+                {knowledgeSuggestions.length>0 && <p className="text-xs text-slate-300 break-words">Literal prefix matches (not synonyms): {knowledgeSuggestions.join(", ")}. Add desired words to the alternative terms field.</p>}
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input type="checkbox" checked={knowledgeDiversify} onChange={e=>{setKnowledgeDiversify(e.target.checked);invalidateKnowledgeResults();}}/>
+                  Diversify ranking across sources (not strict BM25 score order)
+                </label>
                 <Button type="button" disabled={!knowledgeQuery.trim()} onClick={runLocalKnowledge}>Rank local passages</Button>
                 {knowledgeResults && <div className="space-y-2">
-                  <p role="status" className="text-xs text-slate-300">Showing {knowledgeResults.results.length} of {knowledgeResults.totalMatches} matching passages. BM25 scores are relative relevance, not confidence or factual accuracy.</p>
+                  <p role="status" className="text-xs text-slate-300">Showing {knowledgeResults.results.length} of {knowledgeResults.totalMatches} matching passages across {knowledgeResults.matchingSources} sources. BM25 scores are relative relevance, not confidence or factual accuracy.</p>
                   {knowledgeResults.totalMatches===0 && <p className="text-xs text-slate-400">No matching indexed passage. Try fewer words or another source.</p>}
                   {knowledgeResults.results.map(hit=><article key={hit.id} className="space-y-2 rounded border border-slate-700 p-3">
                     <p className="break-all text-xs text-cyan-200">{hit.documentName} · lines {hit.startLine}–{hit.endLine} · BM25 {hit.score.toFixed(3)}</p>
                     <p className="text-xs text-slate-400">Matched: {hit.matchedTerms.join(", ")} · decoded UTF-16 offsets [{hit.startOffset}, {hit.endOffset})</p>
                     <pre className="whitespace-pre-wrap break-all text-xs text-slate-200">{hit.text}</pre>
-                    <Button type="button" size="sm" variant="outline" onClick={()=>void copy(formatKnowledgePassage(hit),"Local source passage")}>Copy source passage and location</Button>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox" checked={knowledgeSelected.includes(hit.id)}
+                          disabled={!knowledgeSelected.includes(hit.id)&&knowledgeSelected.length>=MAX_EVIDENCE_PASSAGES}
+                          onChange={e=>{const checked=e.target.checked;setKnowledgeSelected(ids=>checked?[...ids.filter(id=>id!==hit.id),hit.id]:ids.filter(id=>id!==hit.id));invalidateKnowledgePacket();}}/>
+                        Include in evidence packet
+                      </label>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>void copy(formatKnowledgePassage(hit),"Local source passage")}>Copy source passage and location</Button>
+                    </div>
                   </article>)}
+                  {knowledgeResults.results.length>0 && <section aria-label="Local evidence-grounded answer preparation" className="space-y-2 rounded border border-slate-700 p-3">
+                    <h5 className="text-sm font-semibold text-white">Prepare source-grounded answer draft</h5>
+                    <p className="text-xs text-slate-400">{knowledgeSelected.length}/{MAX_EVIDENCE_PASSAGES} passages selected. No AI answer is generated or sent. Review sensitive content before copying this prompt elsewhere.</p>
+                    <label className="block text-xs text-slate-300">Question (up to 250 characters)
+                      <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeQuestion} maxLength={250}
+                        onChange={e=>{setKnowledgeQuestion(e.target.value);invalidateKnowledgePacket();}}/>
+                    </label>
+                    <Button type="button" variant="outline" disabled={!knowledgeSelected.length||!knowledgeQuestion.trim()} onClick={prepareLocalKnowledgePacket}>Prepare verified local evidence packet</Button>
+                    {knowledgePacketError && <p role="alert" className="text-xs text-amber-200">{knowledgePacketError}</p>}
+                    {knowledgePacket && <>
+                      <p className="text-xs text-slate-300">{knowledgePacket.passages.length} evidence passages · {knowledgePacket.sourceCount} sources. Exact source text checked locally, not independently fact-checked.</p>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-slate-200">{knowledgePacket.draft}</pre>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>void copy(knowledgePacket.draft,"Local evidence packet")}>Copy answer-preparation prompt</Button>
+                    </>}
+                  </section>}
                 </div>}
               </>}
               {knowledgeError && <p role="alert" className="text-xs text-amber-200">{knowledgeError}</p>}
