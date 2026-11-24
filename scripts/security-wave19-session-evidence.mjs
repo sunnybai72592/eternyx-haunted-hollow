@@ -19,6 +19,10 @@ export function signedPath(value, objectPath) {
     [...url.searchParams.keys()].length===1 && !!url.searchParams.get('token'),'signed-url-boundary');
   return url.pathname+url.search;
 }
+export function invalidSignature(status, body) {
+  return deniedStorage(status,body) || (status===400 &&
+    ['InvalidJWT','InvalidSignature','InvalidToken'].includes(body?.error ?? body?.code));
+}
 export function revokedRefresh(status, body) {
   return status===400 && ['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired'].includes(body?.error_code ?? body?.code);
 }
@@ -67,7 +71,8 @@ export async function lifecycle(env, fetcher=fetch) {
   mark('owner-upload',(await request(object+path,{token:a.token,method:'POST',raw:true,body:bytes})).ok);
   mark('orphan-upload',(await request(object+orphan,{token:a.token,method:'POST',raw:true,body:bytes})).ok);
   await insert('pentest_evidence',{owner_id:a.id,engagement_id:engagement,storage_path:path,file_name:'wave19.txt',mime_type:'text/plain',file_size:Buffer.byteLength(bytes)},'register-evidence');
-  mark('registered-owner-read',(await request(download+path,{token:a.token})).data===bytes);
+  const ownerRead=await request(download+path,{token:a.token});
+  mark('registered-owner-read',ownerRead.ok && ownerRead.data===bytes);
   mark('private-public-endpoint-denied',denied(await request('/storage/v1/object/public/'+bucket+'/'+path,{anonymous:true})));
   mark('cross-owner-signed-url-denied',denied(await request(sign+path,{token:b.token,method:'POST',body:{expiresIn:15}})));
   const ownLink=await request(sign+path,{token:a.token,method:'POST',body:{expiresIn:15}});
@@ -77,8 +82,8 @@ export async function lifecycle(env, fetcher=fetch) {
   mark('signed-bearer-download',signed.ok && signed.data===bytes);
   // A signed capability may be shared with anyone before expiry. Never log it.
   const modified=new URL(link,ORIGIN);modified.searchParams.set('token',modified.searchParams.get('token')+'x');
-  mark('tampered-signature-denied',denied(await request(modified.pathname+modified.search,{anonymous:true})) ||
-    false);
+  const tampered=await request(modified.pathname+modified.search,{anonymous:true});
+  mark('tampered-signature-denied',invalidSignature(tampered.status,tampered.data));
   const remove=async(p)=>request('/storage/v1/object/'+bucket,{token:a.token,method:'DELETE',body:{prefixes:[p]}});
   const replacement=await request(object+path,{token:a.token,method:'PUT',raw:true,body:'forbidden replacement',upsert:true});
   mark('registered-overwrite-denied',denied(replacement));
