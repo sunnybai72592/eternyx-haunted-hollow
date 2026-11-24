@@ -6,6 +6,8 @@ on:
       - 'scripts/sql/staged-security-evidence-gateway.sql'
       - 'scripts/sql/staged-security-evidence-controls.sql'
       - 'scripts/sql/test-security-evidence-controls.sql'
+      - 'scripts/sql/staged-security-evidence-global-budget.sql'
+      - 'scripts/sql/test-security-evidence-global-budget.sql'
       - 'src/components/pentest/PentestEvidencePanel.tsx'
       - 'tests/security-wave22-evidence-gateway.test.mjs'
       - '.github/workflows/cybersecurity-wave22-offline.yml'
@@ -16,6 +18,8 @@ on:
       - 'scripts/sql/staged-security-evidence-gateway.sql'
       - 'scripts/sql/staged-security-evidence-controls.sql'
       - 'scripts/sql/test-security-evidence-controls.sql'
+      - 'scripts/sql/staged-security-evidence-global-budget.sql'
+      - 'scripts/sql/test-security-evidence-global-budget.sql'
       - 'src/components/pentest/PentestEvidencePanel.tsx'
       - 'tests/security-wave22-evidence-gateway.test.mjs'
       - '.github/workflows/cybersecurity-wave22-offline.yml'
@@ -38,7 +42,7 @@ jobs:
           git -C "$source_dir" init -q
           git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
           test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
-          for path in supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs scripts/sql/staged-security-evidence-controls.sql scripts/sql/test-security-evidence-controls.sql; do
+          for path in supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs scripts/sql/staged-security-evidence-controls.sql scripts/sql/test-security-evidence-controls.sql scripts/sql/staged-security-evidence-global-budget.sql scripts/sql/test-security-evidence-global-budget.sql; do
             mkdir -p "$(dirname "$path")"
             git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
           done
@@ -62,3 +66,6 @@ jobs:
           docker cp scripts/sql/staged-security-evidence-controls.sql wave23-pg:/tmp/staged-security-evidence-controls.sql
           docker cp scripts/sql/test-security-evidence-controls.sql wave23-pg:/tmp/test-security-evidence-controls.sql
           docker exec wave23-pg psql -X -v ON_ERROR_STOP=1 -U postgres -f /tmp/test-security-evidence-controls.sql
+          docker cp scripts/sql/staged-security-evidence-global-budget.sql wave23-pg:/tmp/staged-security-evidence-global-budget.sql
+          docker cp scripts/sql/test-security-evidence-global-budget.sql wave23-pg:/tmp/test-security-evidence-global-budget.sql
+          docker exec wave23-pg psql -X -v ON_ERROR_STOP=1 -U postgres -f /tmp/test-security-evidence-global-budget.sql

@@ -54,7 +54,7 @@ export function createEvidenceHandler({url,publicKey,serviceKey,enabled=false,fe
    if(!UUID.test(user.id??'')||user.is_anonymous===true)return json(401,'authentication-required');
    const owner=user.id;
    const reserve=async(requestId,bytes)=>{
-    const result=await call('/rest/v1/rpc/security_evidence_gateway_reserve',true,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_owner:owner,p_request:requestId,p_bytes:bytes})});
+    const result=await call('/rest/v1/rpc/security_evidence_gateway_reserve_v2',true,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_owner:owner,p_request:requestId,p_bytes:bytes})});
     if(!result.ok)return 'unavailable';
     const decision=await result.json();
     return ['reserved','replay','quota'].includes(decision)?decision:'unavailable';

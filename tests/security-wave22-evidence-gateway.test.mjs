@@ -10,7 +10,7 @@ function setup({rows=[row,row],enabled=true,user={id:owner},registered=201,reser
  const calls=[];let n=0;
  const handler=createEvidenceHandler({url,publicKey,serviceKey,enabled,randomId:()=>id,fetcher:async(path,opts)=>{
   calls.push({path,opts});
-  if(path.endsWith('/rest/v1/rpc/security_evidence_gateway_reserve'))return json(reservation);
+  if(path.endsWith('/rest/v1/rpc/security_evidence_gateway_reserve_v2'))return json(reservation);
   if(path.includes('/rest/v1/security_evidence_gateway_digests?'))return json([{owner_id:owner,byte_count:3,sha256:digest}]);
   if(path.endsWith('/rest/v1/security_evidence_gateway_digests'))return json({},sealed);
   if(path.endsWith('/auth/v1/user'))return json(user);
