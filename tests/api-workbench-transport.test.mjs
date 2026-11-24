@@ -64,3 +64,14 @@ test("browser acceptance requests real HTML and targets accessible response cont
   assert.match(browser,/expect\(copy_body\)\.to_be_disabled\(\)/);
   assert.doesNotMatch(browser,/name="Copy", exact=True\)\.last/);
 });
+
+test("browser HTML matchers serialize flags separately for JavaScript regex compatibility",()=>{
+  const browser=readFileSync(new URL("./browser/developer_project_lab_smoke.py",import.meta.url),"utf8");
+  const matchers=browser.match(/re\.compile\(r"<html\\b", re\.IGNORECASE\)/g);
+  assert.equal(matchers?.length,2);
+  assert.doesNotMatch(browser,/re\.compile\(r?["']\(\?[aiLmsux-]+\)/);
+  const pattern=new RegExp("<html\\b","i");
+  assert.ok(pattern.test("<!DOCTYPE html>\n<HTML lang=\"en\">"));
+  assert.ok(!pattern.test("<htmlish>"));
+  assert.ok(!pattern.test("(Empty response body)"));
+});

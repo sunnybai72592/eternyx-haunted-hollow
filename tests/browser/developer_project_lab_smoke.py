@@ -660,7 +660,7 @@ def api_project_link(page, staging):
         # Prove transport completion and actual non-empty HTML rendering before
         # checking the named action; never select an arbitrary Copy button.
         response_body = page.get_by_label("Response body", exact=True)
-        expect(response_body).to_have_value(re.compile(r"(?is)<html\b"), timeout=15000)
+        expect(response_body).to_have_value(re.compile(r"<html\b", re.IGNORECASE), timeout=15000)
         expect(page.get_by_text(re.compile(r"^Headers: \d+ ms$"))).to_be_visible()
         copy_body = page.get_by_role("button", name="Copy response body", exact=True)
         expect(copy_body).to_be_enabled()
@@ -668,7 +668,7 @@ def api_project_link(page, staging):
         expect(page.get_by_text("Request changed. This response is from the previous request", exact=False)).to_be_visible()
         expect(copy_body).to_be_disabled()
         # The stale response remains visible for inspection, not current evidence.
-        expect(response_body).to_have_value(re.compile(r"(?is)<html\b"))
+        expect(response_body).to_have_value(re.compile(r"<html\b", re.IGNORECASE))
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")
