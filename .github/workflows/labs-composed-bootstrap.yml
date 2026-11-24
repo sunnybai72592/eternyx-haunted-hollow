@@ -21,7 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          submodules: false
+      - name: Remove checkout authorization before tests
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
