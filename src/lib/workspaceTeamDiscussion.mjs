@@ -52,7 +52,7 @@ export function verifyWorkspaceDiscussionSnapshot({comments,steps,commentCount,s
       (s.done?(id(s.done_by)&&timestamp(s.completed_at)):
         (s.done_by===null&&s.completed_at===null))))
     throw Error("Team discussion returned an invalid or incomplete scoped snapshot.");
-  return {comments,steps};
+  return {comments:comments.map(c=>c.redacted_at?{...c,body:"[Comment redacted]"}:c),steps};
 }
 export function isWorkspaceDiscussionCurrent(scope,request,currentScope,currentRequest){
   return scope===currentScope&&request===currentRequest;

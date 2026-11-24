@@ -33,6 +33,7 @@ export default function WorkspaceTeamTaskDiscussion({
   const token=useRef(0);
   const request=useRef(0);
   const actionLock=useRef(false);
+  const writeAllowed=useRef(false);
   const [verified,setVerified]=useState(false);
   const [commentQuery,setCommentQuery]=useState("");
   const [commentFilter,setCommentFilter]=useState("all");
@@ -61,6 +62,7 @@ export default function WorkspaceTeamTaskDiscussion({
     if(version!==token.current)return;
     const read=++request.current;
     const current=()=>isWorkspaceDiscussionCurrent(version,read,token.current,request.current);
+    writeAllowed.current=false;
     setVerified(false);setLoading(true);setError("");
     try{
     await checkIdentity(expected);
@@ -105,18 +107,8 @@ export default function WorkspaceTeamTaskDiscussion({
     setError("");setNotice("");setLoading(true);setBusy(false);setVerified(false);
     actionLock.current=false;
     setCommentQuery("");setCommentFilter("all");setCommentSort("newest");setStepFilter("all");
-    const initialRequest=request.current;
-    void (async()=>{
-      try{
-        await checkIdentity(expected);
-        await load(expected,version);
-      }catch(failure){
-        if(version===token.current)
-          setError(failure instanceof Error?failure.message:"Team discussion unavailable");
-      }finally{
-        if(version===token.current&&request.current===initialRequest)setLoading(false);
-      }
-    })();
+    writeAllowed.current=false;
+    void load(expected,version);
     return ()=>{token.current++;request.current++;actionLock.current=false;};
   },[owner,spaceId,taskId]);
 
@@ -130,7 +122,6 @@ export default function WorkspaceTeamTaskDiscussion({
     })();
   },[refreshKey,owner,spaceId,taskId]);
 
-  const writeAllowed=useRef(false);
   writeAllowed.current=verified&&!disabled&&editor&&!loading;
   const run=async(action:()=>Promise<void>,message:string,onConfirmed?:()=>void)=>{
     if(!writeAllowed.current||actionLock.current||busy)return;

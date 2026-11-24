@@ -109,3 +109,9 @@ test("discussion UI gates writes, hides stale pages and clears drafts only on cu
     assert.ok(source.includes(anchor),anchor);
   assert.ok(!source.includes("setComments(old=>")&&!source.includes("setSteps(old=>"));
 });
+
+test("verified redacted rows discard residual original text before publishing state",()=>{
+  const result=verifyWorkspaceDiscussionSnapshot({...snapshot,comments:[{...comment,redacted_at:stamp,body:"original private text"}]});
+  assert.equal(result.comments[0].body,"[Comment redacted]");
+  assert.ok(!JSON.stringify(result).includes("original private text"));
+});
