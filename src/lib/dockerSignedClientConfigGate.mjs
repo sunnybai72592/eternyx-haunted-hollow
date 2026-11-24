@@ -174,3 +174,29 @@ export function verifyPinnedDockerClientConfig(env={}){
   independentlyApprovedHost:false
  });
 }
+
+/** Deny flags, command, format strings or targets outside the exact
+ * agent's rootless context introspection and lifecycle grammar.
+ * Defense-in-depth only: this cannot replace signed permits. */
+export function validatePinnedDockerCliCommand(args,approved){
+ if(!Array.isArray(args)||!approved||
+    typeof approved.context!=="string"||
+    !args.every(x=>typeof x==="string"&&x.length>0&&x.length<=200))
+  throw Error("Signed Docker subprocess args must be exact bounded tokens.");
+ const c=approved.context,eq=expected=>
+  args.length===expected.length&&args.every((x,i)=>x===expected[i]);
+ const inspectEndpoint=["context","inspect",c,"--format","{{json .Endpoints.docker.Host}}"];
+ const info=["--context",c,"info","--format","{{json .}}"];
+ const meta=["--context",c,"container","inspect","--format","{{json .}}"];
+ let allowed=eq(["context","show"])||eq(inspectEndpoint)||eq(info);
+ if(args.length===meta.length+1&&args.slice(0,meta.length).every((x,i)=>x===meta[i])&&
+    FULL.test(args[meta.length]))
+  allowed=true;
+ if(args.length===5&&args[0]==="--context"&&args[1]===c&&
+    args[2]==="container"&&["start","stop","restart"].includes(args[3])&&
+    FULL.test(args[4]))
+  allowed=true;
+ if(!allowed)
+  throw Error("Docker subprocess command is outside signed-agent allowlist.");
+ return true;
+}
