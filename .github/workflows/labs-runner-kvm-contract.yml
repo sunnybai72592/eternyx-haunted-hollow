@@ -1,0 +1,21 @@
+name: LABS runner KVM probe contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/labs-runner-kvm-capability.py'
+      - 'tests/labs-runner-kvm-capability-test.py'
+      - '.github/workflows/labs-runner-kvm-capability.yml'
+      - '.github/workflows/labs-runner-kvm-contract.yml'
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization before tests
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - run: python3 -B tests/labs-runner-kvm-capability-test.py
