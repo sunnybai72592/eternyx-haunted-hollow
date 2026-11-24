@@ -1,0 +1,31 @@
+name: LABS ephemeral KVM guest CPU execution
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Execute fixed four-byte guest on one ephemeral KVM vCPU
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_EPHEMERAL_KVM_GUEST_CPU
+permissions:
+  contents: read
+jobs:
+  guest-cpu:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_EPHEMERAL_KVM_GUEST_CPU' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - name: Compile and validate fixed guest contract
+        run: |
+          /usr/bin/cc -std=c11 -Wall -Wextra -Werror -O2 scripts/labs-runner-kvm-guest.c -o "$RUNNER_TEMP/eternyx-kvm-guest"
+          "$RUNNER_TEMP/eternyx-kvm-guest" --self-test
+      - name: Execute bounded guest CPU and verify cleanup
+        run: |
+          sudo -n /usr/bin/env -i GITHUB_ACTIONS=true ETERNYX_GUEST_CPU_APPROVAL=I_APPROVE_EPHEMERAL_KVM_GUEST_CPU /usr/bin/timeout --kill-after=2s 15s "$RUNNER_TEMP/eternyx-kvm-guest" --run

@@ -1,0 +1,26 @@
+name: LABS KVM guest CPU contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/labs-runner-kvm-guest.c'
+      - '.github/workflows/labs-runner-kvm-guest.yml'
+      - '.github/workflows/labs-runner-kvm-guest-contract.yml'
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - name: Strict compile and offline contract
+        run: |
+          /usr/bin/cc -std=c11 -Wall -Wextra -Werror -O2 scripts/labs-runner-kvm-guest.c -o "$RUNNER_TEMP/eternyx-kvm-guest"
+          "$RUNNER_TEMP/eternyx-kvm-guest" --self-test
+          status=0
+          /usr/bin/env -i "$RUNNER_TEMP/eternyx-kvm-guest" --run || status=$?
+          test "$status" -eq 2
