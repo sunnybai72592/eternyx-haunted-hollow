@@ -52,7 +52,8 @@ BEGIN
  daily_bytes=CASE WHEN b.day_utc=v_day THEN b.daily_bytes+p_bytes ELSE p_bytes END,
  daily_requests=CASE WHEN b.day_utc=v_day THEN b.daily_requests+1 ELSE 1 END,
  minute_requests=CASE WHEN b.minute_utc=v_minute THEN b.minute_requests+1 ELSE 1 END
- WHERE (b.day_utc<>v_day OR (b.daily_bytes+p_bytes<=268435456 AND b.daily_requests<256))
+ WHERE b.day_utc<=v_day AND b.minute_utc<=v_minute
+ AND (b.day_utc<>v_day OR (b.daily_bytes+p_bytes<=268435456 AND b.daily_requests<256))
  AND (b.minute_utc<>v_minute OR b.minute_requests<20);
  GET DIAGNOSTICS v_rows=ROW_COUNT;
  IF v_rows=0 THEN
