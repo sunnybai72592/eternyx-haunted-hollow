@@ -211,3 +211,32 @@ test("monthly UI uses verified filtered data and resets dates on scope changes",
   ])assert.ok(panel.includes(anchor),anchor);
   assert.equal(panel.split('setCalendarDay(null);').length-1,2);
 });
+
+test("planner and task editor share valid Gregorian bounds and final-week ordering",()=>{
+  assert.equal(workspaceValidTaskDay("0000-01-01"),false);
+  assert.equal(workspaceValidTaskDay("0001-01-01"),true);
+  const groups=workspaceTeamScheduleGroups([
+    task(1,{due_on:"9999-12-31"}),task(2,{due_on:"9999-12-29"}),
+    task(3,{status:"done",due_on:null}),task(4,{status:"done",due_on:"9999-12-31"}),
+  ],team,"9999-12-29");
+  assert.deepEqual(groups.map(g=>g.tasks.map(t=>t.id)),[[],[id(2)],[id(1)],[],[],[id(4),id(3)]]);
+});
+test("last supported calendar date uses RFC implicit one-day duration, not invalid year 10000",()=>{
+  const result=buildWorkspaceTeamScheduleIcs([task(1,{due_on:"9999-12-31"})],owner,team,new Date(version));
+  assert.ok(result.includes("DTSTART;VALUE=DATE:99991231"));
+  assert.ok(!result.includes("DTEND;")&&!result.includes("+010000"));
+  const yearZero=new Date("0000-01-01T00:00:00Z");
+  assert.throws(()=>buildWorkspaceTeamScheduleIcs([task(1,{due_on:today})],owner,team,yearZero));
+});
+test("calendar rejects malformed UUIDs, invalid priority and empty assignee metadata",()=>{
+  for(const change of [{id:"deadbeef"},{id:"--------"},{priority:"fake"},{assignee_id:""}])
+    assert.throws(()=>buildWorkspaceTeamScheduleIcs([task(1,{due_on:today,...change})],owner,team,new Date(version)));
+});
+test("calendar replaces forbidden control characters while escaping newlines and preserving Unicode",()=>{
+  const text=escapeWorkspaceCalendarText("a\u0000\u0007\u007fb\r\nc,é\t");
+  assert.equal(text,"a\uFFFD\uFFFD\uFFFDb\\nc\\,é\t");
+  const ics=buildWorkspaceTeamScheduleIcs([task(1,{due_on:today,details:"x\u0001\nEND:VEVENT"})],owner,team,new Date(version));
+  assert.ok(!ics.includes("\u0001"));
+  assert.ok(ics.includes("x\uFFFD\\nEND:VEVENT"));
+  assert.equal(ics.split("\r\n").filter(line=>line==="END:VEVENT").length,1);
+});

@@ -432,10 +432,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       const link=document.createElement("a");
       link.href=objectUrl;
       link.download="eternyx-team-tasks-"+today+".csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+      try {
+        document.body.appendChild(link);
+        link.click();
+      }finally{
+        link.remove();
+        window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+      }
       setNotice("Exported "+visibleTasks.length+" visible team tasks to CSV.");
       setError("");
     }catch(failure){
@@ -602,9 +605,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       const link=document.createElement("a");
       link.href=url;
       link.download="eternyx-team-schedule-"+today+".ics";
-      document.body.appendChild(link);
-      link.click();link.remove();
-      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      try {
+        document.body.appendChild(link);
+        link.click();
+      }finally{
+        link.remove();
+        window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }
       setError("");
       setNotice("Exported "+scheduledCount+" outstanding scheduled tasks to calendar.");
     }catch(failure){setError(errorMessage(failure));}
