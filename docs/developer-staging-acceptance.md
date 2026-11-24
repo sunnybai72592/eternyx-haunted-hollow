@@ -56,3 +56,13 @@ The independent Node verifier rejects missing/duplicated or extra observation fi
 If the stage host loads `/` but redirects `/developer-studio/project-lab` to authentication or returns a 404, deploy the correct public SPA routing/fallback configuration before rerunning. If the deep link hydrates but shows a different build ID, investigate stale CDN assets or mismatched rollout; never downgrade the source match requirement. If a service worker is controlling the page, investigate the staging service worker and cache isolation before treating the run as accepted.
 
 **This is a stronger hosted acceptance gate, not proof that staging was actually run.** No real staging domain, credentials or deployment was added by this phase. The workflow remains operator-dispatched, HTTPS-staging-only, and read-only; production and protected backend verification remain **NOT VERIFIED / HOLD_PRODUCTION**.
+
+## Developer Studio 4.1 — workflow-attempt evidence integrity
+
+The browser report now records its UTC start and completion timestamps and the GitHub Actions run ID and attempt. The Node verifier requires these identifiers to match the current workflow environment, with an exact allowlisted report shape and fixed explanatory note. It rejects old reports from other attempts, malformed or noncanonical timestamps, reversed times, observation windows longer than 15 minutes, and stale or implausibly future completion times. This is correlation to a workflow attempt, not signed provenance or protection against a compromised runner.
+
+The route handler now counts both a cross-origin request and an attempted non-GET/HEAD request when they overlap, rather than omitting the write-attempt count due to an early cross-origin return. This applies to requests intercepted by the browser route handler; it is not a network firewall or proof of comprehensive browser egress isolation.
+
+In addition to the raw browser-run artifact, successful verification produces an independently checked, redacted summary artifact named `eternyx-developer-verified-<run_id>-<run_attempt>`. A failed or incomplete verification cannot publish that success-only artifact. The summary includes elapsed observation time and the run/attempt identifiers alongside the existing 14 journeys, root/deep-link release observations, HTTPS controls and permanent production hold.
+
+Older browser reports without this envelope must be rerun, not edited to satisfy the new contract. Configure the approved staging origin and host as described above, then manually dispatch the existing read-only workflow from main. No hosting configuration, staging variables, protected account tests or deployment is changed by this phase. A passing local CI run does not constitute hosted verification.

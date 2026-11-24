@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {
   DEVELOPER_STAGING_CONFIRMATION, DEVELOPER_BROWSER_CASES, DEVELOPER_BROWSER_VIEWPORTS,
-  checkDeveloperStagingConfig, verifyDeveloperStagingEvidence,
+  checkDeveloperStagingConfig, verifyDeveloperStagingEvidence as verifyEvidence,
 } from "../scripts/developer-staging-gate.mjs";
 const workflow=readFileSync(new URL("../.github/workflows/developer-staging-browser-acceptance.yml",import.meta.url),"utf8");
 const chrome=readFileSync(new URL("../tests/browser/developer_project_lab_smoke.py",import.meta.url),"utf8");
@@ -28,7 +28,9 @@ const report=(overrides={})=>({
   schema:"eternyx-developer-browser-acceptance-v1", environment:"operator-specified staging",
   production_verified:false, staging_executed:true, browser:"Chrome",
   target_host:config.expectedHost, network_scope:"same-origin only",api_requests_executed:false,
-  commit:sha, finished_at:"2026-11-23T19:00:00Z",
+  commit:sha, started_at:"2026-11-23T18:55:00Z", finished_at:"2026-11-23T19:00:00Z",
+  run_id:"1234567",run_attempt:"1",
+  note:"Only case names/outcomes recorded; project source, URLs, tokens and downloaded artifacts excluded.",
   release_observations:releaseObservations(),
   deep_link_observations:deepLinkObservations(),
   header_observations:headerObservations(),
@@ -38,6 +40,7 @@ const report=(overrides={})=>({
   ...overrides,
 });
 const now=Date.parse("2026-11-23T19:10:00Z");
+const verifyDeveloperStagingEvidence=(value,config,sha,now)=>verifyEvidence(value,config,sha,now,{runId:"1234567",runAttempt:"1"});
 
 test("pin staging origin to one exact repo administrator-controlled HTTPS host",()=>{
   assert.deepEqual(checkDeveloperStagingConfig(config),{origin:config.origin,host:config.expectedHost});
@@ -54,6 +57,8 @@ test("pin staging origin to one exact repo administrator-controlled HTTPS host",
 test("all 14 actual Chrome results at exact viewports are required for staging evidence",()=>{
   const summary=verifyDeveloperStagingEvidence(report(),config,sha,now);
   assert.equal(summary.developer_case_count,14);
+  assert.equal(summary.workflow_attempt.run_id,"1234567");
+  assert.equal(summary.workflow_attempt.elapsed_seconds,300);
   assert.equal(summary.production_verified,false);
   assert.match(summary.notes,/unsigned release provenance/);
   assert.equal(summary.observed_release.observations,4);
@@ -66,6 +71,8 @@ test("all 14 actual Chrome results at exact viewports are required for staging e
     {cases:report().cases.slice(0,13)},
     {deep_link_observations:undefined},
     {deep_link_observations:[]},
+    {run_id:"1234568"}, {run_attempt:"2"}, {started_at:"2026-11-23T18:00:00Z"},
+    {private_data:"never accepted"}, {note:"arbitrary text"},
   ]) assert.throws(()=>verifyDeveloperStagingEvidence(report(field),config,sha,now),/staging gate|Developer deep-link/);
 });
 

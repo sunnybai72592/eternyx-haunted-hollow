@@ -577,7 +577,7 @@ export default function DeveloperProjectLab() {
                   (previewMode === view.id ? "border-cyan-400 bg-cyan-950 text-cyan-100" : "border-slate-700 text-slate-300")}>{view.label}</button>)}
             </div>
             <p className="text-xs text-slate-400">Preview size: {previewMode === "fluid" ? "container width" : developerPreviewWidth(previewMode) + "px"}; larger widths scroll horizontally on narrow screens.</p>
-            <div ref={previewScroller} aria-label="Preview scroll area" className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-slate-700 bg-white">
+            <div ref={previewScroller} aria-label="Preview scroll area" className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-700 bg-white">
               {previewHtml ? <iframe key={previewRun} title="Isolated project preview" srcDoc={previewHtml}
                 sandbox="allow-scripts" referrerPolicy="no-referrer" style={{width: previewMode === "fluid" ? "100%" : developerPreviewWidth(previewMode) + "px"}}
                 className="block h-[350px] min-w-0 max-w-none border-0 transition-none" /> :
