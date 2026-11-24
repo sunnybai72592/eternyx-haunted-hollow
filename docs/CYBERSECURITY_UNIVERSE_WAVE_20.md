@@ -1,0 +1,15 @@
+# Wave 20 — live-session authorization and private evidence delivery
+
+Wave 19 PR #719 was merged and both final CI workflows passed. Staging still contains zero Auth users. Wave 20 adds a reviewed-source candidate for enforcement, not a deployed migration.
+
+## Changes
+- A private-schema, fixed-search-path SECURITY DEFINER helper checks the verified JWT session_id against auth.sessions and the same auth.uid(), rejects missing/malformed/foreign sessions and anonymous users, and checks not_after.
+- Restrictive RLS policies apply to seven Cybersecurity relations and the private pentest-evidence bucket. Existing ownership, engagement scope, immutability and grants remain necessary. Other storage buckets are not fenced by this candidate.
+- The evidence UI downloads via authenticated Storage and creates a local blob download instead of navigating to a signed bearer URL. It checks owner and engagement identifiers, registered size, session identity and token continuity before releasing bytes, and revokes the local object URL.
+- Disposable PostgreSQL regression executes the candidate and checks owner isolation, revoked-session SELECT/INSERT/UPDATE/DELETE, missing/malformed/foreign/expired session claims, anonymous users, unrelated buckets and the second account. CI uses a network-isolated database, synthetic claims, and the exact event commit without submodule checkout.
+- Existing UI contract regression updated for authenticated delivery.
+
+## Deployment gates
+The SQL under scripts/sql/staged-security-session-fence.sql is deliberately outside supabase/migrations. Do not blindly run db push or apply this to production. Review staging catalog, helper ownership and schema exposure, existing policies and role grants; reconcile migration history and generate a canonical migration with the Supabase CLI. Apply only to authorized staging after CI passes. Provision two confirmed disposable Auth accounts using supported Auth tools. Run the Wave 18 and 19 baselines before the new fence; afterward use fresh test fixtures and check that the old unexpired access JWT cannot read or write any protected relation or download private evidence after logout, and that B remains unaffected. Wave 19's signed-URL behavior is a separate compatibility test, not proof of immediate signed-link revocation.
+
+This candidate addresses new requests evaluated after session deletion; already-started requests, previously downloaded bytes and previously issued signed URLs are outside that guarantee. Removing signed-link use from the UI does not disable direct Storage signing by an authorized user; a separate mediated delivery architecture is required if bearer capabilities must be eliminated completely. The candidate does not enforce every Supabase Auth timeout setting ahead of Auth session cleanup. Browser download size checks are not content-integrity hashes. Do not expose the private schema through the Data API. Production remains blocked pending genuine JWT/API/Storage acceptance, deployment review, backup restore and independent approval. No production changes or live acceptance execution are claimed by this PR.
