@@ -106,7 +106,7 @@ test('Phase43 rejects default PUBLIC EXECUTE even if is_admin is SECURITY DEFINE
  assert.match(sql,/has_function_privilege\('authenticated',p\.oid,'EXECUTE'\)/);
 });
 
-test('Phase43 checks underlying trusted authorization, not user-editable profile roles',()=>{
+test('Phase43 checks underlying trusted authorization, not user-editable profile roles',async()=>{
  const source=await read('supabase/migrations/20261109231500_trusted_admin_authorization.sql');
  assert.match(source,/CREATE TABLE IF NOT EXISTS public\.admin_users/);
  assert.match(source,/ALTER TABLE public\.admin_users ENABLE ROW LEVEL SECURITY/);
