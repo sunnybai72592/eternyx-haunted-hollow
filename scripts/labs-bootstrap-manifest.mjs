@@ -11,6 +11,7 @@ export const MIGRATIONS=Object.freeze([
   "20261122190000_ctf_range_access_grants.sql",
   "20261122200000_ctf_worker_fencing_budget.sql",
   "20261123041000_ctf_hosted_spend_reservations.sql",
+  "20261124123000_ctf_range_session_column_privacy.sql",
 ]);
 export const FUNCTIONS=Object.freeze({
   "ctf-verified":true,"ctf-range-control":true,"ctf-range-access":true,

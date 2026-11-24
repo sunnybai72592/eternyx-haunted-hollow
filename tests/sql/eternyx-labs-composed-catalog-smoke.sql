@@ -62,11 +62,22 @@ BEGIN
     THEN RAISE EXCEPTION 'Synthetic fixture rollback failed'; END IF;
 END;
 $$;
--- Observe, do not conceal: baseline grants currently expose internal columns to
--- the row owner via Data API. This is a deployment blocker, not an offline test failure.
-SELECT CASE WHEN has_column_privilege('authenticated','public.ctf_range_sessions',
- 'provider_instance_ref','SELECT') OR
- has_column_privilege('authenticated','public.ctf_range_sessions','worker_fence_id','SELECT')
- THEN 'BLOCKED: internal session column visibility requires remediation before live rollout'
- ELSE 'Internal session column read grants absent' END AS deployment_gate;
-SELECT 'composed LABS schemas, RPC privileges, default-off budgets and fixture rollback verified' AS result;
+-- Strict final column gate. Refuse any future unreviewed browser-visible column.
+DO $$
+DECLARE col record;
+DECLARE allowed boolean;
+BEGIN
+  IF has_table_privilege('authenticated','public.ctf_range_sessions','SELECT')
+    THEN RAISE EXCEPTION 'Table-level session SELECT bypasses allowlist'; END IF;
+  FOR col IN SELECT attname FROM pg_attribute
+    WHERE attrelid='public.ctf_range_sessions'::regclass AND attnum>0 AND NOT attisdropped
+  LOOP
+    allowed:=col.attname=ANY(ARRAY['id','challenge_pack','status','requested_at','updated_at','expires_at','started_at','finished_at']);
+    IF has_column_privilege('authenticated','public.ctf_range_sessions',col.attname,'SELECT') IS DISTINCT FROM allowed
+      OR has_column_privilege('authenticated','public.ctf_range_sessions',col.attname,'INSERT,UPDATE,REFERENCES')
+      OR has_column_privilege('anon','public.ctf_range_sessions',col.attname,'SELECT,INSERT,UPDATE,REFERENCES')
+    THEN RAISE EXCEPTION 'Session column boundary failed: %',col.attname; END IF;
+  END LOOP;
+END;
+$$;
+SELECT 'composed LABS schemas, RPC privileges, default-off budgets, session column allowlist and fixture rollback verified' AS result;
