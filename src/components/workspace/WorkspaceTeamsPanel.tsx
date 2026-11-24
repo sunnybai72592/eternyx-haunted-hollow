@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { Archive, CheckCircle2, ClipboardCopy, Columns3, Download, FolderKanban, List, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, ClipboardCopy, Columns3, Download, FolderKanban, List, MailPlus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceTeamTaskDiscussion from "@/components/workspace/WorkspaceTeamTaskDiscussion";
 import WorkspaceTeamLiveFeed from "@/components/workspace/WorkspaceTeamLiveFeed";
+import {
+  workspaceTeamScheduleGroups,workspaceTeamTaskDueDatePatch,
+  buildWorkspaceTeamScheduleIcs,
+} from "@/lib/workspaceTeamSchedule.mjs";
 import {
   workspaceTeamBoardColumns,workspaceTeamNextTaskStatus,
   workspaceTeamNextTaskLabel,workspaceTeamTaskStatusPayload,
@@ -63,7 +67,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const [taskSort,setTaskSort]=useState("updated");
   const [taskPriorityFilter,setTaskPriorityFilter]=useState("all");
   const [taskAssigneeFilter,setTaskAssigneeFilter]=useState("all");
-  const [taskLayout,setTaskLayout]=useState<"list"|"board">("list");
+  const [taskLayout,setTaskLayout]=useState<"list"|"board"|"schedule">("list");
   const [dragOverColumn,setDragOverColumn]=useState<string|null>(null);
   const [discussionTaskId,setDiscussionTaskId]=useState<string|null>(null);
   const [liveRevision,setLiveRevision]=useState(0);
@@ -101,6 +105,10 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const boardColumns=useMemo(
     ()=>selected&&currentRole?workspaceTeamBoardColumns(visibleTasks,selected.id):[],
     [visibleTasks,selected,currentRole]);
+  const scheduleGroups=useMemo(
+    ()=>selected&&currentRole?workspaceTeamScheduleGroups(visibleTasks,selected.id,today):[],
+    [visibleTasks,selected,currentRole,today]);
+  const scheduledCount=visibleTasks.filter(task=>task.due_on&&task.status!=="done").length;
   const discussionTask=tasks.find(task=>task.id===discussionTaskId)??null;
 
   const assureOwner=async(expectedOwner:string)=>{
@@ -531,6 +539,35 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     },"Task assignment or priority updated.",true,
     ()=>{if(draft.id===task.id)setDraft(freshDraft());});
   };
+  const changeTaskDueDate=(task:Task,due:string)=>{
+    if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
+       verifiedSpaceId!==selected.id||(task.due_on??"")===due)return;
+    void run(async()=>{
+      const params=workspaceTeamTaskDueDatePatch(task,due,selected.id,memberIds);
+      const {data,error:queryError}=await supabase.rpc("workspace_team_save_task",params);
+      if(queryError||!data)throw new Error(
+        queryError?.message??"Team task due date was not confirmed");
+    },"Team task due date updated.",true,
+    ()=>{if(draft.id===task.id)setDraft(freshDraft());});
+  };
+  const exportCalendarView=()=>{
+    if(!selected||!currentRole||verifiedSpaceId!==selected.id||
+       disabled||busy||loading||!spaceListVerified||!scheduledCount)return;
+    try {
+      const calendar=buildWorkspaceTeamScheduleIcs(visibleTasks,owner,selected.id);
+      const url=URL.createObjectURL(new Blob([calendar],{
+        type:"text/calendar;charset=utf-8",
+      }));
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="eternyx-team-schedule-"+today+".ics";
+      document.body.appendChild(link);
+      link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setError("");
+      setNotice("Exported "+scheduledCount+" outstanding scheduled tasks to calendar.");
+    }catch(failure){setError(errorMessage(failure));}
+  };
   const startBoardDrag=(event:DragEvent<HTMLElement>,task:Task)=>{
     if(!selected||!editor||disabled||busy||loading||!spaceListVerified||
        verifiedSpaceId!==selected.id){event.preventDefault();return;}
@@ -557,7 +594,8 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
     className={board?"space-y-2 rounded-lg border border-border bg-background/60 p-3 text-xs":
       "flex flex-wrap items-center gap-3 py-3 text-xs"}>
     <div className="min-w-0 flex-1">
-      {board&&editor&&<div className="mb-2 flex items-center justify-between gap-2">
+      {board&&taskLayout==="board"&&editor&&
+        <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">Move between columns</span>
         <span draggable={!busy&&!disabled&&!loading}
           onDragStart={event=>startBoardDrag(event,task)}
@@ -625,6 +663,13 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
             })}>
             {task.assignee_id===null?"Claim":"Release"}
           </Button>}
+        <label className="flex items-center gap-1 text-xs">
+          Due
+          <Input type="date" aria-label={"Change due date for "+task.title}
+            value={task.due_on??""} disabled={busy||disabled||loading}
+            onChange={event=>changeTaskDueDate(task,event.target.value)}
+            className="min-h-9 w-[9.5rem] text-xs"/>
+        </label>
         <Button size="sm" type="button" variant="ghost"
           disabled={busy||disabled||loading}
           aria-label={"Delete "+task.title} onClick={()=>removeTask(task)}>Delete</Button>
@@ -786,11 +831,18 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-semibold">Shared team tasks ({taskSummary.total}/500)</h4>
-          <Button size="sm" type="button" variant="outline"
-            disabled={disabled||busy||loading||!currentRole||!visibleTasks.length}
-            onClick={exportTaskView}>
-            <Download className="mr-1 h-3.5 w-3.5"/> Export visible CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" type="button" variant="outline"
+              disabled={disabled||busy||loading||!currentRole||!visibleTasks.length}
+              onClick={exportTaskView}>
+              <Download className="mr-1 h-3.5 w-3.5"/> Export visible CSV
+            </Button>
+            <Button size="sm" type="button" variant="outline"
+              disabled={disabled||busy||loading||!currentRole||!scheduledCount}
+              onClick={exportCalendarView}>
+              <CalendarDays className="mr-1 h-3.5 w-3.5"/> Export visible calendar
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"
           aria-label="Live team task summary">
@@ -923,11 +975,40 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
             onClick={()=>setTaskLayout("board")}>
             <Columns3 className="mr-1 h-3.5 w-3.5"/> Board
           </Button>
+          <Button size="sm" type="button"
+            variant={taskLayout==="schedule"?"default":"outline"}
+            aria-pressed={taskLayout==="schedule"}
+            onClick={()=>setTaskLayout("schedule")}>
+            <CalendarDays className="mr-1 h-3.5 w-3.5"/> Schedule
+          </Button>
           <span className="text-xs text-muted-foreground">
-            {taskLayout==="board"?"Filtered tasks grouped by real status":"Filtered task list"}
+            {taskLayout==="board"?"Filtered tasks grouped by real status":
+              taskLayout==="schedule"?"Filtered tasks grouped by due date":"Filtered task list"}
           </span>
         </div>
-        {taskLayout==="list"?
+        {taskLayout==="schedule"?
+          <div className="space-y-3" aria-label="Shared team task schedule">
+            <p className="text-xs text-muted-foreground">
+              A read-only calendar grouping of currently visible tasks. Dates
+              are local calendar days; completed tasks are separated.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {scheduleGroups.map(group=><section key={group.key}
+                className="min-w-0 rounded-lg border border-border p-3"
+                aria-label={group.label+" schedule group"}>
+                <h5 className="mb-2 text-sm font-semibold">
+                  {group.label} ({group.tasks.length})
+                </h5>
+                <div className="max-h-[24rem] space-y-2 overflow-y-auto">
+                  {group.tasks.map(task=>renderTeamTask(task,true))}
+                  {!group.tasks.length&&<p className="py-2 text-xs text-muted-foreground">
+                    No matching tasks in this group.
+                  </p>}
+                </div>
+              </section>)}
+            </div>
+          </div>
+        :taskLayout==="list"?
           <div className="max-h-[24rem] divide-y divide-border overflow-y-auto"
             aria-label="Shared team task list">
             {visibleTasks.map(task=>renderTeamTask(task))}

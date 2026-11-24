@@ -1,0 +1,122 @@
+// Phase 36: real owner-scoped team scheduling and downloadable all-day calendar.
+// Uses only currently authorized task rows. No backend calls or invented events.
+import {normalizeTeamTaskDraft,WORKSPACE_TEAM_STATUSES,teamMemberLabel} from "./workspaceTeamUtils.mjs";
+import {WORKSPACE_TEAM_TASK_VIEW_LIMIT} from "./workspaceTeamTaskOperations.mjs";
+
+const DAY=/^\d{4}-\d{2}-\d{2}$/;
+const UUID=/^[0-9a-f-]{8,64}$/i;
+export function workspaceValidTaskDay(value){
+  if(typeof value!=="string"||!DAY.test(value))return false;
+  const d=new Date(value+"T00:00:00.000Z");
+  return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;
+}
+function addDays(day,count){
+  const date=new Date(day+"T00:00:00.000Z");
+  date.setUTCDate(date.getUTCDate()+count);
+  return date.toISOString().slice(0,10);
+}
+function authorizedTaskRows(tasks,spaceId){
+  if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT||
+    typeof spaceId!=="string"||!spaceId)throw Error("Invalid team schedule scope");
+  const seen=new Set();
+  for(const task of tasks){
+    if(!task||task.space_id!==spaceId||
+      typeof task.id!=="string"||!task.id||seen.has(task.id)||
+      typeof task.title!=="string"||!task.title.trim()||
+      typeof task.details!=="string"||
+      !WORKSPACE_TEAM_STATUSES.includes(task.status)||
+      !(task.due_on===null||workspaceValidTaskDay(task.due_on))){
+      throw Error("Malformed, duplicate or cross-team schedule row");
+    }
+    seen.add(task.id);
+  }
+  return tasks;
+}
+export const WORKSPACE_TEAM_SCHEDULE_BUCKETS=Object.freeze([
+  {key:"overdue",label:"Overdue"},
+  {key:"today",label:"Due today"},
+  {key:"next7",label:"Next 7 days"},
+  {key:"later",label:"Later"},
+  {key:"unscheduled",label:"No due date"},
+  {key:"completed",label:"Completed"},
+]);
+export function workspaceTeamScheduleGroups(tasks,spaceId,today){
+  if(!workspaceValidTaskDay(today))throw Error("Invalid schedule reference day");
+  const rows=authorizedTaskRows(tasks,spaceId);
+  const bucket=Object.fromEntries(WORKSPACE_TEAM_SCHEDULE_BUCKETS.map(b=>[b.key,[]]));
+  const next=addDays(today,7);
+  for(const task of rows){
+    if(task.status==="done")bucket.completed.push(task);
+    else if(task.due_on===null)bucket.unscheduled.push(task);
+    else if(task.due_on<today)bucket.overdue.push(task);
+    else if(task.due_on===today)bucket.today.push(task);
+    else if(task.due_on<=next)bucket.next7.push(task);
+    else bucket.later.push(task);
+  }
+  const sort=(a,b)=>(a.due_on??"9999-12-31").localeCompare(b.due_on??"9999-12-31")
+    ||String(a.id).localeCompare(String(b.id));
+  return WORKSPACE_TEAM_SCHEDULE_BUCKETS.map(item=>({
+    key:item.key,label:item.label,
+    tasks:[...bucket[item.key]].sort(sort),
+  }));
+}
+export function workspaceTeamTaskDueDatePatch(task,due,spaceId,memberIds){
+  if(!task||typeof spaceId!=="string"||!spaceId||
+     task.space_id!==spaceId||typeof task.id!=="string"||!task.id||
+     !Array.isArray(memberIds)||memberIds.some(id=>typeof id!=="string"||!id)||
+     typeof task.updated_at!=="string"||
+     !Number.isFinite(Date.parse(task.updated_at))||
+     typeof due!=="string"||(due!==""&&!workspaceValidTaskDay(due))||
+     (task.due_on??"")===due)
+    throw Error("Invalid task due date or stale schedule");
+  const validated=normalizeTeamTaskDraft({
+    title:task.title,details:task.details,status:task.status,
+    priority:task.priority,due,assignee:task.assignee_id??"",
+  },memberIds);
+  return {p_space_id:spaceId,p_task_id:task.id,
+    ...validated,p_expected_updated_at:task.updated_at};
+}
+const encoder=new TextEncoder();
+export function escapeWorkspaceCalendarText(value){
+  if(typeof value!=="string")throw Error("Invalid calendar text");
+  return value.replaceAll("\\","\\\\").replace(/\r\n|\r|\n/g,"\\n")
+    .replaceAll(";","\\;").replaceAll(",","\\,");
+}
+function calendarLine(value){
+  // RFC5545 folding at 75 UTF-8 octets; continuation space consumes one.
+  const parts=[];let part="",size=0;
+  for(const char of value){
+    const count=encoder.encode(char).length;
+    if(size+count>75){parts.push(part);part=" ";size=1;}
+    part+=char;size+=count;
+  }
+  parts.push(part);
+  return parts.join("\r\n");
+}
+export function buildWorkspaceTeamScheduleIcs(tasks,owner,spaceId,now=new Date()){
+  if(typeof owner!=="string"||!owner||
+    !(now instanceof Date)||!Number.isFinite(now.getTime()))
+    throw Error("Invalid calendar export identity or timestamp");
+  const rows=authorizedTaskRows(tasks,spaceId);
+  const stamp=now.toISOString().replaceAll("-","").replaceAll(":","").replace(/\.\d{3}Z$/,"Z");
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ETERNYX//Workspace Team Tasks//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH"];
+  let exported=0;
+  for(const task of rows){
+    // Completed tasks and undated tasks aren't future planning events.
+    if(task.status==="done"||task.due_on===null)continue;
+    if(!UUID.test(task.id)||!UUID.test(spaceId))
+      throw Error("Unsafe calendar event identity");
+    const name=escapeWorkspaceCalendarText(task.title);
+    const description=escapeWorkspaceCalendarText(task.details+
+      "\nStatus: "+task.status+"\nPriority: "+task.priority+
+      "\nAssignee: "+(task.assignee_id?
+        teamMemberLabel(task.assignee_id,owner):"Unassigned"));
+    lines.push("BEGIN:VEVENT","UID:"+task.id+"@eternyx.local",
+      "DTSTAMP:"+stamp,"DTSTART;VALUE=DATE:"+task.due_on.replaceAll("-",""),
+      "DTEND;VALUE=DATE:"+addDays(task.due_on,1).replaceAll("-",""),
+      "SUMMARY:"+name,"DESCRIPTION:"+description,"END:VEVENT");
+    exported++;
+  }
+  if(exported===0)throw Error("No scheduled outstanding tasks to export");
+  return lines.concat(["END:VCALENDAR"]).map(calendarLine).join("\r\n")+"\r\n";
+}
