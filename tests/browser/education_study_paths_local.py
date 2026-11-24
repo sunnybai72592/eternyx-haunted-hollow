@@ -28,6 +28,7 @@ CHECKS=(
     "no_private_study_data_sent_to_external_hosts",
     "focus_budget_and_checklist_are_real",
     "saved_confidence_restores_on_resume",
+    "cancelled_replacement_preserves_study",
     "lesson_search_and_navigation_respect_matches",
 )
 SENSITIVE="=WEBSERVICE"
@@ -122,6 +123,14 @@ def exercise(browser,label,viewport,out):
               page.get_by_text("Due in 7 days",exact=True).is_visible() and
               page.get_by_text("Next review:",exact=False).is_visible())
 
+        page.get_by_role("button",name="Create lesson pack").click()
+        page.once("dialog",lambda d:d.dismiss())
+        page.get_by_role("button",name="Open this path for study").click()
+        page.get_by_role("button",name="Study lessons").click()
+        expect(page.get_by_role("button",name="Reopen lesson")).to_be_visible()
+        check(out,label,"cancelled_replacement_preserves_study",
+              page.locator("#study-private-note").input_value()=="@SUM(1,2) Private observation notes" and
+              page.get_by_text("Reviews recorded: 1",exact=False).is_visible())
         with page.expect_download() as result:
             page.get_by_role("button",name="Save study resume (.json)").click()
         resume_text=Path(result.value.path()).read_text(encoding="utf8")
@@ -143,6 +152,7 @@ def exercise(browser,label,viewport,out):
               page.locator("#study-revision-interval").input_value()=="7" and
               page.get_by_text("Reviews recorded: 1",exact=False).is_visible())
 
+        expect(page.locator("#study-review-confidence")).to_have_value("comfortable")
         check(out,label,"saved_confidence_restores_on_resume",
               page.locator("#study-review-confidence").input_value()=="comfortable")
         page.locator("#study-focus-budget").select_option("15")
