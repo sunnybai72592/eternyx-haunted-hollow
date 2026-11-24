@@ -1,0 +1,23 @@
+name: LABS dormant HTTP contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/labs-staging-dormant-http.mjs'
+      - 'tests/eternyx-labs-dormant-http.test.mjs'
+      - '.github/workflows/labs-dormant-http-contract.yml'
+      - '.github/workflows/labs-staging-dormant-http.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/eternyx-labs-dormant-http.test.mjs
