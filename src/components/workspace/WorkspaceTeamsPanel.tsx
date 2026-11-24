@@ -14,6 +14,7 @@ import {
 import {
   workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
   selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
+  resolveWorkspaceAssigneeFilter,
 } from "@/lib/workspaceTeamTaskOperations.mjs";
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
@@ -89,13 +90,14 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
   const canInvite=teamCanInvite(currentRole,selected?.status);
   const memberIds=useMemo(()=>members.map(m=>m.user_id),[members]);
   const today=workspaceTeamLocalDay(new Date());
+  const effectiveAssigneeFilter=resolveWorkspaceAssigneeFilter(taskAssigneeFilter,memberIds);
   const taskSummary=useMemo(()=>workspaceTeamTaskSummary(tasks,today),[tasks,today]);
   const visibleTasks=useMemo(
     ()=>selectWorkspaceTeamTasks(tasks,{
       filter:taskFilter,search:taskQuery,sort:taskSort,owner,today,
-      priority:taskPriorityFilter,assignee:taskAssigneeFilter,memberIds,
+      priority:taskPriorityFilter,assignee:effectiveAssigneeFilter,memberIds,
     }),[tasks,taskFilter,taskQuery,taskSort,owner,today,
-      taskPriorityFilter,taskAssigneeFilter,memberIds]);
+      taskPriorityFilter,effectiveAssigneeFilter,memberIds]);
   const boardColumns=useMemo(
     ()=>selected&&currentRole?workspaceTeamBoardColumns(visibleTasks,selected.id):[],
     [visibleTasks,selected,currentRole]);
@@ -827,7 +829,7 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
           </label>
           <label className="space-y-1 text-xs">Filter by assignee
             <select aria-label="Filter team tasks by assignee"
-              value={taskAssigneeFilter}
+              value={effectiveAssigneeFilter}
               onChange={event=>setTaskAssigneeFilter(event.target.value)}
               className="min-h-10 w-full rounded-md border border-border bg-background px-2">
               <option value="all">All assignees</option>

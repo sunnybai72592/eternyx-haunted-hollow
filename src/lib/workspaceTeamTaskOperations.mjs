@@ -117,3 +117,14 @@ export function buildWorkspaceTeamTasksCsv(tasks,owner,spaceId){
   });
   return "\uFEFF"+[headers.map(csvCell).join(","),...rows].join("\r\n")+"\r\n";
 }
+
+
+// A member can leave or be removed during a background reconciliation.
+// Never retain an inaccessible, formerly authorized member filter.
+export function resolveWorkspaceAssigneeFilter(value,memberIds){
+  if(typeof value!=="string"||!Array.isArray(memberIds)||
+     memberIds.some(id=>typeof id!=="string"||!id))
+    throw Error("Invalid Workspace assignee selection");
+  return ["all","mine","unassigned"].includes(value)||memberIds.includes(value)
+    ?value:"all";
+}
