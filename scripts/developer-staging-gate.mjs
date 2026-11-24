@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { verifyDeveloperStagingEnvelope } from "./developer-staging-envelope.mjs";
 import net from "node:net";
 import { verifyHostedDeveloperReleaseObservations, verifyHostedDeveloperRuntimeSafety } from "./developer-staging-provenance.mjs";
 import { verifyDeveloperHostedHeaders, summarizeDeveloperReleaseDecision } from "./developer-staging-headers.mjs";
@@ -42,7 +43,7 @@ export function checkDeveloperStagingConfig(config) {
   return { origin: parsed.origin, host };
 }
 
-export function verifyDeveloperStagingEvidence(value, config, sourceCommit, currentTime = Date.now()) {
+export function verifyDeveloperStagingEvidence(value, config, sourceCommit, currentTime = Date.now(), expectedRun = null) {
   const target = checkDeveloperStagingConfig(config);
   if (!expectedSha.test(sourceCommit || "")) fail("source revision is not a full git SHA.");
   if (!value || typeof value !== "object" || Array.isArray(value) ||
@@ -53,11 +54,7 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
       value.api_requests_executed !== false || value.commit !== sourceCommit) {
     fail("staging evidence has an invalid environment, revision, scope or target.");
   }
-  if (typeof value.finished_at !== "string" || !Number.isFinite(Date.parse(value.finished_at))) {
-    fail("staging report has no valid completion timestamp.");
-  }
-  const age = currentTime - Date.parse(value.finished_at);
-  if (age < -60_000 || age > 60 * 60_000) fail("staging evidence is not recent.");
+  const attempt = verifyDeveloperStagingEnvelope(value, expectedRun, currentTime);
   if (!Array.isArray(value.cases) || value.cases.length !== 14) {
     fail("all seven cases at two screen sizes are required; partial evidence is not passing evidence.");
   }
@@ -84,6 +81,7 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     environment: "operator-specified staging",
     target_host: target.host,
     checked_source_revision: sourceCommit,
+    workflow_attempt: attempt,
     developer_case_count: observed.size,
     viewports: DEVELOPER_BROWSER_VIEWPORTS,
     observed_release: release,
@@ -95,6 +93,8 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     production_verified: false,
   };
 }
+
+function attemptLabel(attempt) { return attempt.run_id + " / " + attempt.run_attempt; }
 
 function main() {
   const args = process.argv.slice(2);
@@ -122,13 +122,21 @@ function main() {
     const stats = fs.statSync(path);
     if (stats.size < 200 || stats.size > 50_000) fail("acceptance evidence is missing or unexpectedly large.");
     const report = JSON.parse(fs.readFileSync(path,"utf8"));
-    const summary = verifyDeveloperStagingEvidence(report, config, process.env.GITHUB_SHA);
-    process.stdout.write(JSON.stringify(summary,null,2) + "\n");
+    const summary = verifyDeveloperStagingEvidence(report, config, process.env.GITHUB_SHA, Date.now(), {
+      runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    });
+    const output = JSON.stringify(summary,null,2) + "\n";
+    process.stdout.write(output);
+    if (process.env.DEVELOPER_VERIFIED_SUMMARY_PATH) {
+      fs.writeFileSync(process.env.DEVELOPER_VERIFIED_SUMMARY_PATH, output, { flag: "wx" });
+    }
     if (process.env.GITHUB_STEP_SUMMARY) {
       const lines = [
         "## ETERNYX Developer Studio — hosted staging acceptance",
         "",
         "Target host: " + summary.target_host,
+        "Workflow run / attempt: " + attemptLabel(summary.workflow_attempt),
+        "Browser observation duration: " + summary.workflow_attempt.elapsed_seconds + " seconds",
         "Developer Chrome journeys: " + summary.developer_case_count + "/14 passed",
         "Observed public build ID: " + summary.observed_release.build_id,
         "Manifest, HTML and JS match checkout SHA: YES",
