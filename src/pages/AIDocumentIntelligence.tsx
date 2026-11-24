@@ -42,6 +42,11 @@ import {
   formatCorpusWorkspaceInventory, type CorpusWorkspace,
 } from "@/lib/ai/document-corpus-workspace";
 import {
+  ENCRYPTED_CORPUS_ITERATIONS, MAX_ENCRYPTED_CORPUS_BYTES,
+  MIN_ENCRYPTED_CORPUS_PASSWORD, MAX_ENCRYPTED_CORPUS_PASSWORD,
+  EncryptedCorpusError, encryptCorpusWorkspace, readEncryptedCorpusFile,
+} from "@/lib/ai/document-corpus-crypto";
+import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_CHARACTERS,
@@ -119,15 +124,32 @@ const AIDocumentIntelligence = () => {
   const [pendingCorpusWorkspace, setPendingCorpusWorkspace] = useState<CorpusWorkspace | null>(null);
   const [corpusWorkspaceError, setCorpusWorkspaceError] = useState<string | null>(null);
   const [corpusWorkspaceNotice, setCorpusWorkspaceNotice] = useState<string | null>(null);
+  const [encryptedExportPassword, setEncryptedExportPassword] = useState("");
+  const [encryptedExportConfirm, setEncryptedExportConfirm] = useState("");
+  const [encryptedImportPassword, setEncryptedImportPassword] = useState("");
+  const [pendingCorpusEncrypted, setPendingCorpusEncrypted] = useState(false);
   const invalidateCorpusWorkspace = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
+    setPendingCorpusEncrypted(false);
+    setEncryptedExportPassword("");
+    setEncryptedExportConfirm("");
+    setEncryptedImportPassword("");
     setCorpusWorkspaceLoading(false);
     setCorpusWorkspaceExporting(false);
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
   };
   const workspaceErrorText = (reason: unknown) => {
+    if (reason instanceof EncryptedCorpusError) return ({
+      invalid_password: "Use the exact case-sensitive 12–256 character passphrase. Password recovery is not available.",
+      invalid_file: "Choose a valid encrypted ETERNYX backup .json (maximum approximately 4 MiB).",
+      too_large: "Encrypted backup exceeds its size cap; the current workspace was not changed.",
+      invalid_envelope: "Unsupported, malformed or noncanonical encrypted envelope. The workspace was not changed.",
+      crypto_unavailable: "This browser cannot perform secure AES-GCM/PBKDF2; encrypted backup is unavailable.",
+      authentication_failed: "Incorrect passphrase or altered ciphertext. No workspace data was imported.",
+      encrypt_failed: "Unable to encrypt the backup. No encrypted download was created.",
+    }[reason.code]);
     if (!(reason instanceof CorpusWorkspaceError)) return "Could not validate the local evidence workspace.";
     return ({
       invalid_file: "Choose a nonempty .json ETERNYX evidence backup (maximum 3 MiB).",
@@ -270,9 +292,78 @@ const AIDocumentIntelligence = () => {
       if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceExporting(false);
     }
   };
+  const exportEncryptedCorpusWorkspace = async () => {
+    const passphrase = encryptedExportPassword;
+    const confirmation = encryptedExportConfirm;
+    if (passphrase !== confirmation) {
+      setCorpusWorkspaceError("Passphrases do not match. No backup was created.");
+      return;
+    }
+    if (passphrase.length < MIN_ENCRYPTED_CORPUS_PASSWORD ||
+        passphrase.length > MAX_ENCRYPTED_CORPUS_PASSWORD) {
+      setCorpusWorkspaceError("Choose a case-sensitive passphrase of 12–256 characters.");
+      return;
+    }
+    const operation = ++corpusWorkspaceEpoch.current;
+    setEncryptedExportPassword("");
+    setEncryptedExportConfirm("");
+    setPendingCorpusWorkspace(null);
+    setPendingCorpusEncrypted(false);
+    setCorpusWorkspaceError(null);
+    setCorpusWorkspaceNotice(null);
+    setCorpusWorkspaceExporting(true);
+    try {
+      const serialized = await exportCorpusWorkspace({
+        documents: corpusFiles,
+        query: corpusQuery, mode: corpusMode,
+        sourceFilter: corpusFilter || null, question: corpusQuestion,
+      });
+      if (operation !== corpusWorkspaceEpoch.current) return;
+      const encrypted = await encryptCorpusWorkspace(serialized, passphrase);
+      if (operation !== corpusWorkspaceEpoch.current) return;
+      const url = URL.createObjectURL(new Blob([encrypted], {type: "application/json"}));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "eternyx-local-evidence-encrypted-v1.json";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setCorpusWorkspaceNotice(
+        "Encrypted backup downloaded locally. Keep the passphrase separately; no server received it. Without it, the backup cannot be recovered.",
+      );
+    } catch (reason) {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceError(workspaceErrorText(reason));
+    } finally {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceExporting(false);
+    }
+  };
+  const previewEncryptedCorpusWorkspace = async (file: File | null) => {
+    const passphrase = encryptedImportPassword;
+    const operation = ++corpusWorkspaceEpoch.current;
+    setEncryptedImportPassword("");
+    setPendingCorpusWorkspace(null);
+    setPendingCorpusEncrypted(false);
+    setCorpusWorkspaceError(null);
+    setCorpusWorkspaceNotice(null);
+    setCorpusWorkspaceLoading(!!file);
+    if (!file) return;
+    try {
+      const verified = await readEncryptedCorpusFile(file, passphrase);
+      if (operation !== corpusWorkspaceEpoch.current) return;
+      setPendingCorpusWorkspace(verified);
+      setPendingCorpusEncrypted(true);
+      setCorpusWorkspaceNotice(
+        "AES-GCM authentication, strict snapshot schema and all decoded-text SHA-256 values passed locally. No replacement has occurred.",
+      );
+    } catch (reason) {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceError(workspaceErrorText(reason));
+    } finally {
+      if (operation === corpusWorkspaceEpoch.current) setCorpusWorkspaceLoading(false);
+    }
+  };
   const previewCorpusWorkspace = async (file: File | null) => {
     const operation = ++corpusWorkspaceEpoch.current;
     setPendingCorpusWorkspace(null);
+    setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
     setCorpusWorkspaceNotice(null);
     setCorpusWorkspaceLoading(!!file);
@@ -1275,21 +1366,85 @@ const AIDocumentIntelligence = () => {
               className="space-y-3 rounded-xl border border-cyan-500/20 bg-slate-950 p-4">
               <h3 className="font-semibold text-white">Portable evidence workspace · local verified backup</h3>
               <p className="text-xs text-amber-200">
-                Backups contain COMPLETE ORIGINAL DECODED DOCUMENT TEXT, filenames, searches and questions
-                as unencrypted JSON. Keep downloads private. Browser SHA-256 protects against accidental
-                changes to the saved text but does NOT prove its author or authenticity.
-                The backup does not automatically sync or recover after refresh.
+                Plaintext exports contain COMPLETE ORIGINAL DECODED DOCUMENT TEXT, filenames, searches
+                and questions. Use the password-encrypted option below for confidential evidence.
+                Local backups do not sync or automatically recover after refresh. Encryption protects
+                the backup contents at rest, but does NOT prove its author or authenticate who supplied the source files.
               </p>
               <p className="text-xs text-slate-400">
                 Version 1 JSON · maximum {(MAX_CORPUS_WORKSPACE_BYTES / 1024 / 1024).toLocaleString()} MiB.
                 Imports do not trust cached search hits, selected evidence, or AI responses:
                 run a fresh search after restoration.
               </p>
-              <Button type="button" variant="outline"
-                disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}
-                onClick={() => void exportLocalCorpusWorkspace()}>
-                {corpusWorkspaceExporting ? "Creating local SHA-256 backup…" : "Export full local evidence workspace (.json)"}
-              </Button>
+              <section aria-label="Encrypted local evidence backup" className="space-y-3 rounded-lg border border-emerald-400/25 p-3">
+                <h4 className="font-semibold text-white">Encrypted backup · recommended for private evidence</h4>
+                <p className="text-xs text-slate-300">
+                  AES-256-GCM with a fresh random salt and nonce, and {ENCRYPTED_CORPUS_ITERATIONS.toLocaleString()}
+                  {" "}PBKDF2-SHA-256 iterations. No passphrase or document data is uploaded.
+                  File contents, names and search settings are encrypted, but file size remains observable.
+                  Use a unique strong passphrase, not just the 12-character minimum.
+                  <strong> If you lose the passphrase, there is no recovery.</strong>
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label htmlFor="corpus-encrypted-export-password" className="block space-y-2 text-xs text-slate-300">
+                    <span>New passphrase (12–256 characters)</span>
+                    <input id="corpus-encrypted-export-password" type="password"
+                      autoComplete="new-password" value={encryptedExportPassword}
+                      maxLength={MAX_ENCRYPTED_CORPUS_PASSWORD}
+                      onChange={e => setEncryptedExportPassword(e.target.value)}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-white"/>
+                  </label>
+                  <label htmlFor="corpus-encrypted-export-confirm" className="block space-y-2 text-xs text-slate-300">
+                    <span>Confirm passphrase</span>
+                    <input id="corpus-encrypted-export-confirm" type="password"
+                      autoComplete="new-password" value={encryptedExportConfirm}
+                      maxLength={MAX_ENCRYPTED_CORPUS_PASSWORD}
+                      onChange={e => setEncryptedExportConfirm(e.target.value)}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-white"/>
+                  </label>
+                </div>
+                <Button type="button" onClick={() => void exportEncryptedCorpusWorkspace()}
+                  disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting ||
+                    !encryptedExportPassword || !encryptedExportConfirm}>
+                  {corpusWorkspaceExporting ? "Encrypting locally…" : "Export password-encrypted backup (.json)"}
+                </Button>
+                <label htmlFor="corpus-encrypted-import-password" className="block space-y-2 text-xs text-slate-300">
+                  <span>Passphrase for an existing encrypted backup</span>
+                  <input id="corpus-encrypted-import-password" type="password"
+                    autoComplete="off" value={encryptedImportPassword}
+                    maxLength={MAX_ENCRYPTED_CORPUS_PASSWORD}
+                    onChange={e => {
+                      ++corpusWorkspaceEpoch.current;
+                      setPendingCorpusWorkspace(null);
+                      setPendingCorpusEncrypted(false);
+                      setCorpusWorkspaceLoading(false);
+                      setCorpusWorkspaceError(null);
+                      setEncryptedImportPassword(e.target.value);
+                    }}
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-white"/>
+                </label>
+                <label htmlFor="corpus-encrypted-import-file" className="block space-y-2 text-xs text-slate-300">
+                  <span>Select encrypted ETERNYX JSON file (up to {(MAX_ENCRYPTED_CORPUS_BYTES / (1024 * 1024)).toFixed(2)} MiB)</span>
+                  <input id="corpus-encrypted-import-file" type="file"
+                    accept=".json,application/json"
+                    disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting || !encryptedImportPassword}
+                    onChange={e => {
+                      void previewEncryptedCorpusWorkspace(e.target.files?.[0] ?? null);
+                      e.currentTarget.value = "";
+                    }}
+                    className="block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-700 file:px-2 file:py-1 file:text-white"/>
+                </label>
+                <p className="text-xs text-slate-400">Entering the passphrase and choosing a file only decrypts locally for a preview. Replacing your workspace still requires separate confirmation. Passphrase fields are cleared after use.</p>
+              </section>
+              <section aria-label="Legacy plaintext local evidence backup" className="space-y-3 rounded-lg border border-amber-500/20 p-3">
+                <h4 className="font-semibold text-white">Legacy plaintext backup · unencrypted</h4>
+                <p className="text-xs text-amber-200">This compatibility format exposes full document text, filenames, search terms and questions to anyone who obtains the file. It is not encrypted.</p>
+                <Button type="button" variant="outline"
+                  disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}
+                  onClick={() => void exportLocalCorpusWorkspace()}>
+                  {corpusWorkspaceExporting ? "Creating local backup…" : "Export full local evidence workspace (.json, UNENCRYPTED)"}
+                </Button>
+              </section>
               <label htmlFor="document-corpus-workspace-file" className="block space-y-2 text-sm text-slate-300">
                 <span>Choose ETERNYX local workspace backup JSON · review before replacement</span>
                 <input id="document-corpus-workspace-file" type="file" accept=".json,application/json"
@@ -1307,7 +1462,10 @@ const AIDocumentIntelligence = () => {
               {pendingCorpusWorkspace && (
                 <section aria-label="Verified import preview, not yet applied"
                   className="space-y-2 rounded-lg border border-cyan-400/30 p-3">
-                  <Badge variant="outline">Version {pendingCorpusWorkspace.version} · SHA-256 checked · not restored</Badge>
+                  <Badge variant="outline">
+                    {pendingCorpusEncrypted ? "AES-256-GCM authenticated" : "Unencrypted plaintext"}
+                    {" "}· version {pendingCorpusWorkspace.version} · SHA-256 checked · not restored
+                  </Badge>
                   <p className="text-sm text-slate-200">
                     Backup: {pendingCorpusWorkspace.documents.length} files,
                     {" "}{pendingCorpusWorkspace.documents.reduce((sum, doc) => sum + doc.text.length, 0).toLocaleString()} decoded characters.
