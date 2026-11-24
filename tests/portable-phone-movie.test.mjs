@@ -9,6 +9,7 @@ import {
   buildPortablePhoneMovie,validatePhoneMoviePlan,
 } from "../src/lib/ai/portablePhoneIntake.mjs";
 import {readLocalVideoDraft} from "../src/lib/ai/localVideoDraft.mjs";
+import {readPhoneMovieEditDraft,verifyPhoneMovieEditDraftMedia} from "../src/lib/ai/phoneMovieEditDraft.mjs";
 import {readPhonePreparationReport} from "../src/lib/ai/localVideoPrep.mjs";
 const root=resolve(new URL("../",import.meta.url).pathname);
 const modules=["prepare_video_sources.py","render_video_timeline.py",
@@ -624,5 +625,57 @@ test("REAL legacy 16FPS direct movie preserves per-shot cuts and fails closed on
     // Real original input is untouched on failed cut; no invented repeated frames.
     assert.equal(hash(readFileSync(join(folder,"phone-clips/second.mp4"))),
       hash(readFileSync(join(dir,"second.mp4"))));
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("REAL cinematic re-edit from saved ZIP restores source identity and exports another actual 24FPS movie",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"eternyx-cinematic-re-edit-"));
+  try{
+    const source=getFixture(dir,"reedit.mov",24,2,"320x180");
+    const firstPlan=plan([source],{quality:"cinematic",
+      shots:[{...plan([source]).shots[0],caption:"First authored version"}]});
+    const original=await buildPortablePhoneMovie({
+      files:[source],start:0,seconds:2,moviePlan:firstPlan,pythonSources,
+    });
+    const opened=extract(await original.blob.arrayBuffer(),dir);
+    const edit=readPhoneMovieEditDraft(readFileSync(
+      join(opened.folder,"phone-movie-edit-draft.json"),"utf8"));
+    assert.equal(edit.fps,24);
+    const reattached=await verifyPhoneMovieEditDraftMedia(edit,[
+      local(source.name,readFileSync(join(opened.folder,"phone-clips/reedit.mov"))),
+    ]);
+    assert.equal(reattached.verifiedCount,1);
+    assert.equal(reattached.privateMediaUploaded,false);
+    const changed={
+      ...reattached.moviePlan,
+      shots:[{...reattached.moviePlan.shots[0],frames:32,
+        caption:"Second edited cinematic version",fade_in_frames:4}],
+    };
+    const next=await buildPortablePhoneMovie({
+      files:reattached.files,start:reattached.start,
+      seconds:reattached.seconds,moviePlan:changed,pythonSources,
+    });
+    const newRoot=join(dir,"new-version");mkdirSync(newRoot);
+    const repack=extract(await next.blob.arrayBuffer(),newRoot);
+    run("python3",["finish_phone_movie.py","--run"],{
+      cwd:repack.folder,timeout:240000,
+    });
+    const output=join(repack.folder,"phone-movie-output");
+    const receipt=JSON.parse(readFileSync(join(output,"manifest.json"),"utf8"));
+    assert.equal(receipt.fps,24);
+    assert.equal(receipt.video.frame_count,48);
+    assert.equal(receipt.video.fps,"24/1");
+    assert.equal(receipt.video.width,1280);
+    assert.equal(receipt.video.height,720);
+    assert.equal(receipt.shots[0].fade_in_frames,6);
+    const captions=readFileSync(join(output,"captions.srt"),"utf8");
+    assert.match(captions,/Second edited cinematic version/);
+    assert.doesNotMatch(captions,/First authored version/);
+    assert.equal(receipt.video.sha256,hash(readFileSync(join(output,"video.mp4"))));
+    assert.equal(receipt.source_ranges[0].source_sha256,hash(readFileSync(join(dir,"reedit.mov"))));
+    assert.deepEqual(readPhoneMovieEditDraft(readFileSync(
+      join(repack.folder,"phone-movie-edit-draft.json"),"utf8")).movie_plan.shots,changed.shots);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
