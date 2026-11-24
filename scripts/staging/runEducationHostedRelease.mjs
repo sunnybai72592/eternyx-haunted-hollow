@@ -4,7 +4,7 @@
  * from previously successful or unrelated GitHub Actions runs.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { assertEducationDbEvidence } from "./educationHostedDbMetadata.mjs";
 import {assertEducationInventoryEvidence,INVENTORY_PATH} from "./educationStagingConfigurationInventory.mjs";
@@ -15,6 +15,8 @@ import {PRIVATE_FRESH_JOURNEY_TARGET,saveFreshJourneyTarget}
   from "./educationJourneyBrowserGate.mjs";
 import { validateEducationReleaseConfig, EDUCATION_RELEASE_STAGES,
   summarizeEducationReleaseEvidence } from "./educationReleaseGate.mjs";
+
+import {RELEASE_RECOVERY_PATH,createEducationRecovery,advanceEducationRecovery} from "./educationReleaseRecovery.mjs";
 
 const reports = "test-results";
 const releaseFile = join(reports,"education-hosted-release-readiness.json");
@@ -32,7 +34,16 @@ function run(file, env) {
   });
   if (child.error || child.status !== 0) throw new Error("Hosted staging verification failed");
 }
+let recovery=null;
+const recoveryTemp=RELEASE_RECOVERY_PATH+".tmp";
+function persistRecovery(){
+  writeFileSync(recoveryTemp,JSON.stringify(recovery,null,2)+"\n",{mode:0o600});
+  renameSync(recoveryTemp,RELEASE_RECOVERY_PATH);
+}
 try {
+  mkdirSync(reports,{recursive:true});
+  rmSync(RELEASE_RECOVERY_PATH,{force:true});
+  rmSync(recoveryTemp,{force:true});
   const config=validateEducationReleaseConfig(process.env);
   assertEducationInventoryEvidence(JSON.parse(readFileSync(INVENTORY_PATH,"utf8")),process.env);
   const stages=EDUCATION_RELEASE_STAGES[config.mode];
@@ -40,6 +51,8 @@ try {
     sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,
     attempt:process.env.GITHUB_RUN_ATTEMPT,
   };
+  recovery=createEducationRecovery(config.mode,provenance);
+  persistRecovery();
   // Fail BEFORE any test creates an attempt, instructor review or final grade.
   // The audit was produced by the preceding workflow step in this exact run.
   const dbEvidence=JSON.parse(readFileSync(
@@ -74,6 +87,9 @@ try {
       ETERNYX_EDU_STAGING_DB_PASSWORD:"",
       ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY:
         stage.id==="trusted-finalize" ? process.env.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY : ""};
+    // Record possible persistent writes BEFORE initiating a remote child process.
+    advanceEducationRecovery(recovery,"start",stage.id);
+    persistRecovery();
     run(execute,env);
     if (!existsSync(evidenceFile)) throw new Error("Missing hosted evidence");
     run(verify,env);
@@ -85,6 +101,8 @@ try {
       linkedEnv=journeyStageEnv(process.env,handoff);
       rmSync(HANDOFF_PATH,{force:true});
     }
+    advanceEducationRecovery(recovery,"pass",stage.id);
+    persistRecovery();
   }
   const report=summarizeEducationReleaseEvidence(
     config.mode,completed,provenance,dbEvidence,
@@ -96,14 +114,25 @@ try {
     saveFreshJourneyTarget(process.env,journeyHandoff);
   }
   writeFileSync(releaseFile,JSON.stringify(report,null,2)+"\n");
+  advanceEducationRecovery(recovery,"finish");
+  persistRecovery();
   process.stdout.write("Education "+report.outcome+
     "; staging-only evidence recorded; production launch NOT approved.\n");
 }catch{
   // A missing or partial report is a hard failure, never a partial pass.
   rmSync(releaseFile,{force:true});
   rmSync(PRIVATE_FRESH_JOURNEY_TARGET,{force:true});
-  process.stderr.write("Education release readiness BLOCKED. Do not enable production CBT.\n");
+  if(recovery){
+    try{
+      // A journal persistence failure must not mask the original release failure.
+      if(recovery.outcome==="in_progress")advanceEducationRecovery(recovery,"block");
+      else recovery.outcome="blocked";
+      persistRecovery();
+    }catch{/* No success verdict if the journal cannot be persisted. */}
+  }
+  process.stderr.write("Education release readiness BLOCKED. Inspect recovery evidence; never automatically retry or enable production CBT.\n");
   process.exitCode=1;
 }finally{
+  rmSync(recoveryTemp,{force:true});
   rmSync(HANDOFF_PATH,{force:true});
 }
