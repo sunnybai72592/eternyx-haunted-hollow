@@ -4,7 +4,7 @@
  * Never upload local files; no fake browser-side video rendering.
  */
 import {
-  buildLocalVideoBoard,checkLocalMediaName,localVideoSrt,
+  buildLocalVideoBoard,checkLocalMediaName,localVideoSrt,checkLocalVideoLook,
   LOCAL_VIDEO_LIMITS,LOCAL_VIDEO_PROFILES,LOCAL_VIDEO_QUALITIES,localVideoFps,
 } from "./localVideoEditor.mjs";
 
@@ -90,21 +90,21 @@ function validateRendererSource(name,source){
     throw new Error("Missing actual reviewed CPU renderer source: "+name);
   return new Blob([source],{type:"text/x-python;charset=utf-8"});
 }
-function shell(profile,quality){
+function shell(profile,quality,grade,framing){
   return [
     "#!/bin/sh",
     "set -eu",
     'cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"',
-    'python3 render_video_timeline.py --storyboard "./eternyx-video-v2.json" --media "./media" --output "./eternyx-video-output" --profile '+profile+" --quality "+quality,
+    'python3 render_video_timeline.py --storyboard "./eternyx-video-v2.json" --media "./media" --output "./eternyx-video-output" --profile '+profile+" --quality "+quality+(grade===undefined?"":" --grade "+grade)+(framing===undefined?"":" --framing "+framing),
     "",
   ].join("\n");
 }
-function windows(profile,quality){
+function windows(profile,quality,grade,framing){
   return [
     "@echo off",
     "setlocal",
     'pushd "%~dp0" || exit /b 1',
-    "py -3 render_video_timeline.py --storyboard .\\eternyx-video-v2.json --media .\\media --output .\\eternyx-video-output --profile "+profile+" --quality "+quality,
+    "py -3 render_video_timeline.py --storyboard .\\eternyx-video-v2.json --media .\\media --output .\\eternyx-video-output --profile "+profile+" --quality "+quality+(grade===undefined?"":" --grade "+grade)+(framing===undefined?"":" --framing "+framing),
     "set EXITCODE=%ERRORLEVEL%",
     "popd",
     "exit /b %EXITCODE%",
@@ -132,7 +132,7 @@ function guiWindows(){
     "",
   ].join("\r\n");
 }
-function readme(profile,quality,shotCount,seconds,delivery){
+function readme(profile,quality,shotCount,seconds,delivery,grade,framing){
   return [
     "ETERNYX — PORTABLE OFFLINE CPU VIDEO EDITING PROJECT",
     "",
@@ -168,6 +168,7 @@ function readme(profile,quality,shotCount,seconds,delivery){
     "",
     "Requested project: "+shotCount+" shots, "+seconds.toFixed(2)+" seconds at "+localVideoFps(quality)+" FPS.",
     "Output profile: "+profile+". Quality: "+quality+".",
+    "Color grade: "+(grade??"neutral")+". Framing: "+(framing??"contain")+".",
     ...(delivery===undefined?[]:[
       "Selected delivery: "+delivery+". The guided launcher creates and verifies all requested variants, poster, VTT and watch.html.",
       "Use the guided launcher or --run (direct render scripts produce the master only).",
@@ -184,10 +185,11 @@ function readme(profile,quality,shotCount,seconds,delivery){
 }
 export async function buildPortableVideoBundle({
   sources,shots,soundtrack=null,profile="landscape",quality="standard",
-  rendererSources,onProgress=()=>{},delivery,
+  rendererSources,onProgress=()=>{},delivery,grade,framing,
 }){
   if(!LOCAL_VIDEO_PROFILES.includes(profile)||!LOCAL_VIDEO_QUALITIES.includes(quality))
     throw new Error("Unsupported portable CPU output preset.");
+  checkLocalVideoLook(grade,framing);
   if(delivery!==undefined&&!PORTABLE_DELIVERIES.includes(delivery))
     throw new Error("Unsupported portable movie delivery.");
   if(typeof onProgress!=="function")throw new Error("Invalid CPU bundle progress callback.");
@@ -238,6 +240,7 @@ export async function buildPortableVideoBundle({
   const manifest={
     format:"eternyx-portable-cpu-video",
     version:1,profile,quality,...(delivery===undefined?{}:{delivery}),
+    ...(grade===undefined?{}:{grade}),...(framing===undefined?{}:{framing}),
     fps:project.fps,shots:project.board.shots.length,
     frames:project.totalFrames,
     private_original_media:true,
@@ -253,11 +256,11 @@ export async function buildPortableVideoBundle({
     {path:"eternyx-video-v2.json",blob:new Blob([project.json])},
     {path:"captions-preview.srt",blob:new Blob([localVideoSrt(project.board)])},
     {path:"bundle-manifest.json",blob:new Blob([JSON.stringify(manifest,null,2)+"\n"])},
-    {path:"render-macos-linux.sh",blob:new Blob([shell(profile,quality)])},
-    {path:"render-windows.cmd",blob:new Blob([windows(profile,quality)])},
+    {path:"render-macos-linux.sh",blob:new Blob([shell(profile,quality,grade,framing)])},
+    {path:"render-windows.cmd",blob:new Blob([windows(profile,quality,grade,framing)])},
     {path:"launch-video-windows.cmd",blob:new Blob([guiWindows()])},
     {path:"launch-video-macos-linux.sh",blob:new Blob([guiLinux()])},
-    {path:"README.txt",blob:new Blob([readme(profile,quality,project.board.shots.length,project.seconds,delivery)])},
+    {path:"README.txt",blob:new Blob([readme(profile,quality,project.board.shots.length,project.seconds,delivery,grade,framing)])},
     ...Object.entries(scripts).map(([path,blob])=>({path,blob})),
   ];
   const zipMembers=[...extras,...items.map(item=>({path:item.path,blob:item.blob}))];

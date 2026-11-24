@@ -206,9 +206,21 @@ def check_soundtrack(board, root):
     return {**raw, "path": path}
 
 
-def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS):
+# Fixed reviewed filters only; never accept arbitrary filter commands.
+COLOR_GRADES = {
+    "neutral": None,
+    "cinematic": "eq=contrast=1.08:saturation=0.90:brightness=-0.015",
+    "warm": "colorbalance=rs=0.06:bs=-0.06:rm=0.04:bm=-0.04",
+    "cool": "colorbalance=rs=-0.05:bs=0.06:rm=-0.03:bm=0.04",
+    "monochrome": "hue=s=0",
+}
+
+
+def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral"):
     if quality not in ("standard", "high", "cinematic") or framing not in ("contain", "cover"):
         raise ValueError("Unsupported offline encoder quality or framing")
+    if not isinstance(grade, str) or grade not in COLOR_GRADES:
+        raise ValueError("Unsupported offline color grade")
     width, height = size
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y",
            "-filter_complex_threads", "1", "-threads", "1"]
@@ -227,13 +239,14 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
             composition = [f"scale={width}:{height}:flags=lanczos:force_original_aspect_ratio=decrease",
                            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"]
         filters = [f"[{i}:v:0]trim=start_frame={start}:end_frame={end}",
-                   "setpts=PTS-STARTPTS", *composition,
+                   "setpts=PTS-STARTPTS",
+                   *([COLOR_GRADES[grade]] if COLOR_GRADES[grade] else []), *composition,
                    "setsar=1", "format=yuv420p"]
         if shot["fade_in_frames"]:
             filters += [f"fade=t=in:st=0:d={shot['fade_in_frames']/fps:.4f}"]
         if shot["fade_out_frames"]:
             remaining = (shot["frames"] - shot["fade_out_frames"]) / fps
-            filters += [f"fade=t=out:st={remaining:.4f}:d={shot['fade_out_frames']/FPS:.4f}"]
+            filters += [f"fade=t=out:st={remaining:.4f}:d={shot['fade_out_frames']/fps:.4f}"]
         graph.append(",".join(filters) + f"[shot{i}]")
     graph.append("".join(f"[shot{i}]" for i in range(len(shots))) +
                  f"concat=n={len(shots)}:v=1:a=0[outv]")
@@ -327,7 +340,9 @@ Hard cuts with optional fade-to/from-black. The preview requires no web services
           '<a href="captions.srt">editable subtitles</a>.</p></main></html>\n')
 
 
-def render(storyboard, root, output, profile="landscape", quality="standard", framing="contain"):
+def render(storyboard, root, output, profile="landscape", quality="standard", framing="contain", grade="neutral"):
+    if not isinstance(grade, str) or grade not in COLOR_GRADES:
+        raise ValueError("Unsupported offline color grade")
     if profile not in PROFILES or quality not in ("standard", "high", "cinematic") or framing not in ("contain", "cover"):
         raise ValueError("Output profile and quality must be supported presets")
     factor = 2 if quality == "high" else 1
@@ -345,13 +360,14 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps), timeout=240)
+        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade), timeout=240)
         video = verify_output(video_path, total, size, soundtrack is not None, fps)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}
         receipt = {"version": 2, "type": "local CPU video editing",
                    "storyboard_sha256": board_hash, "video": video,
                    "profile": profile, "quality": quality, "framing": framing, "fps": fps,
+                   **({"grade": grade} if grade != "neutral" else {}),
                    "total_frames": total, "shots": public_shots,
                    "soundtrack": audio, "captions": "captions.srt", "model_generation": False}
         (stage / "captions.srt").write_text(srt(shots, fps), encoding="utf-8")
@@ -376,9 +392,10 @@ def main():
     parser.add_argument("--profile", choices=list(PROFILES), default="landscape")
     parser.add_argument("--quality", choices=["standard", "high", "cinematic"], default="standard")
     parser.add_argument("--framing", choices=["contain", "cover"], default="contain")
+    parser.add_argument("--grade", choices=list(COLOR_GRADES), default="neutral")
     args = parser.parse_args()
     try:
-        result = render(args.storyboard, args.media, args.output, args.profile, args.quality, args.framing)
+        result = render(args.storyboard, args.media, args.output, args.profile, args.quality, args.framing, args.grade)
         print(json.dumps({"output": str(args.output), "frames": result["total_frames"],
                           "video_sha256": result["video"]["sha256"],
                           "audio": result["video"]["audio"]}))

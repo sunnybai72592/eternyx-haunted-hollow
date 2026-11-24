@@ -97,6 +97,12 @@ def preflight(root=ROOT):
             or type(manifest.get("shots")) is not int
             or not 1 <= manifest["shots"] <= 8):
         raise ValueError("Unsupported or invalid private ETERNYX CPU project manifest")
+    grade = manifest.get("grade", "neutral")
+    framing = manifest.get("framing", "contain")
+    if not isinstance(grade, str) or grade not in renderer.COLOR_GRADES:
+        raise ValueError("Unsupported portable color grade")
+    if not isinstance(framing, str) or framing not in ("contain", "cover"):
+        raise ValueError("Unsupported portable framing")
     delivery = manifest.get("delivery")
     if "delivery" in manifest and (not isinstance(delivery, str) or delivery not in DELIVERIES):
         raise ValueError("Unsupported portable movie delivery")
@@ -164,6 +170,7 @@ def preflight(root=ROOT):
         "private_media_bytes": total_bytes,
         "profile": manifest["profile"], "quality": manifest["quality"],
         "local_only": True, "output": OUTPUT, "delivery": delivery,
+        "grade": grade, "framing": framing,
     }
 
 
@@ -340,6 +347,7 @@ def run(root=ROOT, on_stage=None, cancel=None):
             "--storyboard", str(root/BOARD), "--media", str(root/"media"),
             "--output", str(workspace/"rendered"),
             "--profile", checked["profile"], "--quality", checked["quality"],
+            "--framing", checked.get("framing", "contain"), "--grade", checked.get("grade", "neutral"),
         ]
         flags=getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0) if os.name=="nt" else 0
         on_stage("Rendering actual H264 video with local FFmpeg (this stage has no estimated percentage)...")
@@ -371,6 +379,8 @@ def run(root=ROOT, on_stage=None, cancel=None):
                 receipt.get("total_frames")!=checked["frames"] or
                 receipt.get("profile")!=checked["profile"] or
                 receipt.get("quality")!=checked["quality"] or
+                receipt.get("framing", "contain")!=checked.get("framing", "contain") or
+                receipt.get("grade", "neutral")!=checked.get("grade", "neutral") or
                 receipt.get("fps")!=checked["fps"] or
                 receipt.get("video", {}).get("fps")!=str(checked["fps"])+"/1"):
             raise ValueError("Actual local renderer receipt conflicts with original validated project")
