@@ -1,0 +1,34 @@
+name: LABS dormant staging HTTP acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Run five fixed no-credential staging HTTP probes"
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_LABS_DORMANT_HTTP_CHECK
+permissions:
+  contents: read
+jobs:
+  verify-dormant:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_LABS_DORMANT_HTTP_CHECK' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: eternyx-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/eternyx-labs-dormant-http.test.mjs
+      - name: Verify fixed staging responses
+        env:
+          ETERNYX_LABS_DORMANT_HTTP_CONSENT: ${{ inputs.approval }}
+          ETERNYX_LABS_STAGING_REF: mhodwvypfbxafamkrgsk
+          ETERNYX_LABS_PRODUCTION_REF: wcncuarekaofmfurbtbh
+        run: node scripts/labs-staging-dormant-http.mjs
