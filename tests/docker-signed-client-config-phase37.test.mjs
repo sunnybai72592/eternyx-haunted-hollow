@@ -119,10 +119,13 @@ test("noncanonical JSON, duplicate keys, BOM, whitespace, truncation, and malfor
   }));
 });
 test("changing even an allowed context byte changes the independently pinned manifest",()=>{
- const a=parsed(),b=parsed({...cleanConfig(),currentContext:C+"2"},
-  {...cleanMeta(),Name:C+"2"});
- // Use the alternate name as the approved *local test* context so both pass.
- // The production pin still must be updated out of band.
+ const alternate=C+"2";
+ const a=parsed(),b=validateSignedDockerConfigContents({
+  configRaw:json({currentContext:alternate}),
+  metaRaw:json({...cleanMeta(),Name:alternate}),
+  context:alternate,endpoint:ENDPOINT
+ });
+ // Both synthetic configurations are valid under their distinct operator pins.
  assert.notEqual(a.manifestSha256,b.manifestSha256);
 });
 test("exact signed-agent grammar permits only authorized context inspection and lifecycle calls",()=>{
