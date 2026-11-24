@@ -101,7 +101,7 @@ test("iCalendar exports only dated outstanding authorized tasks with correct exc
   assert.match(ics,/UID:44444444-4444-4444-8444-000000000001@eternyx.local/);
   assert.ok(!ics.includes(id(2))&&!ics.includes(id(3)));
   assert.ok(!ics.includes(member),"Member UUID is never serialized as assignee");
-  assert.ok(ics.includes("Member 22222222"));
+  assert.ok(ics.replace(/\r\n /g,"").includes("Member 22222222"));
 });
 test("iCalendar escapes malicious line breaks and folds UTF-8 lines at 75 bytes",()=>{
   const name="Résumé ".repeat(32)+"\nBEGIN:VALARM";
