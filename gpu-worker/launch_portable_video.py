@@ -83,18 +83,20 @@ def preflight(root=ROOT):
     if (not isinstance(manifest, dict) or manifest.get("format") != "eternyx-portable-cpu-video"
             or type(manifest.get("version")) is not int or manifest["version"] != 1
             or manifest.get("private_original_media") is not True
-            or manifest.get("fps") != 16
+            or manifest.get("fps") not in (16, 24)
+            or manifest.get("fps") != (24 if manifest.get("quality") == "cinematic" else 16)
+            or board.get("fps", 16) != manifest["fps"]
             or manifest.get("profile") not in renderer.PROFILES
-            or manifest.get("quality") not in ("standard", "high")
+            or manifest.get("quality") not in ("standard", "high", "cinematic")
             or type(manifest.get("frames")) is not int
-            or not 1 <= manifest["frames"] <= 480
+            or not 1 <= manifest["frames"] <= 30 * manifest["fps"]
             or type(manifest.get("shots")) is not int
             or not 1 <= manifest["shots"] <= 8):
         raise ValueError("Unsupported or invalid private ETERNYX CPU project manifest")
     if manifest["shots"] != len(board["shots"]):
         raise ValueError("Portable manifest shot count and storyboard disagree")
     media = root / "media"
-    shots,total = renderer.check_shots(board, media)
+    shots,total = renderer.check_shots(board, media, manifest["fps"])
     audio = renderer.check_soundtrack(board, media)
     if total != manifest["frames"]:
         raise ValueError("Storyboard duration differs from portable project receipt")
@@ -144,7 +146,8 @@ def preflight(root=ROOT):
         raise ValueError("Portable package is missing some edited timeline sources")
     return {
         "result": "ready", "board_sha256": board_sha, "frames": total,
-        "seconds": total/16, "shots": len(shots), "source_count": len(source_hashes),
+        "seconds": total/manifest["fps"], "fps": manifest["fps"],
+        "shots": len(shots), "source_count": len(source_hashes),
         "private_media_bytes": total_bytes,
         "profile": manifest["profile"], "quality": manifest["quality"],
         "local_only": True, "output": OUTPUT,
@@ -227,7 +230,9 @@ def run(root=ROOT, on_stage=None, cancel=None):
                 receipt.get("storyboard_sha256")!=checked["board_sha256"] or
                 receipt.get("total_frames")!=checked["frames"] or
                 receipt.get("profile")!=checked["profile"] or
-                receipt.get("quality")!=checked["quality"]):
+                receipt.get("quality")!=checked["quality"] or
+                receipt.get("fps")!=checked["fps"] or
+                receipt.get("video", {}).get("fps")!=str(checked["fps"])+"/1"):
             raise ValueError("Actual local renderer receipt conflicts with original validated project")
         file=folder/"video.mp4"
         video=receipt.get("video",{})
