@@ -1,0 +1,33 @@
+name: LABS composed PostgreSQL 17 bootstrap rehearsal
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**ctf**.sql'
+      - 'supabase/functions/ctf-*/**'
+      - 'supabase/config.toml'
+      - 'scripts/labs-bootstrap-*'
+      - 'tests/sql/ctf-*.sql'
+      - 'tests/sql/eternyx-labs-*.sql'
+      - 'tests/eternyx-labs-bootstrap.test.mjs'
+      - '.github/workflows/labs-composed-bootstrap.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  composed-labs:
+    name: Replay all five LABS migrations together without network
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check exact source inventory and JWT policy
+        run: |
+          node scripts/labs-bootstrap-manifest.mjs
+          node --test tests/eternyx-labs-bootstrap.test.mjs
+      - name: Replay actual migrations and exercise rollback-isolated fixtures
+        run: bash scripts/labs-bootstrap-rehearsal.sh
