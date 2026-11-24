@@ -240,7 +240,8 @@ export default function LocalVideoEditor() {
       });
       if(mapped.reduce((sum,shot)=>sum+shot.frames,0)>target*30)
         throw new Error("Converted timeline exceeds 30 seconds.");
-      if(mapped.length)setShots(mapped);
+      // Old undo snapshots are in a different frame timebase; do not restore them.
+      setTimelineHistory(resetTimelineHistory(mapped));
       setQuality(next);setMessage("");setNotice("Timeline switched to "+target+" FPS without changing cut timings.");
     }catch(cause){
       setMessage(cause instanceof Error?cause.message:"Cannot safely change frame rate.");
