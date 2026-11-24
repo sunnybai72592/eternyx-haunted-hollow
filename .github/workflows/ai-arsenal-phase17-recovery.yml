@@ -7,6 +7,7 @@ on:
       - 'src/lib/ai/studio-chat-request.ts'
       - 'src/pages/AIDocumentIntelligence.tsx'
       - 'src/components/ai/StoredPdfCorpusImport.tsx'
+      - 'src/components/ai/LocalOfficeCorpusImport.tsx'
       - 'src/pages/AIArsenal.tsx'
       - 'tests/ai-corpus-*.test.mjs'
       - '.github/workflows/ai-arsenal-phase17-recovery.yml'
@@ -24,8 +25,9 @@ jobs:
           node-version: '22'
       - name: Install only the pinned test compiler
         run: |
-          npm install --prefix "$RUNNER_TEMP/ai-recovery-compiler" --no-audit --no-fund --ignore-scripts --package-lock=false typescript@5.8.3
+          npm install --prefix "$RUNNER_TEMP/ai-recovery-compiler" --no-audit --no-fund --ignore-scripts --package-lock=false typescript@5.8.3 @xmldom/xmldom@0.8.11
           mkdir -p node_modules
           ln -s "$RUNNER_TEMP/ai-recovery-compiler/node_modules/typescript" node_modules/typescript
+          ln -s "$RUNNER_TEMP/ai-recovery-compiler/node_modules/@xmldom" node_modules/@xmldom
       - name: Run actual recovery regressions
-        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs tests/ai-corpus-version-review-phase18.test.mjs tests/ai-corpus-checkpoint-phase19.test.mjs tests/ai-corpus-knowledge-phase20.test.mjs tests/ai-corpus-knowledge-evidence-phase21.test.mjs tests/ai-corpus-rag-phase22.test.mjs tests/ai-corpus-assurance-phase23.test.mjs tests/ai-corpus-pdf-import-phase24.test.mjs
+        run: node --test tests/ai-corpus-import-rotation-phase16.test.mjs tests/ai-corpus-selective-recovery-phase17.test.mjs tests/ai-corpus-version-review-phase18.test.mjs tests/ai-corpus-checkpoint-phase19.test.mjs tests/ai-corpus-knowledge-phase20.test.mjs tests/ai-corpus-knowledge-evidence-phase21.test.mjs tests/ai-corpus-rag-phase22.test.mjs tests/ai-corpus-assurance-phase23.test.mjs tests/ai-corpus-pdf-import-phase24.test.mjs tests/ai-corpus-office-phase25.test.mjs
