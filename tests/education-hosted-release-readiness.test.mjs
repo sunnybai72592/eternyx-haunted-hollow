@@ -219,3 +219,54 @@ test("same-run single-attempt fixture preflight is mandatory for release verdict
   assert.throws(()=>summarizeEducationReleaseEvidence(
     "rehearsal",evidence("rehearsal"),p,dbEvidence(),false,p1));
 });
+
+import {createEducationRecovery,advanceEducationRecovery,RELEASE_RECOVERY_PATH}
+ from "../scripts/staging/educationReleaseRecovery.mjs";
+test("recovery journal identifies possible irreversible work before starting a child process",()=>{
+ const j=createEducationRecovery("journey",p);
+ assert.equal(j.write_may_have_occurred,false);
+ advanceEducationRecovery(j,"start","owner-read");
+ advanceEducationRecovery(j,"pass","owner-read");
+ advanceEducationRecovery(j,"start","cbt-write");
+ assert.equal(j.write_may_have_occurred,true);
+ advanceEducationRecovery(j,"block");
+ assert.equal(j.outcome,"blocked");
+ assert.deepEqual(j.stages.map(s=>s.status),["passed","blocked","not_started","not_started","not_started"]);
+ assert.equal(j.automatic_retry_allowed,false);
+ assert.equal(j.production_release_approved,false);
+ assert.throws(()=>advanceEducationRecovery(j,"start","instructor-review"));
+});
+test("read-only preflight cannot become write proof and rejects skipped or reordered stages",()=>{
+ const j=createEducationRecovery("preflight",p);
+ assert.throws(()=>advanceEducationRecovery(j,"start","cbt-write"));
+ assert.throws(()=>advanceEducationRecovery(j,"finish"));
+ assert.throws(()=>advanceEducationRecovery(j,"start","verified-results"));
+ for(const s of j.stages){
+  advanceEducationRecovery(j,"start",s.stage);
+  assert.throws(()=>advanceEducationRecovery(j,"start",s.stage));
+  advanceEducationRecovery(j,"pass",s.stage);
+ }
+ advanceEducationRecovery(j,"finish");
+ assert.equal(j.outcome,"backend_passed");
+ assert.equal(j.write_may_have_occurred,false);
+ assert.equal(j.production_release_approved,false);
+ assert.throws(()=>createEducationRecovery("production",p));
+ assert.throws(()=>createEducationRecovery("journey",{...p,attempt:"0"}));
+});
+test("journal records only fixed stage names and provenance, never learner identifiers or keys",()=>{
+ const j=createEducationRecovery("rehearsal",{...p,password:"secret-fixture",attemptId:"private-attempt"});
+ advanceEducationRecovery(j,"start","owner-read");
+ advanceEducationRecovery(j,"block");
+ assert.doesNotMatch(JSON.stringify(j),/secret-fixture|private-attempt|password|attemptId/);
+ assert.equal(j.write_may_have_occurred,false);
+ assert.equal(j.automatic_retry_allowed,false);
+});
+test("release persists recovery marker before remote execution and uploads sanitized journal only",()=>{
+ const start=releaseRunner.indexOf('advanceEducationRecovery(recovery,"start",stage.id)');
+ const save=releaseRunner.indexOf("persistRecovery()",start);
+ const execute=releaseRunner.indexOf("run(execute,env)",save);
+ assert.ok(start>0&&save>start&&execute>save);
+ assert.ok(releaseFlow.includes(RELEASE_RECOVERY_PATH));
+ assert.doesNotMatch(releaseFlow,/path:\s*test-results\/\*/);
+ assert.match(releaseRunner,/renameSync\(recoveryTemp,RELEASE_RECOVERY_PATH\)/);
+});
