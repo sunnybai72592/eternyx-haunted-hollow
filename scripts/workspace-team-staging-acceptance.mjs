@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { normalizeWorkspaceTeamSnapshot } from "../src/lib/workspaceTeamActivityHistory.mjs";
+import {workspacePortfolioTeam} from "../src/lib/workspaceTeamPortfolio.mjs";
 
 const PRODUCTION_REF="wcncuarekaofmfurbtbh";
 const UUID=/^[\da-f]{8}-[\da-f]{4}-[1-8][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i;
@@ -94,9 +95,36 @@ async function one(client,table,filters,columns="id"){
   gate(rows.length===1,"fixture-not-visible-"+table);
   return rows[0];
 }
-async function invisible(client,table,filters,allowDenied=false){
-  const rows=await selectRows(client,table,filters,"id",2,allowDenied);
+export async function invisible(client,table,filters,allowDenied=false){
+  // Membership and read-cursor tables have composite keys, not an id column.
+  const column=["workspace_team_members","workspace_team_read_cursors"].includes(table)?"user_id":"id";
+  const rows=await selectRows(client,table,filters,column,2,allowDenied);
   gate(rows.length===0,"unauthorized-row-visible-"+table);
+}
+export async function requireWorkspaceActivity(client,space){
+  gate((await selectRows(client,"workspace_team_events",{space_id:space},"id",1)).length===1,
+    "activity-fixture-missing");
+}
+export async function verifyWorkspacePortfolioProbe(client,space,identity,expectedRole,today){
+  const metadata=await one(client,"workspace_team_spaces",{id:space},"id,owner_id,name,status");
+  const [m,t]=await Promise.all([
+    client.from("workspace_team_members").select("user_id,space_id,role",{count:"exact"}).eq("space_id",space).limit(20),
+    client.from("workspace_team_tasks").select("id,space_id,status,priority,due_on,assignee_id",{count:"exact"}).eq("space_id",space).limit(500),
+  ]);
+  gate(!m.error&&!t.error&&metadata.id===space,"portfolio-query-unavailable");
+  let summary;
+  try{summary=workspacePortfolioTeam({space:metadata,owner:identity,members:m.data,memberCount:m.count,
+    tasks:t.data,taskCount:t.count,today});}
+  catch{throw Error("Workspace staging blocked: portfolio-snapshot-incomplete");}
+  const [fresh,self,confirmed]=await Promise.all([
+    one(client,"workspace_team_spaces",{id:space},"id,owner_id,name,status"),
+    one(client,"workspace_team_members",{space_id:space,user_id:identity},"space_id,user_id,role"),
+    client.auth.getUser(),
+  ]);
+  gate(fresh.id===space&&fresh.owner_id===metadata.owner_id&&fresh.name===metadata.name&&fresh.status===metadata.status&&
+    self.space_id===space&&self.user_id===identity&&self.role===expectedRole&&summary.role===expectedRole&&
+    !confirmed.error&&confirmed.data?.user?.id===identity,"portfolio-membership-changed");
+  return summary;
 }
 async function notification(client,space){
   const res=await client.rpc("workspace_team_notification_snapshot",{p_space_id:space});
@@ -167,10 +195,21 @@ export async function runWorkspaceStagingAcceptance(config,clientFactory=createS
     {p_space_id:space});
   gate(!outsiderSnapshot.error&&outsiderSnapshot.data===null,"outsider-snapshot-exposed");
   checks.push("exact_team_only_notification_snapshots");
-  await one(owner,"workspace_team_events",{space_id:space});
-  await one(editor,"workspace_team_events",{space_id:space});
-  await one(viewer,"workspace_team_events",{space_id:space});
+  for(const client of [owner,editor,viewer])await requireWorkspaceActivity(client,space);
   checks.push("server_recorded_activity");
+  const today=new Date().toISOString().slice(0,10);
+  for(let i=0;i<3;i++)await verifyWorkspacePortfolioProbe(clients[i],space,identities[i],ROLES[i].toLowerCase(),today);
+  checks.push("complete_member_portfolio_snapshots");
+  // The exact same minimal query projections must remain invisible to outsiders.
+  for(const [table,columns,limit] of [
+    ["workspace_team_members","user_id,space_id,role",20],
+    ["workspace_team_tasks","id,space_id,status,priority,due_on,assignee_id",500],
+  ]){
+    const result=await outsider.from(table).select(columns,{count:"exact"}).eq("space_id",space).limit(limit);
+    gate(!result.error&&Array.isArray(result.data)&&result.data.length===0&&result.count===0,
+      "outsider_portfolio_rows_visible");
+  }
+  checks.push("outsider_portfolio_projection_denied");
   for(const [table,idKey] of [
     ["workspace_projects","PRIVATE_PROJECT_ID"],
     ["workspace_tasks","PRIVATE_TASK_ID"],
@@ -186,6 +225,12 @@ export async function runWorkspaceStagingAcceptance(config,clientFactory=createS
     await invisible(anon,table,table==="workspace_team_spaces"?
       {id:space}:{space_id:space},true);
   checks.push("anonymous_team_reads_blocked");
+  // Reconfirm all sessions before issuing a sanitized pass receipt.
+  for(let i=0;i<4;i++){
+    const verified=await clients[i].auth.getUser();
+    gate(!verified.error&&verified.data?.user?.id===identities[i],"final-identity-recheck-failed");
+  }
+  checks.push("final_four_account_identity_recheck");
   return sanitizedWorkspaceStagingReport(checks);
 }
 const isCli=process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url);
