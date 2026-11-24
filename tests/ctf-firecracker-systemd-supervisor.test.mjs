@@ -418,3 +418,41 @@ test("expiry result requires stopped guest, zero descendants, exact systemd time
   alive=true;
   assert.equal(await s.verifyTimedOut(session),false);
 });
+
+test("exact system.slice cgroup is required; nested aliases and foreign slices fail",()=>{
+  for(const cgroup of ["/system.slice/other/"+unit,"/other.slice/"+unit])
+    assert.throws(()=>verifySystemdUnitProperties(session,makeShow({ControlGroup:cgroup})));
+});
+test("live PID drift during attestation is not accepted",async()=>{
+ const host=fakeHost({initial:true});let reads=0;
+ const s=makeSupervisor(host,{execute(name,args){
+  if(name==="systemctl"&&args[0]==="show")return makeShow({MainPID:++reads===1?"12001":"12002"});
+  return host.run(name,args);
+ }});
+ await assert.rejects(s.attest(session),/identity changed/);
+});
+test("partial or ambiguous cgroup evidence never proves death",async()=>{
+ for(const mode of ["procsMissing","eventsMissing","duplicate","reappeared"]){
+  const host=fakeHost();let reads=0;
+  const s=makeSupervisor(host,{
+   files:{...host.files,async readFile(path){
+    if(mode==="procsMissing"&&path.endsWith("cgroup.procs")||mode==="eventsMissing"&&path.endsWith("cgroup.events"))
+      throw Object.assign(Error("missing"),{code:"ENOENT"});
+    if(mode==="duplicate"&&path.endsWith("cgroup.events"))return "populated 0\npopulated 1\n";
+    return host.files.readFile(path);
+   }},
+   execute(name,args){
+    if(mode==="reappeared"&&name==="systemctl"&&args[0]==="show"&&++reads>1)return makeShow();
+    return host.run(name,args);
+   },
+  });
+  assert.equal(await s.verifyDead(session),false,mode);
+ }
+});
+test("halt during systemd startup triggers scoped cleanup",async()=>{
+ const host=fakeHost();let checks=0;
+ const s=makeSupervisor(host,{launchGate:async()=>{if(++checks===3)throw Error("halt");return true;}});
+ await assert.rejects(launch(s),/supervisor refused/);
+ assert.equal(host.active,false);
+ assert.ok(host.calls.some(c=>c.name==="systemctl"&&c.args[0]==="stop"));
+});

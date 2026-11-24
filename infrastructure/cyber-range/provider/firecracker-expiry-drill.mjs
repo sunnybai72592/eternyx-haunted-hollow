@@ -49,11 +49,24 @@ export async function observeIndependentExpiry({
      typeof now!=="function"||typeof pause!=="function"||
      !Number.isFinite(wallStartMs))
     throw Error("Invalid independent expiry verifier");
-  const elapsed=()=>now()-wallStartMs;
+  let previous=wallStartMs;
+  const elapsed=()=>{
+    const reading=now();
+    if(!Number.isFinite(reading)||reading<previous)throw Error("Invalid monotonic expiry clock");
+    previous=reading;
+    return reading-wallStartMs;
+  };
+  let waits=0;
+  async function boundedPause(ms){
+    if(++waits>100||!Number.isFinite(ms)||ms<=0)throw Error("Watchdog observation exceeded bounded poll count");
+    const before=elapsed();
+    await pause(ms,signal);
+    if(elapsed()<=before)throw Error("Watchdog observation clock did not advance");
+  }
   async function waitUntil(target){
     while(elapsed()<target){
       if(signal?.aborted)throw Error("Watchdog drill cancelled");
-      await pause(Math.min(20_000,target-elapsed()),signal);
+      await boundedPause(Math.min(20_000,target-elapsed()));
     }
   }
   await waitUntil(LIVE_CHECK_MS);
@@ -72,7 +85,7 @@ export async function observeIndependentExpiry({
         systemdTimeoutResultVerified:true,
         noCgroupDescendants:true,publicLabsEnabled:false});
     }
-    await pause(5000,signal);
+    await boundedPause(5000);
   }
   throw Error("MicroVM outlived independent 900-second deadline");
 }
