@@ -253,6 +253,7 @@ export const HOST_CHALLENGE_TEMPLATE_KEYS=Object.freeze(TEMPLATE_KEYS.slice());
 
 /** Read-only reviewer status; never retries or clears a consumed token. */
 export function inspectDockerHostChallenge(dir,challenge){
+ if(process.platform!=="linux")throw Error("Durable host evidence ledger status requires Linux.");
  if(!HASH.test(challenge||""))throw Error("Exact issued challenge needed for status.");
  const snapshot=audit(dir),origin=snapshot.issued.get(challenge);
  if(!origin)throw Error("Challenge does not exist in original reviewer ledger.");
