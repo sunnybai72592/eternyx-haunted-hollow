@@ -503,7 +503,22 @@ def preview_isolation(page):
     expect(frame).to_have_css("width", "768px", timeout=5000)
     page.get_by_role("button", name="Desktop 1200").click()
     expect(frame).to_have_css("width", "1200px", timeout=5000)
+    scroller=page.get_by_label("Preview scroll area", exact=True)
+    # Simulate real horizontal navigation while the 1200px preview is wider
+    # than its panel, then verify Fluid restores the scroll origin.
+    scroller.evaluate("(element) => { element.scrollLeft = element.scrollWidth; }")
     page.get_by_role("button", name="Fluid", exact=True).click()
+    expect(page.get_by_role("button", name="Fluid", exact=True)).to_have_attribute("aria-pressed", "true")
+    assert scroller.evaluate("(element) => element.scrollLeft") == 0
+    # Compare untransformed layout widths after React and the browser settle.
+    # A bounding-client rectangle may include an ancestor animation transform.
+    page.wait_for_function("""() => {
+      const area = document.querySelector('[aria-label="Preview scroll area"]');
+      const frame = area?.querySelector('iframe');
+      return !!frame && area.clientWidth > 0 && frame.style.width === '100%' &&
+        Math.abs(area.clientWidth - frame.offsetWidth) <= 1 &&
+        area.scrollLeft === 0 && area.scrollWidth <= area.clientWidth + 1;
+    }""", timeout=10000)
     assert frame.get_attribute("sandbox") == "allow-scripts"
     assert frame.get_attribute("referrerpolicy") == "no-referrer"
     doc=frame.get_attribute("srcdoc")
@@ -525,7 +540,23 @@ def preview_isolation(page):
     # This does not retry a failed click or conceal broken script execution.
     expect(preview.locator("#hello")).to_have_attribute(
         "data-handler-ready", "true", timeout=15000)
-    preview.locator("#hello").click()
+    # Bring the outer frame away from sticky navigation and viewport edges.
+    # The real pointer click must still work; no forced click, synthetic
+    # dispatch, keyboard fallback, or retry that could hide a broken preview.
+    frame.evaluate("(element) => element.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'})")
+    hello=preview.locator("#hello")
+    expect(hello).to_be_visible()
+    # Wait for parent hit-testing to agree with the actual child button location.
+    # Opaque-origin content is inspected only through Playwright's frame API.
+    # No parent-side script reaches into the sandbox or dispatches a click.
+    hello.scroll_into_view_if_needed()
+    box=hello.bounding_box()
+    assert box is not None and box["width"] > 0 and box["height"] > 0
+    page.wait_for_function("""point => {
+      const frame = document.querySelector('iframe[title="Isolated project preview"]');
+      return document.elementFromPoint(point.x, point.y) === frame;
+    }""", arg={"x":box["x"]+box["width"]/2,"y":box["y"]+box["height"]/2}, timeout=10000)
+    hello.click()
     expect(preview.locator("#message")).to_have_text("Hello from the isolated preview!")
     page.get_by_role("group", name="Project files", exact=True).get_by_role("button", name="index.html").click()
     editor=page.locator("#project-editor")
