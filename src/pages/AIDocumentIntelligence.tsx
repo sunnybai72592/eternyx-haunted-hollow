@@ -56,6 +56,7 @@ import {createCorpusCheckpoint,canUndoCorpusCheckpoint,undoCorpusCheckpoint,summ
 import {buildKnowledgeIndex,searchKnowledgeIndex,formatKnowledgePassage,KnowledgeError,type KnowledgeIndex} from "@/lib/ai/document-corpus-knowledge";
 import {suggestKnowledgeTerms,prepareKnowledgeEvidence,KnowledgeEvidenceError,MAX_EVIDENCE_PASSAGES} from "@/lib/ai/document-corpus-knowledge-evidence";
 import {prepareKnowledgeRagRequest,reviewKnowledgeRagResponse} from "@/lib/ai/document-corpus-rag";
+import {CLAIM_VERDICTS,suggestClaimQuotes,assessClaimQuote,claimReviewSignals,summarizeClaimAssurance,formatAssuranceReport,type ClaimAssessment,type ClaimVerdict} from "@/lib/ai/document-corpus-assurance";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -125,13 +126,16 @@ const AIDocumentIntelligence = () => {
   const [ragPrepared,setRagPrepared]=useState<{prompt:string;message:string;findings:number}|null>(null);
   const [ragConsent,setRagConsent]=useState(false);
   const [ragError,setRagError]=useState<string|null>(null);
+  const [claimAssessments,setClaimAssessments]=useState<Record<number,ClaimAssessment>>({});
+  const [claimDrafts,setClaimDrafts]=useState<Record<number,{label:string;quote:string;verdict:ClaimVerdict}>>({});
   const [knowledgeSuggestions,setKnowledgeSuggestions] = useState<string[]>([]);
   const [knowledgeMode,setKnowledgeMode] = useState<"all"|"any">("all");
   const [knowledgeFilter,setKnowledgeFilter] = useState("");
   const [knowledgeResults,setKnowledgeResults] = useState<ReturnType<typeof searchKnowledgeIndex>|null>(null);
   const [knowledgeError,setKnowledgeError] = useState<string|null>(null);
   const activeKnowledgeIndex=knowledgeIndex?.sources===corpusFiles ? knowledgeIndex.index:null;
-  const invalidateRag=()=>{setRagPrepared(null);setRagConsent(false);setRagError(null);knowledgeAI.invalidate();};
+  const clearClaimReview=()=>{setClaimAssessments({});setClaimDrafts({});};
+  const invalidateRag=()=>{setRagPrepared(null);setRagConsent(false);setRagError(null);clearClaimReview();knowledgeAI.invalidate();};
   const invalidateKnowledgePacket=()=>{setKnowledgePacket(null);setKnowledgePacketError(null);invalidateRag();};
   const invalidateKnowledgeResults=()=>{setKnowledgeResults(null);setKnowledgeError(null);setKnowledgeSelected([]);setKnowledgeSuggestions([]);invalidateKnowledgePacket();};
   const prepareLocalKnowledgePacket=()=>{
@@ -162,11 +166,16 @@ const AIDocumentIntelligence = () => {
       const fresh=getCurrentRag();
       if(fresh.message!==ragPrepared.message||fresh.findings!==ragPrepared.findings)throw new Error("stale");
       if(!window.confirm("Send the reviewed unredacted question, source names and passages to the configured external AI provider? This uses AI Chat credits and saves chat history. The request cannot be cancelled after submission."))return;
-      setRagConsent(false);setRagError(null);
+      setRagConsent(false);setRagError(null);clearClaimReview();
       void knowledgeAI.run("ai.documents.analyze",fresh.prompt);
     }catch{invalidateRag();setRagError("The reviewed request is no longer valid. Prepare it again before sending.");}
   };
   const ragReview=knowledgeAI.result&&knowledgePacket&&ragPrepared?reviewKnowledgeRagResponse(knowledgeAI.result,knowledgePacket):null;
+  const assuranceSummary=ragReview?.valid===true&&knowledgePacket?summarizeClaimAssurance(ragReview,knowledgePacket,claimAssessments):null;
+  const updateClaimDraft=(i:number,draft:{label:string;quote:string;verdict:ClaimVerdict})=>{
+    setClaimDrafts(old=>({...old,[i]:draft}));
+    setClaimAssessments(old=>{const next={...old};delete next[i];return next;});
+  };
   const buildLocalKnowledge=()=>{
     if(corpusBusy||!corpusFiles.length)return;
     invalidateKnowledgeIndex();
@@ -2098,10 +2107,48 @@ const AIDocumentIntelligence = () => {
                           <p className="text-xs text-amber-200">Citation checks verify label references and response structure only, not whether the claims are true or entailed by evidence. Review every source.</p>
                           {ragReview.valid===true ? <>
                             <p role="status" className="text-xs text-slate-300">Citation structure passed · {ragReview.status==="insufficient"?"Model reports insufficient evidence":"Model returned claims"} · {ragReview.usedLabels.length} cited passages · {ragReview.unusedLabels.length} unused passages.</p>
-                            {ragReview.claims.map((claim,i)=><article key={i} className="space-y-2 rounded border border-slate-700 p-2 text-xs">
+                            {assuranceSummary&&<section aria-label="Local answer assurance summary" className="space-y-2 rounded border border-slate-700 p-3 text-xs text-slate-300">
+                              <h5 className="font-semibold text-white">Evidence assurance · human review</h5>
+                              <p>{assuranceSummary.reviewedClaims}/{assuranceSummary.totalClaims} claims reviewed · {assuranceSummary.claimsWithSignals} with measurement review signals.</p>
+                              <p>{Object.entries(assuranceSummary.counts).map(([key,value])=>key+": "+value).join(" · ")}</p>
+                              <p>These are your recorded assessments, not automatic truth scores. Numeric flags can reflect different quantities or contexts.</p>
+                              <Button type="button" size="sm" variant="outline" onClick={()=>void copy(formatAssuranceReport(assuranceSummary),"Counts-only answer review")}>Copy counts-only quality report</Button>
+                            </section>}
+                            {ragReview.claims.map((claim,i)=>{
+                              const draft=claimDrafts[i]??{label:claim.citations[0],quote:"",verdict:"supported" as ClaimVerdict};
+                              const location=assessClaimQuote(claim,knowledgePacket,draft.label,draft.quote);
+                              const suggestions=suggestClaimQuotes(claim,knowledgePacket);
+                              const signals=claimReviewSignals(claim,knowledgePacket);
+                              return <article key={i} className="space-y-2 rounded border border-slate-700 p-2 text-xs">
                               <p className="whitespace-pre-wrap break-words text-slate-200">{claim.text}</p>
                               {claim.citations.map(label=>{const p=knowledgePacket.passages.find(p=>p.label===label)!;return <details key={label}><summary className="break-all text-cyan-200">{label} · {p.source} · lines {p.startLine}–{p.endLine}</summary><pre className="whitespace-pre-wrap break-all text-slate-300">{p.text}</pre></details>;})}
-                            </article>)}
+                              <div className="space-y-2 border-t border-slate-700 pt-2">
+                                <p className="font-semibold text-slate-200">Review claim {i+1} against evidence</p>
+                                {signals.missingMeasurements.length>0&&<p className="text-amber-200">Measurements not found verbatim in cited passages: {signals.missingMeasurements.map(m=>m.value+" "+m.unit).join(", ")}. Check conversions and context.</p>}
+                                {signals.conflicts.map((flag,j)=><p key={j} className="text-amber-200">Potential numeric discrepancy ({flag.unit}): {flag.leftLabel} [{flag.leftValues.join(", ")}] vs {flag.rightLabel} [{flag.rightValues.join(", ")}]. This is not a proven contradiction.</p>)}
+                                {signals.unmatchedTerms.length>0&&<p className="break-words text-slate-400">Claim words absent from cited text (lexical signal only): {signals.unmatchedTerms.join(", ")}</p>}
+                                {suggestions.length>0&&<div className="space-y-1">
+                                  <p className="text-slate-400">Exact quote candidates ranked by shared words, not semantic support:</p>
+                                  {suggestions.map(q=><button type="button" key={q.label+":"+q.startOffset} className="block w-full rounded border border-slate-700 p-2 text-left break-words text-slate-300 hover:bg-slate-800"
+                                    onClick={()=>updateClaimDraft(i,{...draft,label:q.label,quote:q.quote})}>{q.label}: {q.quote}</button>)}
+                                </div>}
+                                <label className="block text-slate-300">Cited passage
+                                  <select value={draft.label} className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2"
+                                    onChange={e=>updateClaimDraft(i,{...draft,label:e.target.value,quote:""})}>{claim.citations.map(label=><option key={label} value={label}>{label}</option>)}</select>
+                                </label>
+                                <label className="block text-slate-300">Exact evidence excerpt (8–240 characters, one unique occurrence)
+                                  <textarea value={draft.quote} maxLength={240} rows={3} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2"
+                                    onChange={e=>updateClaimDraft(i,{...draft,quote:e.target.value})}/>
+                                </label>
+                                {draft.quote&&<p className={location?"text-cyan-200":"text-amber-200"}>{location?"Exact excerpt found at decoded offsets ["+location.startOffset+", "+location.endOffset+").":"Excerpt missing, too short, or ambiguous; choose more context."}</p>}
+                                <label className="block text-slate-300">Your assessment of this claim
+                                  <select value={draft.verdict} className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2"
+                                    onChange={e=>updateClaimDraft(i,{...draft,verdict:e.target.value as ClaimVerdict})}>{CLAIM_VERDICTS.map(v=><option key={v} value={v}>{v}</option>)}</select>
+                                </label>
+                                <Button type="button" size="sm" variant="outline" disabled={!location} onClick={()=>{if(location)setClaimAssessments(old=>({...old,[i]:{...draft}}));}}>Record manual assessment</Button>
+                                {claimAssessments[i]&&<p role="status" className="text-cyan-200">Recorded: {claimAssessments[i].verdict}</p>}
+                              </div>
+                            </article>;})}
                             {ragReview.uncertainty&&<p className="whitespace-pre-wrap break-words text-xs text-slate-300">Model uncertainty: {ragReview.uncertainty}</p>}
                           </>:<>
                             <p role="alert" className="text-xs text-amber-200">Citation structure rejected: {ragReview.reason}. The raw model output below is unvalidated; do not rely on it.</p>
