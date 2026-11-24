@@ -23,6 +23,8 @@ import {assertSignedAgentPreMutationUnchanged,validateSignedAgentLifecycleEviden
   from "../src/lib/dockerSignedAgentLastMomentGate.mjs";
 import {verifyPinnedDockerCliExecutable,withPinnedDockerCliFile,signedDockerCliEnvironment}
   from "../src/lib/dockerSignedCliExecutableGate.mjs";
+import {verifyPinnedDockerClientConfig,validatePinnedDockerCliCommand}
+  from "../src/lib/dockerSignedClientConfigGate.mjs";
 import { parseAgentAction,agentActionMessage }
   from "../supabase/functions/_shared/docker-command-contract.mjs";
 import { verifyPinnedDockerLabPermit } from "../src/lib/dockerLabPermitGuard.mjs";
@@ -56,8 +58,13 @@ function docker(args,ms=8000){
   // The root-owned ELF is hashed through an O_NOFOLLOW descriptor and Linux
   // EXECUTES THAT VERY DESCRIPTOR (inherited as child fd 3). No second path
   // lookup by PATH or by the original pin is allowed between check and spawn.
+  const clientConfig=verifyPinnedDockerClientConfig(process.env);
+  validatePinnedDockerCliCommand(args,clientConfig);
   const childEnv=signedDockerCliEnvironment(homedir());
-  const r=withPinnedDockerCliFile(process.env,cli=>spawnSync(cli.execPath,args,{
+  // Every subprocess points at the independently sealed *root-owned* config,
+  // NOT the operator's mutable ~/.docker (and not a DOCKER_CONFIG override).
+  const r=withPinnedDockerCliFile(process.env,cli=>spawnSync(
+    cli.execPath,["--config",clientConfig.dir,...args],{
     shell:false,encoding:"utf8",timeout:ms,maxBuffer:524288,
     windowsHide:true,env:childEnv,
     stdio:["ignore","pipe","pipe",cli.fd]
@@ -73,6 +80,7 @@ function localContext(){
   // Admission requires TWO independent operator pins: Engine identity and
   // the exact installed CLI executable (no PATH-selected docker alias).
   verifyPinnedDockerCliExecutable(process.env);
+  verifyPinnedDockerClientConfig(process.env);
   signedDockerCliEnvironment(homedir());
   validateSignedAgentSocket(lstatSync(pins.socketPath),process.getuid());
   const name=docker(["context","show"]);
