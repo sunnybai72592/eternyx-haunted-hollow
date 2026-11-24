@@ -78,6 +78,10 @@ networks:
   local_target_only:
     internal: true
     driver: bridge
+    labels:
+      org.eternyx.range.network: "v1"
   gateway_ingress_only:
     internal: true
     driver: bridge
+    labels:
+      org.eternyx.range.network: "v1"

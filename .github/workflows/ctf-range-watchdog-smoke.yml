@@ -62,15 +62,24 @@ jobs:
           ETERNYX_RANGE_WATCHDOG_ACK=LOCAL_OPERATOR_ONLY node scripts/cyber-range-watchdog.mjs --emergency-stop --apply
           test -f "$HOME/.eternyx-range-launches-halted"
           test -z "$(docker ps -a -q --filter label=org.eternyx.range.managed=v1)"
+          test -z "$(docker network ls -q --filter label=org.eternyx.range.network=v1)"
           docker ps --filter name=eternyx-watchdog-unrelated --format '{{.ID}}' | grep -q .
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import {assertLocalLaunchAllowed} from './infrastructure/cyber-range/provider/local-kill-switch.mjs';
           await assert.rejects(assertLocalLaunchAllowed(), /emergency stop active/);
           NODE
+      - name: Recover an actual empty managed network without removing unrelated network
+        run: |
+          docker network create --internal --label "com.docker.compose.project=$ETERNYX_PROJECT" --label com.docker.compose.network=local_target_only --label org.eternyx.range.network=v1 "${ETERNYX_PROJECT}_local_target_only" >/dev/null
+          docker network create --internal eternyx-watchdog-unrelated-net >/dev/null
+          ETERNYX_RANGE_WATCHDOG_ACK=LOCAL_OPERATOR_ONLY node scripts/cyber-range-watchdog.mjs --emergency-stop --apply
+          test -z "$(docker network ls -q --filter label=org.eternyx.range.network=v1)"
+          docker network inspect eternyx-watchdog-unrelated-net >/dev/null
       - name: Clean up ephemeral test-only artifacts
         if: always()
         run: |
           docker compose -p "$ETERNYX_PROJECT" -f infrastructure/cyber-range/compose.managed.yaml down --volumes --remove-orphans || true
           docker rm --force eternyx-watchdog-unrelated || true
+          docker network rm eternyx-watchdog-unrelated-net || true
           rm -f "$HOME/.eternyx-range-launches-halted" "$HOME/.eternyx-range-watchdog.lock" /tmp/eternyx-watchdog-ci-preview.jsonl /tmp/eternyx-range-isolation-ci.json

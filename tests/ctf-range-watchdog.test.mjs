@@ -7,6 +7,7 @@ import {
   sessionFromProject, verifyManagedContainer, planVerifiedCleanup, runOrphanSweep,
   RANGE_MAX_AGE_SECONDS, RANGE_CLEANUP_GRACE_SECONDS,
 } from "../infrastructure/cyber-range/provider/orphan-watchdog.mjs";
+import {verifyManagedNetwork,verifyNetworkInventory} from "../infrastructure/cyber-range/provider/managed-network-proof.mjs";
 import {
   assertLocalLaunchAllowed, engageLocalHostHalt,
 } from "../infrastructure/cyber-range/provider/local-kill-switch.mjs";
@@ -219,4 +220,32 @@ test("runtime attempts cleanup even after partial compose failure and verifies e
  assert.match(source,/#projectMembers\(sessionId\)/);
  assert.match(source,/Managed containers remain after teardown/);
  assert.doesNotMatch(source,/"down", "--volumes", "--remove-orphans"/);
+});
+
+function network(project,kind,age,id,attachments=[]){
+ return {Id:id.repeat(64),Name:project+"_"+kind,Created:new Date(now.getTime()-age*1000).toISOString(),Internal:true,Driver:"bridge",Scope:"local",
+ Labels:{"com.docker.compose.project":project,"com.docker.compose.network":kind,"org.eternyx.range.network":"v1"},
+ Containers:Object.fromEntries(attachments.map(x=>[x,{}]))};
+}
+test("managed networks require exact labels, private topology and safe attachments",()=>{
+ const n=network(pa,"local_target_only",2000,"e");
+ assert.equal(verifyManagedNetwork(n).sessionId,a);
+ for(const bad of [{...n,Internal:false},{...n,Name:pb+"_local_target_only"},{...n,Labels:{}},{...n,Scope:"swarm"}])
+  assert.throws(()=>verifyManagedNetwork(bad),/cleanup refused/);
+ assert.throws(()=>verifyNetworkInventory([network(pa,"local_target_only",2000,"e",["a".repeat(64)])],[]),/Foreign network attachment/);
+ assert.throws(()=>verifyNetworkInventory([n,n],[]),/Duplicate managed network/);
+});
+test("network-only orphans respect age and are removed using exact IDs",async()=>{
+ let nets=[network(pa,"local_target_only",2000,"e"),network(pb,"gateway_ingress_only",10,"f")];
+ const runtime={async listVerifiedManagedProjects(){return [];},async listVerifiedManagedNetworks(){return nets;},
+ async stop(session,ids,networkIds){assert.equal(session,a);assert.deepEqual(ids,[]);assert.deepEqual(networkIds,["e".repeat(64)]);nets=nets.filter(n=>n.Id!==networkIds[0]);return true;}};
+ const preview=await runOrphanSweep({runtime,now});
+ assert.equal(preview.outcome.scannedProjects,2);assert.equal(preview.outcome.eligible,1);
+ const result=await runOrphanSweep({runtime,now,apply:true,approved:true});
+ assert.equal(result.outcome.removed,1);assert.equal(nets.length,1);
+});
+test("network-only teardown cannot report success while a network remains",async()=>{
+ const n=network(pa,"local_target_only",2000,"e");
+ const runtime={async listVerifiedManagedProjects(){return [];},async listVerifiedManagedNetworks(){return [n];},async stop(){return true;}};
+ await assert.rejects(runOrphanSweep({runtime,now,apply:true,approved:true}),/still present/);
 });
