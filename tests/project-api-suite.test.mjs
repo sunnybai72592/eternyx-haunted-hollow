@@ -5,7 +5,7 @@ import {
   PROJECT_API_REPORT_SCHEMA, PROJECT_API_IMPORT_SCHEMA, MAX_PROJECT_SCENARIOS,
   normalizeProjectApiScenario, normalizeProjectApiScenarios, addProjectApiScenario,
   exportProjectApiSuite, importProjectApiSuite, runProjectApiSuite,
-  summarizeProjectApiResults, exportProjectApiReport,
+  summarizeProjectApiResults, exportProjectApiReport, projectApiSuiteSignature, isProjectApiRunComplete,
 } from "../src/lib/projectApiSuite.mjs";
 const component = readFileSync(new URL("../src/components/developer/ProjectApiSuitePanel.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/pages/ApiEngineeringWorkbench.tsx", import.meta.url), "utf8");
@@ -117,4 +117,58 @@ test("real cross-page project linking, cancellation and report export are wired"
   const runner = readFileSync(new URL("../src/lib/projectApiSuite.mjs", import.meta.url), "utf8");
   assert.match(runner,/credentials: "omit"/);
   assert.match(runner,/redirect: "error"/);
+});
+
+test("optional response type contracts survive export/import, preserve legacy suites, and reject arbitrary values",()=>{
+  const legacy=normalizeProjectApiScenario(specimen());
+  assert.equal(Object.hasOwn(legacy,"expectedContentType"),false);
+  assert.throws(()=>normalizeProjectApiScenario(specimen("bad",{expectedContentType:"text/html"})),/Unsupported response/);
+  const suite=makeSaved([specimen("a",{expectedContentType:"json"})]);
+  assert.equal(importProjectApiSuite(exportProjectApiSuite(suite,"project-1"),"project-1",()=>"b")[0].expectedContentType,"json");
+  assert.notEqual(projectApiSuiteSignature(suite),projectApiSuiteSignature([specimen("a")]));
+});
+
+test("actual response metadata distinguishes JSON, HTML, absent content type and protected denial without retaining raw headers",async()=>{
+  const suite=makeSaved([
+    specimen("json",{expectedContentType:"json",url:"https://example.com/json"}),
+    specimen("html",{expectedContentType:"html",url:"https://example.com/html"}),
+    specimen("missing",{expectedContentType:"text",url:"https://example.com/missing"}),
+    specimen("denied",{expectedStatus:403,url:"https://example.com/denied"}),
+  ]);
+  const rows=await runProjectApiSuite(suite,{fetcher:async(url,opts)=>{
+    assert.equal(opts.credentials,"omit");
+    assert.equal(opts.redirect,"error");
+    const mime=url.endsWith("/json")?"application/problem+json; private=SECRET":url.endsWith("/html")?"application/json":null;
+    return {status:url.endsWith("/denied")?403:200,headers:{get:()=>mime}};
+  }});
+  assert.deepEqual(rows.map(x=>x.reason),["passed","content-type-mismatch","content-type-unavailable","passed"]);
+  assert.equal(rows[0].contentTypeCheck,"passed");
+  assert.equal(isProjectApiRunComplete(suite,rows),true);
+  assert.equal(isProjectApiRunComplete(suite,rows.slice(0,2)),false);
+  assert.equal(isProjectApiRunComplete(suite,[...rows].reverse()),false);
+  assert.ok(!exportProjectApiReport(rows).includes("SECRET"));
+});
+
+test("mixed-project and duplicate scenarios cannot execute; abort wins even if transport returns a response",async()=>{
+  const row=specimen();
+  let calls=0;
+  const fetcher=async()=>{calls++;return {status:200}};
+  await assert.rejects(runProjectApiSuite([row,row],{fetcher}),/unique scenario/);
+  await assert.rejects(runProjectApiSuite([row,specimen("b",{projectId:"other"})],{fetcher}),/one saved project/);
+  assert.equal(calls,0);
+  const controller=new AbortController();
+  const rows=await runProjectApiSuite([row],{signal:controller.signal,fetcher:async()=>{controller.abort();return {status:200}}});
+  assert.equal(rows[0].reason,"cancelled");
+  assert.equal(rows[0].passed,false);
+  assert.equal(isProjectApiRunComplete([row],rows),false);
+});
+
+test("stale, cancelled and mismatched reports cannot be exported as current UI evidence",()=>{
+  assert.match(component,/runSignature !== projectApiSuiteSignature\(available\)/);
+  assert.match(component,/!stale && !running && isProjectApiRunComplete\(available, results\)/);
+  assert.match(component,/disabled=\{!complete\}/);
+  assert.match(component,/if \(complete\) saveJson/);
+  assert.match(component,/useEffect\(\(\) => \(\) => abortRef\.current\?\.abort\(\), \[\]\)/);
+  const forged={scenarioId:"a",method:"GET",origin:"https://example.com",status:200,elapsedMs:10,passed:true,reason:"content-type-mismatch",contentTypeCheck:"mismatch"};
+  assert.equal(JSON.parse(exportProjectApiReport([forged])).summary.passed,0);
 });

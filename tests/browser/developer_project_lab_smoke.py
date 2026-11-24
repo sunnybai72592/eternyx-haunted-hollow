@@ -609,11 +609,13 @@ def api_project_link(page, staging):
     expect(page.get_by_role("heading", name="Project-linked API smoke tests")).to_be_visible()
     expect(page.locator("#linked-project")).to_have_value(store(page, PROJECT_KEY)[0]["id"])
     page.locator("#api-scenario-name").fill("Own-origin health")
+    page.locator("#api-scenario-content-type").select_option("html")
     page.locator("#api-url").fill(ORIGIN + "/?session=PRIVATE_TOKEN")
     page.get_by_role("button", name="Save current request as check").click()
     saved=store(page, API_KEY)
     assert len(saved) == 1 and saved[0]["url"] == ORIGIN + "/"
     assert "PRIVATE_TOKEN" not in json.dumps(saved)
+    assert saved[0]["expectedContentType"] == "html"
     # A real HTTP GET runs only against the disposable local preview; never
     # send any requests in staging acceptance without separate operator consent.
     if not staging:
@@ -626,6 +628,21 @@ def api_project_link(page, staging):
         assert report["summary"]["passed"] == 1
         assert "session" not in json.dumps(report)
         assert "PRIVATE_TOKEN" not in json.dumps(report)
+        assert report["cases"][0]["contentTypeCheck"] == "passed"
+        # A deliberate wrong contract must invalidate the old export and fail on real HTTP.
+        page.locator("#api-scenario-name").fill("Wrong content type")
+        page.locator("#api-scenario-content-type").select_option("json")
+        page.get_by_role("button", name="Save current request as check").click()
+        expect(page.get_by_text("Suite changed. Previous results are stale", exact=False)).to_be_visible()
+        expect(page.get_by_role("button", name="Export sanitized results")).to_be_disabled()
+        page.get_by_role("button", name="Run selected project suite").click()
+        expect(page.get_by_text("Actual results: 1 passed · 1 failed · 0 cancelled")).to_be_visible(timeout=15000)
+        with page.expect_download() as mismatch:
+            page.get_by_role("button", name="Export sanitized results").click()
+        rejected=json.loads(Path(mismatch.value.path()).read_text(encoding="utf-8"))
+        assert rejected["summary"]["failed"] == 1
+        assert rejected["cases"][1]["reason"] == "content-type-mismatch"
+        assert rejected["cases"][1]["contentTypeCheck"] == "mismatch"
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")

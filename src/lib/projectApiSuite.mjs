@@ -8,6 +8,31 @@ export const MAX_TOTAL_SCENARIOS = 30;
 const PROJECT_ID = /^[a-z0-9-]{1,64}$/i;
 const SCENARIO_ID = /^[a-z0-9-]{1,64}$/i;
 const MAX_RUNTIME_MS = 20_000;
+export const PROJECT_API_CONTENT_TYPES = Object.freeze(["any", "json", "html", "text"]);
+const CONTENT_TYPES = new Set(PROJECT_API_CONTENT_TYPES);
+function contentTypeExpectation(value) {
+  if (value === undefined || value === "any") return "any";
+  if (!CONTENT_TYPES.has(value)) throw new Error("Unsupported response content-type expectation.");
+  return value;
+}
+function checkResponseType(response, expected) {
+  if (expected === "any") return "not-requested";
+  const raw = response.headers?.get?.("content-type");
+  if (typeof raw !== "string" || !raw.trim()) return "unavailable";
+  const mime = raw.split(";")[0].trim().toLowerCase();
+  const matches = expected === "json" ? mime === "application/json" || /^application\/[a-z0-9!#const MAX_RUNTIME_MS = 20_000;^_.+-]+\+json$/.test(mime)
+    : expected === "html" ? mime === "text/html" : mime === "text/plain";
+  return matches ? "passed" : "mismatch";
+}
+export function projectApiSuiteSignature(scenarios) {
+  return JSON.stringify(scenarios.map(normalizeProjectApiScenario));
+}
+export function isProjectApiRunComplete(scenarios, results) {
+  if (!Array.isArray(scenarios) || !Array.isArray(results) || !scenarios.length ||
+      scenarios.length !== results.length) return false;
+  return scenarios.every((scenario, i) => results[i]?.scenarioId === scenario.id &&
+    results[i].reason !== "cancelled");
+}
 
 function projectId(value) {
   if (typeof value !== "string" || !PROJECT_ID.test(value)) throw new Error("Save a valid local project before linking API checks.");
@@ -33,7 +58,9 @@ export function normalizeProjectApiScenario(item) {
   if (!Number.isInteger(maxDurationMs) || maxDurationMs < 1 || maxDurationMs > MAX_RUNTIME_MS) {
     throw new Error("Maximum response time must be 1–20000 ms.");
   }
-  return { id, projectId: linkedProjectId, name, method, url, expectedStatus, maxDurationMs };
+  const expectedContentType = contentTypeExpectation(item.expectedContentType);
+  return { id, projectId: linkedProjectId, name, method, url, expectedStatus, maxDurationMs,
+    ...(expectedContentType === "any" ? {} : { expectedContentType }) };
 }
 
 export function normalizeProjectApiScenarios(value, validProjectIds) {
@@ -74,8 +101,8 @@ export function exportProjectApiSuite(collection, id) {
   const linkedId = projectId(id);
   const scenarios = normalizeProjectApiScenarios(collection)
     .filter((item) => item.projectId === linkedId)
-    .map(({ name, method, url, expectedStatus, maxDurationMs }) =>
-      ({ name, method, url, expectedStatus, maxDurationMs }));
+    .map(({ name, method, url, expectedStatus, maxDurationMs, expectedContentType }) =>
+      ({ name, method, url, expectedStatus, maxDurationMs, ...(expectedContentType ? { expectedContentType } : {}) }));
   return JSON.stringify({ schema: PROJECT_API_IMPORT_SCHEMA, scenarios }, null, 2);
 }
 
@@ -96,11 +123,15 @@ function safeResult(item) {
   const method = ["GET", "HEAD"].includes(item.method) ? item.method : "GET";
   const status = Number.isInteger(item.status) && item.status >= 100 && item.status <= 599 ? item.status : null;
   const elapsedMs = Number.isFinite(item.elapsedMs) && item.elapsedMs >= 0 ? Math.min(Math.round(item.elapsedMs), MAX_RUNTIME_MS + 1000) : 0;
-  const passed = item.passed === true;
-  const reason = ["passed", "status-mismatch", "slow-response", "network-or-cors-error", "timed-out", "cancelled"].includes(item.reason)
+  const contentTypeCheck = ["passed", "mismatch", "unavailable", "not-requested"].includes(item.contentTypeCheck)
+    ? item.contentTypeCheck : "not-requested";
+  const reason = ["passed", "status-mismatch", "slow-response", "network-or-cors-error", "timed-out", "cancelled", "content-type-mismatch", "content-type-unavailable"].includes(item.reason)
     ? item.reason : "network-or-cors-error";
+  const passed = item.passed === true && reason === "passed" && status !== null &&
+    !["mismatch","unavailable"].includes(contentTypeCheck);
   const origin = sanitizedApiLocation(item.origin, { originOnly: true });
-  return { scenarioId, method, origin, status, elapsedMs, passed, reason };
+  return { scenarioId, method, origin, status, elapsedMs, passed, reason,
+    ...(contentTypeCheck === "not-requested" ? {} : { contentTypeCheck }) };
 }
 
 export function summarizeProjectApiResults(results) {
@@ -121,6 +152,9 @@ export async function runProjectApiSuite(scenarios, options = {}) {
     throw new Error("Select 1–8 saved scenarios.");
   }
   const normalized = scenarios.map(normalizeProjectApiScenario);
+  if (normalized.some(s => !s.id || s.projectId !== normalized[0].projectId) || new Set(normalized.map(s => s.id)).size !== normalized.length) {
+    throw new Error("Run one saved project with unique scenario identifiers.");
+  }
   const fetcher = options.fetcher || fetch;
   const notify = typeof options.onProgress === "function" ? options.onProgress : () => {};
   const now = typeof options.now === "function" ? options.now : () => performance.now();
@@ -144,10 +178,16 @@ export async function runProjectApiSuite(scenarios, options = {}) {
         signal: timer.signal,
       });
       const elapsedMs = Math.max(0, Math.round(now() - started));
-      const passed = response.status === scenario.expectedStatus && elapsedMs <= scenario.maxDurationMs;
+      const contentTypeCheck = checkResponseType(response, scenario.expectedContentType || "any");
+      // Only response headers are tested. Avoid downloading unused bodies.
+      try { void response.body?.cancel().catch(() => {}); } catch { /* body may already be closed */ }
+      const reason = signal?.aborted ? "cancelled" : timer.signal.aborted ? "timed-out"
+        : response.status !== scenario.expectedStatus ? "status-mismatch"
+        : elapsedMs > scenario.maxDurationMs ? "slow-response"
+        : contentTypeCheck === "mismatch" ? "content-type-mismatch"
+        : contentTypeCheck === "unavailable" ? "content-type-unavailable" : "passed";
       row = { scenarioId: scenario.id, method: scenario.method, origin: new URL(scenario.url).origin,
-        status: response.status, elapsedMs, passed,
-        reason: response.status !== scenario.expectedStatus ? "status-mismatch" : elapsedMs > scenario.maxDurationMs ? "slow-response" : "passed" };
+        status: response.status, elapsedMs, passed: reason === "passed", reason, contentTypeCheck };
     } catch {
       row = { scenarioId: scenario.id, method: scenario.method, origin: new URL(scenario.url).origin,
         status: null, elapsedMs: Math.max(0, Math.round(now() - started)), passed: false,

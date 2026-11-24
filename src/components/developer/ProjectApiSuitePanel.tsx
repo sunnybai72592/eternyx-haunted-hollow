@@ -10,11 +10,11 @@ import { PROJECT_STORAGE_KEY, normalizeSavedDeveloperProjects } from "@/lib/deve
 import {
   PROJECT_API_SUITE_KEY, MAX_PROJECT_SCENARIOS, addProjectApiScenario, exportProjectApiReport,
   exportProjectApiSuite, importProjectApiSuite, normalizeProjectApiScenarios,
-  runProjectApiSuite, summarizeProjectApiResults,
+  runProjectApiSuite, summarizeProjectApiResults, projectApiSuiteSignature, isProjectApiRunComplete,
 } from "@/lib/projectApiSuite.mjs";
 
-type Scenario = { id: string; projectId: string; name: string; method: string; url: string; expectedStatus: number; maxDurationMs: number };
-type ReportRow = { scenarioId: string; method: string; origin: string; status: number | null; elapsedMs: number; passed: boolean; reason: string };
+type Scenario = { id: string; projectId: string; name: string; method: string; url: string; expectedStatus: number; maxDurationMs: number; expectedContentType?: string };
+type ReportRow = { scenarioId: string; method: string; origin: string; status: number | null; elapsedMs: number; passed: boolean; reason: string; contentTypeCheck?: string };
 type Project = { id: string; name: string };
 
 function readProjects(): Project[] {
@@ -50,15 +50,20 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const [scenarioName, setScenarioName] = useState("");
   const [expectedStatus, setExpectedStatus] = useState("200");
   const [maxDurationMs, setMaxDurationMs] = useState("3000");
+  const [expectedContentType, setExpectedContentType] = useState("any");
   const [importText, setImportText] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<ReportRow[]>([]);
   const [runProjectId, setRunProjectId] = useState("");
+  const [runSignature, setRunSignature] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const available = scenarios.filter(s => s.projectId === projectId);
   const summary = summarizeProjectApiResults(results);
+  const stale = runProjectId !== projectId || runSignature !== projectApiSuiteSignature(available);
+  const complete = !stale && !running && isProjectApiRunComplete(available, results);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     if (projects.some(p => p.id === initialProjectId)) setProjectId(initialProjectId);
@@ -66,10 +71,10 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
 
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
-      if (event.key !== PROJECT_STORAGE_KEY) return;
+      if (event.key !== PROJECT_STORAGE_KEY && event.key !== PROJECT_API_SUITE_KEY && event.key !== null) return;
       const next = readProjects();
       setProjects(next);
-      setScenarios(current => normalizeProjectApiScenarios(current, next.map(p => p.id)));
+      setScenarios(readSuites(next));
       setProjectId(current => next.some(p => p.id === current) ? current : next[0]?.id || "");
     };
     window.addEventListener("storage", refresh);
@@ -89,7 +94,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     try {
       const next = addProjectApiScenario(scenarios, {
         id: crypto.randomUUID(), projectId, name: scenarioName, method: draft.method, url: draft.url,
-        expectedStatus, maxDurationMs,
+        expectedStatus, maxDurationMs, expectedContentType,
       }, projects.map(p => p.id));
       persist(next);
       setScenarioName("");
@@ -114,6 +119,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     abortRef.current = abort;
     setResults([]);
     setRunProjectId(projectId);
+    setRunSignature(projectApiSuiteSignature(available));
     setRunning(true);
     flash("Running real browser requests, one at a time. The target API must permit CORS.");
     try {
@@ -128,6 +134,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     setProjectId(value);
     setResults([]);
     setRunProjectId("");
+    setRunSignature("");
   };
 
   return <Card className="border-cyan-400/20 bg-slate-900/70 text-white">
@@ -155,6 +162,17 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           <div className="space-y-2"><Label htmlFor="api-scenario-time">Timeout and max latency (ms)</Label>
             <Input id="api-scenario-time" inputMode="numeric" value={maxDurationMs} onChange={e => setMaxDurationMs(e.target.value)} className="border-slate-700 bg-slate-950 text-white"/></div>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="api-scenario-content-type">Expected response content type</Label>
+          <select id="api-scenario-content-type" value={expectedContentType} onChange={e => setExpectedContentType(e.target.value)} disabled={running}
+            className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+            <option value="any">Any (status and latency only)</option>
+            <option value="json">JSON (including +json)</option>
+            <option value="html">HTML</option>
+            <option value="text">Plain text</option>
+          </select>
+          <p className="text-xs text-slate-400">Use 401 or 403 to check anonymous denial. This does not prove authenticated access or RLS. Latency measures response headers; no body is inspected.</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" disabled={running || available.length >= MAX_PROJECT_SCENARIOS} onClick={add}>
             <Save className="mr-2 h-4 w-4"/>Save current request as check</Button>
@@ -164,7 +182,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         <div className="space-y-2" aria-label="Saved API scenarios">
           {available.length ? available.map(s => <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm">
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms</p>
+              <p className="font-medium">{s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms · {s.expectedContentType || "any content type"}</p>
             </div>
             <Button size="sm" variant="ghost" disabled={running} aria-label={"Remove " + s.name} onClick={() => persist(scenarios.filter(item => item.id !== s.id))}>
               <Trash2 className="h-4 w-4"/></Button>
@@ -173,18 +191,20 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         <div className="flex flex-wrap gap-2">
           <Button type="button" disabled={running || available.length === 0} onClick={() => void run()}><Play className="mr-2 h-4 w-4"/>Run selected project suite</Button>
           {running && <Button type="button" variant="destructive" onClick={() => abortRef.current?.abort()}>
-            <StopCircle className="mr-2 h-4 w-4"/>Stop after current request</Button>}
+            <StopCircle className="mr-2 h-4 w-4"/>Cancel current request and stop</Button>}
           <Button type="button" size="sm" variant="outline" disabled={!available.length || running}
             onClick={() => saveJson("eternyx-api-suite.json", exportProjectApiSuite(scenarios, projectId))}>
             <Download className="mr-2 h-4 w-4"/>Export sanitized suite</Button>
         </div>
         {results.length > 0 && runProjectId === projectId && <div className="rounded-xl border border-slate-700 p-4">
           <p className="font-semibold"><Activity className="mr-2 inline h-4 w-4 text-cyan-300"/>Actual results: {summary.passed} passed · {summary.failed} failed · {summary.cancelled} cancelled</p>
-          <p className="mt-1 text-xs text-slate-400">Results show origin, status, latency, and reason. No response body, request path, URL query or headers are retained in the report.</p>
+          {stale && <p role="status" className="mt-2 text-sm text-amber-300">Suite changed. Previous results are stale; rerun before exporting.</p>}
+          {!stale && !running && !complete && <p role="status" className="mt-2 text-sm text-amber-300">Run incomplete or cancelled. Rerun before exporting.</p>}
+          <p className="mt-1 text-xs text-slate-400">Results show origin, status, header latency, content-type outcome and reason. No response body, request path, URL query or raw headers are retained in the report.</p>
           <div className="mt-3 space-y-2">{results.map((r, i) => <p key={r.scenarioId + i} className={"rounded-md border p-2 text-xs " +
               (r.passed ? "border-emerald-500/30 text-emerald-200" : "border-rose-500/30 text-rose-200")}>
-              {r.passed ? "PASS" : "FAIL"} · {r.method} {r.origin} · HTTP {r.status ?? "unavailable"} · {r.elapsedMs} ms · {r.reason}</p>)}</div>
-          <Button className="mt-3" size="sm" variant="outline" disabled={running} onClick={() => saveJson("eternyx-api-smoke-report.json", exportProjectApiReport(results))}>
+              {r.passed ? "PASS" : "FAIL"} · {r.method} {r.origin} · HTTP {r.status ?? "unavailable"} · {r.elapsedMs} ms · {r.reason}{r.contentTypeCheck ? " · content type: " + r.contentTypeCheck : ""}</p>)}</div>
+          <Button className="mt-3" size="sm" variant="outline" disabled={!complete} onClick={() => { if (complete) saveJson("eternyx-api-smoke-report.json", exportProjectApiReport(results)); }}>
             <Download className="mr-2 h-4 w-4"/>Export sanitized results</Button>
         </div>}
         <div className="space-y-2"><Label htmlFor="api-project-suite-import">Import ETERNYX project API suite JSON</Label>
