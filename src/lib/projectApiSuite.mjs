@@ -20,7 +20,7 @@ function checkResponseType(response, expected) {
   const raw = response.headers?.get?.("content-type");
   if (typeof raw !== "string" || !raw.trim()) return "unavailable";
   const mime = raw.split(";")[0].trim().toLowerCase();
-  const matches = expected === "json" ? mime === "application/json" || /^application\/[a-z0-9!#const MAX_RUNTIME_MS = 20_000;^_.+-]+\+json$/.test(mime)
+  const matches = expected === "json" ? mime === "application/json" || /^application\/[a-z0-9!#$&^_.+-]+\+json$/.test(mime)
     : expected === "html" ? mime === "text/html" : mime === "text/plain";
   return matches ? "passed" : "mismatch";
 }

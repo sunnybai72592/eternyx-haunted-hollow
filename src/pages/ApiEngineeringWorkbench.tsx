@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ProjectApiSuitePanel from "@/components/developer/ProjectApiSuitePanel";
 import { ArrowLeft, Copy, ExternalLink, Globe2, Play, ShieldAlert, TerminalSquare } from "lucide-react";
@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { buildCurlCommand, formatApiResponseBody } from "@/lib/apiWorkbenchUtils.mjs";
+import { buildCurlCommand } from "@/lib/apiWorkbenchUtils.mjs";
+import { executeApiWorkbenchRequest, API_REQUEST_TIMEOUT_MS } from "@/lib/apiWorkbenchTransport.mjs";
 import ApiWorkspacePanel from "@/components/developer/ApiWorkspacePanel";
 import { API_HISTORY_STORAGE, normalizeApiHistory, recordApiHistory, resolveApiDraft, runApiAssertions } from "@/lib/apiWorkspaceUtils.mjs";
 
@@ -17,43 +18,13 @@ type ApiResult = {
   statusText: string;
   ok: boolean;
   durationMs: number;
+  headerDurationMs: number;
   headers: string;
   body: string;
   truncated: boolean;
 };
 
-const MAX_RESPONSE_BYTES = 1_000_000;
-const REQUEST_TIMEOUT_MS = 30_000;
 const initialHistory = () => { try { return normalizeApiHistory(JSON.parse(localStorage.getItem(API_HISTORY_STORAGE) || "[]")); } catch { return []; } };
-
-async function readResponse(response: Response) {
-  if (!response.body) return { text: "", truncated: false };
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let text = "";
-  let bytes = 0;
-  let truncated = false;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const remaining = MAX_RESPONSE_BYTES - bytes;
-      if (value.byteLength > remaining) {
-        text += decoder.decode(value.subarray(0, Math.max(0, remaining)), { stream: true });
-        text += decoder.decode();
-        truncated = true;
-        await reader.cancel();
-        break;
-      }
-      bytes += value.byteLength;
-      text += decoder.decode(value, { stream: true });
-    }
-    if (!truncated) text += decoder.decode();
-  } finally {
-    reader.releaseLock();
-  }
-  return { text, truncated };
-}
 
 export default function ApiEngineeringWorkbench() {
   const [searchParams] = useSearchParams();
@@ -64,10 +35,14 @@ export default function ApiEngineeringWorkbench() {
   const [result, setResult] = useState<ApiResult | null>(null);
   const [curl, setCurl] = useState("");
   const [busy, setBusy] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
+  const [responseSignature, setResponseSignature] = useState("");
+  const [curlSignature, setCurlSignature] = useState("");
+  useEffect(() => () => activeRequest.current?.abort(), []);
   const [error, setError] = useState("");
   const [envText, setEnvText] = useState("");
   const [history, setHistory] = useState(initialHistory);
-  const [assertionResults, setAssertionResults] = useState<{ name: string; passed: boolean; detail: string }[]>([]);
+  const [, setAssertionResults] = useState<{ name: string; passed: boolean; detail: string }[]>([]);
   const [expectations, setExpectations] = useState({ status: "200", maxDurationMs: "", jsonPath: "", equals: "" });
 
   useEffect(() => {
@@ -76,6 +51,10 @@ export default function ApiEngineeringWorkbench() {
   }, [history]);
 
   const draft = { method, url, headers, body };
+  // Session-only snapshot: never persisted, exported or logged.
+  const draftSignature = JSON.stringify([method,url,headers,body,envText]);
+  const responseStale = !!result && responseSignature !== draftSignature;
+  const curlStale = !!curl && curlSignature !== draftSignature;
   const loadTemplate = (template: { method: string; url: string }) => {
     setMethod(template.method);
     setUrl(template.url);
@@ -100,6 +79,7 @@ export default function ApiEngineeringWorkbench() {
     try {
       const request = resolveApiDraft(draft, envText);
       setCurl(buildCurlCommand({ url: request.url, method: request.method, headers: request.headers.map(([k, v]) => k + ": " + v).join("\n"), body: request.body }));
+      setCurlSignature(draftSignature);
       setError("");
       toast.success("cURL command generated locally.");
     } catch (cause) {
@@ -109,6 +89,7 @@ export default function ApiEngineeringWorkbench() {
   };
 
   const sendRequest = async () => {
+    if (activeRequest.current) return;
     let request;
     try {
       request = resolveApiDraft(draft, envText);
@@ -119,49 +100,34 @@ export default function ApiEngineeringWorkbench() {
       return;
     }
 
+    if (!["GET","HEAD","OPTIONS"].includes(request.method) &&
+        !window.confirm("Send " + request.method + " to " + new URL(request.url).origin +
+          "? This may change data on the target service.")) return;
     setBusy(true);
     setError("");
     setResult(null);
     setAssertionResults([]);
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const started = performance.now();
+    activeRequest.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, API_REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(request.url, {
-        method: request.method,
-        headers: new Headers(request.headers),
-        ...(request.body && !["GET", "HEAD"].includes(request.method) ? { body: request.body } : {}),
-        mode: "cors",
-        credentials: "omit",
-        cache: "no-store",
-        redirect: "follow",
-        signal: controller.signal,
-      });
-      const received = await readResponse(response);
-      const responseHeaders = Array.from(response.headers.entries())
-        .map(([name, value]) => name + ": " + value).join("\n");
-      const nextResult = {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        durationMs: Math.round(performance.now() - started),
-        headers: responseHeaders || "No response headers exposed by the browser.",
-        body: formatApiResponseBody(received.text, response.headers.get("content-type") || ""),
-        truncated: received.truncated,
-      };
+      const nextResult = await executeApiWorkbenchRequest(request, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setResponseSignature(draftSignature);
       setResult(nextResult);
       setAssertionResults(runApiAssertions(nextResult, expectations));
       setHistory((current) => recordApiHistory(current, {
-        url: request.url, method: request.method, status: response.status,
+        url: request.url, method: request.method, status: nextResult.status,
         durationMs: nextResult.durationMs, at: new Date().toISOString(),
       }));
-    } catch (cause) {
-      const message = cause instanceof Error && cause.name === "AbortError"
-        ? "Request timed out after 30 seconds."
-        : "The request could not be completed. The endpoint may be offline, unreachable, or blocked by browser CORS policy. Check the URL and endpoint CORS settings.";
-      setError(message);
+    } catch {
+      setError(controller.signal.aborted
+        ? timedOut ? "Request timed out after 30 seconds." : "Request cancelled."
+        : "Request failed. The endpoint may be unreachable, redirecting, or blocked by browser CORS policy. Redirects are not followed.");
     } finally {
       window.clearTimeout(timeout);
+      activeRequest.current = null;
       setBusy(false);
     }
   };
@@ -185,8 +151,8 @@ export default function ApiEngineeringWorkbench() {
         <ProjectApiSuitePanel initialProjectId={searchParams.get("projectId") || ""} draft={draft} />
 
         <ApiWorkspacePanel draft={draft} onLoad={loadTemplate} envText={envText} onEnvText={setEnvText}
-          expectations={expectations} onExpectations={(value) => { setExpectations(value); setAssertionResults([]); }}
-          assertions={assertionResults} history={history} onClearHistory={() => setHistory([])} busy={busy} />
+          expectations={expectations} onExpectations={(value) => { setExpectations(value); setAssertionResults(result && !responseStale ? runApiAssertions(result, value) : []); }}
+          assertions={result && !responseStale ? runApiAssertions(result, expectations) : []} history={history} onClearHistory={() => setHistory([])} busy={busy} />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <Card className="border-slate-800 bg-slate-900/70 text-white">
@@ -214,9 +180,10 @@ export default function ApiEngineeringWorkbench() {
               {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
               <div className="flex flex-wrap gap-2">
                 <Button onClick={sendRequest} disabled={busy} className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Play className="mr-2 h-4 w-4" />{busy ? "Sending..." : "Send request"}</Button>
+                {busy && <Button variant="destructive" onClick={() => activeRequest.current?.abort()}>Cancel request</Button>}
                 <Button variant="outline" onClick={prepareCurl}><TerminalSquare className="mr-2 h-4 w-4" />Generate cURL</Button>
               </div>
-              {curl && <div className="space-y-2"><div className="flex items-center justify-between"><Label>cURL command</Label><Button size="sm" variant="outline" onClick={() => void copy(curl, "cURL command")}><Copy className="mr-2 h-4 w-4" />Copy</Button></div><Textarea readOnly value={curl} spellCheck={false} className="min-h-28 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100" /></div>}
+              {curl && <div className="space-y-2"><div className="flex items-center justify-between"><Label>cURL command</Label><Button size="sm" variant="outline" disabled={curlStale} onClick={() => { if (!curlStale) void copy(curl, "cURL command"); }}><Copy className="mr-2 h-4 w-4" />Copy</Button></div>{curlStale && <p role="status" className="text-xs text-amber-300">Request changed. Generate cURL again before copying.</p>}<Textarea readOnly value={curl} spellCheck={false} className="min-h-28 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100" /></div>}
             </CardContent>
           </Card>
 
@@ -227,13 +194,14 @@ export default function ApiEngineeringWorkbench() {
             </CardHeader>
             <CardContent className="space-y-5">
               {result ? <>
+                {responseStale && <p role="status" className="text-sm text-amber-300">Request changed. This response is from the previous request; send again for current assertions.</p>}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><p className="text-xs text-slate-500">HTTP status</p><p className={`mt-1 text-xl font-semibold ${result.ok ? "text-emerald-300" : "text-rose-300"}`}>{result.status} <span className="text-xs">{result.statusText}</span></p></div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><p className="text-xs text-slate-500">Duration</p><p className="mt-1 text-xl font-semibold text-cyan-300">{result.durationMs} ms</p></div>
+                  <div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><p className="text-xs text-slate-500">Total duration</p><p className="mt-1 text-xl font-semibold text-cyan-300">{result.durationMs} ms</p><p className="text-xs text-slate-400">Headers: {result.headerDurationMs} ms</p></div>
                   <div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><p className="text-xs text-slate-500">Body limit</p><p className="mt-1 text-xl font-semibold text-white">1 MB</p></div>
                 </div>
                 <div className="space-y-2"><Label>Response headers</Label><Textarea readOnly value={result.headers} className="min-h-28 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100" /></div>
-                <div className="space-y-2"><div className="flex items-center justify-between"><Label>Response body</Label><Button size="sm" variant="outline" disabled={!result.body} onClick={() => void copy(result.body, "Response body")}><Copy className="mr-2 h-4 w-4" />Copy</Button></div><Textarea readOnly value={result.body || "(Empty response body)"} spellCheck={false} className="min-h-64 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100" />{result.truncated && <p className="text-xs text-amber-300">Response display was capped at 1 MB to protect browser memory.</p>}</div>
+                <div className="space-y-2"><div className="flex items-center justify-between"><Label>Response body</Label><Button size="sm" variant="outline" disabled={!result.body || responseStale} onClick={() => { if (!responseStale) void copy(result.body, "Response body"); }}><Copy className="mr-2 h-4 w-4" />Copy</Button></div><Textarea readOnly value={result.body || "(Empty response body)"} spellCheck={false} className="min-h-64 border-slate-700 bg-slate-950 font-mono text-xs text-slate-100" />{result.truncated && <p className="text-xs text-amber-300">Response display was capped at 1 MB to protect browser memory.</p>}</div>
               </> : <div className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center"><Globe2 className="h-10 w-10 text-slate-600" /><p className="mt-4 font-medium text-slate-300">Waiting for a request</p><p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Send a request to inspect its response. Network access depends on endpoint availability and browser CORS policy.</p></div>}
             </CardContent>
           </Card>
@@ -244,7 +212,7 @@ export default function ApiEngineeringWorkbench() {
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300">
             <li>Requests are sent directly from your browser only when you choose Send. ETERNYX does not proxy them. Sanitized collections and origin-only response history are stored in this browser; environment values and full request/response content are not persisted by these new workspace features.</li>
             <li>Do not paste production secrets into shared devices. Authorization headers and request bodies are never saved to collections or history. Export files omit them. Temporary test tokens are preferable.</li>
-            <li>Browser CORS policy may block requests even when an API works in a server-side client. This tool cannot bypass CORS.</li>
+            <li>Browser CORS policy may block requests even when an API works in a server-side client. Redirects are refused, referrer URLs are omitted, and write methods require confirmation. This tool cannot bypass CORS.</li>
             <li>Only HTTP and HTTPS URLs are accepted. Request timeout is 30 seconds and displayed response content is capped at 1 MB.</li>
             <li>Browser JavaScript cannot expose every restricted response header; the displayed headers are those made available by the endpoint and browser.</li>
           </ul>

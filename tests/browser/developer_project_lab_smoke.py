@@ -643,6 +643,14 @@ def api_project_link(page, staging):
         assert rejected["summary"]["failed"] == 1
         assert rejected["cases"][1]["reason"] == "content-type-mismatch"
         assert rejected["cases"][1]["contentTypeCheck"] == "mismatch"
+        # The interactive composer uses the real loopback server, with no external calls.
+        page.locator("#api-url").fill(ORIGIN + "/")
+        page.get_by_role("button", name="Send request", exact=True).click()
+        expect(page.get_by_role("button", name="Copy", exact=True).last).to_be_enabled(timeout=15000)
+        expect(page.get_by_text("Headers:", exact=False)).to_be_visible()
+        page.locator("#api-url").fill(ORIGIN + "/?next=1")
+        expect(page.get_by_text("Request changed. This response is from the previous request", exact=False)).to_be_visible()
+        expect(page.get_by_role("button", name="Copy", exact=True).last).to_be_disabled()
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")
