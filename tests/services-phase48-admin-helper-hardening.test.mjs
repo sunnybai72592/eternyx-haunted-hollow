@@ -41,3 +41,10 @@ test('Phase48 cannot treat partial or malformed catalog as hardening proof',asyn
  assert.throws(()=>analyzeHardening(JSON.stringify({...full,extra:true})),/incomplete_facts/);
  assert.throws(()=>analyzeHardening(JSON.stringify({...full,public_wrapper_invoker:'true'})),/incomplete_facts/);
 });
+
+test('Phase48 catalog statement is not duplicated and wrapper expression remains quoted',async()=>{
+ const sql=await read('docs/sql/eternyx/services-phase48-readonly-admin-helper-verdict.sql');
+ assert.equal(sql.match(/SELECT row_to_json\(facts\)::text FROM facts;/g)?.length,1);
+ assert.match(sql,/~ 'RETURNeternyx_admin_private\[\.\]is_current_user_admin\[\(\]\[\)\];\?\$' FROM w,h\),false\) AS wrapper_bound_to_helper,/);
+ assert.ok(sql.trim().endsWith('SELECT row_to_json(facts)::text FROM facts;'));
+});
