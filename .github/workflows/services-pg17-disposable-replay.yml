@@ -55,6 +55,12 @@ on:
       - "scripts/sql/services-staging-auditor-candidate.sql"
       - "docs/sql/eternyx/services-phase47-disposable-fixture-acceptance.sql"
       - "tests/services-phase47-real-acceptance-readiness.test.mjs"
+      - "scripts/sql/services-staging-admin-helper-hardening-candidate.sql"
+      - "docs/sql/eternyx/services-phase48-readonly-admin-helper-verdict.sql"
+      - "docs/sql/eternyx/services-phase48-disposable-admin-helper-acceptance.sql"
+      - "tests/services-phase48-admin-helper-hardening.test.mjs"
+      - "scripts/services-phase48-admin-helper-proof.mjs"
+      - "docs/ETERNYX_SERVICES_ADMIN_HELPER_PHASE48.md"
       - "docs/ETERNYX_SERVICES_LIVE_ACCEPTANCE_PHASE47.md"
       - "docs/sql/eternyx/services-phase45-staging-default-acl-assert.sql"
       - "docs/ETERNYX_SERVICES_PINNED_ROLLOUT_PHASE45.md"
@@ -89,7 +95,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs tests/services-phase44-staging-foundation.test.mjs tests/services-phase45-pinned-rollout.test.mjs tests/services-phase47-real-acceptance-readiness.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs tests/services-phase44-staging-foundation.test.mjs tests/services-phase45-pinned-rollout.test.mjs tests/services-phase47-real-acceptance-readiness.test.mjs tests/services-phase48-admin-helper-hardening.test.mjs
           node scripts/services-phase45-pinned-rollout.mjs --check > "$RUNNER_TEMP/services-phase45-reviewed-plan.json"
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
@@ -273,6 +279,32 @@ jobs:
             -c "SELECT NOT rolcanlogin AND NOT rolbypassrls AND NOT rolinherit AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND has_column_privilege(rolname,'supabase_migrations.schema_migrations','version','SELECT') AND has_column_privilege(rolname,'supabase_migrations.schema_migrations','name','SELECT') AND NOT has_column_privilege(rolname,'supabase_migrations.schema_migrations','statements','SELECT') AND NOT has_table_privilege(rolname,'public.service_requests','SELECT') AND NOT has_function_privilege(rolname,'public.is_admin()','EXECUTE') FROM pg_roles WHERE rolname='services_staging_auditor';" \
             | grep -qx t
           echo "PASS: Phase47 exact fixture candidate, isolated roles, duplicate refusal and NOLOGIN auditor ACL"
+          # Phase48: keep all existing policy/view dependencies and privileges
+          # but move the elevated boolean lookup outside the public API schema.
+          identity_sql="SELECT p.oid || ':' || (SELECT count(*) FROM pg_depend d WHERE d.refclassid='pg_proc'::regclass AND d.refobjid=p.oid) FROM pg_proc p WHERE p.oid='public.is_admin()'::regprocedure;"
+          before=$(docker exec "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d services_phase44 -c "$identity_sql")
+          docker exec -i "$name" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < scripts/sql/services-staging-admin-helper-hardening-candidate.sql
+          after=$(docker exec "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d services_phase44 -c "$identity_sql")
+          test -n "$before" && test "$before" = "$after" || { echo "Phase48 public helper OID or dependent count changed"; exit 1; }
+          docker exec -i "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase48-readonly-admin-helper-verdict.sql > "$RUNNER_TEMP/services-phase48-helper.json"
+          node --input-type=module -e "import {readFileSync} from 'node:fs';import {analyzeHardening} from './scripts/services-phase48-admin-helper-proof.mjs';const x=analyzeHardening(readFileSync(process.argv[1],'utf8'));if(x.factsPassed!==10)throw Error('Phase48 helper catalog failed: '+x.missingFacts.join(','));" \
+            "$RUNNER_TEMP/services-phase48-helper.json"
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase47-disposable-fixture-acceptance.sql
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase48-disposable-admin-helper-acceptance.sql
+          docker exec -i "$name" psql -X -q -A -t -F '|' -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase27-readonly-catalog-verdict.sql > "$RUNNER_TEMP/services-phase48-catalog.txt"
+          grep -q '^t|64|0|{}|' "$RUNNER_TEMP/services-phase48-catalog.txt" || { echo "Phase48 hardened Services catalog failed"; exit 1; }
+          if docker exec -i "$name" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+              < scripts/sql/services-staging-admin-helper-hardening-candidate.sql > "$RUNNER_TEMP/services-phase48-repeat.log" 2>&1; then
+            echo "Phase48 repeated hardening unexpectedly succeeded"; exit 1
+          fi
+          grep -q 'Phase48 expected seedless administrator foundation changed' "$RUNNER_TEMP/services-phase48-repeat.log"
+          echo "PASS: Phase48 hardened helper OID, dependencies, 10 metadata facts, RLS, revocation and 64 catalog checks"
+
           echo "PASS: Phase44 exact seedless candidate and complete 13-file Services chain with synthetic RLS acceptance"
           echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and hardened SECURITY DEFINER checks (no remote deployment)"
 
