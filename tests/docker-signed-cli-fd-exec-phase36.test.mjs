@@ -140,7 +140,10 @@ test("the live agent always executes /proc fd3 under a bounded synchronous call"
  const end=s.indexOf("function localContext(){",start);
  const fn=s.slice(start,end);
  assert.ok(start>=0&&end>start);
- assert.match(fn,/withPinnedDockerCliFile\(process\.env,cli=>spawnSync\(cli\.execPath,args/);
+ assert.match(fn,/withPinnedDockerCliFile\(process\.env,cli=>spawnSync\(/);
+ assert.match(fn,/cli\.execPath,\["--config",clientConfig\.dir,\.\.\.args\]/);
+ assert.match(fn,/verifyPinnedDockerClientConfig\(process\.env\)/);
+ assert.match(fn,/validatePinnedDockerCliCommand\(args,clientConfig\)/);
  assert.match(fn,/stdio:\["ignore","pipe","pipe",cli\.fd\]/);
  assert.match(fn,/const childEnv=signedDockerCliEnvironment\(homedir\(\)\)/);
  assert.match(fn,/shell:false/);
