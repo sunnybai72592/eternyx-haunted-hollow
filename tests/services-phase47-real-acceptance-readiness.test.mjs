@@ -46,3 +46,16 @@ test('Phase47 actual candidate is rehearsed in existing networkless replay befor
  assert.match(wf,/Phase47 fixture repeat unexpectedly succeeded/);
  assert.match(wf,/tests\/services-phase47-real-acceptance-readiness.test.mjs/);
 });
+
+test('Phase47 fixture journal is verified under approved admin identity, then denied after clearing it',async()=>{
+ const sql=await read('scripts/sql/services-staging-acceptance-fixtures-candidate.sql');
+ const admin=sql.lastIndexOf("set_config('request.jwt.claim.sub',adm::text,true)");
+ const verify=sql.indexOf('count(DISTINCT event_kind)',admin);
+ const clear=sql.indexOf("set_config('request.jwt.claim.sub','',true)",verify);
+ const denied=sql.indexOf('Services fixture journal exposed rows to cleared identity',clear);
+ assert.ok(admin>=0&&verify>admin&&clear>verify&&denied>clear);
+ assert.match(sql,/IF NOT public\.is_admin\(\)/);
+ assert.match(sql,/'request_created','scope_published','scope_response','question_published','answer_submitted','amendment_submitted'/);
+ assert.match(sql,/request_id=ra AND actor_id=a AND event_type='request_created'/);
+ assert.match(sql,/request_id=rb AND actor_id=b AND event_type='request_created'/);
+});
