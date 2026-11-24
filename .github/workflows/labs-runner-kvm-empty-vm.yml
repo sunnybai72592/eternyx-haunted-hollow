@@ -1,0 +1,28 @@
+name: LABS ephemeral empty KVM lifecycle
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Create and immediately close one empty VM; no guest execution
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_EPHEMERAL_EMPTY_KVM_VM
+permissions:
+  contents: read
+jobs:
+  empty-vm:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_EPHEMERAL_EMPTY_KVM_VM' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Remove checkout authorization
+        run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - name: Verify offline contracts
+        run: python3 -B tests/labs-runner-kvm-capability-test.py
+      - name: Create and close empty KVM object without guest execution
+        run: sudo -n /usr/bin/env -i GITHUB_ACTIONS=true ETERNYX_EMPTY_VM_APPROVAL=I_APPROVE_EPHEMERAL_EMPTY_KVM_VM /usr/bin/python3 -I -B scripts/labs-runner-kvm-capability.py --empty-vm

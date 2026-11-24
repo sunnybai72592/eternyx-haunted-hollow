@@ -5,7 +5,7 @@ import pathlib
 import stat
 import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 spec = importlib.util.spec_from_file_location("probe", pathlib.Path(__file__).resolve().parents[1] / "scripts/labs-runner-kvm-capability.py")
 probe = importlib.util.module_from_spec(spec)
@@ -60,6 +60,40 @@ class CapabilityTest(unittest.TestCase):
             result = probe.report()
         self.assertTrue(result["effectiveRoot"])
         self.assertTrue(result["kvmApiAvailable"])
+        for key in ("vmBootAttempted", "hardwareAcceptanceVerified", "providerActivationAllowed", "productionReleaseReady"):
+            self.assertIs(result[key], False)
+
+    def test_empty_vm_lifecycle(self):
+        a = self.run_case("empty_vm_created_and_closed", empty_vm=True, ioctl=Mock(side_effect=[12, 8]))
+        self.assertEqual(a["ioctl"].call_args_list, [call(7, 0xAE00, 0), call(7, 0xAE01, 0)])
+        self.assertEqual(a["close_device"].call_args_list, [call(8), call(7)])
+
+    def test_empty_vm_create_failure(self):
+        a = self.run_case("empty_vm_creation_failed", empty_vm=True, ioctl=Mock(side_effect=[12, OSError(errno.ENODEV, "unavailable")]))
+        a["close_device"].assert_called_once_with(7)
+
+    def test_empty_vm_close_failure(self):
+        a = self.run_case("empty_vm_close_failed", empty_vm=True, ioctl=Mock(side_effect=[12, 8]),
+                          close_device=Mock(side_effect=[OSError(errno.EIO, "close failed"), None]))
+        self.assertEqual(a["close_device"].call_args_list, [call(8), call(7)])
+
+    def test_empty_vm_invalid_descriptor(self):
+        a = self.run_case("invalid_vm_descriptor", empty_vm=True, ioctl=Mock(side_effect=[12, 7]))
+        a["close_device"].assert_called_once_with(7)
+
+    def test_empty_vm_wrong_api_no_creation(self):
+        a = self.run_case("unexpected_api_version", empty_vm=True, ioctl=Mock(return_value=13))
+        a["ioctl"].assert_called_once_with(7, 0xAE00, 0)
+
+    def test_empty_vm_requires_approval(self):
+        with patch.dict(probe.os.environ, {}, clear=True), patch.object(probe, "report") as report:
+            self.assertEqual(probe.main(["--empty-vm"]), 2)
+            report.assert_not_called()
+
+    def test_empty_vm_report_not_boot_or_release(self):
+        with patch.object(probe, "inspect_kvm", return_value="empty_vm_created_and_closed"):
+            result = probe.report(empty_vm=True)
+        self.assertTrue(result["emptyVmCreatedAndClosed"])
         for key in ("vmBootAttempted", "hardwareAcceptanceVerified", "providerActivationAllowed", "productionReleaseReady"):
             self.assertIs(result[key], False)
 

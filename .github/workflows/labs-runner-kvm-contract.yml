@@ -6,6 +6,7 @@ on:
       - 'tests/labs-runner-kvm-capability-test.py'
       - '.github/workflows/labs-runner-kvm-capability.yml'
       - '.github/workflows/labs-runner-kvm-contract.yml'
+      - '.github/workflows/labs-runner-kvm-empty-vm.yml'
 permissions:
   contents: read
 jobs:
