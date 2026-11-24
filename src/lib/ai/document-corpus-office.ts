@@ -11,7 +11,7 @@ const nativeParser:Parser=text=>new DOMParser().parseFromString(text,"applicatio
 const elements=(node:Document|Element,ns:string,name:string)=>Array.from(node.getElementsByTagNameNS(ns,name));
 const children=(node:Element,ns:string,name:string)=>Array.from(node.childNodes).filter((n):n is Element=>n.nodeType===1&&(n as Element).namespaceURI===ns&&(n as Element).localName===name);
 const first=(node:Element,ns:string,name:string)=>children(node,ns,name)[0];
-const fail=(code="invalid_office_xml"):never=>{throw new Error(code);};
+function fail(code="invalid_office_xml"):never{throw new Error(code);}
 function parse(text:string,parser:Parser,ns:string,name:string){
   if(/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(text)||text.includes("\u0000"))fail();
   const doc=parser(text);
