@@ -53,6 +53,7 @@ import {
 import { listCorpusRecovery, planCorpusRecovery, CorpusRecoveryError } from "@/lib/ai/document-corpus-recovery";
 import { compareCorpusVersions, formatRecoveryReceipt, selectiveRecoveryReceipt, replacementReceipt, type RecoveryReceipt } from "@/lib/ai/document-corpus-version-review";
 import {createCorpusCheckpoint,canUndoCorpusCheckpoint,undoCorpusCheckpoint,summarizeCorpusCheckpoint,type CorpusCheckpoint} from "@/lib/ai/document-corpus-checkpoint";
+import {buildKnowledgeIndex,searchKnowledgeIndex,formatKnowledgePassage,KnowledgeError,type KnowledgeIndex} from "@/lib/ai/document-corpus-knowledge";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -110,6 +111,31 @@ const AIDocumentIntelligence = () => {
   const corpusReadVersion = useRef(0);
   const [corpusFiles, setCorpusFiles] = useState<CorpusDocument[]>([]);
   const [corpusBusy, setCorpusBusy] = useState(false);
+  const [knowledgeIndex,setKnowledgeIndex] = useState<{index:KnowledgeIndex;sources:CorpusDocument[]}|null>(null);
+  const [knowledgeQuery,setKnowledgeQuery] = useState("");
+  const [knowledgeMode,setKnowledgeMode] = useState<"all"|"any">("all");
+  const [knowledgeFilter,setKnowledgeFilter] = useState("");
+  const [knowledgeResults,setKnowledgeResults] = useState<ReturnType<typeof searchKnowledgeIndex>|null>(null);
+  const [knowledgeError,setKnowledgeError] = useState<string|null>(null);
+  const activeKnowledgeIndex=knowledgeIndex?.sources===corpusFiles ? knowledgeIndex.index:null;
+  const invalidateKnowledgeResults=()=>{setKnowledgeResults(null);setKnowledgeError(null);};
+  const invalidateKnowledgeIndex=()=>{setKnowledgeIndex(null);setKnowledgeFilter("");invalidateKnowledgeResults();};
+  const buildLocalKnowledge=()=>{
+    if(corpusBusy||!corpusFiles.length)return;
+    invalidateKnowledgeIndex();
+    try{setKnowledgeIndex({index:buildKnowledgeIndex(corpusFiles),sources:corpusFiles});}
+    catch{setKnowledgeError("Index could not be built within local limits.");}
+  };
+  const runLocalKnowledge=()=>{
+    invalidateKnowledgeResults();
+    if(!activeKnowledgeIndex||corpusBusy)return;
+    try{setKnowledgeResults(searchKnowledgeIndex(activeKnowledgeIndex,knowledgeQuery,knowledgeMode,knowledgeFilter||null));}
+    catch(reason){
+      setKnowledgeError(reason instanceof KnowledgeError && reason.code==="empty_index"
+        ?"No searchable word tokens in loaded text."
+        :"Use one to eight distinct words, up to 120 characters, and a valid source.");
+    }
+  };
   const [corpusQuery, setCorpusQuery] = useState("");
   const [corpusMode, setCorpusMode] = useState<CorpusMatchMode>("all");
   const [corpusFilter, setCorpusFilter] = useState("");
@@ -217,6 +243,7 @@ const AIDocumentIntelligence = () => {
     }[reason.code]);
   };
   const invalidateCorpusFingerprints = () => {
+    invalidateKnowledgeIndex();
     corpusHashVersion.current += 1;
     setCorpusFingerprints(null);
     setCorpusHashBusy(false);
@@ -300,6 +327,7 @@ const AIDocumentIntelligence = () => {
     ++corpusReadVersion.current;
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
+    setKnowledgeQuery("");setKnowledgeMode("all");
     discardRecoveryCheckpoint();
     setRecoveryReceipt(null);
     setCorpusBusy(false);
@@ -1933,6 +1961,49 @@ const AIDocumentIntelligence = () => {
                 {corpusHashBusy ? "Hashing local decoded text…" : "Calculate local SHA-256 fingerprints"}
               </Button>
             </div>
+            <section aria-label="Local indexed knowledge retrieval" className="space-y-3 rounded-xl border border-cyan-400/25 bg-slate-950 p-4">
+              <h4 className="font-semibold text-white">Local knowledge index · ranked passages</h4>
+              <p className="text-xs text-slate-400">Build an in-memory inverted index of loaded text passages. BM25 ranks matching words; it is not semantic AI, OCR, PDF extraction, or independent verification. Passages do not overlap; words or concepts spanning boundaries may be missed.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" disabled={corpusBusy||!corpusFiles.length} onClick={buildLocalKnowledge}>Build local knowledge index</Button>
+                <Button type="button" variant="outline" disabled={!activeKnowledgeIndex} onClick={invalidateKnowledgeIndex}>Discard index</Button>
+              </div>
+              {activeKnowledgeIndex && !corpusBusy && <>
+                <p role="status" className="text-xs text-slate-300">{activeKnowledgeIndex.passages.length} searchable passages · {activeKnowledgeIndex.postings.size.toLocaleString()} distinct word tokens · {activeKnowledgeIndex.documentIds.length} loaded sources.</p>
+                <label className="block text-xs text-slate-300">Passage keyword query
+                  <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={knowledgeQuery} maxLength={120}
+                    onChange={e=>{setKnowledgeQuery(e.target.value);invalidateKnowledgeResults();}}
+                    onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing)runLocalKnowledge();}} />
+                </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-300">Match terms
+                    <select className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2" value={knowledgeMode}
+                      onChange={e=>{setKnowledgeMode(e.target.value==="any"?"any":"all");invalidateKnowledgeResults();}}>
+                      <option value="all">All words in passage</option><option value="any">Any word in passage</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">Source filter
+                    <select className="mt-1 block w-full rounded border border-slate-700 bg-slate-950 p-2" value={knowledgeFilter}
+                      onChange={e=>{setKnowledgeFilter(e.target.value);invalidateKnowledgeResults();}}>
+                      <option value="">All loaded sources</option>
+                      {corpusFiles.map(doc=><option key={doc.id} value={doc.id}>{doc.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <Button type="button" disabled={!knowledgeQuery.trim()} onClick={runLocalKnowledge}>Rank local passages</Button>
+                {knowledgeResults && <div className="space-y-2">
+                  <p role="status" className="text-xs text-slate-300">Showing {knowledgeResults.results.length} of {knowledgeResults.totalMatches} matching passages. BM25 scores are relative relevance, not confidence or factual accuracy.</p>
+                  {knowledgeResults.totalMatches===0 && <p className="text-xs text-slate-400">No matching indexed passage. Try fewer words or another source.</p>}
+                  {knowledgeResults.results.map(hit=><article key={hit.id} className="space-y-2 rounded border border-slate-700 p-3">
+                    <p className="break-all text-xs text-cyan-200">{hit.documentName} · lines {hit.startLine}–{hit.endLine} · BM25 {hit.score.toFixed(3)}</p>
+                    <p className="text-xs text-slate-400">Matched: {hit.matchedTerms.join(", ")} · decoded UTF-16 offsets [{hit.startOffset}, {hit.endOffset})</p>
+                    <pre className="whitespace-pre-wrap break-all text-xs text-slate-200">{hit.text}</pre>
+                    <Button type="button" size="sm" variant="outline" onClick={()=>void copy(formatKnowledgePassage(hit),"Local source passage")}>Copy source passage and location</Button>
+                  </article>)}
+                </div>}
+              </>}
+              {knowledgeError && <p role="alert" className="text-xs text-amber-200">{knowledgeError}</p>}
+            </section>
             {corpusFingerprints && (
               <section aria-label="Local decoded text fingerprints" className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
                 <p className="text-xs text-amber-200">
