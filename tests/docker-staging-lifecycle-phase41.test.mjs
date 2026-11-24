@@ -109,12 +109,21 @@ test("both captures contain no raw container JSON, host PID, env secrets or sock
   assert.doesNotMatch(JSON.stringify(p),/DO_NOT_PRINT|phase41-pinned-daemon|do-not-export-raw-inspect|\/run\/user|5656|4545/);
  }
 }));
-test("capturing a post-state before the manual action refuses the wrong status",()=>mk(dir=>{
- for(const op of ["stop","start","restart"]){
+test("post-state admission rejects an unperformed stop or start, while restart requires paired epoch evidence",()=>mk(dir=>{
+ for(const op of ["stop","start"]){
   const bad=data(dir,op,"before");
   bad.phase="after";
   assert.throws(()=>evaluateDockerStagingLifecycleCapture(bad),/Post-staging observation/);
  }
+ // A restart remains running on both sides: POST by itself cannot prove
+ // restart. Only the independent before/after epoch comparison can.
+ const restartBefore=data(dir,"restart","before");
+ restartBefore.phase="after";
+ const unproven=evaluateDockerStagingLifecycleCapture(restartBefore,new Date(Date.now()-60000));
+ assert.equal(unproven.observedState.running,true);
+ const p=pair(dir,"restart");
+ assert.throws(()=>verifyDockerStagingLifecyclePair(
+  p.before,unproven,p.approved),/start epoch|distinct lifecycle|reversed|stale|checksum|drift|transition/);
 }));
 test("double-read capture refuses changed runtime state even with the same container ID",()=>mk(dir=>{
  const base=data(dir),changed=structuredClone(base.targetAfter);
