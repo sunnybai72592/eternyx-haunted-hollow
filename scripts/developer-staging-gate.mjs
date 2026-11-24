@@ -2,6 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import { verifyHostedDeveloperReleaseObservations, verifyHostedDeveloperRuntimeSafety } from "./developer-staging-provenance.mjs";
 import { verifyDeveloperHostedHeaders, summarizeDeveloperReleaseDecision } from "./developer-staging-headers.mjs";
+import { verifyHostedDeveloperDeepLinkObservations } from "./developer-staging-deeplink.mjs";
 
 export const DEVELOPER_STAGING_CONFIRMATION = "RUN_DEVELOPER_STAGING_READ_ONLY";
 export const DEVELOPER_BROWSER_CASES = Object.freeze([
@@ -74,6 +75,7 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
   }
   if (observed.size !== expected.size) fail("incomplete staging case coverage.");
   const release = verifyHostedDeveloperReleaseObservations(value.release_observations, sourceCommit);
+  const deepLink = verifyHostedDeveloperDeepLinkObservations(value.deep_link_observations);
   const runtime = verifyHostedDeveloperRuntimeSafety(value);
   const headers = verifyDeveloperHostedHeaders(value.header_observations);
   const releaseDecision = summarizeDeveloperReleaseDecision({developer_case_count:observed.size},release,runtime,headers);
@@ -85,10 +87,11 @@ export function verifyDeveloperStagingEvidence(value, config, sourceCommit, curr
     developer_case_count: observed.size,
     viewports: DEVELOPER_BROWSER_VIEWPORTS,
     observed_release: release,
+    verified_deep_link: deepLink,
     runtime_safety: runtime,
     hosting_https_headers: headers,
     release_decision: releaseDecision,
-    notes: "Observed hosted HTML, JavaScript and release manifest match the checkout revision. This is unsigned release provenance; protected backend and production readiness are unverified.",
+    notes: "Observed public root and direct Project Lab route, matching HTML/JavaScript and release manifest against the checkout. This is unsigned release provenance, not a signed deployment attestation; protected backend and production readiness are unverified.",
     production_verified: false,
   };
 }
@@ -129,6 +132,7 @@ function main() {
         "Developer Chrome journeys: " + summary.developer_case_count + "/14 passed",
         "Observed public build ID: " + summary.observed_release.build_id,
         "Manifest, HTML and JS match checkout SHA: YES",
+        "Direct Project Lab route: " + summary.verified_deep_link.observations + "/4 observations passed (no redirects, correct rendered page and matching HTML/JS markers)",
         "Runtime exceptions / first-party asset failures / attempted writes: 0 / 0 / 0",
         "Blocked external requests: " + summary.runtime_safety.blocked_external_requests,
         "Root document HTTPS security controls: " + summary.hosting_https_headers.required_controls.length + "/7 checked at 4 observations",

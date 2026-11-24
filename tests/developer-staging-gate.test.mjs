@@ -14,6 +14,10 @@ const releaseObservations=()=>DEVELOPER_BROWSER_VIEWPORTS.flatMap(viewport=>["be
   viewport,phase,status:"source-matched",build_id:releaseId,source_sha:sha,
   html_matches:true,client_matches:true,matches_checkout:true,
 })));
+const deepLinkObservations=()=>DEVELOPER_BROWSER_VIEWPORTS.flatMap(viewport=>["before","after"].map(phase=>({
+  viewport,phase,http_status:200,route_exact:true,https_origin:true,redirect_free:true,
+  content_type_html:true,heading_visible:true,html_matches:true,client_matches:true,controller_absent:true,
+})));
 const headerObservations=()=>["390x844","1440x900"].flatMap(viewport=>["before","after"].map(phase=>({
   viewport,phase,http_status:200,
   content_security_policy:true,csp_no_unsafe_eval:true,frame_protection:true,
@@ -26,6 +30,7 @@ const report=(overrides={})=>({
   target_host:config.expectedHost, network_scope:"same-origin only",api_requests_executed:false,
   commit:sha, finished_at:"2026-11-23T19:00:00Z",
   release_observations:releaseObservations(),
+  deep_link_observations:deepLinkObservations(),
   header_observations:headerObservations(),
   runtime_errors:[],asset_failures:[],
   network_audit:{blocked_external_requests:0,blocked_write_attempts:0},
@@ -52,12 +57,16 @@ test("all 14 actual Chrome results at exact viewports are required for staging e
   assert.equal(summary.production_verified,false);
   assert.match(summary.notes,/unsigned release provenance/);
   assert.equal(summary.observed_release.observations,4);
+  assert.equal(summary.verified_deep_link.observations,4);
+  assert.equal(summary.verified_deep_link.direct_entry,true);
   for(const field of [
     {production_verified:true}, {staging_executed:false}, {environment:"local Vite preview"},
     {browser:"Firefox"}, {target_host:"other.staging.example.org"}, {commit:"b".repeat(40)},
     {api_requests_executed:true},{network_scope:"cross-origin"},{finished_at:"2026-11-20T00:00:00Z"},
     {cases:report().cases.slice(0,13)},
-  ]) assert.throws(()=>verifyDeveloperStagingEvidence(report(field),config,sha,now),/staging gate/);
+    {deep_link_observations:undefined},
+    {deep_link_observations:[]},
+  ]) assert.throws(()=>verifyDeveloperStagingEvidence(report(field),config,sha,now),/staging gate|Developer deep-link/);
 });
 
 test("duplicates, phantom results and non-passed cases are not release acceptance",()=>{

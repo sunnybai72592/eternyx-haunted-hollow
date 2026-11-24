@@ -49,7 +49,7 @@ jobs:
           "$RUNNER_TEMP/eternyx-developer-staging/bin/python" tests/browser/developer_project_lab_smoke.py \
             --base-url "$DEVELOPER_STAGING_ORIGIN" --staging --confirmed-staging \
             --expected-host "$DEVELOPER_STAGING_HOST"
-      - name: Reject partial, stale, misdirected or fabricated staging evidence
+      - name: Reject partial, stale, misdirected, deep-link or fabricated staging evidence
         run: |
           node scripts/developer-staging-gate.mjs --verify-report test-results/developer-project-browser-acceptance.json
       - name: Preserve sanitized staging acceptance evidence even if a browser test failed

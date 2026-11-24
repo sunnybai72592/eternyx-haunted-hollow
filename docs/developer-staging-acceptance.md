@@ -43,3 +43,16 @@ For each public staging root navigation (before and after both screen sizes), th
 Only seven boolean classifications and HTTP status are saved per observation; raw CSP, HSTS, cookies, tokens, URLs, and header values do not appear in artifacts. Four fully passing observations are mandatory in staging. Failing a check means fix the staging **hosting headers** first; never weaken this gate to claim acceptance. If the service legitimately needs a more complex framing policy, review and explicitly update the policy and regression tests rather than bypass them.
 
 Even after every public UI, provenance, and HTTPS control passes, the machine-readable release decision remains **HOLD_PRODUCTION**. Protected backend, authenticated roles, RLS, cloud provider integrations and production deployment are independently unverified.
+
+
+## Developer Studio 4.0 — direct-route staging integrity
+
+A root-page release manifest matching the checkout is **not sufficient** to prove the public Project Lab deep link works. The manual read-only staging run now checks the real `/developer-studio/project-lab` route *directly*, before and after each of the two supported viewports. This adds four independent deep-link observations without renaming or inflating the existing **14 Chrome journey results**.
+
+Each observation requires all of the following from a real browser network navigation: HTTP **200**, an **HTML** response, an **exact same-origin HTTPS** deep-link URL, **no HTTP redirect** (including to sign-in), the rendered **Local Project Lab** heading after hydration, the **same HTML meta and client JavaScript build ID** seen on that viewport's root response, and **no controlling service worker** in the disposable context. Only status and fixed boolean classifications are saved; the report contains no private headers, source code, response content, raw URL, cookies or credentials.
+
+The independent Node verifier rejects missing/duplicated or extra observation fields, wrong phases/viewports, non-boolean success claims, redirects, absent hydration, incorrect HTML/JS markers, service-worker control and any unexpected HTTP status. It checks the deep-link evidence in addition to the original root manifest and 14 UI journeys. Existing source-commit pinning, HTTPS security-header requirements, failed-resource detection and blocked POST/PUT/PATCH/DELETE behavior remain mandatory.
+
+If the stage host loads `/` but redirects `/developer-studio/project-lab` to authentication or returns a 404, deploy the correct public SPA routing/fallback configuration before rerunning. If the deep link hydrates but shows a different build ID, investigate stale CDN assets or mismatched rollout; never downgrade the source match requirement. If a service worker is controlling the page, investigate the staging service worker and cache isolation before treating the run as accepted.
+
+**This is a stronger hosted acceptance gate, not proof that staging was actually run.** No real staging domain, credentials or deployment was added by this phase. The workflow remains operator-dispatched, HTTPS-staging-only, and read-only; production and protected backend verification remain **NOT VERIFIED / HOLD_PRODUCTION**.

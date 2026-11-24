@@ -21,6 +21,7 @@ RECOVERY_KEY = "eternyx:developer-recovery:v1"
 API_KEY = "eternyx:developer-project-api-suites:v1"
 TEST_PLAN_KEY = "eternyx:developer-local-tests:v1"
 RELEASE_OBSERVATIONS = []
+DEEP_LINK_OBSERVATIONS = []
 RUNTIME_ERRORS = []
 ASSET_FAILURES = []
 HEADER_OBSERVATIONS = []
@@ -130,6 +131,57 @@ def observe_hosted_release(page, viewport, phase, require_current):
     })
     if require_current and status != "source-matched":
         raise AssertionError("Staging release identity is unknown, stale or mismatched; workflows were not accepted.")
+    observe_project_lab_direct_route(page, viewport, phase, build_id, require_current)
+
+
+def observe_project_lab_direct_route(page, viewport, phase, root_build_id, require_current):
+    """Verify real direct-entry navigation, hydration and root revision parity.
+
+    Saves only fixed booleans/status; no URL, source text, response headers,
+    cookies or captured browser content are included in the report.
+    """
+    route = "/developer-studio/project-lab"
+    response = page.goto(ORIGIN + route, wait_until="domcontentloaded")
+    heading_visible = False
+    try:
+        page.get_by_role("heading", name="Local Project Lab").wait_for(state="visible", timeout=15000)
+        heading_visible = True
+    except Exception:
+        pass
+    parsed = urlsplit(page.url)
+    response_url = urlsplit(response.url) if response else None
+    actual_origin = parsed.scheme + "://" + parsed.netloc
+    markers = page.evaluate("""() => ({
+      html: document.querySelector('meta[name="eternyx-build-id"]')?.content ?? null,
+      client: document.documentElement.getAttribute("data-eternyx-build-id"),
+      serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
+    })""")
+    headers = response.all_headers() if response else {}
+    evidence = {
+        "viewport": viewport,
+        "phase": phase,
+        "http_status": response.status if response else 0,
+        "route_exact": (page.url == ORIGIN + route and response_url is not None and
+                        response_url.scheme + "://" + response_url.netloc == ORIGIN and
+                        response_url.path == route and not response_url.query and not response_url.fragment),
+        "https_origin": parsed.scheme == "https" and actual_origin == ORIGIN,
+        "redirect_free": bool(response and response.request.redirected_from is None),
+        "content_type_html": "text/html" in headers.get("content-type", "").lower(),
+        "heading_visible": heading_visible,
+        "html_matches": bool(root_build_id and markers.get("html") == root_build_id),
+        "client_matches": bool(root_build_id and markers.get("client") == root_build_id),
+        "controller_absent": not markers.get("serviceWorkerControlled"),
+    }
+    DEEP_LINK_OBSERVATIONS.append(evidence)
+    if require_current and not (
+        evidence["http_status"] == 200 and all(evidence[key] is True for key in (
+            "route_exact", "https_origin", "redirect_free", "content_type_html",
+            "heading_visible", "html_matches", "client_matches", "controller_absent"
+        ))
+    ):
+        raise AssertionError("Staging direct Project Lab route did not match the root release, failed hydration, redirected, or lacked browser isolation.")
+    if not heading_visible:
+        raise AssertionError("Public Project Lab direct route did not render its expected heading.")
 
 
 def target_origin(args):
@@ -151,7 +203,7 @@ def target_origin(args):
             raise ValueError("Remote staging cannot use IP literals.")
         if parsed.scheme != "https" or parsed.hostname != args.expected_host:
             raise ValueError("Staging requires HTTPS and an exact --expected-host match.")
-        if not any(part in (parsed.hostname or "").lower() for part in ("staging", "stage")):
+        if not re.search(r"(^|[.-])stag(?:e|ing)([.-]|$)", parsed.hostname or "", re.I):
             raise ValueError("Target does not clearly identify a staging host; refusing remote checks.")
     elif args.confirmed_staging or args.expected_host or parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost") or parsed.port != 4173:
         raise ValueError("Local mode accepts only http://127.0.0.1:4173 or http://localhost:4173.")
@@ -609,6 +661,7 @@ if __name__ == "__main__":
             "target_host":urlsplit(ORIGIN).hostname,
             "network_scope":"same-origin only",
             "release_observations":RELEASE_OBSERVATIONS,
+            "deep_link_observations":DEEP_LINK_OBSERVATIONS,
             "header_observations":HEADER_OBSERVATIONS,
             "runtime_errors":RUNTIME_ERRORS,
             "asset_failures":ASSET_FAILURES,
