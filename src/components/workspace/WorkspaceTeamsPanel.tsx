@@ -18,7 +18,7 @@ import {
 import {
   workspaceTeamLocalDay,workspaceTeamTaskSummary,workspaceTeamTaskDueBucket,
   selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
-  resolveWorkspaceAssigneeFilter,workspaceTeamWorkload,
+  resolveWorkspaceAssigneeFilter,workspaceTeamWorkload,workspaceTeamWorkloadView,
 } from "@/lib/workspaceTeamTaskOperations.mjs";
 import { chooseWorkspaceTeam,verifyWorkspaceTeamDetails,
   retainWorkspaceTeamDraft,shouldQuarantineWorkspaceAuth,workspaceResumeAction,
@@ -406,13 +406,19 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
       if(current()){actionBusyRef.current=false;setBusy(false);}
     }
   };
-  const openWorkloadTasks=(filter:string,overdue=false)=>{
+  const openWorkloadTasks=(assignee:string,metric:string)=>{
     if(!selected||!currentRole||disabled||busy||loading||!spaceListVerified||
-       verifiedSpaceId!==selected.id||
-       !workload.some(row=>row.filter===filter))return;
-    setTaskQuery("");setTaskPriorityFilter("all");setTaskSort("due");
-    setTaskAssigneeFilter(filter);setTaskFilter(overdue?"overdue":"outstanding");
-    setTaskLayout("list");
+       verifiedSpaceId!==selected.id)return;
+    try {
+      const view=workspaceTeamWorkloadView(workload,assignee,metric);
+      setTaskQuery(view.search);setTaskPriorityFilter(view.priority);setTaskSort(view.sort);
+      setTaskAssigneeFilter(view.assignee);setTaskFilter(view.filter);
+      setTaskLayout("list");
+    }catch(failure){setError(errorMessage(failure));}
+  };
+  const clearTaskFilters=()=>{
+    setTaskFilter("all");setTaskQuery("");setTaskSort("updated");
+    setTaskPriorityFilter("all");setTaskAssigneeFilter("all");
   };
   const exportTaskView=()=>{
     if(!selected||!currentRole||verifiedSpaceId!==selected.id||
@@ -909,20 +915,17 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
                 </tr></thead>
                 <tbody>{workload.map(row=><tr key={row.key} className="border-b border-border/50">
                   <th scope="row" className="p-2 font-medium whitespace-nowrap">{row.label}</th>
-                  <td className="p-2">{row.filter!==null&&row.outstanding>0?
-                    <Button type="button" size="sm" variant="outline"
-                      disabled={disabled||busy||loading}
-                      aria-label={"Show outstanding tasks for "+row.label}
-                      onClick={()=>openWorkloadTasks(row.filter)}>{row.outstanding}</Button>:row.outstanding}</td>
-                  <td className="p-2">{row.inProgress}</td>
-                  <td className="p-2">{row.filter!==null&&row.overdue>0?
-                    <Button type="button" size="sm" variant="outline"
-                      disabled={disabled||busy||loading}
-                      aria-label={"Show overdue tasks for "+row.label}
-                      onClick={()=>openWorkloadTasks(row.filter,true)}>{row.overdue}</Button>:row.overdue}</td>
-                  <td className="p-2">{row.upcoming}</td>
-                  <td className="p-2">{row.urgent}</td>
-                  <td className="p-2">{row.done}</td>
+                  {([
+                    ["outstanding","outstanding"],["inProgress","in progress"],
+                    ["overdue","overdue"],["upcoming","due within 7 days"],
+                    ["urgent","urgent open"],["done","completed"],
+                  ] as const).map(([metric,label])=><td key={metric} className="p-2">
+                    {row.filter!==null&&row[metric]>0?
+                      <Button type="button" size="sm" variant="outline"
+                        disabled={disabled||busy||loading}
+                        aria-label={"Show "+label+" tasks for "+row.label}
+                        onClick={()=>openWorkloadTasks(row.filter,metric)}>{row[metric]}</Button>:row[metric]}
+                  </td>)}
                 </tr>)}</tbody>
               </table>
             </div>
@@ -981,14 +984,23 @@ export default function WorkspaceTeamsPanel({owner,disabled}:{
             ["unassigned","Unassigned"],
             ["outstanding","Outstanding"],
             ["overdue","Overdue"],
+            ["today","Due today"],
             ["upcoming","Next 7 days"],
+            ["unscheduled","No due date"],
+            ["in_progress","In progress"],
             ["done","Completed"],
           ] as const).map(([value,label])=><Button key={value} size="sm" type="button"
             variant={taskFilter===value?"default":"outline"}
+            aria-pressed={taskFilter===value}
             onClick={()=>setTaskFilter(value)}>
             {label}{value==="mine"?" ("+tasks.filter(t=>t.assignee_id===owner).length+")":""}
           </Button>)}
         </div>
+        {(taskFilter!=="all"||taskQuery!==""||taskSort!=="updated"||
+          taskPriorityFilter!=="all"||effectiveAssigneeFilter!=="all")&&
+          <Button size="sm" type="button" variant="outline" onClick={clearTaskFilters}>
+            Reset task filters and sort
+          </Button>}
         <p className="text-xs text-muted-foreground" role="status">
           Showing {visibleTasks.length} of {tasks.length} authorized team tasks.
           Exports include only these visible, filtered records.

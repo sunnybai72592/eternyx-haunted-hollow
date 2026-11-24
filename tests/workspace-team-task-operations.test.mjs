@@ -4,7 +4,7 @@ import {readFileSync} from "node:fs";
 import {
   workspaceTeamLocalDay,workspaceTeamTaskDueBucket,
   workspaceTeamTaskSummary,selectWorkspaceTeamTasks,buildWorkspaceTeamTasksCsv,
-  WORKSPACE_TEAM_TASK_VIEW_LIMIT,workspaceTeamWorkload,
+  WORKSPACE_TEAM_TASK_VIEW_LIMIT,workspaceTeamWorkload,workspaceTeamWorkloadView,WORKSPACE_TEAM_WORKLOAD_METRICS,
 } from "../src/lib/workspaceTeamTaskOperations.mjs";
 import {verifyWorkspaceTeamSpacePage} from "../src/lib/workspaceTeamAccess.mjs";
 
@@ -127,7 +127,7 @@ test("real UI wires triage, CSV boundary, and account/team-scoped view reset",()
     'workspaceTeamTaskDueBucket(task,today)==="overdue"',
     'window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);',
   ])assert.ok(panel.includes(anchor),anchor);
-  assert.equal(panel.split('setTaskFilter("all");setTaskQuery("");setTaskSort("updated");').length-1,2);
+  assert.equal(panel.split('setTaskFilter("all");setTaskQuery("");setTaskSort("updated");').length-1,3);
 });
 
 const roster=[
@@ -192,13 +192,66 @@ test("workload UI is verified, read-only and resets its view on account/team cha
     'selected&&currentRole?workspaceTeamWorkload(tasks,members,owner,selected.id,today):[]',
     'aria-label="Team workload overview"',
     'setCalendarDay(null);setShowWorkload(false);',
-    'setTaskAssigneeFilter(filter);setTaskFilter(overdue?"overdue":"outstanding");',
-    'setTaskQuery("");setTaskPriorityFilter("all");setTaskSort("due");',
-    'row.filter!==null&&row.overdue>0',
+    'setTaskAssigneeFilter(view.assignee);setTaskFilter(view.filter);',
+    'setTaskQuery(view.search);setTaskPriorityFilter(view.priority);setTaskSort(view.sort);',
+    'row.filter!==null&&row[metric]>0',
     'verifiedSpaceId!==selected.id',
     'Counts measure task volume, not hours, capacity or member performance.',
   ])assert.ok(panel.includes(anchor),anchor);
   assert.equal(panel.split('setCalendarDay(null);setShowWorkload(false);').length-1,2);
+  const handler=panel.slice(panel.indexOf("const openWorkloadTasks="),panel.indexOf("const exportTaskView="));
+  assert.ok(!handler.includes("supabase.")&&!handler.includes("setTasks("));
+});
+
+test("all six workload metrics drill down to exactly their actual task counts",()=>{
+  const rows=[...tasks,
+    task("active",{status:"in_progress",priority:"urgent",assignee_id:owner,due_on:today}),
+    task("done2",{status:"done",priority:"urgent",assignee_id:owner,due_on:today}),
+  ];
+  const workload=workspaceTeamWorkload(rows,roster,owner,spaceId,today);
+  const before=structuredClone(rows);
+  for(const row of workload){
+    if(row.filter===null)continue;
+    for(const metric of WORKSPACE_TEAM_WORKLOAD_METRICS){
+      if(!row[metric]){
+        assert.throws(()=>workspaceTeamWorkloadView(workload,row.filter,metric));
+        continue;
+      }
+      const view=workspaceTeamWorkloadView(workload,row.filter,metric);
+      assert.equal(selectWorkspaceTeamTasks(rows,{...view,owner,today,memberIds:roster.map(m=>m.user_id)}).length,row[metric]);
+    }
+  }
+  assert.deepEqual(rows,before);
+});
+test("drilldowns refuse unknown, empty, stale and invented metric selections",()=>{
+  const rows=workspaceTeamWorkload(tasks,roster,owner,spaceId,today);
+  for(const [assignee,metric] of [[null,"outstanding"],["foreign","outstanding"],
+    ["mine","fake"],["viewer","outstanding"],["mine","done"]])
+    assert.throws(()=>workspaceTeamWorkloadView(rows,assignee,metric));
+  assert.throws(()=>workspaceTeamWorkloadView([], "mine","outstanding"));
+});
+test("today, undated and in-progress filters compose with assignment and urgency",()=>{
+  const rows=[task("a",{due_on:today,status:"in_progress",assignee_id:owner,priority:"urgent"}),
+    task("b",{due_on:today,status:"done"}),task("c",{due_on:null,status:"todo"}),
+    task("d",{due_on:null,status:"done"}),task("e",{due_on:"2026-11-24",status:"in_progress"})];
+  const by=(filter,extra={})=>selectWorkspaceTeamTasks(rows,{filter,today,owner,...extra}).map(t=>t.id);
+  assert.deepEqual(by("today"),["a"]);
+  assert.deepEqual(by("unscheduled"),["c"]);
+  assert.deepEqual(by("in_progress"),["a","e"]);
+  assert.deepEqual(by("in_progress",{assignee:"mine",priority:"urgent"}),["a"]);
+});
+test("date sort places no due date after the latest representable real date",()=>{
+  const rows=[task("a",{due_on:null}),task("z",{due_on:"9999-12-31"})];
+  assert.deepEqual(selectWorkspaceTeamTasks(rows,{today,sort:"due"}).map(t=>t.id),["z","a"]);
+  assert.equal(workspaceTeamTaskDueBucket(rows[1],"9999-12-29"),"upcoming");
+});
+test("triage controls are accessible and reuse verified list filters without writes",()=>{
+  const panel=readFileSync(new URL("../src/components/workspace/WorkspaceTeamsPanel.tsx",import.meta.url),"utf8");
+  for(const anchor of ['workspaceTeamWorkloadView(workload,assignee,metric)',
+    '["today","Due today"]','["unscheduled","No due date"]',
+    '["in_progress","In progress"]','aria-pressed={taskFilter===value}',
+    'Reset task filters and sort','setTaskLayout("list");'])
+    assert.ok(panel.includes(anchor),anchor);
   const handler=panel.slice(panel.indexOf("const openWorkloadTasks="),panel.indexOf("const exportTaskView="));
   assert.ok(!handler.includes("supabase.")&&!handler.includes("setTasks("));
 });

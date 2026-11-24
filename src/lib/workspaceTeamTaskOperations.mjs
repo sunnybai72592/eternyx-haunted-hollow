@@ -7,7 +7,7 @@ export const WORKSPACE_TEAM_TASK_VIEW_LIMIT=500;
 export const WORKSPACE_TEAM_TASK_SEARCH_LIMIT=120;
 export const WORKSPACE_TEAM_TASK_SORTS=Object.freeze(["updated","due","priority","title"]);
 export const WORKSPACE_TEAM_TASK_FILTERS=Object.freeze([
-  "all","mine","unassigned","outstanding","overdue","upcoming","done",
+  "all","mine","unassigned","outstanding","overdue","upcoming","done","today","unscheduled","in_progress",
 ]);
 const priorityRank={low:0,normal:1,high:2,urgent:3};
 const dayFormat=/^\d{4}-\d{2}-\d{2}$/;
@@ -28,7 +28,7 @@ export function workspaceTeamTaskDueBucket(task,today){
   if(task.due_on<today)return "overdue";
   const upper=new Date(today+"T00:00:00.000Z");
   upper.setUTCDate(upper.getUTCDate()+7);
-  return task.due_on<=upper.toISOString().slice(0,10)?"upcoming":"none";
+  return Date.parse(task.due_on+"T00:00:00.000Z")<=upper.getTime()?"upcoming":"none";
 }
 export function workspaceTeamTaskSummary(tasks,today){
   if(!Array.isArray(tasks)||tasks.length>WORKSPACE_TEAM_TASK_VIEW_LIMIT)
@@ -68,6 +68,9 @@ export function selectWorkspaceTeamTasks(tasks,{
     if(!["all","mine","unassigned"].includes(assignee)&&
        task.assignee_id!==assignee)return false;
     if(filter==="done")return task.status==="done";
+    if(filter==="in_progress")return task.status==="in_progress";
+    if(filter==="today")return task.status!=="done"&&task.due_on===today;
+    if(filter==="unscheduled")return task.status!=="done"&&task.due_on===null;
     if(filter==="overdue"||filter==="upcoming")
       return workspaceTeamTaskDueBucket(task,today)===filter;
     return workspaceTeamTaskMatchesFilter(task,filter,owner);
@@ -76,7 +79,8 @@ export function selectWorkspaceTeamTasks(tasks,{
   return selected.sort((a,b)=>{
     let value=0;
     if(sort==="due"){
-      value=(a.due_on??"9999-12-31").localeCompare(b.due_on??"9999-12-31");
+      value=Number(a.due_on===null)-Number(b.due_on===null)||
+        (a.due_on??"").localeCompare(b.due_on??"");
     }else if(sort==="priority"){
       value=(priorityRank[b.priority]??-1)-(priorityRank[a.priority]??-1);
     }else if(sort==="title"){
@@ -172,4 +176,20 @@ export function workspaceTeamWorkload(tasks,members,owner,spaceId,today){
   if(unknown.total)rows.push(unknown);
   return rows.sort((a,b)=>b.overdue-a.overdue||b.outstanding-a.outstanding||
     b.urgent-a.urgent||a.key.localeCompare(b.key));
+}
+
+export const WORKSPACE_TEAM_WORKLOAD_METRICS=Object.freeze([
+  "outstanding","inProgress","overdue","upcoming","urgent","done",
+]);
+/** Translate an actual, currently authorized workload count into existing view controls. */
+export function workspaceTeamWorkloadView(rows,assignee,metric){
+  if(!Array.isArray(rows)||rows.length>22||typeof assignee!=="string"||
+     !assignee||!WORKSPACE_TEAM_WORKLOAD_METRICS.includes(metric))
+    throw Error("Invalid workload drilldown");
+  const row=rows.find(entry=>entry?.filter===assignee);
+  if(!row||!Number.isSafeInteger(row[metric])||row[metric]<=0)
+    throw Error("Workload count is no longer available");
+  const filter=metric==="urgent"?"outstanding":metric==="inProgress"?"in_progress":metric;
+  return {filter,assignee,priority:metric==="urgent"?"urgent":"all",search:"",
+    sort:metric==="done"?"updated":metric==="urgent"?"priority":"due"};
 }

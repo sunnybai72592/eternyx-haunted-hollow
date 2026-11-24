@@ -141,5 +141,28 @@ test("client never optimistically assigns a task and resets filters at account/t
   assert.ok(!quick.includes(".update("));
   assert.ok(quick.includes("void run(async()=>"));
   assert.ok(quick.includes("if(draft.id===task.id)setDraft(freshDraft());"));
-  assert.equal(s.split('setTaskPriorityFilter("all");setTaskAssigneeFilter("all");').length-1,2);
+  // Verify each scope reset independently. A manual reset elsewhere must not
+  // be able to satisfy a missing account or team reset.
+  const ownerStart=s.indexOf("const token=++spacesEpoch.current;\n    detailsEpoch.current++; // invalidate a previous owner's detail queries");
+  const ownerEnd=s.indexOf("},[owner]);",ownerStart);
+  const teamStart=s.indexOf("const token=++detailsEpoch.current;\n    setMembers([]);setTasks([]);setEvents([]);setInvites([]);",ownerEnd);
+  const teamEnd=s.indexOf("if(!selectedId)return;",teamStart);
+  assert.ok(ownerStart>=0&&ownerEnd>ownerStart&&teamStart>ownerEnd&&teamEnd>teamStart);
+  const reset='setTaskPriorityFilter("all");setTaskAssigneeFilter("all");';
+  for(const scope of [s.slice(ownerStart,ownerEnd),s.slice(teamStart,teamEnd)]){
+    assert.equal(scope.split(reset).length-1,1);
+    assert.ok(scope.includes('setTaskFilter("all");setTaskQuery("");setTaskSort("updated");'));
+  }
+});
+test("manual reset clears all five view controls without changing task data or layout",()=>{
+  const s=boardSource();
+  const start=s.indexOf("const clearTaskFilters=()=>{");
+  const end=s.indexOf("const exportTaskView=",start);
+  assert.ok(start>=0&&end>start);
+  const manual=s.slice(start,end);
+  for(const anchor of ['setTaskFilter("all")','setTaskQuery("")','setTaskSort("updated")',
+    'setTaskPriorityFilter("all")','setTaskAssigneeFilter("all")'])
+    assert.ok(manual.includes(anchor),anchor);
+  assert.ok(!manual.includes("setTasks(")&&!manual.includes("setTaskLayout(")&&!manual.includes("supabase."));
+  assert.ok(s.includes('onClick={clearTaskFilters}'));
 });
