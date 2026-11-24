@@ -4,6 +4,8 @@ on:
     paths:
       - 'src/lib/workspaceTeam*.mjs'
       - 'src/components/workspace/WorkspaceTeamsPanel.tsx'
+      - 'src/components/workspace/WorkspaceTeamTaskDiscussion.tsx'
+      - 'tests/workspace-team-discussion.test.mjs'
       - 'tests/workspace-team-task-operations.test.mjs'
       - 'tests/workspace-team-quick-triage.test.mjs'
       - 'tests/workspace-team-task-board.test.mjs'
@@ -20,4 +22,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs
+      - run: node --test tests/workspace-team-task-operations.test.mjs tests/workspace-team-schedule.test.mjs tests/workspace-team-task-board.test.mjs tests/workspace-team-quick-triage.test.mjs tests/workspace-team-discussion.test.mjs

@@ -8,6 +8,8 @@ import type { Database } from "@/integrations/supabase/types";
 import {
   validateTeamCommentBody, validateTeamStepTitle,
   workspaceTeamStepProgress, workspaceTeamCommentCanRedact,
+  verifyWorkspaceDiscussionSnapshot,isWorkspaceDiscussionCurrent,
+  selectWorkspaceDiscussionComments,selectWorkspaceDiscussionSteps,
 } from "@/lib/workspaceTeamDiscussion.mjs";
 import { teamMemberLabel } from "@/lib/workspaceTeamUtils.mjs";
 
@@ -29,11 +31,23 @@ export default function WorkspaceTeamTaskDiscussion({
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const token=useRef(0);
+  const request=useRef(0);
+  const actionLock=useRef(false);
+  const writeAllowed=useRef(false);
+  const [verified,setVerified]=useState(false);
+  const [commentQuery,setCommentQuery]=useState("");
+  const [commentFilter,setCommentFilter]=useState("all");
+  const [commentSort,setCommentSort]=useState("newest");
+  const [stepFilter,setStepFilter]=useState("all");
   const previousRefresh=useRef(refreshKey);
   const identity=useRef({owner,spaceId,taskId});
   identity.current={owner,spaceId,taskId};
   const editor=(role==="owner"||role==="editor")&&active;
-  const progress=workspaceTeamStepProgress(steps);
+  const progress=workspaceTeamStepProgress(verified?steps:[]);
+  const visibleSteps=verified?selectWorkspaceDiscussionSteps(steps,stepFilter):[];
+  const visibleComments=verified?selectWorkspaceDiscussionComments(comments,{
+    query:commentQuery,filter:commentFilter,sort:commentSort,owner,
+  }):[];
 
   const checkIdentity=async(expected:{owner:string;spaceId:string;taskId:string})=>{
     const {data,error:authError}=await supabase.auth.getUser();
@@ -45,6 +59,14 @@ export default function WorkspaceTeamTaskDiscussion({
     }
   };
   const load=async(expected:{owner:string;spaceId:string;taskId:string},version:number)=>{
+    if(version!==token.current)return;
+    const read=++request.current;
+    const current=()=>isWorkspaceDiscussionCurrent(version,read,token.current,request.current);
+    writeAllowed.current=false;
+    setVerified(false);setLoading(true);setError("");
+    try{
+    await checkIdentity(expected);
+    if(!current())return;
     const [c,s]=await Promise.all([
       supabase.from("workspace_team_task_comments")
         .select("*",{count:"exact"})
@@ -63,28 +85,31 @@ export default function WorkspaceTeamTaskDiscussion({
       throw new Error(c.error?.message??s.error?.message??
         "Team discussion returned an incomplete page. Refresh before editing.");
     }
+    const snapshot=verifyWorkspaceDiscussionSnapshot({
+      comments:c.data,steps:s.data,commentCount:c.count,stepCount:s.count,
+      spaceId:expected.spaceId,taskId:expected.taskId,
+    });
     await checkIdentity(expected);
-    if(version!==token.current)return;
-    setComments((c.data??[]) as Comment[]);
-    setSteps((s.data??[]) as Step[]);
+    if(!current())return;
+    setComments(snapshot.comments as Comment[]);
+    setSteps(snapshot.steps as Step[]);
+    setVerified(true);
+    }catch(failure){
+      if(!current())return;
+      setComments([]);setSteps([]);setVerified(false);
+      setError(failure instanceof Error?failure.message:"Team discussion unavailable");
+    }finally{if(current())setLoading(false);}
   };
   useEffect(()=>{
     const expected={owner,spaceId,taskId};
     const version=++token.current;
     setComments([]);setSteps([]);setCommentBody("");setStepTitle("");
-    setError("");setNotice("");setLoading(true);setBusy(false);
-    void (async()=>{
-      try{
-        await checkIdentity(expected);
-        await load(expected,version);
-      }catch(failure){
-        if(version===token.current)
-          setError(failure instanceof Error?failure.message:"Team discussion unavailable");
-      }finally{
-        if(version===token.current)setLoading(false);
-      }
-    })();
-    return ()=>{token.current++;};
+    setError("");setNotice("");setLoading(true);setBusy(false);setVerified(false);
+    actionLock.current=false;
+    setCommentQuery("");setCommentFilter("all");setCommentSort("newest");setStepFilter("all");
+    writeAllowed.current=false;
+    void load(expected,version);
+    return ()=>{token.current++;request.current++;actionLock.current=false;};
   },[owner,spaceId,taskId]);
 
   useEffect(()=>{
@@ -93,20 +118,23 @@ export default function WorkspaceTeamTaskDiscussion({
     const expected={owner,spaceId,taskId};
     const version=token.current;
     void (async()=>{
-      try {await checkIdentity(expected);await load(expected,version);}
-      catch(failure){if(version===token.current)setError(
-        failure instanceof Error?failure.message:"Live task update could not be loaded");}
+      await load(expected,version);
     })();
   },[refreshKey,owner,spaceId,taskId]);
 
-  const run=async(action:()=>Promise<void>,message:string)=>{
-    if(disabled||busy||loading||!editor)return;
+  writeAllowed.current=verified&&!disabled&&editor&&!loading;
+  const run=async(action:()=>Promise<void>,message:string,onConfirmed?:()=>void)=>{
+    if(!writeAllowed.current||actionLock.current||busy)return;
     const expected={owner,spaceId,taskId},version=token.current;
+    actionLock.current=true;
     setBusy(true);setError("");setNotice("");
     try{
       await checkIdentity(expected);
+      if(version!==token.current||!writeAllowed.current)return;
       await action();
       await checkIdentity(expected);
+      if(version!==token.current)return;
+      onConfirmed?.();
       await load(expected,version);
       if(version===token.current){
         setNotice(message);
@@ -116,7 +144,7 @@ export default function WorkspaceTeamTaskDiscussion({
       if(version===token.current)
         setError(failure instanceof Error?failure.message:"Team action was rejected");
     }finally{
-      if(version===token.current)setBusy(false);
+      if(version===token.current){actionLock.current=false;setBusy(false);}
     }
   };
   const post=(event:FormEvent)=>{
@@ -127,8 +155,7 @@ export default function WorkspaceTeamTaskDiscussion({
         p_space_id:spaceId,p_task_id:taskId,p_body:body,
       });
       if(rpcError||!data)throw new Error(rpcError?.message??"Comment was not saved");
-      setCommentBody("");
-    },"Comment posted and recorded in team activity.");
+    },"Comment posted and recorded in team activity.",()=>setCommentBody(""));
   };
   const add=(event:FormEvent)=>{
     event.preventDefault();
@@ -138,8 +165,7 @@ export default function WorkspaceTeamTaskDiscussion({
         p_space_id:spaceId,p_task_id:taskId,p_title:title,
       });
       if(rpcError||!data)throw new Error(rpcError?.message??"Step was not added");
-      setStepTitle("");
-    },"Team checklist step added.");
+    },"Team checklist step added.",()=>setStepTitle(""));
   };
   const check=(step:Step)=>{
     void run(async()=>{
@@ -173,12 +199,7 @@ export default function WorkspaceTeamTaskDiscussion({
     if(busy||loading||disabled)return;
     const version=token.current;
     const expected={owner,spaceId,taskId};
-    setLoading(true);setError("");
-    try {await checkIdentity(expected);await load(expected,version);}
-    catch(failure) {
-      if(version===token.current)setError(
-        failure instanceof Error?failure.message:"Could not refresh team task");
-    }finally{if(version===token.current)setLoading(false);}
+    await load(expected,version);
   };
 
   return <section className="space-y-3 rounded-lg border border-cyan-600/30 bg-background/50 p-3"
@@ -198,11 +219,21 @@ export default function WorkspaceTeamTaskDiscussion({
     {loading&&<p role="status" className="text-xs text-muted-foreground">Loading real team discussion…</p>}
     {error&&<p role="alert" className="break-words text-xs text-destructive">{error}</p>}
     {notice&&<p role="status" className="break-words text-xs text-cyan-300">{notice}</p>}
-    <div className="grid gap-4 lg:grid-cols-2">
+    {!verified&&!loading&&<p className="text-xs text-muted-foreground">
+      Discussion unavailable until a complete authorized refresh succeeds. Drafts are retained locally in this open task.
+    </p>}
+    {verified&&<div className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-2">
         <p className="flex items-center gap-2 text-sm font-medium">
           <CheckSquare2 className="h-4 w-4"/> Checklist: {progress.done}/{progress.total}
         </p>
+        <progress className="h-2 w-full" aria-label="Checklist completion" value={progress.done} max={progress.total||1}/>
+        <label className="text-xs">Checklist view
+          <select className="ml-2 rounded border border-border bg-background p-1" value={stepFilter}
+            onChange={event=>setStepFilter(event.target.value)}>
+            <option value="all">All steps</option><option value="open">Open steps</option><option value="done">Completed steps</option>
+          </select>
+        </label>
         {editor&&<form onSubmit={add} className="flex flex-wrap gap-2">
           <Input aria-label="New shared checklist step" className="min-w-0 flex-1"
             value={stepTitle} maxLength={180} disabled={busy||disabled||loading||steps.length>=30}
@@ -212,7 +243,7 @@ export default function WorkspaceTeamTaskDiscussion({
           </Button>
         </form>}
         <div className="max-h-64 space-y-1 overflow-y-auto">
-          {steps.map(step=><div key={step.id}
+          {visibleSteps.map(step=><div key={step.id}
             className="flex items-start gap-2 rounded-md border border-border/50 p-2 text-xs">
             <input type="checkbox" checked={step.done} disabled={!editor||busy||disabled||loading}
               className="mt-0.5 accent-cyan-500" aria-label={"Complete step "+step.title}
@@ -230,7 +261,7 @@ export default function WorkspaceTeamTaskDiscussion({
               disabled={busy||disabled||loading} aria-label={"Remove step "+step.title}
               onClick={()=>removeStep(step)}><Trash2 className="h-3.5 w-3.5"/></Button>}
           </div>)}
-          {!steps.length&&!loading&&<p className="text-xs text-muted-foreground">No steps yet.</p>}
+          {!visibleSteps.length&&<p className="text-xs text-muted-foreground">{steps.length?"No steps match this view.":"No steps yet."}</p>}
         </div>
         {steps.length>=30&&<p className="text-xs text-amber-400">
           The 30-step limit is reached for this task.
@@ -238,6 +269,19 @@ export default function WorkspaceTeamTaskDiscussion({
       </div>
       <div className="space-y-2">
         <p className="text-sm font-medium">Discussion ({comments.length}/200)</p>
+        <Input type="search" aria-label="Search team task comments" value={commentQuery}
+          maxLength={120} placeholder="Search visible comment text" onChange={event=>setCommentQuery(event.target.value)}/>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <label>Comment view <select className="rounded border border-border bg-background p-1" value={commentFilter}
+            onChange={event=>setCommentFilter(event.target.value)}>
+            <option value="all">All comments</option><option value="mine">My comments</option><option value="redacted">Redacted</option>
+          </select></label>
+          <label>Order <select className="rounded border border-border bg-background p-1" value={commentSort}
+            onChange={event=>setCommentSort(event.target.value)}>
+            <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
+          </select></label>
+        </div>
+        <p className="text-xs text-muted-foreground" role="status">Showing {visibleComments.length} of {comments.length} comments.</p>
         {editor&&<form onSubmit={post} className="space-y-2">
           <Textarea aria-label="Write a team task comment" rows={2}
             maxLength={2000} value={commentBody} disabled={busy||disabled||loading||comments.length>=200}
@@ -247,9 +291,9 @@ export default function WorkspaceTeamTaskDiscussion({
             comments.length>=200}>Post comment</Button>
         </form>}
         <div className="max-h-64 space-y-2 overflow-y-auto">
-          {comments.map(comment=><div key={comment.id}
+          {visibleComments.map(comment=><div key={comment.id}
             className="space-y-1 rounded-md border border-border/50 p-2 text-xs">
-            <p className="break-words whitespace-pre-wrap">{comment.body}</p>
+            <p className="break-words whitespace-pre-wrap">{comment.redacted_at?"[Comment redacted]":comment.body}</p>
             <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
               <span>{teamMemberLabel(comment.author_id,owner)} ·
                 {" "+new Date(comment.created_at).toLocaleString()}
@@ -264,11 +308,11 @@ export default function WorkspaceTeamTaskDiscussion({
               </Button>}
             </div>
           </div>)}
-          {!comments.length&&!loading&&<p className="text-xs text-muted-foreground">
-            No comments yet.
+          {!visibleComments.length&&<p className="text-xs text-muted-foreground">
+            {comments.length?"No comments match this view.":"No comments yet."}
           </p>}
         </div>
       </div>
-    </div>
+    </div>}
   </section>;
 }
