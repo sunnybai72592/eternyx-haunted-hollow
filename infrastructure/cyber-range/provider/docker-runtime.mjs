@@ -9,6 +9,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectForSession, validSessionId } from "../../../supabase/functions/_shared/ctf-range-worker-contract.mjs";
 import { sessionFromProject, verifyManagedContainer } from "./orphan-watchdog.mjs";
+import {verifyManagedNetwork,verifyNetworkInventory} from "./managed-network-proof.mjs";
 import { assertLocalLaunchAllowed } from "./local-kill-switch.mjs";
 import { admitHostLab, verifyRuntimeIsolation } from "./isolation-policy.mjs";
 import { createHostRangeRelay, verifyInternalGatewayAddress } from "./host-relay.mjs";
@@ -91,6 +92,10 @@ export class LocalDockerRangeRuntime {
     // The host also enforces a local 3-lab resource envelope independently
     // of the Supabase rolling daily budget and maximum active sessions.
     const previous = await this.listVerifiedManagedProjects();
+    const oldNetworks=verifyNetworkInventory(await this.listVerifiedManagedNetworks(),previous);
+    if(oldNetworks.some(n=>!previous.some(c=>c.Config.Labels["com.docker.compose.project"]===n.project)))throw Error("Orphan managed network requires cleanup before launch");
+    if(this.#projectNetworks(sessionId).length||this.#projectMembers(sessionId).length)throw Error("Existing project resource blocks new launch");
+    this.#assertNoProjectVolumes(sessionId);
     const projects = [...new Set(previous.map(item=>
       verifyManagedContainer(item).project))];
     admitHostLab({ existingProjects: projects, sessionId });
@@ -301,10 +306,49 @@ export class LocalDockerRangeRuntime {
     return ids.sort();
   }
 
-  async stop(sessionId, expectedIds=null) {
+  #networkIds(filters){
+    const raw=executeDocker(["network","ls","--no-trunc","--quiet",...filters]);
+    const ids=raw?raw.split(/\r?\n/).filter(Boolean):[];
+    if(ids.length>200||new Set(ids).size!==ids.length||ids.some(id=>!/^[a-f0-9]{64}$/.test(id)))throw Error("Untrusted Docker network inventory");
+    return ids;
+  }
+  #inspectNetwork(id){
+    const raw=JSON.parse(executeDocker(["network","inspect","--format","{{json .}}",id]));
+    if(raw?.Id!==id)throw Error("Network identity changed");
+    verifyManagedNetwork(raw);
+    return raw;
+  }
+  async listVerifiedManagedNetworks(){
+    this.#requireHost();
+    return this.#networkIds(["--filter","label=org.eternyx.range.network=v1"]).map(id=>this.#inspectNetwork(id));
+  }
+  #projectNetworks(sessionId){
+    const project=projectForSession(sessionId);
+    const ids=new Set(this.#networkIds(["--filter","label=com.docker.compose.project="+project]));
+    // Also inspect exact-name collisions even when their project label is absent.
+    for(const name of [project+"_local_target_only",project+"_gateway_ingress_only"]){
+      for(const id of this.#networkIds(["--filter","name=^"+name+"$"]))ids.add(id);
+    }
+    if(ids.size>2)throw Error("Unexpected project network count");
+    const result=[...ids].map(id=>this.#inspectNetwork(id));
+    if(result.some(n=>verifyManagedNetwork(n).project!==project))throw Error("Foreign project network");
+    return result;
+  }
+  #assertNoProjectVolumes(sessionId){
+    const project=projectForSession(sessionId);
+    if(executeDocker(["volume","ls","--quiet","--filter","label=com.docker.compose.project="+project]))
+      throw Error("Unexpected project volumes require operator review");
+  }
+
+  async stop(sessionId, expectedIds=null, expectedNetworkIds=null) {
     if (!validSessionId(sessionId)) throw new Error("Invalid session identifier");
     this.#requireHost();
     const before=this.#projectMembers(sessionId);
+    this.#assertNoProjectVolumes(sessionId);
+    const networks=this.#projectNetworks(sessionId).map(verifyManagedNetwork);
+    const networkIds=networks.map(n=>n.id).sort();
+    if(expectedNetworkIds!==null&&(!Array.isArray(expectedNetworkIds)||networkIds.join(",")!==[...expectedNetworkIds].sort().join(",")))throw Error("Project networks changed before scoped teardown");
+    if(networks.some(n=>n.attachedIds.some(id=>!before.includes(id))))throw Error("Foreign network attachment; teardown refused");
     if(expectedIds!==null&&(!Array.isArray(expectedIds)||before.join(',')!==[...expectedIds].sort().join(',')))throw new Error('Project changed before scoped teardown');
     const relay=this.#hostRelays.get(sessionId);
     let relayFailed=false;
@@ -318,8 +362,15 @@ export class LocalDockerRangeRuntime {
     // either part fails.
     // This template has no named volumes. Never remove unknown volumes or orphans.
     if(this.#projectMembers(sessionId).join(",")!==before.join(","))throw new Error("Project changed during teardown");
-    executeDocker(composeArgs(sessionId, ["down"]));
+    const fresh=this.#projectNetworks(sessionId).map(verifyManagedNetwork);
+    if(fresh.map(n=>n.id).sort().join(",")!==networkIds.join(",")||fresh.some(n=>n.attachedIds.some(id=>!before.includes(id))))throw Error("Network membership changed during teardown");
+    if(before.length)executeDocker(["rm","--force",...before]);
     if(this.#projectMembers(sessionId).length!==0)throw new Error("Managed containers remain after teardown");
+    const remaining=this.#projectNetworks(sessionId).map(verifyManagedNetwork);
+    if(remaining.map(n=>n.id).sort().join(",")!==networkIds.join(",")||remaining.some(n=>n.attachedIds.length))throw Error("Network identity or attachments changed after container removal");
+    if(networkIds.length)executeDocker(["network","rm",...networkIds]);
+    if(this.#projectNetworks(sessionId).length!==0)throw Error("Managed networks remain after teardown");
+    this.#assertNoProjectVolumes(sessionId);
     if(relayFailed)throw new Error("Host relay teardown requires operator review");
     return true;
   }
