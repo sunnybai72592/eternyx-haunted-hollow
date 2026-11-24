@@ -8,7 +8,7 @@ import {inspectRehearsalSource} from "./automation-fresh-staging-mirror.mjs";
 export const CTF="20261122170000_ctf_verified_missions.sql";
 export const PROTECTED_TABLES=Object.freeze(["pentest_audit_events","pentest_engagements","pentest_evidence","security_case_assets","security_case_finding_evidence","security_case_finding_history","security_case_findings"]);
 export const OBSERVED_VERSIONS=Object.freeze(["20261123215132","20261123215141","20261123215211"]);
-const NAME=/^20\d{12}_[a-z0-9_]+\.sql$/;
+const NAME=/^20\d{12}_[A-Za-z0-9_-]+\.sql$/;
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const fail=reason=>{throw Error("additive_replay_"+reason);};
 export function selectCandidate(names,occupied=OBSERVED_VERSIONS){
