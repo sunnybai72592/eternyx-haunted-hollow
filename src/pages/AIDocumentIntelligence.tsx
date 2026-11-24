@@ -52,6 +52,7 @@ import {
 } from "@/lib/ai/document-corpus-import-review";
 import { listCorpusRecovery, planCorpusRecovery, CorpusRecoveryError } from "@/lib/ai/document-corpus-recovery";
 import { compareCorpusVersions, formatRecoveryReceipt, selectiveRecoveryReceipt, replacementReceipt, type RecoveryReceipt } from "@/lib/ai/document-corpus-version-review";
+import {createCorpusCheckpoint,canUndoCorpusCheckpoint,undoCorpusCheckpoint,summarizeCorpusCheckpoint,type CorpusCheckpoint} from "@/lib/ai/document-corpus-checkpoint";
 import {
   DOCUMENT_KINDS,
   MAX_DOCUMENT_BYTES,
@@ -143,6 +144,12 @@ const AIDocumentIntelligence = () => {
   const [versionReview, setVersionReview] = useState<ReturnType<typeof compareCorpusVersions> | null>(null);
   const [versionError, setVersionError] = useState(false);
   const [recoveryReceipt, setRecoveryReceipt] = useState<RecoveryReceipt | null>(null);
+  const [keepRecoveryCheckpoint,setKeepRecoveryCheckpoint] = useState(false);
+  const [recoveryCheckpoint,setRecoveryCheckpoint] = useState<CorpusCheckpoint|null>(null);
+  const currentCorpusSnapshot = {documents:corpusFiles,query:corpusQuery,mode:corpusMode,sourceFilter:corpusFilter||null,question:corpusQuestion};
+  const checkpointSummary = recoveryCheckpoint ? summarizeCorpusCheckpoint(recoveryCheckpoint) : null;
+  const checkpointCanUndo = recoveryCheckpoint ? canUndoCorpusCheckpoint(recoveryCheckpoint,currentCorpusSnapshot) : false;
+  const discardRecoveryCheckpoint = () => {setRecoveryCheckpoint(null);setKeepRecoveryCheckpoint(false);};
   const resetVersionReview = () => {
     setVersionCurrentId(""); setVersionBackupId(""); setVersionReview(null); setVersionError(false);
   };
@@ -172,6 +179,7 @@ const AIDocumentIntelligence = () => {
     corpusWorkspaceEpoch.current += 1;
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setEncryptedExportPassword("");
@@ -250,6 +258,7 @@ const AIDocumentIntelligence = () => {
   };
   const loadCorpusFiles = async (files: readonly File[]) => {
     const version = ++corpusReadVersion.current;
+    discardRecoveryCheckpoint();
     invalidateCorpusWorkspace();
     invalidateCorpus();
     setCorpusBusy(files.length > 0);
@@ -274,6 +283,7 @@ const AIDocumentIntelligence = () => {
     }
   };
   const removeCorpusFile = (id: string) => {
+    discardRecoveryCheckpoint();
     invalidateCorpusWorkspace();
     ++corpusReadVersion.current;
     setCorpusBusy(false);
@@ -290,6 +300,7 @@ const AIDocumentIntelligence = () => {
     ++corpusReadVersion.current;
     invalidateCorpusFingerprints();
     setCorpusFiles([]);
+    discardRecoveryCheckpoint();
     setRecoveryReceipt(null);
     setCorpusBusy(false);
     setCorpusFilter("");
@@ -319,6 +330,7 @@ const AIDocumentIntelligence = () => {
     setCorpusWorkspaceNotice(null);
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setCorpusWorkspaceExporting(true);
     try {
@@ -358,6 +370,7 @@ const AIDocumentIntelligence = () => {
     setEncryptedExportConfirm("");
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -402,6 +415,7 @@ const AIDocumentIntelligence = () => {
     setRotateConfirmPassword("");
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -431,6 +445,7 @@ const AIDocumentIntelligence = () => {
     setEncryptedImportPassword("");
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -455,6 +470,7 @@ const AIDocumentIntelligence = () => {
     const operation = ++corpusWorkspaceEpoch.current;
     setPendingCorpusWorkspace(null);
     resetVersionReview();
+    setKeepRecoveryCheckpoint(false);
     setCorpusRecoveryIds([]);
     setPendingCorpusEncrypted(false);
     setCorpusWorkspaceError(null);
@@ -483,6 +499,26 @@ const AIDocumentIntelligence = () => {
       setVersionReview(compareCorpusVersions(corpusFiles,pendingCorpusWorkspace,versionCurrentId,versionBackupId));
     } catch { setVersionError(true); }
   };
+  const undoLastRecovery = () => {
+    if (!recoveryCheckpoint || !checkpointCanUndo || corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+    if (!window.confirm("Undo the latest recovery and return to the previous local documents and search settings? Recovered additions will disappear and current search results will be cleared. This is a one-step undo.")) return;
+    try {
+      const previous=undoCorpusCheckpoint(recoveryCheckpoint,currentCorpusSnapshot);
+      ++corpusReadVersion.current;
+      setCorpusBusy(false);
+      invalidateCorpusWorkspace();
+      invalidateCorpusFingerprints();
+      invalidateCorpus();
+      setCorpusFiles([...previous.documents]);
+      setCorpusQuery(previous.query);
+      setCorpusMode(previous.mode);
+      setCorpusFilter(previous.sourceFilter ?? "");
+      setCorpusQuestion(previous.question);
+      discardRecoveryCheckpoint();
+      setRecoveryReceipt(null);
+      setCorpusWorkspaceNotice("Latest recovery undone locally. Previous documents and draft settings restored; run a new search. No redo checkpoint retained.");
+    } catch {setCorpusWorkspaceError("Undo rejected: checkpoint no longer matches the current workspace.");}
+  };
   const recoverSelectedCorpus = () => {
     if (!pendingCorpusWorkspace || !corpusRecoveryIds.length || !recoveryPreview?.plan ||
         corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
@@ -493,12 +529,15 @@ const AIDocumentIntelligence = () => {
         " renamed conflict copies? Existing files and search settings remain unchanged. "+
         "Current search results, selected excerpts and AI results will be cleared."
       )) return;
+      const nextCheckpoint=keepRecoveryCheckpoint ? createCorpusCheckpoint(currentCorpusSnapshot,{...currentCorpusSnapshot,documents:plan.documents},"selective-recovery") : null;
       ++corpusReadVersion.current;
       setCorpusBusy(false);
       invalidateCorpusWorkspace();
       invalidateCorpusFingerprints();
       invalidateCorpus();
       setCorpusFiles(plan.documents);
+      setRecoveryCheckpoint(nextCheckpoint);
+      setKeepRecoveryCheckpoint(false);
       setRecoveryReceipt(selectiveRecoveryReceipt(plan,pendingCorpusEncrypted));
       setCorpusWorkspaceNotice("Recovered "+plan.additions.length+
         " local source(s), including "+plan.copiedCount+" conflict copy/copies. Existing sources and settings were kept. Search again for fresh evidence.");
@@ -508,7 +547,7 @@ const AIDocumentIntelligence = () => {
   };
   const restoreCorpusWorkspace = () => {
     if (!pendingCorpusWorkspace || !pendingCorpusReview?.replacementHasEffects ||
-        corpusWorkspaceLoading || corpusWorkspaceExporting) return;
+        corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting) return;
     if (!window.confirm(
       "REPLACE every current local evidence file and search setting with this validated backup? " +
       pendingCorpusReview.counts.removed + " existing file(s) will be REMOVED; " +
@@ -517,6 +556,10 @@ const AIDocumentIntelligence = () => {
       "Save your existing workspace first if you need to keep it. No automatic merge or upload.",
     )) return;
     const imported = pendingCorpusWorkspace;
+    let nextCheckpoint:CorpusCheckpoint|null=null;
+    try {
+      if (keepRecoveryCheckpoint) nextCheckpoint=createCorpusCheckpoint(currentCorpusSnapshot,imported,"full-replacement");
+    } catch {setCorpusWorkspaceError("Could not create the requested checkpoint. Recovery was not applied.");return;}
     // Stop pending user file reads and fingerprint generation before replacing.
     ++corpusReadVersion.current;
     setCorpusBusy(false);
@@ -529,6 +572,8 @@ const AIDocumentIntelligence = () => {
     setCorpusFilter(imported.sourceFilter ?? "");
     setCorpusQuestion(imported.question);
     setRecoveryReceipt(replacementReceipt(pendingCorpusReview,pendingCorpusEncrypted));
+    setRecoveryCheckpoint(nextCheckpoint);
+    setKeepRecoveryCheckpoint(false);
     setCorpusWorkspaceNotice(
       "Validated local workspace restored. Search again to recompute fresh evidence; no cached hits or AI interpretation were imported.",
     );
@@ -1546,6 +1591,7 @@ const AIDocumentIntelligence = () => {
                       ++corpusWorkspaceEpoch.current;
                       setPendingCorpusWorkspace(null);
                       resetVersionReview();
+                      setKeepRecoveryCheckpoint(false);
                       setCorpusRecoveryIds([]);
                       setPendingCorpusEncrypted(false);
                       setCorpusWorkspaceLoading(false);
@@ -1699,6 +1745,12 @@ const AIDocumentIntelligence = () => {
                       </Button>
                     </section>
                   )}
+                  <label className="flex items-start gap-2 rounded-lg border border-amber-500/30 p-3 text-xs text-slate-300">
+                    <input type="checkbox" className="mt-0.5" checked={keepRecoveryCheckpoint}
+                      onChange={e=>setKeepRecoveryCheckpoint(e.target.checked)}
+                      disabled={corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}/>
+                    <span>Keep a temporary one-step undo checkpoint for the next recovery. This retains previous source text and draft search settings in browser memory until undo, discard, workspace edit or page closure. It is not encrypted storage. Unchecked by default. A new recovery replaces or discards the old checkpoint.</span>
+                  </label>
                   <section aria-label="Local document version comparison" className="space-y-3 rounded-lg border border-slate-700 p-3">
                     <h4 className="text-sm font-semibold text-white">Compare current and backup document versions</h4>
                     <p className="text-xs text-slate-400">Choose both sources explicitly. A matching ID or filename is not proof of shared provenance. Comparison is local, with line endings normalized only for the line diff. Exact decoded text equality is reported separately.</p>
@@ -1795,6 +1847,16 @@ const AIDocumentIntelligence = () => {
                   </Button>
                 </section>
               )}
+              {recoveryCheckpoint && checkpointSummary && <section aria-label="Temporary recovery undo checkpoint" className="space-y-2 rounded-lg border border-amber-500/30 p-3">
+                <h4 className="text-sm font-semibold text-white">Undo latest recovery</h4>
+                <p className="text-xs text-slate-300">Restore {checkpointSummary.beforeFiles} previous files from {checkpointSummary.afterFiles} current files; {checkpointSummary.beforeCharacters.toLocaleString()} previous decoded characters; {checkpointSummary.settingsChanged} changed draft settings. One-step only, no redo. Prior source text is retained in memory, not encrypted or persisted.</p>
+                {!checkpointCanUndo && <p role="alert" className="text-xs text-amber-200">Current workspace differs from the checkpoint. Undo is blocked.</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" onClick={undoLastRecovery}
+                    disabled={!checkpointCanUndo || corpusBusy || corpusWorkspaceLoading || corpusWorkspaceExporting}>Undo recovery locally</Button>
+                  <Button type="button" variant="outline" onClick={discardRecoveryCheckpoint}>Discard undo checkpoint</Button>
+                </div>
+              </section>}
               {recoveryReceipt && <section aria-label="Latest local recovery receipt" className="space-y-2 rounded-lg border border-slate-700 p-3">
                 <h4 className="text-sm font-semibold text-white">Latest completed local recovery receipt</h4>
                 <p className="text-xs text-slate-400">Counts only, in memory until cleared or this page is closed. Not a durable or tamper-proof audit log. This receipt describes the completed action, not the current workspace.</p>
@@ -1831,14 +1893,14 @@ const AIDocumentIntelligence = () => {
                   onKeyDown={e => {
                     if (e.key === "Enter" && !e.nativeEvent.isComposing && corpusFiles.length && !corpusBusy) runCorpusSearch();
                   }}
-                  onChange={e => { invalidateCorpusWorkspace(); setCorpusQuery(e.target.value); invalidateCorpus(); }}
+                  onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusQuery(e.target.value); invalidateCorpus(); }}
                   placeholder="e.g. coating inspection"
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white" />
               </label>
               <label htmlFor="document-corpus-mode" className="block space-y-2 text-sm text-slate-300">
                 <span>Keyword matching</span>
                 <select id="document-corpus-mode" value={corpusMode}
-                  onChange={e => { invalidateCorpusWorkspace(); setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
+                  onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusMode(e.target.value as CorpusMatchMode); invalidateCorpus(); }}
                   className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                   <option value="all">All query words on the same line</option>
                   <option value="any">Any query word on the line</option>
@@ -1850,7 +1912,7 @@ const AIDocumentIntelligence = () => {
             <label htmlFor="document-corpus-filter" className="block space-y-2 text-sm text-slate-300">
               <span>Optional local file filter</span>
               <select id="document-corpus-filter" value={corpusFilter}
-                onChange={e => { invalidateCorpusWorkspace(); setCorpusFilter(e.target.value); invalidateCorpus(); }}
+                onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusFilter(e.target.value); invalidateCorpus(); }}
                 className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white">
                 <option value="">Search all loaded files</option>
                 {corpusFiles.map(file => <option key={file.id} value={file.id}>{file.name}</option>)}
@@ -2000,7 +2062,7 @@ const AIDocumentIntelligence = () => {
                   <label htmlFor="document-corpus-ai-question" className="block space-y-2 text-sm text-slate-300">
                     <span>Optional evidence question · maximum 250 characters</span>
                     <input id="document-corpus-ai-question" value={corpusQuestion} maxLength={250}
-                      onChange={e => { invalidateCorpusWorkspace(); setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
+                      onChange={e => { discardRecoveryCheckpoint(); invalidateCorpusWorkspace(); setCorpusQuestion(e.target.value); corpusAI.invalidate(); }}
                       placeholder="Which lines support this conclusion?"
                       className="w-full rounded-md border border-slate-700 bg-slate-950 p-3 text-white"/>
                   </label>
