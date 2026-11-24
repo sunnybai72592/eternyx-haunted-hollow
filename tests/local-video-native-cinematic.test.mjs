@@ -137,7 +137,7 @@ test("main Studio and launcher are wired to native cinematic without fake browse
   const launcher=readFileSync(new URL("../gpu-worker/launch_portable_video.py",import.meta.url),"utf8");
   const bundle=readFileSync(new URL("../src/lib/ai/portableVideoBundle.mjs",import.meta.url),"utf8");
   for(const token of ["fps={fps}","switchQuality","resetTimelineHistory(mapped)",
-                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality })',
+                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition })',
                       "native 24 FPS"])assert.ok(studio.includes(token),token);
   assert.match(timeline,/fps=16/);
   assert.match(timeline,/timelineSegments\(shots,fps\)/);
@@ -145,4 +145,21 @@ test("main Studio and launcher are wired to native cinematic without fake browse
   assert.match(launcher,/renderer\.check_shots\(board, media, manifest\["fps"\]\)/);
   assert.match(bundle,/fps:project\.fps/);
   assert.doesNotMatch(studio,/supabase\.functions\.invoke|enqueueAIJob/);
+});
+
+test("transition settings remain exact and reject malformed presets, short cuts and filter injection",()=>{
+  const input={sources:[a,b],shots:state(),quality:"cinematic"};
+  const transition={mode:"dissolve",duration_ms:500};
+  const made=buildLocalVideoBoard({...input,transition});
+  assert.deepEqual(made.board.transition,transition);
+  assert.equal(made.totalFrames,72);
+  assert.equal(localVideoSrt(made.board),localVideoSrt(buildLocalVideoBoard(input).board));
+  const saved=createLocalVideoDraft({...input,transition});
+  assert.deepEqual(readLocalVideoDraft(saved.json).transition,transition);
+  for(const invalid of [null,{mode:"fade;movie=x",duration_ms:250},{mode:"dissolve",duration_ms:333},{mode:"dissolve",duration_ms:250,extra:true}]){
+    assert.throws(()=>buildLocalVideoBoard({...input,transition:invalid}),/transition/i);
+  }
+  assert.throws(()=>buildLocalVideoBoard({...input,transition,shots:[input.shots[0],{...input.shots[1],frames:12,fadeInFrames:0,fadeOutFrames:0}]}),/transition/i);
+  assert.equal(auditLocalVideoExport({...input,transition}).canExport,true);
+  assert.equal(auditLocalVideoExport({...input,transition:{mode:"bad",duration_ms:250}}).canExport,false);
 });

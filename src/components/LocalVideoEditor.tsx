@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  buildLocalVideoBoard, checkLocalMediaName, localVideoCommand, localVideoSrt, LOCAL_VIDEO_GRADES, LOCAL_VIDEO_FRAMINGS,
+  buildLocalVideoBoard, checkLocalMediaName, localVideoCommand, localVideoSrt, LOCAL_VIDEO_GRADES, LOCAL_VIDEO_FRAMINGS, LOCAL_VIDEO_TRANSITIONS,
   LOCAL_VIDEO_LIMITS, LOCAL_VIDEO_PROFILES, LOCAL_VIDEO_QUALITIES,
 } from "@/lib/ai/localVideoEditor.mjs";
 
@@ -96,6 +96,7 @@ export default function LocalVideoEditor() {
   const [delivery,setDelivery]=useState("mp4");
   const [grade,setGrade]=useState("neutral");
   const [framing,setFraming]=useState("contain");
+  const [transition,setTransition]=useState<{mode:string;duration_ms:number}|undefined>(undefined);
   const fps:16|24=quality==="cinematic"?24:16;
   const [selectedSource, setSelectedSource] = useState("");
   const [working, setWorking] = useState(false);
@@ -128,7 +129,7 @@ export default function LocalVideoEditor() {
   const downloadDraft = () => {
     try {
       const saved = createLocalVideoDraft({
-        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,
+        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,transition,
       });
       saveDownload(saved.json,saved.filename,"application/json");
       setMessage("");
@@ -214,7 +215,7 @@ export default function LocalVideoEditor() {
       setSelectedSource(prepared[0].name);
       setProfile(verified.profile);
       setQuality(verified.quality);
-      setGrade(verified.grade);setFraming(verified.framing);
+      setGrade(verified.grade);setFraming(verified.framing);setTransition(verified.transition);
       setDraftName(verified.name);
       setPendingDraft(null);
       setNotice("Editing project restored: "+verified.verifiedCount+
@@ -367,7 +368,7 @@ export default function LocalVideoEditor() {
   let validation = "";
   if (sources.length) {
     try {
-      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality });
+      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition });
     } catch (error) {
       validation = error instanceof Error ? error.message : "Check the selected timeline.";
     }
@@ -381,7 +382,7 @@ export default function LocalVideoEditor() {
     setBundleProgress("Verifying actual source media...");
     try {
       const output = await buildPortableVideoBundle({
-        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing,
+        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing, transition,
         rendererSources: {
           "render_video_timeline.py": rendererPython,
           "assemble_video_storyboard.py": storyboardPython,
@@ -568,7 +569,7 @@ export default function LocalVideoEditor() {
         {sources.length > 0 && (
           <LocalVideoSequenceReview
             sources={sources} shots={shots} soundtrack={soundtrack} narration={narration} effects={effects}
-            profile={profile} quality={quality}
+            profile={profile} quality={quality} transition={transition}
             disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
             onJumpToShot={index=>{
               document.getElementById("local-video-shot-"+index)
@@ -744,6 +745,24 @@ export default function LocalVideoEditor() {
             </label>
           </div>
           <p className="text-xs text-slate-400">Color and framing are applied by real local FFmpeg to all shots, before fades. Source preview remains ungraded; inspect the completed MP4 to see the result.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm">Scene transition at every cut
+              <select value={transition?.mode??"cut"} disabled={bundleWorking||draftWorking||Boolean(pendingDraft)}
+                onChange={e=>setTransition(e.target.value==="cut"?undefined:{mode:e.target.value,duration_ms:transition?.duration_ms??250})}
+                className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
+                <option value="cut">Hard cut</option>
+                {LOCAL_VIDEO_TRANSITIONS.map(mode=><option key={mode} value={mode}>{mode.replaceAll("_"," ")}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1 text-sm">Transition duration
+              <select value={transition?.duration_ms??250} disabled={!transition||bundleWorking||draftWorking||Boolean(pendingDraft)}
+                onChange={e=>setTransition(old=>old?{...old,duration_ms:Number(e.target.value)}:undefined)}
+                className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
+                <option value={250}>0.25 seconds</option><option value={500}>0.50 seconds</option>
+              </select>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">Transitions blend from the previous composed shot's final frame into the incoming shot. They preserve the timeline length and caption/audio placement. Incoming cuts must be longer than the chosen transition. The source preview does not simulate this rendered effect.</p>
           <label className="block space-y-1 text-sm">Offline movie delivery formats
             <select value={delivery} disabled={bundleWorking} onChange={e=>setDelivery(e.target.value)}
               className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">

@@ -54,7 +54,7 @@ def read_board(path):
         raise ValueError("Storyboard exceeds 32 KiB")
     board = json.loads(content, object_pairs_hook=unique_keys)
     if (not isinstance(board, dict) or type(board.get("version")) is not int or
-            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps"} or
+            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps", "transition"} or
             type(board.get("fps", FPS)) is not int or board.get("fps", FPS) not in (FPS, CINEMATIC_FPS)):
         raise ValueError("Expected a v2 storyboard with shots and optional soundtrack")
     shots = board.get("shots")
@@ -146,6 +146,22 @@ def video_info(streams, *, expected_fps=FPS):
     return width, height, count
 
 
+TRANSITION_MODES = {"dissolve", "wipe_left", "wipe_right", "wipe_up", "wipe_down"}
+
+
+def check_transition(transition, shots, fps):
+    """A held-frame transition consumes no additional movie frames."""
+    if not isinstance(transition, dict) or set(transition) != {"mode", "duration_ms"}:
+        raise ValueError("Invalid scene transition fields")
+    mode, duration = transition["mode"], transition["duration_ms"]
+    if not isinstance(mode, str) or mode not in TRANSITION_MODES or type(duration) is not int or duration not in (250, 500):
+        raise ValueError("Unsupported scene transition preset or duration")
+    frames = duration * fps // 1000
+    if len(shots) < 2 or any(shot["frames"] <= frames for shot in shots[1:]):
+        raise ValueError("Scene transition requires at least two cuts and each incoming cut longer than the transition")
+    return frames
+
+
 def check_shots(board, root, fps=FPS):
     total = 0
     sources = {}
@@ -184,6 +200,8 @@ def check_shots(board, root, fps=FPS):
                           "timeline_start_frame": total, "caption": raw["caption"],
                           "rights_ref": raw["rights_ref"], "path": path})
         total += frames
+    if "transition" in board:
+        check_transition(board["transition"], validated, fps)
     return validated, total
 
 
@@ -263,7 +281,7 @@ COLOR_GRADES = {
 }
 
 
-def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None):
+def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None, transition=None):
     if quality not in ("standard", "high", "cinematic") or framing not in ("contain", "cover"):
         raise ValueError("Unsupported offline encoder quality or framing")
     if not isinstance(grade, str) or grade not in COLOR_GRADES:
@@ -279,6 +297,7 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
         if track.get("loop", True):
             cmd += ["-stream_loop", "-1"]
         cmd += ["-protocol_whitelist", "file,pipe", "-i", str(track["path"])]
+    transition_frames = check_transition(transition, shots, fps) if transition is not None else 0
     graph = []
     for i, shot in enumerate(shots):
         start, end = shot["start_frame"], shot["start_frame"] + shot["frames"]
@@ -298,8 +317,32 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
             remaining = (shot["frames"] - shot["fade_out_frames"]) / fps
             filters += [f"fade=t=out:st={remaining:.4f}:d={shot['fade_out_frames']/fps:.4f}"]
         graph.append(",".join(filters) + f"[shot{i}]")
-    graph.append("".join(f"[shot{i}]" for i in range(len(shots))) +
-                 f"concat=n={len(shots)}:v=1:a=0[outv]")
+    if transition_frames:
+        # Use the previous composed shot's last decoded frame, held only over
+        # the incoming cut. The main input always defines output timestamps.
+        # No overlapping source windows, shifted subtitles or lost audio time.
+        n = transition_frames
+        progress = f"min(1,(N-1)/{n})"
+        expressions = {
+            "dissolve": f"B*(1-{progress})+A*{progress}",
+            "wipe_left": f"if(lt(X/W,{progress}),A,B)",
+            "wipe_right": f"if(gte(X/W,1-{progress}),A,B)",
+            "wipe_up": f"if(lt(Y/H,{progress}),A,B)",
+            "wipe_down": f"if(gte(Y/H,1-{progress}),A,B)",
+        }
+        expression = expressions[transition["mode"]]
+        for i, shot in enumerate(shots):
+            if i < len(shots) - 1:
+                graph.append(f"[shot{i}]split[main{i}][tail{i}]")
+                graph.append(f"[tail{i}]trim=start_frame={shot['frames']-1}:end_frame={shot['frames']},setpts=PTS-STARTPTS[hold{i}]")
+            else:
+                graph.append(f"[shot{i}]null[main{i}]")
+        for i in range(1, len(shots)):
+            graph.append(f"[main{i}][hold{i-1}]blend=all_expr='{expression}':repeatlast=1:eof_action=repeat:enable='lt(n,{n})'[scene{i}]")
+        ordered = "[main0]" + "".join(f"[scene{i}]" for i in range(1, len(shots)))
+    else:
+        ordered = "".join(f"[shot{i}]" for i in range(len(shots)))
+    graph.append(ordered + f"concat=n={len(shots)}:v=1:a=0[outv]")
     for index, track in enumerate(tracks):
         duration = total / fps
         audio_input = len(shots) + index
@@ -448,7 +491,7 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects), timeout=240)
+        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects, board.get("transition")), timeout=240)
         video = verify_output(video_path, total, size, any(t is not None for t in tracks.values()), fps)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}
@@ -456,6 +499,7 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
                    "storyboard_sha256": board_hash, "video": video,
                    "profile": profile, "quality": quality, "framing": framing, "fps": fps,
                    **({"grade": grade} if grade != "neutral" else {}),
+                   **({"transition": board["transition"]} if "transition" in board else {}),
                    "total_frames": total, "shots": public_shots,
                    "soundtrack": audio, **{role: {k: v for k, v in tracks[role].items() if k != "path"}
                        for role in ("narration", "effects") if tracks[role] is not None},
