@@ -59,6 +59,7 @@ on:
       - "docs/sql/eternyx/services-phase48-readonly-admin-helper-verdict.sql"
       - "docs/sql/eternyx/services-phase48-disposable-admin-helper-acceptance.sql"
       - "tests/services-phase48-admin-helper-hardening.test.mjs"
+      - "scripts/services-phase48-admin-helper-proof.mjs"
       - "docs/ETERNYX_SERVICES_ADMIN_HELPER_PHASE48.md"
       - "docs/ETERNYX_SERVICES_LIVE_ACCEPTANCE_PHASE47.md"
       - "docs/sql/eternyx/services-phase45-staging-default-acl-assert.sql"
@@ -288,7 +289,7 @@ jobs:
           test -n "$before" && test "$before" = "$after" || { echo "Phase48 public helper OID or dependent count changed"; exit 1; }
           docker exec -i "$name" psql -X -q -A -t -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
             < docs/sql/eternyx/services-phase48-readonly-admin-helper-verdict.sql > "$RUNNER_TEMP/services-phase48-helper.json"
-          node --input-type=module -e "import {readFileSync} from 'node:fs';const x=JSON.parse(readFileSync(process.argv[1],'utf8'));const failed=Object.keys(x).filter(k=>x[k]!==true);if(Object.keys(x).length!==10||failed.length)throw Error('Phase48 helper catalog failed: '+failed.join(','));" \
+          node --input-type=module -e "import {readFileSync} from 'node:fs';import {analyzeHardening} from './scripts/services-phase48-admin-helper-proof.mjs';const x=analyzeHardening(readFileSync(process.argv[1],'utf8'));if(x.factsPassed!==10)throw Error('Phase48 helper catalog failed: '+x.missingFacts.join(','));" \
             "$RUNNER_TEMP/services-phase48-helper.json"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
             < docs/sql/eternyx/services-phase47-disposable-fixture-acceptance.sql
