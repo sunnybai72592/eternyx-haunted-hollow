@@ -39,5 +39,7 @@ install supabase/migrations/20261123041000_ctf_hosted_spend_reservations.sql
 smoke tests/sql/ctf-hosted-spend-reservations-smoke.sql
 install supabase/migrations/20261124123000_ctf_range_session_column_privacy.sql
 smoke tests/sql/eternyx-labs-session-privacy-smoke.sql
+echo "Rollback-isolated terminal fixture operator rehearsal"
+{ printf 'BEGIN;\n'; cat tests/sql/eternyx-labs-terminal-fixture-bootstrap.sql scripts/sql/labs-staging-terminal-fixtures.sql scripts/sql/labs-staging-terminal-fixtures.sql tests/sql/eternyx-labs-terminal-fixture-smoke.sql; printf '\nROLLBACK;\n'; } | sql
 sql < tests/sql/eternyx-labs-composed-catalog-smoke.sql
 echo "Offline composition complete; no staging or production deployment performed."
