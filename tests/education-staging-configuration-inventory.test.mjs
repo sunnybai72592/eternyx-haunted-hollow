@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {
   COMMON_KEYS,WRITE_KEYS,MODES,requiredConfigurationNames,
-  configForOfflineValidation,makeEducationStagingInventory,
+  configForOfflineValidation,makeEducationStagingInventory,configurationLocation,
 } from "../scripts/staging/educationStagingConfigurationInventory.mjs";
 
 const uuid=n=>"10000000-0000-4000-8000-"+String(n).padStart(12,"0");
@@ -145,4 +145,30 @@ test("manual inventory is no-network, no scheduled execution and uploads only sa
  assert.doesNotMatch(workflow,/curl |psql |supabase db |npm run deploy/);
  for(const name of [...COMMON_KEYS,...WRITE_KEYS])
   assert.ok(release.includes(name),name);
+});
+
+test("preflight validator receives only recognized read-only settings, never unrelated credentials",()=>{
+ const env=synthetic("journey");
+ env.UNRELATED_RUNNER_TOKEN="synthetic unrelated credential";
+ const preflight=configForOfflineValidation(env,"preflight");
+ assert.equal(preflight.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY,"");
+ assert.equal(Object.hasOwn(preflight,"ETERNYX_RLS_INSTRUCTOR_PASSWORD"),false);
+ assert.equal(Object.hasOwn(preflight,"ETERNYX_EDU_REVIEW_TEST_ID"),false);
+ assert.equal(Object.hasOwn(preflight,"UNRELATED_RUNNER_TOKEN"),false);
+ assert.equal(makeEducationStagingInventory(env,"preflight").outcome,"configuration_syntax_ready");
+ assert.equal(configForOfflineValidation(env,"journey").ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY,env.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY);
+ assert.throws(()=>configForOfflineValidation(env,"production"));
+});
+test("missing-setting guidance classifies only allowlisted secret and variable names",()=>{
+ for(const name of [...COMMON_KEYS,...WRITE_KEYS]){
+  const expected=workflow.includes("secrets."+name)?"rls-staging environment secret":"rls-staging environment variable";
+  assert.equal(configurationLocation(name),expected,name);
+ }
+ assert.throws(()=>configurationLocation("UNRECOGNIZED"));
+});
+test("inventory removes previous report before computing a new verdict",()=>{
+ const start=source.indexOf("export function runInventory");
+ const clear=source.indexOf("rmSync(INVENTORY_PATH,{force:true})",start);
+ const compute=source.indexOf("const report=makeEducationStagingInventory",start);
+ assert.ok(start>=0&&clear>start&&compute>clear);
 });

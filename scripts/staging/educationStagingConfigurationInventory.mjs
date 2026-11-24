@@ -3,7 +3,7 @@
  * Only missing CONFIGURATION NAMES and fixed validation results are exposed.
  * This does NOT authorize a manual rehearsal or connect to Supabase.
  */
-import {mkdirSync,writeFileSync,appendFileSync} from "node:fs";
+import {mkdirSync,writeFileSync,appendFileSync,rmSync} from "node:fs";
 import {pathToFileURL} from "node:url";
 import {validateStagingRlsReadOnlyConfig} from "./stagingRlsConfig.mjs";
 import {validateEducationReleaseConfig} from "./educationReleaseGate.mjs";
@@ -41,6 +41,17 @@ const FLAGS=Object.freeze([
  "staging_database_connection_config_valid",
 ]);
 export const INVENTORY_PATH="test-results/education-hosted-configuration-inventory.json";
+const SECRET_NAMES=new Set([
+ "ETERNYX_RLS_STAGING_URL","ETERNYX_RLS_STAGING_PUBLISHABLE_KEY",
+ "ETERNYX_RLS_TEST_A_EMAIL","ETERNYX_RLS_TEST_A_PASSWORD",
+ "ETERNYX_RLS_TEST_B_EMAIL","ETERNYX_RLS_TEST_B_PASSWORD",
+ "ETERNYX_RLS_INSTRUCTOR_EMAIL","ETERNYX_RLS_INSTRUCTOR_PASSWORD",
+ "ETERNYX_EDU_STAGING_DB_PASSWORD","ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY",
+]);
+export function configurationLocation(name){
+ if(!COMMON_KEYS.includes(name)&&!WRITE_KEYS.includes(name))throw new Error("Unknown Education configuration name");
+ return SECRET_NAMES.has(name)?"rls-staging environment secret":"rls-staging environment variable";
+}
 const fail=()=>{throw new Error("Education staging inventory blocked");};
 
 export function requiredConfigurationNames(mode){
@@ -50,9 +61,12 @@ export function requiredConfigurationNames(mode){
 // The approval constants here are ONLY inputs to pure validators; these are
 // not passed to any network client, child process, or release workflow.
 export function configForOfflineValidation(env,mode){
+ const allowed=requiredConfigurationNames(mode);
  const write=mode!=="preflight";
+ // Do not copy unrelated runner credentials or write-only fixture fields into preflight.
+ const scoped=Object.fromEntries(allowed.map(key=>[key,env[key]]));
  return {
-  ...env,
+  ...scoped,
   ETERNYX_EDU_RELEASE_MODE:mode,
   ETERNYX_EDU_RELEASE_APPROVAL:"I_APPROVE_EDUCATION_STAGING_RELEASE_CHECKS",
   ETERNYX_EDU_STAGING_READ_APPROVAL:"I_APPROVE_EDUCATION_STAGING_READ_ONLY",
@@ -109,6 +123,8 @@ export function makeEducationStagingInventory(env,mode){
 }
 export function runInventory(env=process.env){
  try{
+  // Invalid provenance or malformed mode must never leave an old successful report.
+  rmSync(INVENTORY_PATH,{force:true});
   const report=makeEducationStagingInventory(env,env.ETERNYX_EDU_INVENTORY_MODE);
   mkdirSync("test-results",{recursive:true});
   writeFileSync(INVENTORY_PATH,JSON.stringify(report,null,2)+"\n",{mode:0o600});
@@ -117,7 +133,7 @@ export function runInventory(env=process.env){
     "Mode: "+report.run_mode+"; result: "+report.outcome,
     "This checks only local configuration and protected credential shape. No network access or live hosted authentication occurred.",
     "Missing configuration names: "+report.missing_configuration_names.length,
-    ...report.missing_configuration_names.map(k=>"- \`"+k+"\`"),
+    ...report.missing_configuration_names.map(k=>"- \`"+k+"\` — "+configurationLocation(k)),
     ...report.checks.map(c=>"- "+c.check+": "+c.result),
     "Production release approved: NO.",
   ].join("\n")+"\n";

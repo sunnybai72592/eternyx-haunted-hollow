@@ -63,10 +63,10 @@ jobs:
           ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
           ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
           ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
-          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
-          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL || '' }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD || '' }}
           ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
-          ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY }}
+          ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY: ${{ (inputs.run_mode == 'rehearsal' || inputs.run_mode == 'journey') && secrets.ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY || '' }}
         run: node scripts/staging/educationStagingConfigurationInventory.mjs
       - name: Upload sanitized configuration inventory even when blocked
         if: always()

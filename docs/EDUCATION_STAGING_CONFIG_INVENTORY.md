@@ -19,3 +19,7 @@ The same audit runs at the **start** of the existing Education hosted release wo
 5. Only after successful read-only acceptance and independent review, consider an explicitly approved one-time `journey` with prepared synthetic accounts, approved exam/instructor, validated expected scores, and a recent staging backup.
 
 **Never treat `configuration_syntax_ready` as `staging_verified` or `production_approved`.** Offline completeness is not live authentication, row-level-security proof, or an authorization to deploy.
+
+## Credential isolation and operator guidance
+
+The standalone inventory injects instructor credentials and the staging-only privileged key only for rehearsal or journey mode. Preflight local validation receives only recognized read-only configuration names (plus fixed validation-only approval markers); unrelated runner secrets are not copied. Each missing name in the job summary identifies whether to add it as an environment secret or variable under `rls-staging`. The prior local inventory file is removed before computing a new report so malformed mode/provenance cannot reuse an old successful artifact. These checks do not constitute hosted acceptance.
