@@ -22,6 +22,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+import struct
+from html import escape
+from time import monotonic
 
 import render_video_timeline as renderer
 
@@ -33,6 +36,7 @@ MAX_BUNDLE_BYTES = 64 * 1024
 ENCODERS_TIMEOUT = 12
 RUN_SECONDS = 240
 SHA = set("0123456789abcdef")
+DELIVERIES = {"mp4", "mp4_with_subtitles", "mp4_webm", "all"}
 
 
 def safe_json(path, maximum=MAX_BUNDLE_BYTES):
@@ -93,6 +97,15 @@ def preflight(root=ROOT):
             or type(manifest.get("shots")) is not int
             or not 1 <= manifest["shots"] <= 8):
         raise ValueError("Unsupported or invalid private ETERNYX CPU project manifest")
+    delivery = manifest.get("delivery")
+    if "delivery" in manifest and (not isinstance(delivery, str) or delivery not in DELIVERIES):
+        raise ValueError("Unsupported portable movie delivery")
+    if delivery in ("mp4_webm", "all"):
+        check_program("ffmpeg", ["-hide_banner", "-encoders"], b"libvpx-vp9")
+        if board.get("soundtrack"):
+            check_program("ffmpeg", ["-hide_banner", "-encoders"], b"libopus")
+    if delivery in ("mp4_with_subtitles", "all"):
+        check_program("ffmpeg", ["-hide_banner", "-encoders"], b"mov_text")
     if manifest["shots"] != len(board["shots"]):
         raise ValueError("Portable manifest shot count and storyboard disagree")
     media = root / "media"
@@ -150,7 +163,7 @@ def preflight(root=ROOT):
         "shots": len(shots), "source_count": len(source_hashes),
         "private_media_bytes": total_bytes,
         "profile": manifest["profile"], "quality": manifest["quality"],
-        "local_only": True, "output": OUTPUT,
+        "local_only": True, "output": OUTPUT, "delivery": delivery,
     }
 
 
@@ -177,6 +190,133 @@ def stop_group(process):
         else:
             process.kill()
         process.wait(timeout=12)
+
+
+
+def delivery_command(args, cancel, timeout):
+    """Bounded cancellable local conversion; drain pipes while child runs."""
+    if cancel.is_set():
+        raise ValueError("Video delivery cancelled")
+    proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, start_new_session=os.name != "nt",
+                            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0)
+    deadline = monotonic() + timeout
+    try:
+        while True:
+            if cancel.is_set():
+                raise ValueError("Video delivery cancelled")
+            if monotonic() >= deadline:
+                raise ValueError("Local delivery encoding exceeded its CPU budget")
+            try:
+                out, err = proc.communicate(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        if proc.returncode != 0:
+            raise ValueError("Local delivery failed: " + err.decode("utf8", "replace")[-500:])
+        if cancel.is_set():
+            raise ValueError("Video delivery cancelled")
+        return out
+    finally:
+        if proc.poll() is None:
+            stop_group(proc)
+
+
+def make_deliveries(folder, receipt, mode, cancel):
+    """Create variants only inside the launcher's private staging folder."""
+    if mode not in DELIVERIES:
+        raise ValueError("Unsupported portable movie delivery")
+    video = receipt["video"]
+    frames, fps = receipt["total_frames"], receipt["fps"]
+    size = (video["width"], video["height"])
+    audio = video["audio"]
+    master = folder / "video.mp4"
+    srt_path = folder / "captions.srt"
+    results = {}
+    def record(path):
+        if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 64*1024*1024:
+            raise ValueError("Missing or oversized local delivery asset")
+        return {"sha256": sha256(path), "file_bytes": path.stat().st_size}
+    def variant(path, codec, subtitle=False, audio_codec=None):
+        if cancel.is_set():
+            raise ValueError("Video delivery cancelled")
+        record(path)
+        result = renderer.verify_output(path, frames, size, audio, fps)
+        streams = json.loads(delivery_command([
+            "ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe",
+            "-show_entries", "stream=codec_type,codec_name", "-of", "json", str(path),
+        ], cancel, 30))["streams"]
+        videos = [s.get("codec_name") for s in streams if s.get("codec_type") == "video"]
+        audios = [s.get("codec_name") for s in streams if s.get("codec_type") == "audio"]
+        subs = [s.get("codec_name") for s in streams if s.get("codec_type") == "subtitle"]
+        if videos != [codec] or subs != (["mov_text"] if subtitle else []) or audios != ([audio_codec] if audio else []):
+            raise ValueError("Delivery video, audio or subtitle codec mismatch")
+        return {**result, "codec": codec, "audio_codec": audio_codec if audio else None,
+                "selectable_subtitles": subtitle}
+    prefix = ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-n", "-protocol_whitelist", "file,pipe"]
+    results["video.mp4"] = variant(master, "h264", audio_codec="aac")
+    results["captions.srt"] = record(srt_path)
+    results["preview.html"] = record(folder / "preview.html")
+    if mode in ("mp4_with_subtitles", "all"):
+        path = folder / "video-subtitled.mp4"
+        delivery_command(prefix + ["-i", str(master), "-f", "srt", "-i", str(srt_path),
+            "-map", "0:v:0", "-map", "1:s:0",
+            *(["-map", "0:a:0", "-c:a", "copy"] if audio else ["-an"]),
+            "-c:v", "copy", "-c:s", "mov_text", "-metadata:s:s:0", "language=eng",
+            "-movflags", "+faststart", str(path)], cancel, 90)
+        results[path.name] = variant(path, "h264", subtitle=True, audio_codec="aac")
+    if mode in ("mp4_webm", "all"):
+        path = folder / "video.webm"
+        delivery_command(prefix + ["-i", str(master), "-map", "0:v:0",
+            *(["-map", "0:a:0", "-c:a", "libopus", "-b:a", "96k"] if audio else ["-an"]),
+            "-sn", "-dn", "-c:v", "libvpx-vp9", "-deadline", "realtime",
+            "-cpu-used", "6", "-threads", "2", "-b:v", "0", "-crf", "27",
+            "-pix_fmt", "yuv420p", str(path)], cancel, 180)
+        results[path.name] = variant(path, "vp9", audio_codec="opus")
+    # Exact middle decoded frame works even for a one-frame movie.
+    png = delivery_command(prefix + ["-i", str(master), "-map", "0:v:0",
+        "-vf", "select=eq(n\\," + str(frames//2) + ")", "-frames:v", "1",
+        "-an", "-c:v", "png", "-f", "image2pipe", "pipe:1"], cancel, 60)
+    if (len(png) < 24 or len(png) > 8*1024*1024 or not png.startswith(b"\x89PNG\r\n\x1a\n")
+            or struct.unpack(">II", png[16:24]) != size):
+        raise ValueError("Decoded movie poster dimensions are invalid")
+    poster = folder / "poster.png"
+    poster.write_bytes(png)
+    results[poster.name] = record(poster)
+    vtt = ["WEBVTT", ""]
+    transcript = []
+    for shot in receipt["shots"]:
+        start = renderer.timeline_stamp(shot["timeline_start_frame"], fps).replace(",", ".")
+        end = renderer.timeline_stamp(shot["timeline_start_frame"] + shot["frames"], fps).replace(",", ".")
+        caption = escape(shot["caption"])
+        vtt.extend([start+" --> "+end, caption, ""])
+        transcript.append(f"<li><time>{start}</time> – <time>{end}</time><br>{caption}</li>")
+    (folder / "captions.vtt").write_text("\n".join(vtt)+"\n", encoding="utf8")
+    results["captions.vtt"] = record(folder / "captions.vtt")
+    primary = "video-subtitled.mp4" if "video-subtitled.mp4" in results else "video.mp4"
+    sources = f'<source src="{primary}" type="video/mp4">'
+    if primary != "video.mp4":
+        sources += '<source src="video.mp4" type="video/mp4">'
+    if "video.webm" in results:
+        sources += '<source src="video.webm" type="video/webm">'
+    downloads = "".join(f'<li><a href="{name}" download>{name}</a></li>' for name in results)
+    html = f"""<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eternyx portable movie playback</title>
+<style>:root{{color-scheme:light dark}}body{{font:1rem/1.5 system-ui;max-width:52rem;margin:auto;padding:1rem}}
+video{{display:block;width:100%;height:auto;max-height:75vh;background:#000}}li{{overflow-wrap:anywhere;margin:.4rem 0}}</style>
+<main><h1>Finished movie</h1><p>{size[0]} × {size[1]} · {fps} FPS · {frames/fps:g} seconds · {"Licensed soundtrack" if audio else "Silent output"}</p>
+<video controls playsinline preload="metadata" poster="poster.png" width="{size[0]}" height="{size[1]}">{sources}
+<track kind="captions" src="captions.vtt" srclang="en" label="Human-authored captions">
+<a href="{primary}">Open local movie</a></video>
+<details><summary>Timed transcript</summary><ol>{"".join(transcript)}</ol></details>
+<h2>Download verified files</h2><ul>{downloads}</ul><p><a href="manifest.json">Local integrity receipt</a></p></main></html>
+"""
+    (folder / "watch.html").write_text(html, encoding="utf8")
+    results["watch.html"] = record(folder / "watch.html")
+    if cancel.is_set():
+        raise ValueError("Video delivery cancelled")
+    return results
 
 
 def run(root=ROOT, on_stage=None, cancel=None):
@@ -245,6 +385,11 @@ def run(root=ROOT, on_stage=None, cancel=None):
             candidate=folder/filename
             if candidate.is_symlink() or not candidate.is_file() or candidate.stat().st_size<=0:
                 raise ValueError("Missing genuine rendered preview or SRT captions")
+        if checked.get("delivery") is not None:
+            on_stage("Encoding and verifying selected movie delivery files...")
+            receipt["delivery"] = checked["delivery"]
+            receipt["deliverables"] = make_deliveries(folder, receipt, checked["delivery"], cancel)
+            (folder/"manifest.json").write_text(json.dumps(receipt, indent=2, ensure_ascii=False, allow_nan=False)+"\n", encoding="utf8")
         if cancel.is_set():
             raise ValueError("Video rendering cancelled before final promotion")
         target=root/OUTPUT
@@ -256,6 +401,7 @@ def run(root=ROOT, on_stage=None, cancel=None):
             "result":"completed","output":str(target),"video_sha256":video["sha256"],
             "frames":checked["frames"],"audio":video.get("audio"),
             "local_only":True,
+            **({"deliverables": list(receipt["deliverables"])} if "deliverables" in receipt else {}),
         }
     except KeyboardInterrupt:
         cancel.set()

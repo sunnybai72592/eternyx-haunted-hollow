@@ -182,7 +182,7 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   const project=await buildPortableVideoBundle(settings([source],[
     shot(source,{frames:16,caption:"Real approved clip",fadeInFrames:3}),
     shot(source,{startFrame:16,frames:16,caption:"Real second cut",fadeOutFrames:3}),
-  ],{soundtrack:audio}));
+  ],{soundtrack:audio,delivery:"all"}));
   const zip=join(dir,"eternyx-project.zip"),unpacked=join(dir,"unpacked");
   mkdirSync(unpacked);
   writeFileSync(zip,Buffer.from(await project.blob.arrayBuffer()));
@@ -213,6 +213,19 @@ test("real extracted ZIP renders a verified H264 MP4, preview, SRT and output ma
   assert.equal(summary.shots.length,2);
   assert.equal(summary.model_generation,false);
   assert.equal(summary.video.sha256,digest(readFileSync(join(out,"video.mp4"))));
+  assert.equal(summary.delivery,"all");
+  for(const name of ["video.mp4","video-subtitled.mp4","video.webm","poster.png","captions.srt","captions.vtt","preview.html","watch.html"]){
+    const bytes=readFileSync(join(out,name));
+    assert.equal(summary.deliverables[name].sha256,digest(bytes),name);
+    assert.equal(summary.deliverables[name].file_bytes,bytes.length,name);
+  }
+  assert.equal(summary.deliverables["video-subtitled.mp4"].audio_codec,"aac");
+  assert.equal(summary.deliverables["video-subtitled.mp4"].selectable_subtitles,true);
+  assert.equal(summary.deliverables["video.webm"].audio_codec,"opus");
+  assert.equal(summary.deliverables["video.webm"].frame_count,32);
+  assert.match(readFileSync(join(out,"watch.html"),"utf8"),/Licensed soundtrack/);
+  assert.match(readFileSync(join(out,"watch.html"),"utf8"),/video.webm/);
+  assert.match(readFileSync(join(out,"captions.vtt"),"utf8"),/00:00:01\.000 --> 00:00:02\.000/);
   const frames=spawnSync("ffprobe",[
     "-v","error","-count_frames","-show_entries",
     "stream=codec_type,width,height,nb_read_frames",

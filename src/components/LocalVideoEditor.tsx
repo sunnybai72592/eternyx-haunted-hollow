@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import LocalRenderReview from "@/components/LocalRenderReview";
-import { buildPortableVideoBundle } from "@/lib/ai/portableVideoBundle.mjs";
+import { buildPortableVideoBundle, PORTABLE_DELIVERIES } from "@/lib/ai/portableVideoBundle.mjs";
 import {
   VIDEO_DRAFT_LIMITS,createLocalVideoDraft,
   readLocalVideoDraft,verifyLocalVideoDraftMedia,
@@ -89,6 +89,7 @@ export default function LocalVideoEditor() {
   const [soundtrack, setSoundtrack] = useState<LocalSound | null>(null);
   const [profile, setProfile] = useState<RenderProfile>("landscape");
   const [quality, setQuality] = useState<RenderQuality>("standard");
+  const [delivery,setDelivery]=useState("mp4");
   const fps:16|24=quality==="cinematic"?24:16;
   const [selectedSource, setSelectedSource] = useState("");
   const [working, setWorking] = useState(false);
@@ -338,7 +339,7 @@ export default function LocalVideoEditor() {
     setBundleProgress("Verifying actual source media...");
     try {
       const output = await buildPortableVideoBundle({
-        sources, shots, soundtrack, profile, quality,
+        sources, shots, soundtrack, profile, quality, delivery,
         rendererSources: {
           "render_video_timeline.py": rendererPython,
           "assemble_video_storyboard.py": storyboardPython,
@@ -634,6 +635,16 @@ export default function LocalVideoEditor() {
               </select>
             </label>
           </div>
+          <label className="block space-y-1 text-sm">Offline movie delivery formats
+            <select value={delivery} disabled={bundleWorking} onChange={e=>setDelivery(e.target.value)}
+              className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
+              {PORTABLE_DELIVERIES.map(mode=><option key={mode} value={mode}>{({
+                mp4:"MP4 + offline player",mp4_with_subtitles:"MP4 + selectable subtitle MP4",
+                mp4_webm:"MP4 + WebM",all:"All formats + offline player",
+              } as Record<string,string>)[mode]}</option>)}
+            </select>
+            <span className="block text-xs text-slate-400">The local launcher verifies every requested movie and keeps the licensed soundtrack. Poster, VTT, transcript and watch.html are included. Direct render scripts export the master only.</span>
+          </label>
           {validation && <p role="alert" className="text-sm text-amber-200">{validation}</p>}
           {message && <p role="alert" className="text-sm text-rose-200">{message}</p>}
           {notice && <p role="status" className="text-sm text-emerald-200">{notice}</p>}
