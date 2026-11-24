@@ -27,13 +27,19 @@ jobs:
     environment: automation-staging
     timeout-minutes: 6
     env:
-      ETERNYX_AUTOMATION_STAGING_REF: "${{ vars.ETERNYX_AUTOMATION_STAGING_REF }}"
+      ETERNYX_AUTOMATION_STAGING_REF: mhodwvypfbxafamkrgsk
       ETERNYX_AUTOMATION_PRODUCTION_REF: wcncuarekaofmfurbtbh
       ETERNYX_AUTOMATION_NEGATIVE_HTTP_CONSENT: "${{ inputs.negative_http_approval }}"
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          submodules: false
+      - name: Strip checkout authorization before executing repository code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          if git config --local --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1; then exit 1; fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
