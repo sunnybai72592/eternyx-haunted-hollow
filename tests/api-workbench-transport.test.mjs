@@ -42,3 +42,9 @@ test("response size cap and stale-safe workbench wiring remain enforced",async()
   assert.match(view,/disabled=\{!result\.body \|\| responseStale\}/);
   assert.doesNotMatch(view,/redirect:\s*"follow"/);
 });
+
+test("invalid UTF-8 replacement expansion cannot exceed the display byte budget",async()=>{
+  const result=await executeApiWorkbenchRequest(request,{fetcher:async()=>new Response(new Uint8Array(500_000).fill(255))});
+  assert.ok(new TextEncoder().encode(result.body).byteLength<=1_000_000);
+  assert.equal(result.truncated,true);
+});

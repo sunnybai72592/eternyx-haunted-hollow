@@ -42,7 +42,6 @@ export default function ApiEngineeringWorkbench() {
   const [error, setError] = useState("");
   const [envText, setEnvText] = useState("");
   const [history, setHistory] = useState(initialHistory);
-  const [, setAssertionResults] = useState<{ name: string; passed: boolean; detail: string }[]>([]);
   const [expectations, setExpectations] = useState({ status: "200", maxDurationMs: "", jsonPath: "", equals: "" });
 
   useEffect(() => {
@@ -61,7 +60,7 @@ export default function ApiEngineeringWorkbench() {
     setHeaders("");
     setBody("");
     setResult(null);
-    setAssertionResults([]);
+
     setCurl("");
     setError("");
   };
@@ -96,7 +95,7 @@ export default function ApiEngineeringWorkbench() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Invalid request.");
       setResult(null);
-      setAssertionResults([]);
+
       return;
     }
 
@@ -106,7 +105,7 @@ export default function ApiEngineeringWorkbench() {
     setBusy(true);
     setError("");
     setResult(null);
-    setAssertionResults([]);
+
     const controller = new AbortController();
     activeRequest.current = controller;
     let timedOut = false;
@@ -116,7 +115,7 @@ export default function ApiEngineeringWorkbench() {
       if (controller.signal.aborted) return;
       setResponseSignature(draftSignature);
       setResult(nextResult);
-      setAssertionResults(runApiAssertions(nextResult, expectations));
+
       setHistory((current) => recordApiHistory(current, {
         url: request.url, method: request.method, status: nextResult.status,
         durationMs: nextResult.durationMs, at: new Date().toISOString(),
@@ -151,7 +150,7 @@ export default function ApiEngineeringWorkbench() {
         <ProjectApiSuitePanel initialProjectId={searchParams.get("projectId") || ""} draft={draft} />
 
         <ApiWorkspacePanel draft={draft} onLoad={loadTemplate} envText={envText} onEnvText={setEnvText}
-          expectations={expectations} onExpectations={(value) => { setExpectations(value); setAssertionResults(result && !responseStale ? runApiAssertions(result, value) : []); }}
+          expectations={expectations} onExpectations={setExpectations}
           assertions={result && !responseStale ? runApiAssertions(result, expectations) : []} history={history} onClearHistory={() => setHistory([])} busy={busy} />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

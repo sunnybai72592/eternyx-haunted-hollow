@@ -64,12 +64,16 @@ export async function executeApiWorkbenchRequest(request, options = {}) {
   const raw = received.text;
   const formatted = received.truncated ? raw : formatApiResponseBody(raw, response.headers.get("content-type") || "");
   // Pretty printing can expand a compact JSON document substantially.
-  const body = new TextEncoder().encode(formatted).byteLength <= API_MAX_RESPONSE_BYTES ? formatted : raw;
+  const encoder = new TextEncoder();
+  const preferred = encoder.encode(formatted).byteLength <= API_MAX_RESPONSE_BYTES ? formatted : raw;
+  const encoded = encoder.encode(preferred);
+  const displayClipped = encoded.byteLength > API_MAX_RESPONSE_BYTES;
+  const body = displayClipped ? new TextDecoder().decode(encoded.subarray(0, API_MAX_RESPONSE_BYTES), {stream:true}) : preferred;
   return {
     status:response.status, statusText:response.statusText, ok:response.ok,
     headerDurationMs, durationMs:Math.max(0, Math.round(now() - started)),
     headers:Array.from(response.headers.entries()).map(([name,value])=>name+": "+value).join("\n") ||
       "No response headers exposed by the browser.",
-    body, truncated:received.truncated,
+    body, truncated:received.truncated || displayClipped,
   };
 }
