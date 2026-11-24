@@ -203,7 +203,7 @@ def target_origin(args):
             raise ValueError("Remote staging cannot use IP literals.")
         if parsed.scheme != "https" or parsed.hostname != args.expected_host:
             raise ValueError("Staging requires HTTPS and an exact --expected-host match.")
-        if not any(part in (parsed.hostname or "").lower() for part in ("staging", "stage")):
+        if not re.search(r"(^|[.-])stag(?:e|ing)([.-]|$)", parsed.hostname or "", re.I):
             raise ValueError("Target does not clearly identify a staging host; refusing remote checks.")
     elif args.confirmed_staging or args.expected_host or parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost") or parsed.port != 4173:
         raise ValueError("Local mode accepts only http://127.0.0.1:4173 or http://localhost:4173.")
