@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {
   COMMON_KEYS,WRITE_KEYS,MODES,requiredConfigurationNames,
-  configForOfflineValidation,makeEducationStagingInventory,configurationLocation,
+  configForOfflineValidation,makeEducationStagingInventory,configurationLocation,assertEducationInventoryEvidence,
 } from "../scripts/staging/educationStagingConfigurationInventory.mjs";
 
 const uuid=n=>"10000000-0000-4000-8000-"+String(n).padStart(12,"0");
@@ -171,4 +171,32 @@ test("inventory removes previous report before computing a new verdict",()=>{
  const clear=source.indexOf("rmSync(INVENTORY_PATH,{force:true})",start);
  const compute=source.indexOf("const report=makeEducationStagingInventory",start);
  assert.ok(start>=0&&clear>start&&compute>clear);
+});
+
+test("release requires exact current-run configuration proof, not stale or promoted evidence",()=>{
+ for(const mode of MODES){
+  const env={...synthetic(mode),ETERNYX_EDU_RELEASE_MODE:mode};
+  const report=makeEducationStagingInventory(env,mode);
+  assert.equal(assertEducationInventoryEvidence(report,env),true);
+  for(const mutate of [
+   r=>{r.source_sha="b".repeat(40);},r=>{r.github_run_id="999";},
+   r=>{r.github_run_attempt="2";},r=>{r.run_mode="production";},
+   r=>{r.required_count--;},r=>{r.checks[0].result="blocked";},
+   r=>{r.checks.pop();},r=>{r.checks[0].secret="not allowed";},
+   r=>{r.missing_configuration_names.push("ETERNYX_EDU_STAGING_DB_PASSWORD");},
+   r=>{r.outcome="configuration_blocked";},r=>{r.hosted_staging_verified=true;},
+   r=>{r.production_release_approved=true;},r=>{r.private_value="unrecognized";},
+  ]){
+   const copy=structuredClone(report);mutate(copy);
+   assert.throws(()=>assertEducationInventoryEvidence(copy,env));
+  }
+ }
+});
+test("same-run inventory is independently validated before any live database or hosted runner stage",()=>{
+ const check=release.indexOf("Independently require current-run offline inventory");
+ const db=release.indexOf("node scripts/staging/educationHostedDbMetadata.mjs");
+ assert.ok(check>0&&db>check);
+ const runner=readFileSync(new URL("../scripts/staging/runEducationHostedRelease.mjs",import.meta.url),"utf8");
+ assert.ok(runner.indexOf("assertEducationInventoryEvidence(JSON.parse")<runner.indexOf("for(const stage of stages)"));
+ assert.match(runner,/assertEducationInventoryEvidence\(JSON\.parse/);
 });

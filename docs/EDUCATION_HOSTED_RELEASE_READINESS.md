@@ -59,3 +59,7 @@ The runner strips service-role credentials from *every subprocess except trusted
 ### Mandatory live metadata evidence in combined verdict
 
 The release orchestrator now **requires** the staging PostgreSQL metadata result from this exact SHA/run/attempt before executing its first hosted student/instructor check. The final summarized report has a `database_metadata_gate` with a pass count; an unverified or stale report cannot be translated into a green release verdict. The SQL audit's database password is supplied only to its GitHub Actions step and is stripped from all child processes. A total of **31** fixed permission/RLS/function/trigger checks are required. This remains a staging-only source gate until it runs against a separately approved backend.
+
+## Avoid consuming a fresh attempt before browser prerequisites are ready
+
+In journey mode, build the staging-only frontend, install Chromium, start the local preview and prove an offline browser can launch **before** any one-time exam attempt, review or finalization. The actual authenticated fresh-result browser checks still execute only after the complete backend journey. The prelaunch smoke does not log in, prove a hosted UI, or certify production. Instructor credentials are conditional on rehearsal/journey mode. A strict current-run inventory proof is required both before remote checks and inside the release runner; it verifies only offline configuration and is never treated as hosted acceptance.

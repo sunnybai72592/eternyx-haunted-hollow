@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertEducationDbEvidence } from "./educationHostedDbMetadata.mjs";
+import {assertEducationInventoryEvidence,INVENTORY_PATH} from "./educationStagingConfigurationInventory.mjs";
 import {FIXTURE_EVIDENCE,assertJourneyFixtureEvidence}
   from "./educationJourneyFixturePreflight.mjs";
 import {HANDOFF_PATH,verifyJourneyHandoff,journeyStageEnv} from "./educationJourneyHandoff.mjs";
@@ -33,6 +34,7 @@ function run(file, env) {
 }
 try {
   const config=validateEducationReleaseConfig(process.env);
+  assertEducationInventoryEvidence(JSON.parse(readFileSync(INVENTORY_PATH,"utf8")),process.env);
   const stages=EDUCATION_RELEASE_STAGES[config.mode];
   const provenance={
     sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,
