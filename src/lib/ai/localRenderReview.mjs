@@ -111,6 +111,7 @@ export function readLocalRenderReceipt(raw) {
     cursor += row.frames;
   });
   if (cursor !== receipt.total_frames) fail("Shot lengths do not match the rendered timeline.");
+  if(!Object.hasOwn(receipt,"soundtrack"))fail("Missing soundtrack receipt.");
   const audioRoles=["soundtrack","narration","effects"];
   const seen=new Set(receipt.shots.map(shot=>shot.file.toLowerCase()));
   let hasAudio=false;

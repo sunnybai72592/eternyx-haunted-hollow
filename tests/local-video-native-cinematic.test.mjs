@@ -137,7 +137,7 @@ test("main Studio and launcher are wired to native cinematic without fake browse
   const launcher=readFileSync(new URL("../gpu-worker/launch_portable_video.py",import.meta.url),"utf8");
   const bundle=readFileSync(new URL("../src/lib/ai/portableVideoBundle.mjs",import.meta.url),"utf8");
   for(const token of ["fps={fps}","switchQuality","resetTimelineHistory(mapped)",
-                      'buildLocalVideoBoard({ sources, shots, soundtrack, quality })',
+                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality })',
                       "native 24 FPS"])assert.ok(studio.includes(token),token);
   assert.match(timeline,/fps=16/);
   assert.match(timeline,/timelineSegments\(shots,fps\)/);

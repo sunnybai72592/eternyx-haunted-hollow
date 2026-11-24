@@ -11,10 +11,9 @@ type Shot={
   sourceName:string;startFrame:number;frames:number;caption:string;
   rightsRef:string;fadeInFrames:number;fadeOutFrames:number;
 };
+type AudioTrack={name:string;size:number;sha256:string;rightsRef:string;volumePercent:number}|null;
 type Props={
-  sources:Source[];shots:Shot[];soundtrack:{
-    name:string;size:number;sha256:string;rightsRef:string;volumePercent:number;
-  }|null;narration?:Props["soundtrack"];effects?:Props["soundtrack"];profile:string;quality:string;
+  sources:Source[];shots:Shot[];soundtrack:AudioTrack;narration?:AudioTrack;effects?:AudioTrack;profile:string;quality:string;
   disabled?:boolean;onJumpToShot?:(index:number)=>void;
 };
 export default function LocalVideoSequenceReview({
