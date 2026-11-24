@@ -1,0 +1,45 @@
+name: Cybersecurity Wave 22 offline
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/security-evidence-gateway/**'
+      - 'scripts/sql/staged-security-evidence-gateway.sql'
+      - 'src/components/pentest/PentestEvidencePanel.tsx'
+      - 'tests/security-wave22-evidence-gateway.test.mjs'
+      - '.github/workflows/cybersecurity-wave22-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/security-evidence-gateway/**'
+      - 'scripts/sql/staged-security-evidence-gateway.sql'
+      - 'src/components/pentest/PentestEvidencePanel.tsx'
+      - 'tests/security-wave22-evidence-gateway.test.mjs'
+      - '.github/workflows/cybersecurity-wave22-offline.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Evidence gateway mocked transport authorization regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Export exact event commit without broken submodule checkout
+        shell: bash
+        env:
+          TEST_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TEST_SHA" =~ ^[0-9a-f]{40}$ ]]
+          source_dir="$(mktemp -d "$RUNNER_TEMP/wave22-source.XXXXXX")"
+          git -C "$source_dir" init -q
+          git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
+          test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
+          for path in supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs; do
+            mkdir -p "$(dirname "$path")"
+            git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check supabase/functions/security-evidence-gateway/handler.mjs
+      - run: node --test tests/security-wave22-evidence-gateway.test.mjs
