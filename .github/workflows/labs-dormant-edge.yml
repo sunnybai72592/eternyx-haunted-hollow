@@ -1,0 +1,28 @@
+name: LABS dormant Edge bundle review
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/ctf-range-access/**'
+      - 'supabase/functions/ctf-range-access-check/**'
+      - 'supabase/functions/ctf-range-worker/**'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/config.toml'
+      - 'scripts/labs-dormant-edge-manifest.mjs'
+      - 'tests/eternyx-labs-dormant-edge.test.mjs'
+      - '.github/workflows/labs-dormant-edge.yml'
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - run: git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/eternyx-labs-dormant-edge.test.mjs tests/ctf-range-access.test.mjs tests/ctf-range-fenced-worker.test.mjs
+      - run: node scripts/labs-dormant-edge-manifest.mjs
