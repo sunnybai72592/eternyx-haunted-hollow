@@ -1,0 +1,27 @@
+name: LABS GitHub runner KVM capability
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Inspect runner only; no VM launch or provider activation
+        required: true
+        type: choice
+        options:
+          - DENY
+          - I_APPROVE_READONLY_KVM_PROBE
+permissions:
+  contents: read
+jobs:
+  capability:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_READONLY_KVM_PROBE' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify probe contract without hardware
+        run: python3 -B tests/labs-runner-kvm-capability-test.py
+      - name: Inspect KVM device and API without creating a VM
+        run: python3 -B scripts/labs-runner-kvm-capability.py
