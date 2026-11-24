@@ -54,7 +54,7 @@ def read_board(path):
         raise ValueError("Storyboard exceeds 32 KiB")
     board = json.loads(content, object_pairs_hook=unique_keys)
     if (not isinstance(board, dict) or type(board.get("version")) is not int or
-            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps", "transition"} or
+            board["version"] != 2 or set(board) - {"version", "shots", "soundtrack", "narration", "effects", "fps", "transition", "camera"} or
             type(board.get("fps", FPS)) is not int or board.get("fps", FPS) not in (FPS, CINEMATIC_FPS)):
         raise ValueError("Expected a v2 storyboard with shots and optional soundtrack")
     shots = board.get("shots")
@@ -162,6 +162,43 @@ def check_transition(transition, shots, fps):
     return frames
 
 
+CAMERA_MODES = {"push_in", "pull_out", "pan_left", "pan_right", "tilt_up", "tilt_down"}
+
+
+def check_camera(camera):
+    if (not isinstance(camera, dict) or set(camera) != {"mode", "strength_percent"} or
+            not isinstance(camera["mode"], str) or camera["mode"] not in CAMERA_MODES or
+            type(camera["strength_percent"]) is not int or camera["strength_percent"] not in (10, 20, 30)):
+        raise ValueError("Unsupported camera motion preset or strength")
+    return camera
+
+
+def camera_filter(camera, frames, width, height, fps):
+    check_camera(camera)
+    mode = camera["mode"]
+    strength = camera["strength_percent"] / 100
+    # on is the zero-based output frame index for this individual shot.
+    # One output per input, with bounded cubic easing and exact timebase.
+    t = f"(on/{max(1, frames-1)})"
+    ease = f"({t}*{t}*(3-2*{t}))"
+    zoom = f"1+{strength:.2f}"
+    x = "(iw-iw/zoom)/2"
+    y = "(ih-ih/zoom)/2"
+    if mode == "push_in":
+        zoom = f"1+{strength:.2f}*{ease}"
+    elif mode == "pull_out":
+        zoom = f"1+{strength:.2f}*(1-{ease})"
+    elif mode == "pan_left":
+        x = f"(iw-iw/zoom)*(1-{ease})"
+    elif mode == "pan_right":
+        x = f"(iw-iw/zoom)*{ease}"
+    elif mode == "tilt_up":
+        y = f"(ih-ih/zoom)*(1-{ease})"
+    elif mode == "tilt_down":
+        y = f"(ih-ih/zoom)*{ease}"
+    return f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={width}x{height}:fps={fps}"
+
+
 def check_shots(board, root, fps=FPS):
     total = 0
     sources = {}
@@ -202,6 +239,8 @@ def check_shots(board, root, fps=FPS):
         total += frames
     if "transition" in board:
         check_transition(board["transition"], validated, fps)
+    if "camera" in board:
+        check_camera(board["camera"])
     return validated, total
 
 
@@ -281,7 +320,7 @@ COLOR_GRADES = {
 }
 
 
-def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None, transition=None):
+def build_command(shots, total, destination, size, soundtrack, quality="standard", framing="contain", fps=FPS, grade="neutral", narration=None, effects=None, transition=None, camera=None):
     if quality not in ("standard", "high", "cinematic") or framing not in ("contain", "cover"):
         raise ValueError("Unsupported offline encoder quality or framing")
     if not isinstance(grade, str) or grade not in COLOR_GRADES:
@@ -311,6 +350,9 @@ def build_command(shots, total, destination, size, soundtrack, quality="standard
                    "setpts=PTS-STARTPTS",
                    *([COLOR_GRADES[grade]] if COLOR_GRADES[grade] else []), *composition,
                    "setsar=1", "format=yuv420p"]
+        if camera is not None:
+            filters += [camera_filter(camera, shot["frames"], width, height, fps),
+                        "setsar=1", "format=yuv420p"]
         if shot["fade_in_frames"]:
             filters += [f"fade=t=in:st=0:d={shot['fade_in_frames']/fps:.4f}"]
         if shot["fade_out_frames"]:
@@ -491,7 +533,7 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
     stage = Path(tempfile.mkdtemp(prefix=".eternyx-v2-", dir=output.parent))
     try:
         video_path = stage / "video.mp4"
-        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects, board.get("transition")), timeout=240)
+        execute(build_command(shots, total, video_path, size, soundtrack, quality, framing, fps, grade, narration, effects, board.get("transition"), board.get("camera")), timeout=240)
         video = verify_output(video_path, total, size, any(t is not None for t in tracks.values()), fps)
         public_shots = [{key: value for key, value in shot.items() if key != "path"} for shot in shots]
         audio = None if soundtrack is None else {key: value for key, value in soundtrack.items() if key != "path"}
@@ -500,6 +542,7 @@ def render(storyboard, root, output, profile="landscape", quality="standard", fr
                    "profile": profile, "quality": quality, "framing": framing, "fps": fps,
                    **({"grade": grade} if grade != "neutral" else {}),
                    **({"transition": board["transition"]} if "transition" in board else {}),
+                   **({"camera": board["camera"]} if "camera" in board else {}),
                    "total_frames": total, "shots": public_shots,
                    "soundtrack": audio, **{role: {k: v for k, v in tracks[role].items() if k != "path"}
                        for role in ("narration", "effects") if tracks[role] is not None},

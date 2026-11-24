@@ -13,18 +13,18 @@ type Shot={
 };
 type AudioTrack={name:string;size:number;sha256:string;rightsRef:string;volumePercent:number}|null;
 type Props={
-  sources:Source[];shots:Shot[];soundtrack:AudioTrack;narration?:AudioTrack;effects?:AudioTrack;profile:string;quality:string;transition?:{mode:string;duration_ms:number};
+  sources:Source[];shots:Shot[];soundtrack:AudioTrack;narration?:AudioTrack;effects?:AudioTrack;profile:string;quality:string;transition?:{mode:string;duration_ms:number};camera?:{mode:string;strength_percent:number};
   disabled?:boolean;onJumpToShot?:(index:number)=>void;
 };
 export default function LocalVideoSequenceReview({
-  sources,shots,soundtrack,narration=null,effects=null,profile,quality,transition,disabled=false,
+  sources,shots,soundtrack,narration=null,effects=null,profile,quality,transition,camera,disabled=false,
   onJumpToShot=()=>{},
 }:Props){
   const audit=useMemo(()=>{
     try{return {value:auditLocalVideoExport({
-      sources,shots,soundtrack,narration,effects,profile,quality,transition}),error:""};}
+      sources,shots,soundtrack,narration,effects,profile,quality,transition,camera}),error:""};}
     catch(cause){return {value:null,error:cause instanceof Error?cause.message:"Cannot audit this project."};}
-  },[sources,shots,soundtrack,narration,effects,profile,quality,transition]);
+  },[sources,shots,soundtrack,narration,effects,profile,quality,transition,camera]);
   const scheduled=useMemo(()=>{
     try{return {value:localSequencePlan(shots,sources,quality==="cinematic"?24:16),error:""};}
     catch(cause){return {value:null,error:cause instanceof Error?cause.message:"Cannot preview original sequence."};}

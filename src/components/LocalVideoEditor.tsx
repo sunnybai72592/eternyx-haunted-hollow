@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  buildLocalVideoBoard, checkLocalMediaName, localVideoCommand, localVideoSrt, LOCAL_VIDEO_GRADES, LOCAL_VIDEO_FRAMINGS, LOCAL_VIDEO_TRANSITIONS,
+  buildLocalVideoBoard, checkLocalMediaName, localVideoCommand, localVideoSrt, LOCAL_VIDEO_GRADES, LOCAL_VIDEO_FRAMINGS, LOCAL_VIDEO_TRANSITIONS, LOCAL_VIDEO_CAMERA_MODES,
   LOCAL_VIDEO_LIMITS, LOCAL_VIDEO_PROFILES, LOCAL_VIDEO_QUALITIES,
 } from "@/lib/ai/localVideoEditor.mjs";
 
@@ -97,6 +97,7 @@ export default function LocalVideoEditor() {
   const [grade,setGrade]=useState("neutral");
   const [framing,setFraming]=useState("contain");
   const [transition,setTransition]=useState<{mode:string;duration_ms:number}|undefined>(undefined);
+  const [camera,setCamera]=useState<{mode:string;strength_percent:number}|undefined>(undefined);
   const fps:16|24=quality==="cinematic"?24:16;
   const [selectedSource, setSelectedSource] = useState("");
   const [working, setWorking] = useState(false);
@@ -129,7 +130,7 @@ export default function LocalVideoEditor() {
   const downloadDraft = () => {
     try {
       const saved = createLocalVideoDraft({
-        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,transition,
+        name:draftName,sources,shots,soundtrack,narration,effects,profile,quality,grade,framing,transition,camera,
       });
       saveDownload(saved.json,saved.filename,"application/json");
       setMessage("");
@@ -215,7 +216,7 @@ export default function LocalVideoEditor() {
       setSelectedSource(prepared[0].name);
       setProfile(verified.profile);
       setQuality(verified.quality);
-      setGrade(verified.grade);setFraming(verified.framing);setTransition(verified.transition);
+      setGrade(verified.grade);setFraming(verified.framing);setTransition(verified.transition);setCamera(verified.camera);
       setDraftName(verified.name);
       setPendingDraft(null);
       setNotice("Editing project restored: "+verified.verifiedCount+
@@ -368,7 +369,7 @@ export default function LocalVideoEditor() {
   let validation = "";
   if (sources.length) {
     try {
-      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition });
+      ready = buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition, camera });
     } catch (error) {
       validation = error instanceof Error ? error.message : "Check the selected timeline.";
     }
@@ -382,7 +383,7 @@ export default function LocalVideoEditor() {
     setBundleProgress("Verifying actual source media...");
     try {
       const output = await buildPortableVideoBundle({
-        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing, transition,
+        sources, shots, soundtrack, narration, effects, profile, quality, delivery, grade, framing, transition, camera,
         rendererSources: {
           "render_video_timeline.py": rendererPython,
           "assemble_video_storyboard.py": storyboardPython,
@@ -569,7 +570,7 @@ export default function LocalVideoEditor() {
         {sources.length > 0 && (
           <LocalVideoSequenceReview
             sources={sources} shots={shots} soundtrack={soundtrack} narration={narration} effects={effects}
-            profile={profile} quality={quality} transition={transition}
+            profile={profile} quality={quality} transition={transition} camera={camera}
             disabled={working || audioWorking || bundleWorking || draftWorking || Boolean(pendingDraft)}
             onJumpToShot={index=>{
               document.getElementById("local-video-shot-"+index)
@@ -763,6 +764,24 @@ export default function LocalVideoEditor() {
             </label>
           </div>
           <p className="text-xs text-slate-400">Transitions blend from the previous composed shot's final frame into the incoming shot. They preserve the timeline length and caption/audio placement. Incoming cuts must be longer than the chosen transition. The source preview does not simulate this rendered effect.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm">Cinematic camera motion
+              <select value={camera?.mode??"static"} disabled={bundleWorking||draftWorking||Boolean(pendingDraft)}
+                onChange={e=>setCamera(e.target.value==="static"?undefined:{mode:e.target.value,strength_percent:camera?.strength_percent??20})}
+                className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
+                <option value="static">Static framing</option>
+                {LOCAL_VIDEO_CAMERA_MODES.map(mode=><option key={mode} value={mode}>{mode.replaceAll("_"," ")}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1 text-sm">Camera motion strength
+              <select value={camera?.strength_percent??20} disabled={!camera||bundleWorking||draftWorking||Boolean(pendingDraft)}
+                onChange={e=>setCamera(old=>old?{...old,strength_percent:Number(e.target.value)}:undefined)}
+                className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">
+                <option value={10}>Subtle · 10%</option><option value={20}>Medium · 20%</option><option value={30}>Strong · 30%</option>
+              </select>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">Local FFmpeg applies eased digital zoom or pan over each composed shot, then fades and transitions. The camera crops the composed image, including any letterbox bars, without changing frame count or audio timing. This is digital reframing, not AI camera generation. Original-source preview is unchanged.</p>
           <label className="block space-y-1 text-sm">Offline movie delivery formats
             <select value={delivery} disabled={bundleWorking} onChange={e=>setDelivery(e.target.value)}
               className="min-h-11 w-full rounded border border-slate-700 bg-slate-950 px-2">

@@ -508,3 +508,47 @@ test("real frame-preserving scene transitions at both timebases retain timeline 
     }
   }
 });
+
+test("real six camera moves change decoded composition without changing native frame count",{
+  skip:!toolsReady(),
+},async()=>{
+  const dir=fixtureDir();
+  for(const [fps,quality,modes] of [[16,"standard",["pan_left","pan_right","tilt_up","tilt_down"]],[24,"cinematic",["push_in","pull_out"]]]){
+    const name="camera-"+fps+".mp4",path=join(dir,name);
+    const sourceRender=spawnSync("ffmpeg",["-nostdin","-v","error","-y","-f","lavfi","-i",
+      "color=black:size=256x144:rate="+fps+":duration=1",
+      "-vf","drawbox=x=0:y=0:w=128:h=72:color=red:t=fill,drawbox=x=128:y=0:w=128:h=72:color=blue:t=fill,drawbox=x=0:y=72:w=128:h=72:color=green:t=fill,drawbox=x=128:y=72:w=128:h=72:color=yellow:t=fill,drawbox=x=112:y=56:w=32:h=32:color=white:t=fill",
+      "-threads","1","-c:v","libx264","-pix_fmt","yuv420p",path],{encoding:"utf8",timeout:30000});
+    assert.equal(sourceRender.status,0,sourceRender.stderr);
+    const source=media(name,readFileSync(path));
+    for(const mode of modes){
+      const camera={mode,strength_percent:30};
+      const pack=await buildPortableVideoBundle(settings([source],[shot(source,{frames:fps})],{quality,camera,framing:"cover"}));
+      const folder=join(dir,mode),zip=join(dir,mode+".zip");mkdirSync(folder);
+      writeFileSync(zip,Buffer.from(await pack.blob.arrayBuffer()));extractedZip(zip,folder);
+      const run=spawnSync("python3",["launch_portable_video.py","--run"],{cwd:folder,encoding:"utf8",timeout:240000});
+      assert.equal(run.status,0,run.stderr+"\n"+run.stdout);
+      const output=join(folder,"eternyx-video-output");
+      const receipt=JSON.parse(readFileSync(join(output,"manifest.json"),"utf8"));
+      assert.deepEqual(receipt.camera,camera);assert.equal(receipt.video.frame_count,fps);
+      const r=spawnSync("ffmpeg",["-v","error","-i",join(output,"video.mp4"),"-vf","scale=64:36:flags=neighbor","-pix_fmt","rgb24","-f","rawvideo","pipe:1"],{timeout:30000,maxBuffer:1024*1024});
+      assert.equal(r.status,0,r.stderr?.toString());assert.equal(r.stdout.length,fps*64*36*3);
+      const stats=f=>{
+        let white=0,wx=0,wy=0;
+        for(let y=0;y<36;y++)for(let x=0;x<64;x++){
+          const i=(f*64*36+y*64+x)*3;
+          if(r.stdout[i]>200&&r.stdout[i+1]>200&&r.stdout[i+2]>200){white++;wx+=x;wy+=y;}
+        }
+        assert.ok(white>20,"real visible center marker");
+        return {white,x:wx/white,y:wy/white};
+      };
+      const a=stats(0),b=stats(fps-1);
+      if(mode==="push_in")assert.ok(b.white>a.white*1.25,JSON.stringify({a,b}));
+      if(mode==="pull_out")assert.ok(a.white>b.white*1.25,JSON.stringify({a,b}));
+      if(mode==="pan_left")assert.ok(b.x>a.x+8,JSON.stringify({a,b}));
+      if(mode==="pan_right")assert.ok(b.x<a.x-8,JSON.stringify({a,b}));
+      if(mode==="tilt_up")assert.ok(b.y>a.y+4,JSON.stringify({a,b}));
+      if(mode==="tilt_down")assert.ok(b.y<a.y-4,JSON.stringify({a,b}));
+    }
+  }
+});

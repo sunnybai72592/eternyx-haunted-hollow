@@ -137,7 +137,7 @@ test("main Studio and launcher are wired to native cinematic without fake browse
   const launcher=readFileSync(new URL("../gpu-worker/launch_portable_video.py",import.meta.url),"utf8");
   const bundle=readFileSync(new URL("../src/lib/ai/portableVideoBundle.mjs",import.meta.url),"utf8");
   for(const token of ["fps={fps}","switchQuality","resetTimelineHistory(mapped)",
-                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition })',
+                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition, camera })',
                       "native 24 FPS"])assert.ok(studio.includes(token),token);
   assert.match(timeline,/fps=16/);
   assert.match(timeline,/timelineSegments\(shots,fps\)/);
@@ -162,4 +162,19 @@ test("transition settings remain exact and reject malformed presets, short cuts 
   assert.throws(()=>buildLocalVideoBoard({...input,transition,shots:[input.shots[0],{...input.shots[1],frames:12,fadeInFrames:0,fadeOutFrames:0}]}),/transition/i);
   assert.equal(auditLocalVideoExport({...input,transition}).canExport,true);
   assert.equal(auditLocalVideoExport({...input,transition:{mode:"bad",duration_ms:250}}).canExport,false);
+});
+
+test("camera presets roundtrip and preserve exact cinematic cuts and captions",()=>{
+  const input={sources:[a,b],shots:state(),quality:"cinematic"};
+  const camera={mode:"pan_right",strength_percent:20};
+  const project=buildLocalVideoBoard({...input,camera});
+  assert.deepEqual(project.board.camera,camera);
+  assert.equal(project.totalFrames,72);
+  assert.equal(localVideoSrt(project.board),localVideoSrt(buildLocalVideoBoard(input).board));
+  assert.deepEqual(readLocalVideoDraft(createLocalVideoDraft({...input,camera}).json).camera,camera);
+  for(const bad of [null,{mode:"zoompan=z=99",strength_percent:20},{mode:"push_in",strength_percent:99},{mode:"tilt_up",strength_percent:10,extra:true}]){
+    assert.throws(()=>buildLocalVideoBoard({...input,camera:bad}),/camera/i);
+  }
+  assert.equal(auditLocalVideoExport({...input,camera}).canExport,true);
+  assert.equal(auditLocalVideoExport({...input,camera:{mode:"bad",strength_percent:20}}).canExport,false);
 });
