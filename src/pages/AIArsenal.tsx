@@ -43,7 +43,7 @@ const plannedStudios = [
   },
   {
     name: "AI Document Intelligence",
-    description: "Local evidence search and source review, verified backup change previews, selective non-destructive source recovery with conflict copies, local version comparison, counts-only recovery receipts and opt-in one-step recovery undo, local BM25 indexed passage retrieval with lexical expansion, source diversity and verified evidence-packet preparation, AES-256-GCM encrypted workspace import/export and passphrase rotation, legacy plaintext compatibility and opt-in AI Chat. PDF OCR remains pending.",
+    description: "Local evidence search and source review, verified backup change previews, selective non-destructive source recovery with conflict copies, local version comparison, counts-only recovery receipts and opt-in one-step recovery undo, local BM25 indexed passage retrieval with lexical expansion, source diversity and verified evidence-packet preparation, optional AI synthesis and citation-structure review, AES-256-GCM encrypted workspace import/export and passphrase rotation, legacy plaintext compatibility and opt-in AI Chat. PDF OCR remains pending.",
     icon: FileSearch,
   },
   {
