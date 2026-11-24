@@ -1,0 +1,80 @@
+name: Automation staging credentialless live denial acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/automation-live-denial-ci.yml'
+      - 'scripts/automation-staging-negative-http.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: automation-staging-live-denial
+  cancel-in-progress: false
+jobs:
+  deny:
+    if: "${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/automation-phase3z-live-denial-ci-20261124') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}"
+    name: Five real HTTP denials against fixed staging host (no credentials)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check exactly five bounded requests without checkout or credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/automation-live-denials.json"
+          import json, ssl, urllib.request, urllib.error, datetime
+          base = "https://mhodwvypfbxafamkrgsk.supabase.co/functions/v1/"
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          opener = urllib.request.build_opener(
+              urllib.request.ProxyHandler({}), NoRedirect(),
+              urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+          cases = [
+              ("unauthenticated_control_list", "automation-control", "POST", b'{"action":"list"}', [401,403]),
+              ("webhook_get_not_allowed", "automation-webhook", "GET", None, [405]),
+              ("unsigned_webhook_envelope", "automation-webhook", "POST", b'{}', [400]),
+              ("scheduler_get_not_allowed", "automation-scheduler-worker", "GET", None, [405]),
+              ("scheduler_missing_key", "automation-scheduler-worker", "POST", b'{"action":"invalid_without_key"}', [401]),
+          ]
+          results = []
+          for label, slug, method, body, expected in cases:
+              headers = {"Accept":"application/json","Cache-Control":"no-store"}
+              if body is not None:
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(base + slug, data=body, headers=headers, method=method)
+              try:
+                  try:
+                      response = opener.open(req, timeout=8)
+                  except urllib.error.HTTPError as error:
+                      response = error
+                  with response:
+                      status = response.code
+                      if response.headers.get("Location") is not None or len(response.read(2049)) > 2048:
+                          raise ValueError("untrusted_response")
+              except Exception:
+                  raise SystemExit("Live staging denial transport or response failed: " + label) from None
+              if status not in expected:
+                  raise SystemExit("Unexpected staging status: " + label + " " + str(status))
+              results.append({"id":label,"status":status,"passed":True})
+          print(json.dumps({
+              "schema":"eternyx-automation-credentialless-live-ci-v1",
+              "stagingRef":"mhodwvypfbxafamkrgsk",
+              "checkedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "checks":results,"allFiveSecurityDenialsPassed":True,
+              "credentialsUsed":False,"workflowWritesAttempted":False,
+              "signedWebhookAttempted":False,"schedulerTickAttempted":False,
+              "authenticatedRuntimeVerified":False,"secretsVerified":False,
+              "productionReady":False,"releaseAuthorized":False
+          },indent=2))
+          PY
+          cat "$RUNNER_TEMP/automation-live-denials.json"
+      - name: Publish sanitized status-only receipt
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: automation-credentialless-live-denial-receipt
+          path: ${{ runner.temp }}/automation-live-denials.json
+          if-no-files-found: error
+          retention-days: 7
