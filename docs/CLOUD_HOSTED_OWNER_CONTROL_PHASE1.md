@@ -14,6 +14,18 @@ This PR connects a **real Cloud control center** to those existing owner-scoped 
 6. **Truthful cloud tooling:** the separate Cloud Solutions simulation no longer announces successful live deployments or manufactures fake resource URLs. Its hard-coded cost table is explicitly labelled illustrative rather than real, region-specific or billable provider pricing.
 7. **Reproducible offline tests:** independent synthetic owner A/owner B records, malformed payloads, cross-tenant joins, stale/revoked signed reports, out-of-bounds/contradictory counts, identity-switch and source wiring checks. Tests assert the Cloud page's requests are **list-only** and that both existing backend handlers require the original authenticated owner guard. All existing repository tests and browser acceptance remain CI merge gates.
 
+## Actual connected staging inventory — 2026-11-25 (read-only)
+
+A live read-only inventory of the **Eternyx Staging** Supabase project found:
+
+- Neither `docker-enrollment` nor `docker-control` among currently deployed Edge Functions.
+- None of these expected Docker account/control tables in `public`: `docker_identity_workspaces`, `docker_agent_registrations`, `docker_agent_reports`, `docker_control_policies`, `docker_control_requests`, `docker_control_events`, `docker_command_claims`, `docker_lab_incidents`.
+- No Docker-named entries in staging's migration history.
+
+**Therefore the hosted Cloud dashboard is NOT operational on the inspected staging backend.** The page must show its unavailable state, not fake connected resources, until the existing reviewed Docker migrations/functions have been reconciled and actually deployed to that staging environment. No DDL, Edge Function deployment, account provisioning, production changes or paid resource enablement were performed by this inventory.
+
+The repository's existing Docker backend must be reviewed for ordered migration dependencies, RLS/authorization parity, function secrets and disabled execution flags *before* any staging deployment. Obtaining actual staging approval and successful owner A/B live acceptance is a separate release gate; PR merge cannot authorize it.
+
 ## Hosted staging acceptance — NOT yet carried out by code merge
 
 Cloud UI is functional only when the corresponding owner-authenticated Docker Edge Functions and database migrations are deployed and reachable in the target environment. **CI alone does not prove this is already true on your hosted site.** In independently approved ETERNYX Staging (never production), complete:
