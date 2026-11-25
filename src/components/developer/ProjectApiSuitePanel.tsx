@@ -248,6 +248,10 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     try {
       const fingerprint=await fingerprintApiSuite(available);
       if (abort.signal.aborted) { flash("Cancelled before execution."); return; }
+      const refreshedProjects=readProjects();
+      if (!refreshedProjects.some(p=>p.id===projectId) || projectApiSuiteSignature(readSuites(refreshedProjects))!==projectApiSuiteSignature(scenarios)) {
+        setProjects(refreshedProjects);setScenarios(readSuites(refreshedProjects));flash("Saved checks changed before execution. Review and run again.",true);return;
+      }
       const startedReceipt=startApiRun({runId:crypto.randomUUID(),projectId,environment,fingerprint,scenarioIds:available.map(item=>item.id),stopOnFailure});
       // Save start evidence before dispatching network requests.
       persistRun(startedReceipt);
