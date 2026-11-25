@@ -139,8 +139,8 @@ def exchange(path,session,nonce,deadline):
         sock.sendall(request)
         return verify_response(read_line(sock,end),session,nonce)
 
-def exercise(work,report):
-    name="ef-"+uuid.uuid4().hex[:20]
+def exercise(work,report,*,name=None,watchdog=None):
+    name=name or "ef-"+uuid.uuid4().hex[:20]
     cg=j.CGROOT/name
     net=pathlib.Path("/run/netns")/name
     root=work/"jails"/"firecracker"/name/"root"
@@ -151,7 +151,10 @@ def exercise(work,report):
     child=None
     reaped=False
     net_created=False
-    cg.mkdir()
+    if watchdog is None:
+        cg.mkdir()
+    else:
+        require(cg.is_dir() and not j.members(cg),"expected empty observer-owned cgroup")
     try:
         for key,value in j.LIMITS.items():
             (cg/key).write_text(value)
@@ -166,6 +169,8 @@ def exercise(work,report):
             require(j.boot.digest(root/item)==j.boot.digest(work/item),"jailed artifact mismatch")
         (root/"config.json").write_text(json.dumps(config(modular)))
         (root/"config.json").chmod(0o444)
+        if watchdog is not None:
+            watchdog.arm(cg)
         with log.open("xb") as output:
             launcher=subprocess.Popen(j.invocation(work,cg,name,net),stdin=subprocess.DEVNULL,
                                      stdout=output,stderr=subprocess.STDOUT,env={})
@@ -195,6 +200,9 @@ def exercise(work,report):
             two=exchange(vsock,session,second,deadline)
             require(one!=two,"repeated response")
             j.verify_live(child,cg,root,net,allowed_socket=vsock)
+            if watchdog is not None:
+                watchdog.crash(cg,child)
+                raise RuntimeError("controller crash did not occur")
             (cg/"cgroup.kill").write_text("1")
             require(j.reap(child,5)==-signal.SIGKILL,"unexpected guest exit")
             reaped=True
@@ -234,7 +242,7 @@ def exercise(work,report):
                 stream.seek(max(0,log.stat().st_size-4096))
                 print(stream.read().decode("utf-8",errors="replace"),flush=True)
 
-def main(source):
+def main(source,exercise_runner=exercise):
     require(os.geteuid()==0,"approved ephemeral root setup required")
     require((j.CGROOT/"cgroup.controllers").is_file() and
             stat.S_ISCHR(pathlib.Path("/dev/kvm").stat().st_mode),"KVM/cgroup v2 absent")
@@ -253,7 +261,7 @@ def main(source):
         j.boot.extract_pinned(work/"release.tgz",work)
         for name in ("firecracker","jailer"):
             j.verify_release_executable(work/name)
-        exercise(work,report)
+        exercise_runner(work,report)
     print(json.dumps({"immutableKernelRootfsBootVerified":True,
         "guestReadOnlyExt4ServiceVerified":True,"guestVsockVerified":True,
         "guestModuleLoadingVerified":report["mode"]=="authenticated-module-plan",
