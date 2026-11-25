@@ -107,6 +107,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Discover exact synthetic fixture settings before offline inventory (optional read only)
+        if: inputs.run_mode == 'journey' && inputs.approve_read_only && vars.ETERNYX_EDU_DISCOVER_FIXTURES == 'true'
+        timeout-minutes: 1
+        env:
+          ETERNYX_EDU_DISCOVERY_APPROVAL: I_APPROVE_EDUCATION_SYNTHETIC_FIXTURE_READ
+          ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+        run: node scripts/staging/educationStagingFixtureDiscovery.mjs
       - name: Inventory protected staging settings and fixture contracts before any remote checks
         timeout-minutes: 1
         env:

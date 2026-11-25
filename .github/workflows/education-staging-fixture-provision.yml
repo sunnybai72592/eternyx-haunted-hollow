@@ -1,0 +1,48 @@
+name: ETERNYX Education provision synthetic exam fixtures
+on:
+  workflow_dispatch:
+    inputs:
+      approve_fixtures:
+        description: "Create seven dedicated synthetic exams and two immutable baseline grades in staging"
+        type: boolean
+        required: true
+        default: false
+      acknowledge_no_retry:
+        description: "Inspect database after interruption; no automatic retry or cleanup"
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: eternyx-education-hosted-shared-staging
+  cancel-in-progress: false
+jobs:
+  provision-fixtures:
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && inputs.approve_fixtures && inputs.acknowledge_no_retry && github.run_attempt == '1' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create approved synthetic fixture package once
+        timeout-minutes: 2
+        env:
+          ETERNYX_EDU_FIXTURE_APPROVAL: I_APPROVE_ONE_TIME_EDUCATION_STAGING_FIXTURES
+          ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+          ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_EDU_STAGING_DB_PASSWORD: ${{ secrets.ETERNYX_EDU_STAGING_DB_PASSWORD }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL }}
+        run: node scripts/staging/educationStagingSyntheticFixtures.mjs
+      - name: Remove private manifest (never upload)
+        if: always()
+        run: rm -f education-staging-fixture-variables.private.json
