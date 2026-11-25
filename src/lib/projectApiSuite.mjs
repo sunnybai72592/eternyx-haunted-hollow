@@ -103,6 +103,34 @@ export function addProjectApiScenario(collection, input, projectIds) {
   return [...safe, candidate];
 }
 
+// Mutations retain project identity and preserve unrelated project ordering.
+export function updateProjectApiScenario(collection, project, id, patch, projectIds) {
+  const safe = normalizeProjectApiScenarios(collection, projectIds);
+  const index = safe.findIndex(item => item.projectId === project && item.id === id);
+  if (index < 0) throw new Error("Saved scenario no longer exists.");
+  const original = safe[index];
+  const next = normalizeProjectApiScenario({...original,...patch,id:original.id,projectId:original.projectId});
+  return safe.map((item,i)=>i===index?next:item);
+}
+export function moveProjectApiScenario(collection, project, id, direction, projectIds) {
+  if (direction !== -1 && direction !== 1) throw new Error("Invalid sequence direction.");
+  const safe = normalizeProjectApiScenarios(collection, projectIds);
+  const indices = safe.map((item,i)=>item.projectId===project?i:-1).filter(i=>i>=0);
+  const position = indices.findIndex(i=>safe[i].id===id);
+  if (position < 0) throw new Error("Saved scenario no longer exists.");
+  const target = position + direction;
+  if (target < 0 || target >= indices.length) return safe;
+  const a=indices[position], b=indices[target];
+  [safe[a],safe[b]]=[safe[b],safe[a]];
+  return safe;
+}
+export function duplicateProjectApiScenario(collection, project, id, newId, projectIds) {
+  const safe = normalizeProjectApiScenarios(collection, projectIds);
+  const original = safe.find(item=>item.projectId===project && item.id===id);
+  if (!original) throw new Error("Saved scenario no longer exists.");
+  return addProjectApiScenario(safe,{...original,id:newId,name:original.name.slice(0,65)+" (copy)"},projectIds);
+}
+
 export function exportProjectApiSuite(collection, id) {
   const linkedId = projectId(id);
   const scenarios = normalizeProjectApiScenarios(collection)
@@ -164,6 +192,7 @@ export async function runProjectApiSuite(scenarios, options = {}) {
   if (normalized.some(s => !s.id || s.projectId !== normalized[0].projectId) || new Set(normalized.map(s => s.id)).size !== normalized.length) {
     throw new Error("Run one saved project with unique scenario identifiers.");
   }
+  if (options.stopOnFailure !== undefined && typeof options.stopOnFailure !== "boolean") throw new Error("Invalid execution policy.");
   const fetcher = options.fetcher || fetch;
   const notify = typeof options.onProgress === "function" ? options.onProgress : () => {};
   const now = typeof options.now === "function" ? options.now : () => performance.now();
@@ -216,7 +245,7 @@ export async function runProjectApiSuite(scenarios, options = {}) {
     const safe = safeResult(row);
     results.push(safe);
     notify(safe, [...results]);
-    if (signal?.aborted) break;
+    if (signal?.aborted || (options.stopOnFailure && !safe.passed)) break;
   }
   return results;
 }

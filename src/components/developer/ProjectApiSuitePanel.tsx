@@ -13,6 +13,7 @@ import {
   PROJECT_API_SUITE_KEY, MAX_PROJECT_SCENARIOS, addProjectApiScenario, exportProjectApiReport,
   exportProjectApiSuite, importProjectApiSuite, normalizeProjectApiScenarios,
   runProjectApiSuite, summarizeProjectApiResults, projectApiSuiteSignature, isProjectApiRunComplete,
+  updateProjectApiScenario, moveProjectApiScenario, duplicateProjectApiScenario,
 } from "@/lib/projectApiSuite.mjs";
 
 type Scenario = { id: string; projectId: string; name: string; method: string; url: string; expectedStatus: number; maxDurationMs: number; expectedContentType?: string; jsonContract?: { path:string; type:string } };
@@ -52,6 +53,10 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   });
   const [scenarios, setScenarios] = useState<Scenario[]>(() => readSuites(readProjects()));
   const [scenarioName, setScenarioName] = useState("");
+  const [editing, setEditing] = useState<Scenario | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editMethod, setEditMethod] = useState("GET");
+  const [stopOnFailure, setStopOnFailure] = useState(false);
   const [expectedStatus, setExpectedStatus] = useState("200");
   const [maxDurationMs, setMaxDurationMs] = useState("3000");
   const [expectedContentType, setExpectedContentType] = useState("any");
@@ -101,7 +106,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     return () => window.removeEventListener("storage",refresh);
   }, []);
 
-  useEffect(() => { setEnvironment("saved"); setTargetOrigin(""); }, [projectId]);
+  useEffect(() => { setEnvironment("saved"); setTargetOrigin(""); setEditing(null); }, [projectId]);
   useEffect(() => {
     if (projects.some(p => p.id === initialProjectId)) setProjectId(initialProjectId);
   }, [initialProjectId, projects]);
@@ -121,11 +126,19 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const flash = (value: string, isError = false) => { setMessage(value); setError(isError); };
   const persist = (items: Scenario[]) => {
     try {
-      const safe = normalizeProjectApiScenarios(items, projects.map(p => p.id));
+      const latestProjects = readProjects();
+      const latest = readSuites(latestProjects);
+      if (projectApiSuiteSignature(latest) !== projectApiSuiteSignature(scenarios)) {
+        setProjects(latestProjects); setScenarios(latest);
+        flash("Saved checks changed in another tab. Review them and retry.", true); return false;
+      }
+      const safe = normalizeProjectApiScenarios(items, latestProjects.map(p => p.id));
+      if (safe.length !== items.length) throw new Error("Saved project or scenario is no longer valid.");
       localStorage.setItem(PROJECT_API_SUITE_KEY, JSON.stringify(safe));
       setScenarios(safe);
       flash("Project API suite saved to this browser. No credentials or response bodies stored.");
-    } catch { flash("Browser storage is unavailable; no changes were saved.", true); }
+      return true;
+    } catch { flash("Browser storage is unavailable or project changed; no changes were saved.", true); return false; }
   };
   const saveBaseline = () => {
     if (!current || !complete || running) return;
@@ -147,15 +160,34 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       flash("Saved regression baseline removed.");
     } catch { flash("Unable to remove baseline.",true); }
   };
+  const beginEdit = (item: Scenario) => {
+    setEditing(item); setEditMethod(item.method); setEditUrl(item.url); setScenarioName(item.name);
+    setExpectedStatus(String(item.expectedStatus)); setMaxDurationMs(String(item.maxDurationMs));
+    setExpectedContentType(item.expectedContentType || "any"); setJsonPath(item.jsonContract?.path || ""); setJsonType(item.jsonContract?.type || "exists");
+  };
+  const resetEditor = () => { setEditing(null); setScenarioName(""); setExpectedStatus("200"); setMaxDurationMs("3000"); setExpectedContentType("any"); setJsonPath(""); setJsonType("exists"); };
+  const mutate = (operation: () => Scenario[]) => {
+    if (running || editing) return;
+    try { persist(operation()); } catch (cause) { flash(cause instanceof Error ? cause.message : "Unable to change sequence.",true); }
+  };
   const add = () => {
     try {
+      if (editing) {
+        const existing = scenarios.find(item=>item.id===editing.id && item.projectId===projectId);
+        if (!existing || projectApiSuiteSignature([existing]) !== projectApiSuiteSignature([editing])) throw new Error("Saved check changed. Cancel editing and reopen it.");
+        const next = updateProjectApiScenario(scenarios,projectId,editing.id,{
+          name:scenarioName, method:editMethod, url:editUrl, expectedStatus,maxDurationMs,expectedContentType,
+          jsonContract:jsonPath.trim()?{path:jsonPath.trim(),type:jsonType}:undefined,
+        },projects.map(p=>p.id));
+        if (persist(next)) resetEditor();
+        return;
+      }
       const next = addProjectApiScenario(scenarios, {
         id: crypto.randomUUID(), projectId, name: scenarioName, method: draft.method, url: draft.url,
         expectedStatus, maxDurationMs, expectedContentType,
         ...(jsonPath.trim() ? {jsonContract:{path:jsonPath.trim(),type:jsonType}} : {}),
       }, projects.map(p => p.id));
-      persist(next);
-      setScenarioName("");
+      if (persist(next)) setScenarioName("");
     } catch (cause) { flash(cause instanceof Error ? cause.message : "Unable to save check.", true); }
   };
   const imported = () => {
@@ -164,15 +196,18 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       const entries = importProjectApiSuite(importText, projectId, () => crypto.randomUUID());
       let next = scenarios;
       for (const scenario of entries) next = addProjectApiScenario(next, scenario, projects.map(p => p.id));
-      persist(next);
-      setImportText("");
+      if (persist(next)) setImportText("");
     } catch (cause) { flash(cause instanceof Error ? cause.message : "Import failed.", true); }
   };
   const run = async () => {
-    if (running || abortRef.current || !projectId || !available.length || targetError) return;
+    if (running || abortRef.current || editing || !projectId || !available.length || targetError) return;
+    const latestProjects=readProjects();
+    if (!latestProjects.some(p=>p.id===projectId) || projectApiSuiteSignature(readSuites(latestProjects))!==projectApiSuiteSignature(scenarios)) {
+      setProjects(latestProjects);setScenarios(readSuites(latestProjects));flash("Saved checks changed. Review the sequence and run again.",true);return;
+    }
     const targets = targetOrigins;
     if (!window.confirm("Run " + available.length + " GET/HEAD check(s) against " + targets.join(", ") +
-      "? This will send actual network requests without cookies or authorization headers. Optional JSON checks read up to 64 KiB per response.")) return;
+      "? This will send actual network requests without cookies or authorization headers. Optional JSON checks read up to 64 KiB per response. " + (stopOnFailure?"Stop on first failure.":"Run every check."))) return;
     const abort = new AbortController();
     abortRef.current = abort;
     setResults([]);
@@ -183,9 +218,9 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     setRunning(true);
     flash("Running real browser requests, one at a time. The target API must permit CORS.");
     try {
-      const finished = await runProjectApiSuite(available, { signal: abort.signal, onProgress: (_row, rows) => setResults(rows) });
+      const finished = await runProjectApiSuite(available, { signal: abort.signal, stopOnFailure, onProgress: (_row, rows) => setResults(rows) });
       setResults(finished);
-      flash(abort.signal.aborted ? "Suite stopped. Partial results retained for this visit." : "Suite completed. Review genuine HTTP outcomes below.");
+      flash(abort.signal.aborted ? "Suite stopped. Partial results retained for this visit." : finished.length < available.length ? "Stopped on first failure. Remaining checks were not run." : "Suite completed. Review genuine HTTP outcomes below.");
     } catch (cause) { flash(cause instanceof Error ? cause.message : "Suite could not start.", true); }
     finally { abortRef.current = null; setRunning(false); }
   };
@@ -216,6 +251,13 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       </div>
       {!projects.length && <p role="status" className="text-sm text-amber-300">Save a project in Project Lab first. This connects only to projects saved on this device.</p>}
       {!!projectId && <>
+        {editing && <div className="space-y-3 rounded-lg border border-cyan-400/30 p-3">
+          <p className="font-medium">Editing saved check: {editing.name}</p>
+          <div className="grid gap-2 sm:grid-cols-[100px_minmax(0,1fr)]">
+            <div><Label htmlFor="api-edit-method">Method</Label><select id="api-edit-method" value={editMethod} onChange={e=>setEditMethod(e.target.value)} className="h-10 w-full rounded-md bg-slate-950 text-white"><option>GET</option><option>HEAD</option></select></div>
+            <div><Label htmlFor="api-edit-url">Saved request URL</Label><Input id="api-edit-url" value={editUrl} onChange={e=>setEditUrl(e.target.value)} className="border-slate-700 bg-slate-950 text-white"/></div>
+          </div>
+        </div>}
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-2 md:col-span-2"><Label htmlFor="api-scenario-name">Scenario name</Label>
             <Input id="api-scenario-name" value={scenarioName} onChange={e => setScenarioName(e.target.value.slice(0, 72))} placeholder="GET health endpoint" className="border-slate-700 bg-slate-950 text-white"/></div>
@@ -245,17 +287,22 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           <p className="text-xs text-slate-400 sm:col-span-2">GET only. Checks own JSON fields within 64 KiB. Field values and body content are never retained or exported. Do not put secrets in paths.</p>
         </div>}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={running || savedScenarios.length >= MAX_PROJECT_SCENARIOS || (!!jsonPath.trim() && draft.method !== "GET")} onClick={add}>
-            <Save className="mr-2 h-4 w-4"/>Save current request as check</Button>
+          <Button type="button" variant="outline" disabled={running || (!editing && savedScenarios.length >= MAX_PROJECT_SCENARIOS) || (!!jsonPath.trim() && (editing?editMethod:draft.method) !== "GET")} onClick={add}>
+            <Save className="mr-2 h-4 w-4"/>{editing?"Save check changes":"Save current request as check"}</Button>
+          {editing && <Button variant="outline" onClick={resetEditor}>Cancel editing</Button>}
           <span className="self-center text-xs text-slate-400">{savedScenarios.length} / {MAX_PROJECT_SCENARIOS} checks linked</span>
         </div>
         <p className="text-xs text-amber-200">Only the current request method, URL without query string or fragment, scenario name, expected status and timeout are saved. Headers, request bodies and credentials are discarded. Do not put secrets in URL paths or names. Only GET/HEAD are supported.</p>
         <div className="space-y-2" aria-label="Saved API scenarios">
-          {savedScenarios.length ? savedScenarios.map(s => <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm">
+          {savedScenarios.length ? savedScenarios.map((s,index) => <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm">
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms · {s.expectedContentType || "any content type"}{s.jsonContract ? " · JSON " + s.jsonContract.path + " : " + s.jsonContract.type : ""}</p>
+              <p className="font-medium">{index+1}. {s.name}</p><p className="mt-1 break-all font-mono text-xs text-slate-400">{s.method} {s.url} · Expect {s.expectedStatus} ≤{s.maxDurationMs}ms · {s.expectedContentType || "any content type"}{s.jsonContract ? " · JSON " + s.jsonContract.path + " : " + s.jsonContract.type : ""}</p>
             </div>
-            <Button size="sm" variant="ghost" disabled={running} aria-label={"Remove " + s.name} onClick={() => persist(scenarios.filter(item => item.id !== s.id))}>
+            <Button size="sm" variant="outline" disabled={running || !!editing} aria-label={"Edit " + s.name} onClick={()=>beginEdit(s)}>Edit</Button>
+            <Button size="sm" variant="outline" disabled={running || !!editing || savedScenarios.length>=MAX_PROJECT_SCENARIOS} aria-label={"Duplicate " + s.name} onClick={()=>mutate(()=>duplicateProjectApiScenario(scenarios,projectId,s.id,crypto.randomUUID(),projects.map(p=>p.id)))}>Duplicate</Button>
+            <Button size="sm" variant="outline" disabled={running || !!editing || index===0} aria-label={"Move up " + s.name} onClick={()=>mutate(()=>moveProjectApiScenario(scenarios,projectId,s.id,-1,projects.map(p=>p.id)))}>↑</Button>
+            <Button size="sm" variant="outline" disabled={running || !!editing || index===savedScenarios.length-1} aria-label={"Move down " + s.name} onClick={()=>mutate(()=>moveProjectApiScenario(scenarios,projectId,s.id,1,projects.map(p=>p.id)))}>↓</Button>
+            <Button size="sm" variant="ghost" disabled={running || !!editing} aria-label={"Remove " + s.name} onClick={() => persist(scenarios.filter(item => item.id !== s.id))}>
               <Trash2 className="h-4 w-4"/></Button>
           </div>) : <p className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-400">Add GET or HEAD requests using the composer below.</p>}
         </div>
@@ -273,8 +320,10 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           {targetError && <p role="status" className="text-sm text-amber-300">{targetError}</p>}
           {!!targetOrigins.length && <p className="break-all text-xs text-cyan-200">Effective targets: {targetOrigins.join(", ")}</p>}
         </section>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={stopOnFailure} disabled={running} onChange={e=>setStopOnFailure(e.target.checked)}/>Stop on first failed check</label>
+        <p className="text-xs text-slate-400">Checks execute in the displayed order. A stopped run is incomplete if any checks remain; it cannot become a complete report or baseline.</p>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" disabled={running || !!targetError || available.length === 0} onClick={() => void run()}><Play className="mr-2 h-4 w-4"/>Run selected project suite</Button>
+          <Button type="button" disabled={running || !!editing || !!targetError || available.length === 0} onClick={() => void run()}><Play className="mr-2 h-4 w-4"/>Run selected project suite</Button>
           {running && <Button type="button" variant="destructive" onClick={() => abortRef.current?.abort()}>
             <StopCircle className="mr-2 h-4 w-4"/>Cancel current request and stop</Button>}
           <Button type="button" size="sm" variant="outline" disabled={!savedScenarios.length || running}
@@ -284,7 +333,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         {results.length > 0 && runProjectId === projectId && <div className="rounded-xl border border-slate-700 p-4">
           <p className="font-semibold"><Activity className="mr-2 inline h-4 w-4 text-cyan-300"/>Actual results: {summary.passed} passed · {summary.failed} failed · {summary.cancelled} cancelled</p>
           {stale && <p role="status" className="mt-2 text-sm text-amber-300">Suite changed. Previous results are stale; rerun before exporting.</p>}
-          {!stale && !running && !complete && <p role="status" className="mt-2 text-sm text-amber-300">Run incomplete or cancelled. Rerun before exporting.</p>}
+          {!stale && !running && !complete && <p role="status" className="mt-2 text-sm text-amber-300">Run incomplete or cancelled. {Math.max(0,available.length-results.length)} checks not run. Rerun before exporting.</p>}
           <p className="mt-1 text-xs text-slate-400">Results show origin, status, latency, content-type and optional JSON field outcomes, and reason. No response body, request path, URL query or raw headers are retained in the report.</p>
           <div className="mt-3 space-y-2">{results.map((r, i) => <p key={r.scenarioId + i} className={"rounded-md border p-2 text-xs " +
               (r.passed ? "border-emerald-500/30 text-emerald-200" : "border-rose-500/30 text-rose-200")}>
@@ -312,7 +361,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
         <div className="space-y-2"><Label htmlFor="api-project-suite-import">Import ETERNYX project API suite JSON</Label>
           <Textarea id="api-project-suite-import" value={importText} onChange={e => setImportText(e.target.value.slice(0, 40001))}
             spellCheck={false} className="min-h-24 border-slate-700 bg-slate-950 font-mono text-xs" placeholder='{"schema":"eternyx-project-api-suite-v1","scenarios":[]}'/>
-          <Button type="button" size="sm" variant="outline" disabled={running || !importText.trim()} onClick={imported}>
+          <Button type="button" size="sm" variant="outline" disabled={running || !!editing || !importText.trim()} onClick={imported}>
             <Upload className="mr-2 h-4 w-4"/>Import into selected project</Button></div>
       </>}
       {message && <p role={error ? "alert" : "status"} className={error ? "text-sm text-rose-200" : "text-sm text-cyan-200"}>{message}</p>}
