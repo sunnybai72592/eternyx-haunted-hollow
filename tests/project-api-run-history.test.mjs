@@ -1,0 +1,40 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {startApiRun,checkpointApiRun,upsertApiRun,readApiRunHistory,summarizeApiRun,exportApiRunHistory} from "../src/lib/projectApiRunHistory.mjs";
+const start=(extra={})=>startApiRun({runId:"run-a",projectId:"p1",environment:"saved",fingerprint:"a".repeat(64),scenarioIds:["a","b"],stopOnFailure:true,startedAt:"2026-11-25T12:00:00.000Z",...extra});
+const good={scenarioId:"a",status:200,elapsedMs:12,passed:true,reason:"passed",origin:"https://example.org/SECRET",body:"SECRET"};
+const bad={scenarioId:"a",status:503,elapsedMs:15,passed:false,reason:"status-mismatch"};
+const end="2026-11-25T12:00:01.000Z";
+test("start, checkpoint, finish and reload keep ordered redacted outcomes",()=>{
+  const run=start();let saved=upsertApiRun([],run);
+  const progress=checkpointApiRun(run,[good]);saved=upsertApiRun(saved,progress);
+  assert.equal(readApiRunHistory(JSON.stringify(saved))[0].state,"started");
+  const finished=checkpointApiRun(progress,[good,{...good,scenarioId:"b"}],"completed",end);
+  saved=upsertApiRun(saved,finished);
+  assert.deepEqual(summarizeApiRun(saved[0]),{planned:2,attempted:2,passed:2,failed:0,cancelled:0,notRun:0});
+  assert.ok(!JSON.stringify(saved).includes("SECRET"));
+  assert.throws(()=>upsertApiRun(saved,progress),/Invalid/);
+});
+test("failure stop, cancellation, and missing terminal receipts cannot become completed",()=>{
+  const run=start();
+  const stopped=checkpointApiRun(run,[bad],"stopped-on-failure",end);
+  assert.equal(summarizeApiRun(stopped).notRun,1);
+  assert.throws(()=>checkpointApiRun(run,[bad],"completed",end),/Invalid/);
+  assert.throws(()=>checkpointApiRun(run,[bad,{...good,scenarioId:"b"}],"completed",end),/Invalid/);
+  const cancelled=checkpointApiRun(run,[{...bad,status:null,reason:"cancelled"}],"cancelled",end);
+  assert.equal(summarizeApiRun(cancelled).cancelled,1);
+  assert.equal(summarizeApiRun(run).attempted,0);
+  assert.throws(()=>checkpointApiRun(run,[{...good,scenarioId:"b"}]),/Invalid/);
+  assert.throws(()=>checkpointApiRun(checkpointApiRun(run,[good]),[bad]),/Invalid/);
+});
+test("history is bounded, drops tampered records, scopes exports and refuses missing start receipts",()=>{
+  const run=start();
+  assert.throws(()=>upsertApiRun([],checkpointApiRun(run,[bad],"stopped-on-failure",end)),/Invalid/);
+  assert.equal(readApiRunHistory(JSON.stringify([run,run,{...run,runId:"bad",state:"completed"}])).length,1);
+  let saved=[];
+  for(let i=0;i<32;i++)saved=upsertApiRun(saved,start({runId:"run-"+i,projectId:i===31?"p2":"p1"}));
+  assert.equal(saved.length,30);
+  const exported=JSON.parse(exportApiRunHistory(saved,"p1"));
+  assert.equal(exported.productionVerified,false);
+  assert.equal(exported.runs.length,29);
+});

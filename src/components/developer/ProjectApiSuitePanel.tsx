@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PROJECT_STORAGE_KEY, normalizeSavedDeveloperProjects } from "@/lib/developerProjectLab.mjs";
 import { resolveApiEnvironmentSuite } from "@/lib/projectApiEnvironment.mjs";
+import { API_RUN_HISTORY_KEY, readApiRunHistory, startApiRun, checkpointApiRun, upsertApiRun, summarizeApiRun, exportApiRunHistory } from "@/lib/projectApiRunHistory.mjs";
 import { API_BASELINE_KEY, readApiBaselines, storeApiBaseline, fingerprintApiSuite, createApiBaseline, compareApiBaselines, exportApiRegression } from "@/lib/projectApiRegression.mjs";
 import {
   PROJECT_API_SUITE_KEY, MAX_PROJECT_SCENARIOS, addProjectApiScenario, exportProjectApiReport,
@@ -20,6 +21,8 @@ type Scenario = { id: string; projectId: string; name: string; method: string; u
 type ReportRow = { scenarioId: string; method: string; origin: string; status: number | null; elapsedMs: number; passed: boolean; reason: string; contentTypeCheck?: string; jsonCheck?: string };
 type Project = { id: string; name: string };
 type Baseline = ReturnType<typeof createApiBaseline>;
+type RunReceipt = ReturnType<typeof startApiRun>;
+function loadRunHistory(): RunReceipt[] { try { return readApiRunHistory(localStorage.getItem(API_RUN_HISTORY_KEY) || "[]"); } catch { return []; } }
 function loadBaselines(): Baseline[] { try { return readApiBaselines(localStorage.getItem(API_BASELINE_KEY) || "[]"); } catch { return []; } }
 
 function readProjects(): Project[] {
@@ -67,6 +70,9 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
   const [error, setError] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<ReportRow[]>([]);
+  const [runHistory, setRunHistory] = useState<RunReceipt[]>(loadRunHistory);
+  const [historyWarning, setHistoryWarning] = useState("");
+  const projectHistory = runHistory.filter(run=>run.projectId===projectId);
   const [runProjectId, setRunProjectId] = useState("");
   const [runSignature, setRunSignature] = useState("");
   const [environment, setEnvironment] = useState("saved");
@@ -123,7 +129,26 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     return () => window.removeEventListener("storage", refresh);
   }, []);
 
+  useEffect(() => {
+    const refresh = (event: StorageEvent) => { if (event.key === API_RUN_HISTORY_KEY || event.key === null) setRunHistory(loadRunHistory()); };
+    window.addEventListener("storage",refresh);
+    return () => window.removeEventListener("storage",refresh);
+  }, []);
   const flash = (value: string, isError = false) => { setMessage(value); setError(isError); };
+  const persistRun = (receipt: RunReceipt) => {
+    const next=upsertApiRun(loadRunHistory(),receipt);
+    localStorage.setItem(API_RUN_HISTORY_KEY,JSON.stringify(next));
+    setRunHistory(next);
+  };
+  const clearRunHistory = () => {
+    if (running || !window.confirm("Clear this project's local API execution history?")) return;
+    try {
+      const next=loadRunHistory().filter(run=>run.projectId!==projectId);
+      localStorage.setItem(API_RUN_HISTORY_KEY,JSON.stringify(next));
+      setRunHistory(next);
+      setHistoryWarning("");
+    } catch { setHistoryWarning("Unable to clear history in this browser."); }
+  };
   const persist = (items: Scenario[]) => {
     try {
       const latestProjects = readProjects();
@@ -216,13 +241,39 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
     setRunSignature(projectApiSuiteSignature(available));
     setRunEnvironment(environment);
     setRunning(true);
-    flash("Running real browser requests, one at a time. The target API must permit CORS.");
+    setHistoryWarning("");
+    let receipt: RunReceipt | null = null;
+    let observed: ReportRow[] = [];
+    let terminal = "execution-error";
     try {
-      const finished = await runProjectApiSuite(available, { signal: abort.signal, stopOnFailure, onProgress: (_row, rows) => setResults(rows) });
+      const fingerprint=await fingerprintApiSuite(available);
+      if (abort.signal.aborted) { flash("Cancelled before execution."); return; }
+      const refreshedProjects=readProjects();
+      if (!refreshedProjects.some(p=>p.id===projectId) || projectApiSuiteSignature(readSuites(refreshedProjects))!==projectApiSuiteSignature(scenarios)) {
+        setProjects(refreshedProjects);setScenarios(readSuites(refreshedProjects));flash("Saved checks changed before execution. Review and run again.",true);return;
+      }
+      const startedReceipt=startApiRun({runId:crypto.randomUUID(),projectId,environment,fingerprint,scenarioIds:available.map(item=>item.id),stopOnFailure});
+      // Save start evidence before dispatching network requests.
+      persistRun(startedReceipt);
+      receipt=startedReceipt;
+      flash("Running real browser requests, one at a time. The target API must permit CORS.");
+      const finished = await runProjectApiSuite(available, { signal: abort.signal, stopOnFailure, onProgress: (_row, rows) => {
+        observed=rows; setResults(rows);
+        try { if(receipt) { const next=checkpointApiRun(receipt,rows); persistRun(next); receipt=next; } }
+        catch { setHistoryWarning("History checkpoint could not be saved; live results remain available."); }
+      } });
+      observed=finished;
       setResults(finished);
+      terminal=abort.signal.aborted?"cancelled":finished.length<available.length?"stopped-on-failure":"completed";
       flash(abort.signal.aborted ? "Suite stopped. Partial results retained for this visit." : finished.length < available.length ? "Stopped on first failure. Remaining checks were not run." : "Suite completed. Review genuine HTTP outcomes below.");
     } catch (cause) { flash(cause instanceof Error ? cause.message : "Suite could not start.", true); }
-    finally { abortRef.current = null; setRunning(false); }
+    finally {
+      if(receipt) {
+        try { persistRun(checkpointApiRun(receipt,observed,terminal)); }
+        catch { setHistoryWarning("Terminal history receipt could not be saved. Unfinished records are not completed evidence."); }
+      }
+      abortRef.current = null; setRunning(false);
+    }
   };
   const chooseProject = (value: string) => {
     if (running) return;
@@ -341,6 +392,23 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
           <Button className="mt-3" size="sm" variant="outline" disabled={!complete} onClick={() => { if (complete) saveJson("eternyx-api-smoke-report.json", exportProjectApiReport(results)); }}>
             <Download className="mr-2 h-4 w-4"/>Export sanitized results</Button>
         </div>}
+        <section aria-label="API execution history" className="space-y-3 rounded-xl border border-slate-700 p-4">
+          <h3 className="font-semibold">API execution history</h3>
+          <p className="text-xs text-slate-400">Up to 30 recent runs across browser projects. Saved start and progress checkpoints survive reloads. An unfinished receipt means no terminal outcome was recorded, not a confirmed completed run. No endpoint URLs or response contents are stored.</p>
+          {historyWarning && <p role="alert" className="text-sm text-amber-300">{historyWarning}</p>}
+          {projectHistory.length ? <div className="space-y-2 max-h-80 overflow-y-auto">{projectHistory.map(run=>{
+            const counts=summarizeApiRun(run);
+            return <div key={run.runId} className="rounded-md border border-slate-700 p-2 text-xs">
+              <p className="font-medium">{run.state==="started"?"No terminal receipt":run.state} · {run.environment} · {run.stopOnFailure?"fail-fast":"run all"}</p>
+              <p className="text-slate-400">{new Date(run.startedAt).toLocaleString()} · {counts.attempted}/{counts.planned} attempted · {counts.passed} passed · {counts.failed} failed · {counts.cancelled} cancelled · {counts.notRun} not run</p>
+              <details className="mt-1"><summary>Recorded check outcomes</summary>{run.cases.map((row,i)=><p key={row.scenarioId}>Check {i+1}: {row.reason} · HTTP {row.status??"unavailable"} · {row.elapsedMs} ms</p>)}</details>
+            </div>;
+          })}</div> : <p className="text-sm text-slate-400">No saved API runs for this project.</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={running || !projectHistory.length} onClick={()=>saveJson("eternyx-api-run-history.json",exportApiRunHistory(loadRunHistory(),projectId))}>Export API run history</Button>
+            <Button size="sm" variant="outline" disabled={running || !projectHistory.length} onClick={clearRunHistory}>Clear API run history</Button>
+          </div>
+        </section>
         <section aria-label="API regression intelligence" className="space-y-3 rounded-xl border border-slate-700 p-4">
           <h3 className="font-semibold">API regression intelligence</h3>
           <p className="text-xs text-slate-400">Compare completed runs of the exact same suite and selected environment. Only fixed outcomes, identifiers, timings and a SHA-256 configuration fingerprint are saved. Local observations, not production certification.</p>
@@ -366,7 +434,7 @@ export default function ProjectApiSuitePanel({ initialProjectId = "", draft }: {
       </>}
       {message && <p role={error ? "alert" : "status"} className={error ? "text-sm text-rose-200" : "text-sm text-cyan-200"}>{message}</p>}
       <p className="text-xs leading-5 text-slate-500">
-        All tests run sequentially from this browser, only after confirmation. Cookies and authorization headers are never attached by this suite. Network/CORS failures are failures, not fabricated successful tests. Raw results exist only in current page memory; optional baselines retain sanitized metadata locally.
+        All tests run sequentially from this browser, only after confirmation. Cookies and authorization headers are never attached by this suite. Network/CORS failures are failures, not fabricated successful tests. Raw results exist only in current page memory; execution history and optional baselines retain sanitized metadata locally.
       </p>
     </CardContent>
   </Card>;
