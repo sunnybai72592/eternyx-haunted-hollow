@@ -112,6 +112,9 @@ def weights(seed):
         "b1": np.zeros(HIDDEN, np.float32),
         "w2": rng.normal(0, .02, (HIDDEN, D)).astype(np.float32),
         "b2": np.zeros(D, np.float32),
+        # Explicit learned conditional residual, initialized to zero. Unlike
+        # the tiny one-hot input alone, it cannot be drowned out by 9216 pixels.
+        "tag_bias": np.zeros((TAGS, D), np.float32),
     }
 
 
@@ -125,7 +128,9 @@ def forward(model, noisy, times, labels):
     np = numpy()
     inp = condition(noisy, times, labels)
     hidden = np.tanh(inp @ model["w1"] + model["b1"])
-    predicted = np.tanh(hidden @ model["w2"] + model["b2"])
+    # Train an unsaturated x0 head; clamp the estimate at inference, not
+    # inside the training gradient. Both shared and tag-specific weights learn.
+    predicted = hidden @ model["w2"] + model["b2"] + model["tag_bias"][labels]
     return inp, hidden, predicted
 
 
@@ -144,14 +149,17 @@ def batch(items, tags, rng, indices, times=None):
 def evaluate(model, items, tags):
     np = numpy()
     rng = np.random.default_rng(601)
-    losses, baselines = [], []
+    losses, baselines, swapped_losses = [], [], []
     for step in (3, 6, 9, 12):
         for i in range(len(items)):
             clean, noisy, t, y = batch(items, tags, rng, [i], np.array([step]))
             _, _, pred = forward(model, noisy, t, y)
-            losses.append(float(np.mean((pred-clean)**2)))
+            losses.append(float(np.mean((np.clip(pred,-1,1)-clean)**2)))
+            _, _, swapped = forward(model, noisy, t, 1-y)
+            swapped_losses.append(float(np.mean((np.clip(swapped,-1,1)-clean)**2)))
             baselines.append(float(np.mean((np.clip(noisy,-1,1)-clean)**2)))
     return {"denoising_mse": float(np.mean(losses)), "noisy_input_mse": float(np.mean(baselines)),
+            "swapped_tag_mse": float(np.mean(swapped_losses)),
             "windows": len(items), "noise_levels": [3,6,9,12]}
 
 
@@ -163,12 +171,17 @@ def fit(train, heldout, tags, seed, updates):
     holdout_before = evaluate(model, heldout, tags)
     m = {k: np.zeros_like(v) for k,v in model.items()}
     v = {k: np.zeros_like(v) for k,v in model.items()}
+    pools = [[i for i,(label,_) in enumerate(train) if label==tag] for tag in tags]
     for step in range(1, updates+1):
-        clean, noisy, times, labels = batch(train, tags, rng, rng.integers(0,len(train),size=4))
+        indices = np.concatenate([rng.choice(pool, size=2, replace=True) for pool in pools])
+        rng.shuffle(indices)
+        clean, noisy, times, labels = batch(train, tags, rng, indices)
         inp, h, pred = forward(model, noisy, times, labels)
-        delta = (2/pred.size)*(pred-clean)*(1-pred**2)
+        delta = (2/pred.size)*(pred-clean)
+        tag_grad = np.zeros_like(model["tag_bias"])
+        np.add.at(tag_grad, labels, delta)
         back = (delta @ model["w2"].T)*(1-h**2)
-        grad = {"w2": h.T @ delta, "b2": delta.sum(axis=0),
+        grad = {"w2": h.T @ delta, "b2": delta.sum(axis=0), "tag_bias": tag_grad,
                 "w1": inp.T @ back, "b1": back.sum(axis=0)}
         for k in model:
             m[k] = .9*m[k]+.1*grad[k]
@@ -219,7 +232,7 @@ def load(path):
     if not isinstance(tags,list) or len(tags)!=TAGS or len(set(check_tag(t) for t in tags))!=TAGS:
         raise ValueError("Invalid checkpoint tags")
     arrays = data.get("weights")
-    shapes = {"w1":(D+3,HIDDEN),"b1":(HIDDEN,),"w2":(HIDDEN,D),"b2":(D,)}
+    shapes = {"w1":(D+3,HIDDEN),"b1":(HIDDEN,),"w2":(HIDDEN,D),"b2":(D,), "tag_bias":(TAGS,D)}
     if not isinstance(arrays,dict) or set(arrays)!=set(shapes):
         raise ValueError("Invalid checkpoint weights")
     model = {}
@@ -244,6 +257,7 @@ def sample(model, tags, tag, seed):
     alphas = schedule()
     for t in range(STEPS,0,-1):
         _,_, clean = forward(model,x,np.array([t]),np.array([tags.index(tag)]))
+        clean = np.clip(clean,-1,1)
         # Deterministic DDIM reverse update using learned x0 estimates.
         eps = (x-np.sqrt(alphas[t])*clean)/np.sqrt(1-alphas[t])
         x = (np.sqrt(alphas[t-1])*clean + np.sqrt(1-alphas[t-1])*eps).astype(np.float32)

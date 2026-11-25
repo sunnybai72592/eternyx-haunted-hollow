@@ -25,3 +25,7 @@ The generation tag must be one of the two labels actually trained. Outputs are o
 6. Treat cinematic editing and export as a separate finishing stage. Upscaling, interpolation and effects are not gains in underlying model resolution or generative capability.
 
 Training a competitive Veo-class foundation model from scratch is not a credible CPU-only near-term target. Larger high-quality models require extensive licensed data, compute and engineering; no claim or time estimate of parity is made here. This prototype is an independently trainable first step, not a release-ready general-purpose video generator.
+
+## Conditioning collapse regression
+
+The first CI run detected identical red and blue generated samples at a fixed seed. The corrected architecture adds an independently learned tag-specific output residual (initialized to zero), uses balanced tag batches, and replaces the saturating output tanh with a linear training head and clipped x0 estimate during DDIM. The test retains exact inequality and now additionally checks the intended red-versus-blue color direction and learned tag weights. Reports include counterfactual swapped-tag denoising error, not an asserted general semantic score. This adds 18,432 learned parameters to the experimental model (470,112 total). The pre-merge experimental checkpoint schema changes accordingly; old checkpoints must be retrained.

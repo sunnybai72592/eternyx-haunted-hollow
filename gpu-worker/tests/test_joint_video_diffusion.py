@@ -48,7 +48,17 @@ class JointDiffusionTests(unittest.TestCase):
             sample=diffusion.sample(model,tags,"red",5)
             self.assertEqual(sample.shape,(16,12,16,3))
             self.assertTrue(np.array_equal(sample,diffusion.sample(model,tags,"red",5)))
-            self.assertFalse(np.array_equal(sample,diffusion.sample(model,tags,"blue",5)))
+            blue_sample=diffusion.sample(model,tags,"blue",5)
+            self.assertFalse(np.array_equal(sample,blue_sample))
+            # Require learned label influence in the intended color direction,
+            # not merely a one-pixel difference or a seed change.
+            def color_balance(frames):
+                values=frames.astype(np.float32)
+                return float(np.mean(values[...,0]-values[...,2]))
+            self.assertGreater(color_balance(sample)-color_balance(blue_sample), 1.0)
+            self.assertFalse(np.array_equal(model["tag_bias"][0],model["tag_bias"][1]))
+            self.assertGreater(np.linalg.norm(model["tag_bias"]),0)
+            self.assertIn("swapped_tag_mse",report["metrics"]["holdout_after"])
             self.assertFalse(np.array_equal(sample,diffusion.sample(diffusion.weights(31),tags,"red",5)))
             with self.assertRaisesRegex(ValueError,"Unknown trained tag"):
                 diffusion.sample(model,tags,"unknown",5)
