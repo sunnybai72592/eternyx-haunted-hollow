@@ -43,6 +43,14 @@ def on_runtime_error(error):
     else:
         kind = "other-js-error"
     RUNTIME_ERRORS.append(kind)
+    # Fixed diagnostic labels only: no exception messages, stack traces or URL data.
+    subtype = next((label for label, pattern in (
+        ("network-abort", r"AbortError|Failed to fetch|NetworkError"),
+        ("syntax", r"SyntaxError"), ("security", r"SecurityError|Content Security Policy"),
+        ("type", r"TypeError"), ("reference", r"ReferenceError"),
+        ("range", r"RangeError"), ("promise", r"unhandled promise")
+    ) if re.search(pattern, value, re.I)), "unclassified")
+    print("Developer runtime exception:", kind, subtype, flush=True)
 
 def on_asset_response(response):
     uri = urlsplit(response.url)
@@ -757,6 +765,10 @@ if __name__ == "__main__":
                             NETWORK_AUDIT["blocked_external_requests"] += 1
                         if is_write:
                             NETWORK_AUDIT["blocked_write_attempts"] += 1
+                            if NETWORK_AUDIT["blocked_write_attempts"] <= 16:
+                                group = "visitor-presence" if url.path == "/rest/v1/rpc/visitor_presence" else "other-external" if is_external else "same-origin"
+                                method = route.request.method if route.request.method in ("POST", "PUT", "PATCH", "DELETE", "OPTIONS") else "other"
+                                print("Developer blocked write:", group, method, flush=True)
                         if is_external or is_write:
                             return route.abort()
                         return route.continue_()

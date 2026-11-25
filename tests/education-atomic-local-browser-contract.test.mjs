@@ -104,7 +104,9 @@ test("private Education, exam, instructor, and result routes never poll visitor 
  assert.match(source,/path\.startsWith\("\/test-results\/"\)/);
  assert.match(source,/included = allowed && !locked && !restoring && !privateEducation/);
  assert.match(source,/queryKey: \["visitor-presence", included, privateEducation\]/);
- assert.match(source,/enabled: !privateEducation && \(included \|\| home\)/);
+ assert.match(source,/enabled: !presenceDisabled && !privateEducation && \(included \|\| home\)/);
+ assert.match(source,/const presenceDisabled = import\.meta\.env\.VITE_DISABLE_VISITOR_PRESENCE === "true"/);
+ assert.match(source,/const locked = presenceDisabled \|\| analytics === false/);
  assert.match(script,/path == "\/rest\/v1\/rpc\/is_admin"/);
  assert.match(script,/fixture\.unexpected_mutations\.clear\(\)/);
  assert.match(workflow,/src\/components\/home\/VisitorPresence\.tsx/);
