@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import WorkspaceCaptureLink from "@/components/workspace/WorkspaceCaptureLink";
+import HostedCloudControlCenter from "@/components/cloud/HostedCloudControlCenter";
 import { Cloud, Container, Network, ShieldCheck, Upload, Database, Workflow, GitBranch, Server, AlertTriangle, ArrowUpRight } from "lucide-react";
 import { parseCloudSnapshot, MAX_SNAPSHOT_BYTES } from "@/lib/cloudInventoryUtils.mjs";
 
@@ -36,13 +37,15 @@ export default function CloudIntegrations() {
     <section className="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-slate-950 via-slate-950 to-cyan-950/60 p-7 text-white sm:p-10">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300"><Cloud className="h-5 w-5" /> ETERNYX infrastructure</div>
       <h1 className="mt-4 text-3xl font-bold sm:text-5xl">Cloud &amp; <span className="text-cyan-300">Integrations</span></h1>
-      <p className="mt-4 max-w-3xl leading-7 text-slate-300">A unified home for cloud resources, infrastructure operations and connected services. Begin with real read-only inventory from an operator-controlled Docker host or Kubernetes namespace.</p>
+      <p className="mt-4 max-w-3xl leading-7 text-slate-300">A unified home for cloud resources, infrastructure operations and connected services. Review your authenticated account's hosted Docker governance records alongside operator-collected local Docker or Kubernetes inventory. Neither path enables live container execution.</p>
       <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-300">
+        <span className="rounded-full border border-slate-700 px-3 py-1">Authenticated owner status (when deployed)</span>
         <span className="rounded-full border border-slate-700 px-3 py-1">Local operator inventory available</span>
         <span className="rounded-full border border-slate-700 px-3 py-1">Remote live control not connected</span>
         <span className="rounded-full border border-slate-700 px-3 py-1">No credentials uploaded</span>
       </div>
     </section>
+    <HostedCloudControlCenter />
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-7" aria-labelledby="inventory-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
