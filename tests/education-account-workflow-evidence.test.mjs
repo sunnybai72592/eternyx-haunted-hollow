@@ -35,3 +35,12 @@ test("journal validation rejects sensitive extra fields, forged success and repe
  j.accounts[0].email="private";
  assert.throws(()=>recoveryEvidence(j,env));
 });
+
+test("default config-only dispatch does not require mutation approvals and skips recovery upload",()=>{
+ assert.match(workflow,/check_config_only:[\s\S]*?default: true/);
+ assert.match(workflow,/inputs\.check_config_only \|\| \(inputs\.approve_new_accounts && inputs\.acknowledge_partial_failure\)/);
+ assert.match(workflow,/inputs\.check_config_only && '--check-config'/);
+ assert.equal((workflow.match(/if: always\(\) && !inputs\.check_config_only/g)||[]).length,2);
+ const runner=readFileSync(new URL("../scripts/staging/runEducationStagingAccountProvision.mjs",import.meta.url),"utf8");
+ assert.ok(runner.indexOf('process.argv.includes("--check-config")')<runner.indexOf("writeFileSync(path,"));
+});
