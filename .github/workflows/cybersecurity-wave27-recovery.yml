@@ -31,7 +31,7 @@ jobs:
           git -C "$source_dir" init -q
           git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
           test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
-          for path in scripts/sql/test-security-session-fence.sql scripts/sql/staged-security-session-fence.sql scripts/sql/staged-security-evidence-controls.sql scripts/sql/staged-security-evidence-global-budget.sql scripts/sql/staged-security-evidence-gateway.sql scripts/sql/seed-security-recovery-rehearsal.sql scripts/sql/verify-security-recovery-rehearsal.sql scripts/security-wave27-verify-backup.mjs tests/security-wave27-verify-backup.test.mjs; do
+          for path in scripts/sql/test-security-scanner-history.sql scripts/sql/staged-security-scanner-history.sql scripts/sql/test-security-session-fence.sql scripts/sql/staged-security-session-fence.sql scripts/sql/staged-security-evidence-controls.sql scripts/sql/staged-security-evidence-global-budget.sql scripts/sql/staged-security-evidence-gateway.sql scripts/sql/seed-security-recovery-rehearsal.sql scripts/sql/verify-security-recovery-rehearsal.sql scripts/security-wave27-verify-backup.mjs tests/security-wave27-verify-backup.test.mjs; do
             mkdir -p "$(dirname "$path")"
             git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
           done
@@ -59,3 +59,4 @@ jobs:
           docker exec wave27-pg createdb -U postgres recovered
           docker exec wave27-pg pg_restore -U postgres --exit-on-error --single-transaction -d recovered /tmp/synthetic.dump
           docker exec wave27-pg psql -X -v ON_ERROR_STOP=1 -U postgres -d recovered -f /tmp/rehearsal/verify-security-recovery-rehearsal.sql
+          docker exec wave27-pg psql -X -v ON_ERROR_STOP=1 -U postgres -d recovered -f /tmp/rehearsal/test-security-scanner-history.sql
