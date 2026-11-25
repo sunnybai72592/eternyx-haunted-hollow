@@ -13,7 +13,29 @@ const corsHeaders = {
 };
 
 const SSL_LABS_API = "https://api.ssllabs.com/api/v3/analyze";
-const MAX_POLL_ATTEMPTS = 8;
+const MAX_POLL_ATTEMPTS = 2;
+const MAX_REQUEST_BYTES = 4096;
+const MAX_PROVIDER_BYTES = 2 * 1024 * 1024;
+
+async function boundedJson(input: Request | Response, limit: number): Promise<any> {
+  const reader = input.body?.getReader();
+  if (!reader) throw new Error("empty-body");
+  let total = 0;
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) { await reader.cancel(); throw new Error("body-too-large"); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
 
 interface SSLAnalysisRequest {
   hostname: string;
@@ -72,8 +94,9 @@ serve(async (req) => {
 
     let body: SSLAnalysisRequest;
     try {
-      body = await req.json();
-    } catch {
+      body = await boundedJson(req, MAX_REQUEST_BYTES);
+    } catch (error) {
+      if (error instanceof Error && error.message === "body-too-large") return jsonResponse({ error: "Request body is too large." }, 413);
       return jsonResponse({ error: "Request body must be valid JSON." }, 400);
     }
 
@@ -143,7 +166,7 @@ serve(async (req) => {
       ],
     });
   } catch (error) {
-    console.error("SSL analyzer error:", error);
+    console.error("SSL analyzer failed");
     if (error instanceof SSLLabsApiError) {
       return jsonResponse({ error: error.message }, error.status);
     }
@@ -156,7 +179,7 @@ serve(async (req) => {
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
@@ -168,7 +191,7 @@ async function requestSslLabs(hostname: string, startNew = false): Promise<any> 
 
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    response = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: "error" });
   } catch {
     throw new SSLLabsApiError("Qualys SSL Labs could not be reached. Please retry later.", 502);
   }
@@ -184,15 +207,15 @@ async function requestSslLabs(hostname: string, startNew = false): Promise<any> 
   }
 
   try {
-    return await response.json();
+    return await boundedJson(response, MAX_PROVIDER_BYTES);
   } catch {
     throw new SSLLabsApiError("Qualys SSL Labs returned an unreadable assessment response.", 502);
   }
 }
 
 async function performSSLAnalysis(hostname: string): Promise<SSLResult> {
-  // startNew is used once only. Polling requests must not restart the assessment.
-  let analysisData = await requestSslLabs(hostname, true);
+  // Reuse cached or in-progress provider assessment; retries must not force restarts.
+  let analysisData = await requestSslLabs(hostname);
   let attempts = 0;
 
   while (analysisData.status !== "READY" && analysisData.status !== "ERROR" && attempts < MAX_POLL_ATTEMPTS) {
