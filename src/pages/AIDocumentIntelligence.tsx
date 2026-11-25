@@ -5,6 +5,7 @@ import LocalOfficeCorpusImport from "@/components/ai/LocalOfficeCorpusImport";
 import LocalCorpusDiscovery from "@/components/ai/LocalCorpusDiscovery";
 import LocalCorpusAnalytics from "@/components/ai/LocalCorpusAnalytics";
 import LocalCorpusValidation from "@/components/ai/LocalCorpusValidation";
+import LocalCorpusResearch from "@/components/ai/LocalCorpusResearch";
 import {useAuthStore} from "@/store/authStore";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ClipboardCopy, FileCheck2, FileSearch, RotateCcw, ScanSearch, ShieldCheck, Trash2, XCircle } from "lucide-react";
@@ -2046,6 +2047,8 @@ const AIDocumentIntelligenceWorkspace = ({ownerId}:{ownerId:string}) => {
                 {corpusHashBusy ? "Hashing local decoded text…" : "Calculate local SHA-256 fingerprints"}
               </Button>
             </div>
+            <LocalCorpusResearch documents={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting}
+              onCopy={text=>void copy(text,"Local research report")}/>
             <LocalCorpusValidation documents={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting}
               onCopy={text=>void copy(text,"Local validation report")}/>
             <LocalCorpusAnalytics documents={corpusFiles} disabled={corpusBusy||corpusWorkspaceLoading||corpusWorkspaceExporting}
