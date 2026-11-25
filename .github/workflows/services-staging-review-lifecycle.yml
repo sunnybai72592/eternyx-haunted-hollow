@@ -1,0 +1,57 @@
+name: Services authenticated synthetic review lifecycle
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledgment:
+        description: "Creates two synthetic staging requests and their review history; retains records. No delivery, payment or account creation."
+        required: true
+        type: choice
+        options:
+          - NOT_APPROVED
+          - WRITE_SYNTHETIC_SERVICES_STAGING_LIFECYCLE
+permissions:
+  contents: read
+concurrency:
+  group: services-staging-lifecycle
+  cancel-in-progress: false
+jobs:
+  lifecycle:
+    if: ${{ inputs.acknowledgment == 'WRITE_SYNTHETIC_SERVICES_STAGING_LIFECYCLE' && github.ref == 'refs/heads/main' }}
+    environment: services-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify reviewed migration source
+        run: node scripts/services-migration-source-guard.mjs > /dev/null
+      - name: Verify registered staging identity independently (GET only)
+        env:
+          SERVICES_PREFLIGHT_CONFIRM: READ_ONLY_STAGING_INVENTORY
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_STAGING_AUDIT_POOLER_HOST: ${{ vars.SERVICES_STAGING_AUDIT_POOLER_HOST }}
+          SERVICES_STAGING_EXPECTED_ORG_SLUG: ${{ vars.SERVICES_STAGING_EXPECTED_ORG_SLUG }}
+          SERVICES_STAGING_EXPECTED_PROJECT_NAME: ${{ vars.SERVICES_STAGING_EXPECTED_PROJECT_NAME }}
+          SERVICES_STAGING_MANAGEMENT_API_TOKEN: ${{ secrets.SERVICES_STAGING_MANAGEMENT_API_TOKEN }}
+        run: node scripts/services-phase41-registered-staging-project.mjs
+      - name: Run authenticated synthetic review lifecycle
+        env:
+          SERVICES_LIFECYCLE_CONFIRM: ${{ inputs.acknowledgment }}
+          SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF: ${{ vars.SERVICES_PREFLIGHT_EXPECTED_PROJECT_REF }}
+          SERVICES_PREFLIGHT_URL: ${{ vars.SERVICES_PREFLIGHT_URL }}
+          SERVICES_PREFLIGHT_PUBLISHABLE_KEY: ${{ secrets.SERVICES_PREFLIGHT_PUBLISHABLE_KEY }}
+          SERVICES_LIFECYCLE_CUSTOMER_A_ID: ${{ vars.SERVICES_LIFECYCLE_CUSTOMER_A_ID }}
+          SERVICES_LIFECYCLE_CUSTOMER_B_ID: ${{ vars.SERVICES_LIFECYCLE_CUSTOMER_B_ID }}
+          SERVICES_LIFECYCLE_ADMIN_ID: ${{ vars.SERVICES_LIFECYCLE_ADMIN_ID }}
+          SERVICES_PREFLIGHT_CUSTOMER_A_EMAIL: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_A_EMAIL }}
+          SERVICES_PREFLIGHT_CUSTOMER_A_PASSWORD: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_A_PASSWORD }}
+          SERVICES_PREFLIGHT_CUSTOMER_B_EMAIL: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_B_EMAIL }}
+          SERVICES_PREFLIGHT_CUSTOMER_B_PASSWORD: ${{ secrets.SERVICES_PREFLIGHT_CUSTOMER_B_PASSWORD }}
+          SERVICES_PREFLIGHT_ADMIN_EMAIL: ${{ secrets.SERVICES_PREFLIGHT_ADMIN_EMAIL }}
+          SERVICES_PREFLIGHT_ADMIN_PASSWORD: ${{ secrets.SERVICES_PREFLIGHT_ADMIN_PASSWORD }}
+        run: node scripts/services-phase50-staging-lifecycle.mjs
