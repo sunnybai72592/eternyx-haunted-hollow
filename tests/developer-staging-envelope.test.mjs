@@ -60,7 +60,7 @@ test("runner records actual UTC lifecycle and counts cross-origin write attempts
   assert.match(runner, /"run_id":os\.getenv\("GITHUB_RUN_ID",""\)/);
   assert.match(runner, /"run_attempt":os\.getenv\("GITHUB_RUN_ATTEMPT",""\)/);
   assert.match(runner, /is_write = args\.staging and route\.request\.method not in \("GET", "HEAD"\)/);
-  assert.match(runner, /if is_external:\s+NETWORK_AUDIT\["blocked_external_requests"\] \+= 1\s+if is_write:\s+NETWORK_AUDIT\["blocked_write_attempts"\] \+= 1\s+if is_external or is_write:\s+return route\.abort\(\)/);
+  assert.match(runner, /if is_external:\s+NETWORK_AUDIT\["blocked_external_requests"\] \+= 1\s+if is_write:\s+NETWORK_AUDIT\["blocked_write_attempts"\] \+= 1\s+if NETWORK_AUDIT\["blocked_write_attempts"\] <= 16:\s+group = "visitor-presence" if url\.path == "\/rest\/v1\/rpc\/visitor_presence" else "other-external" if is_external else "same-origin"\s+method = route\.request\.method if route\.request\.method in \("POST", "PUT", "PATCH", "DELETE", "OPTIONS"\) else "other"\s+print\("Developer blocked write:", group, method, flush=True\)\s+if is_external or is_write:\s+return route\.abort\(\)\s+return route\.continue_\(\)/);
 });
 
 test("verified summary is written by the gate and published only after successful verification",()=>{
