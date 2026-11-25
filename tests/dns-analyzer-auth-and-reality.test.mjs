@@ -9,7 +9,12 @@ test("DNS analyzer requires a verified user session", async () => {
 
   assert.match(source, /req\.method !== 'POST'/);
   assert.match(source, /authorization\?\.startsWith\('Bearer '\)/);
-  assert.match(source, /supabaseClient\.auth\.getUser\(\)/);
+  assert.match(source, /supabaseClient\.auth\.getUser\(authorization\.slice\(7\)\)/);
+  assert.match(source, /if \(authError \|\| !user\)/);
+  assert.match(source, /const admission = await admitScanner\(\{ authorization, user,/);
+  assert.match(source, /if \(admission\.status !== 200\) return new Response/);
+  assert.ok(source.indexOf("supabaseClient.auth.getUser(") < source.indexOf("const admission = await admitScanner("));
+  assert.ok(source.indexOf("const admission = await admitScanner(") < source.indexOf("const records = await queryDNSRecords("));
   assert.match(source, /const user_id = user\.id/);
   assert.doesNotMatch(source, /const \{ domain, user_id \}: DNSAnalysisRequest/);
 });
