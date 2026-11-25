@@ -58,7 +58,7 @@ test("2. Neither the write-approval token nor acknowledgement alone can activate
   assert.throws(()=>validateEducationHostedCbtConfig(y),/acknowledgement/);
   y.ETERNYX_EDU_IRREVERSIBLE_ACK=EDUCATION_CBT_IRREVERSIBLE_ACK;
   assert.equal(validateEducationHostedCbtConfig(y).mode,"write");
-  assert.equal(validateEducationHostedCbtConfig(y).expectedCases.length,46);
+  assert.equal(validateEducationHostedCbtConfig(y).expectedCases.length,51);
 });
 test("3. Arbitrary mode, missing mode or wrong approval constants fail closed",()=>{
   for(const mode of [undefined,"Write","write-now","production","","read-only",null]){
@@ -110,9 +110,9 @@ test("7. All four reviewed exam/question/option fixture IDs are valid and distin
 });
 test("8. Both acceptance modes have exact fixed, nonduplicate case names",()=>{
   assert.equal(CBT_PREFLIGHT_CASES.length,16);
-  assert.equal(CBT_WRITE_CASES.length,29);
+  assert.equal(CBT_WRITE_CASES.length,34);
   assert.equal(CBT_STAGING_CASES.preflight.length,17);
-  assert.equal(CBT_STAGING_CASES.write.length,46);
+  assert.equal(CBT_STAGING_CASES.write.length,51);
   for(const x of Object.values(CBT_STAGING_CASES))assert.equal(new Set(x).size,x.length);
   assert.ok(CBT_STAGING_CASES.write.includes("student-b-cannot-save-a-answer"));
   assert.ok(CBT_STAGING_CASES.write.includes("student-a-has-pending-unverified-result"));
@@ -298,3 +298,14 @@ test("23. An invisible non-owner write needs an exact empty RETURNING and follow
   assert.match(runner,/attempts\[0\]\.score===null && attempts\[0\]\.max_score===null/);
   assert.match(runner,/answer\.is_correct===null && answer\.points_awarded===null/);
 });
+
+ test("hosted recovery checks require real independent sign-in, original clock and exact answer identities before submission",()=>{
+ const s=readFileSync(new URL("../scripts/staging/verifyEducationHostedCbtWrite.mjs",import.meta.url),"utf8");
+ const cases=["unenrolled-student-cannot-start-fresh-exam","student-a-signs-out-during-active-attempt","student-a-reauthenticates-in-independent-client","student-a-resume-preserves-attempt-and-original-clock","student-a-resume-preserves-exact-saved-answers"];
+ let previous=s.indexOf('await gate("student-a-attempt-in-progress"');
+ for(const name of cases){const i=s.indexOf('await gate("'+name+'"');assert.ok(i>previous);assert.ok(CBT_WRITE_CASES.includes(name));previous=i;}
+ assert.ok(previous<s.indexOf('await gate("student-a-submits-staging-exam"'));
+ assert.match(s,/signOut\(\{scope:"local"\}\)/);assert.match(s,/studentA=client\(config\)/);
+ assert.match(s,/Date\.parse\(r\.start_time\)===Date\.parse\(originalStartTime\)/);
+ assert.match(s,/x\.id===originalMcqAnswerId/);assert.match(s,/x\.id===essayAnswerId/);
+ });

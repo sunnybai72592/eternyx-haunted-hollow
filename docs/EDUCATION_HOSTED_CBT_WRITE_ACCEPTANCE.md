@@ -28,7 +28,7 @@ The existing production-project fingerprint, distinct project refs, exact HTTPS 
 
 5. Manually run the workflow from the repository's default branch in **preflight** mode, with both write checkboxes unchecked. The evidence verifier requires all **17** fixed cases, sanitized results and both Auth sessions signed out. No CBT state is created.
 
-6. Only after reviewing a successful preflight and confirming that the new fixture is still fresh, optionally run **write** mode and explicitly check both acknowledgements. The workflow repeats preflight and then runs 29 controlled student write/denial cases, including nine explicit direct-mutation/unchanged-record checks. All **46** cases must pass.
+6. Only after reviewing a successful preflight and confirming that the new fixture is still fresh, optionally run **write** mode and explicitly check both acknowledgements. The workflow repeats preflight and then runs 34 controlled student write/denial/recovery cases, including nine explicit direct-mutation/unchanged-record checks. All **51** cases must pass.
 
 7. The resulting submitted staging attempt remains available for independent teacher review and trusted grading. **Manual cleanup / fixture rotation is required** before another write rehearsal. Do not silently mutate or erase a submitted attempt, marks or accounts to reset the suite. If a run fails or loses network after starting an attempt, a write **may already have committed**; manually inspect staging before retrying.
 
@@ -39,3 +39,7 @@ The independent report validator rejects partial/fabricated successes, incorrect
 This does **not** invoke service-role APIs, production databases, grading workers, payments, billing, GPUs, infrastructure provisioning, privileged table writes or automatic cleanup. It does intentionally send synthetic direct-table mutation attempts that **must be denied** in write mode; failure stops the rehearsal. Staging may have normal Supabase plan quotas or charges when an operator elects to use a project, but committing this PR does not create such a project or initiate hosted calls.
 
 **Production is not verified.** Even a successful write rehearsal tests only this one synthetic student path. Teacher review, trusted grading, end-to-end live frontend, rollback and production migration remain separate controlled release gates. Keep production Education feature flags OFF.
+
+### Interrupted-session acceptance
+
+The approved hosted write journey now also denies an unenrolled student's attempt start, signs student A out mid-exam, checks that the original local session is absent, reauthenticates through a new Supabase client, resumes the original attempt without extending its start time, and compares the exact persisted answer IDs and contents. The subsequent submission, no-retake and protected-result checks still run on that same attempt. These five added checks require real hosted execution; offline regression tests alone are not acceptance. Current staging inventory found two shared Auth accounts, zero administrators, instructor grants, exams, attempts and grades; dedicated Education users and separately approved fixture setup remain required.
