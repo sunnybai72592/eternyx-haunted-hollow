@@ -1,0 +1,44 @@
+name: LABS protected HTTP assessment rehearsal
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-http-assessment-candidate.yml'
+      - 'scripts/sql/labs-http-assessment-candidate.sql'
+      - 'tests/sql/labs-http-assessment-candidate-smoke.sql'
+      - 'tests/sql/ctf-range-db-bootstrap.sql'
+      - 'supabase/migrations/20261122180000_ctf_range_session_control.sql'
+      - 'supabase/migrations/20261122190000_ctf_range_access_grants.sql'
+      - 'supabase/migrations/20261124123000_ctf_range_session_column_privacy.sql'
+permissions:
+  contents: read
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Rehearse SQL in networkless disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="eternyx-http-assessment-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --rm --network none --name "$name" -e POSTGRES_PASSWORD=local_ci_only postgres:17-alpine
+          for i in $(seq 1 40); do
+            if docker exec "$name" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec "$name" pg_isready -U postgres
+          for file in tests/sql/ctf-range-db-bootstrap.sql supabase/migrations/20261122180000_ctf_range_session_control.sql supabase/migrations/20261122190000_ctf_range_access_grants.sql supabase/migrations/20261124123000_ctf_range_session_column_privacy.sql scripts/sql/labs-http-assessment-candidate.sql tests/sql/labs-http-assessment-candidate-smoke.sql; do
+            docker exec -i "$name" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+          done
