@@ -1,0 +1,58 @@
+name: ETERNYX Education hosted publication and enrollment acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      approve_synthetic_publication:
+        type: boolean
+        required: true
+        default: false
+        description: "Create, publish and revoke enrollment on one separate synthetic exam only"
+      acknowledge_persistent_draft:
+        type: boolean
+        required: true
+        default: false
+        description: "Published test remains; inspect any interrupted run before another dispatch"
+permissions:
+  contents: read
+concurrency:
+  group: eternyx-education-hosted-shared-staging
+  cancel-in-progress: false
+jobs:
+  publication:
+    runs-on: ubuntu-latest
+    environment: rls-staging
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && github.ref == 'refs/heads/main' && github.run_attempt == '1' && inputs.approve_synthetic_publication && inputs.acknowledge_persistent_draft }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run real four-account publication and enrollment checks
+        timeout-minutes: 8
+        env:
+          ETERNYX_EDU_PUBLICATION_APPROVAL: I_APPROVE_ONE_SYNTHETIC_EDUCATION_PUBLICATION_JOURNEY
+          ETERNYX_RLS_STAGING_REF: ${{ vars.ETERNYX_RLS_STAGING_REF }}
+          ETERNYX_RLS_PRODUCTION_REF: ${{ vars.ETERNYX_RLS_PRODUCTION_REF }}
+          ETERNYX_RLS_STAGING_URL: ${{ secrets.ETERNYX_RLS_STAGING_URL }}
+          ETERNYX_RLS_STAGING_PUBLISHABLE_KEY: ${{ secrets.ETERNYX_RLS_STAGING_PUBLISHABLE_KEY }}
+          ETERNYX_RLS_TEST_A_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_A_EMAIL }}
+          ETERNYX_RLS_TEST_A_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_A_PASSWORD }}
+          ETERNYX_RLS_TEST_B_EMAIL: ${{ secrets.ETERNYX_RLS_TEST_B_EMAIL }}
+          ETERNYX_RLS_TEST_B_PASSWORD: ${{ secrets.ETERNYX_RLS_TEST_B_PASSWORD }}
+          ETERNYX_RLS_INSTRUCTOR_EMAIL: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_EMAIL }}
+          ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
+          ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL }}
+          ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD }}
+        run: node scripts/staging/runEducationHostedPublication.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: education-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/education-hosted-publication.json
+          if-no-files-found: warn
+          retention-days: 7
