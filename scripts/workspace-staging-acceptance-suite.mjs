@@ -67,13 +67,20 @@ export async function preflightSuite(config,factory=createStagingClient){
   gate(project.owner_id===config.accounts[0]&&project.name==="ETERNYX STAGING PRIVATE FIXTURE","private-fixture-owner-mismatch");
   return nonce;
 }
-export async function editApprovedFixture(config,{client,identity,space,task}){
+const fixtureTransitions={
+  initial:["Synthetic staging task","Synthetic staging task — acceptance update"],
+  offline:["Synthetic staging task — acceptance update","Synthetic staging task — offline update"],
+  reconnected:["Synthetic staging task — offline update","Synthetic staging task — reconnected update"],
+};
+export async function editApprovedFixture(config,{client,identity,space,task,phase="initial"}){
+  const transition=Object.hasOwn(fixtureTransitions,phase)?fixtureTransitions[phase]:null;
+  gate(transition!==null,"invalid-fixture-edit-phase");
   gate(identity===config.accounts[0]&&space===config.base.ids.SPACE_ID&&task===config.base.ids.TEAM_TASK_ID,"edit-scope-mismatch");
   const row=await one(client,"workspace_team_tasks",{id:task,space_id:space},"id,title,details,status,priority,due_on,assignee_id,updated_at");
-  gate(row.title==="Synthetic staging task"&&row.details==="Non-sensitive acceptance fixture"&&
+  gate(row.title===transition[0]&&row.details==="Non-sensitive acceptance fixture"&&
     typeof row.updated_at==="string"&&Number.isFinite(Date.parse(row.updated_at)),"edit-fixture-changed");
   const result=await client.rpc("workspace_team_save_task",{p_space_id:space,p_task_id:task,
-    p_title:"Synthetic staging task — acceptance update",p_details:row.details,p_status:row.status,
+    p_title:transition[1],p_details:row.details,p_status:row.status,
     p_priority:row.priority,p_due_on:row.due_on,p_assignee_id:row.assignee_id,p_expected_updated_at:row.updated_at});
   gate(!result.error&&result.data===task,"approved-realtime-edit-failed");
 }
@@ -86,7 +93,8 @@ export function verifySuiteStage(stage,report){
     authenticated_read:passed("complete_member_portfolio_snapshots")&&passed("outsider_portfolio_projection_denied")&&passed("final_four_account_identity_recheck"),
     private_storage:report.verified_exact_sha256===true&&report.verified_cross_account_denial===true&&report.verified_public_url_denial===true,
     concurrent_write:passed("concurrent_edit_one_winner_and_shared_convergence")&&report.verified_temporary_task_cleanup===true,
-    realtime:report.verified_realtime_delivery===true&&report.verified_outsider_exclusion===true&&report.application_data_modified_by_runner===true,
+    realtime:report.verified_realtime_delivery===true&&report.verified_outsider_exclusion===true&&report.application_data_modified_by_runner===true&&
+      report.verified_editor_disconnect===true&&report.verified_authoritative_catchup===true&&report.verified_reconnected_delivery===true,
     revocation:report.verified_existing_socket_exclusion===true&&report.verified_fresh_socket_exclusion===true&&report.temporary_task_removed===true&&report.persisted_editor_revocation===true,
   };
   gate(valid[stage]===true,"stage-specific-evidence-incomplete");
@@ -98,7 +106,7 @@ export async function runWorkspaceAcceptanceSuite(config,{factory=createStagingC
     ()=>runWorkspaceStagingAcceptance(config.base,factory),
     ()=>runPrivateStorageReadOnly(config.storage,factory),
     ()=>runStagingWriteRoleAcceptance(config.write,factory),
-    ()=>runWorkspaceRealtimeStaging(config.realtime,factory,{approvedFixtureEdit:context=>editApprovedFixture(config,context)}),
+    ()=>runWorkspaceRealtimeStaging(config.realtime,factory,{approvedFixtureEdit:context=>editApprovedFixture(config,context),approvedReconnectEdit:context=>editApprovedFixture(config,context)}),
     ()=>runStagingRevocationAcceptance(config.revoke,factory),
   ];
   const completed=[];
@@ -108,9 +116,9 @@ export async function runWorkspaceAcceptanceSuite(config,{factory=createStagingC
     completed.push({key:stages[i],status:"pass"});
     onStage(stages[i],"passed");
   }
-  return {schema:"eternyx.workspace.phase52.acceptance-suite",checks:completed,
+  return {schema:"eternyx.workspace.phase53.acceptance-suite",checks:completed,
     release_gate:"manual_review_required",production_certified:false,browser_ui_verified:false,
-    reconnect_verified:false,account_recovery_verified:false,migration_history_verified:false,
+    reconnect_verified:true,account_recovery_verified:false,migration_history_verified:false,
     disposable_task_edit_and_revocation_persist:true};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
