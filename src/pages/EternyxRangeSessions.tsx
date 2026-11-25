@@ -10,6 +10,7 @@ import {
   createRangeOwnerFence,parseRangeProviderStatus,parseRangeSessionsResponse,
   parseRangeReservationReply,parseRangeStopReply,canRequestRangeSession,RANGE_ACTIVE_STATES,
 } from "@/lib/eternyxRangeSessionClient.mjs";
+import { rangeLifecycle, mayRefreshRange, restartEligibility } from "@/lib/eternyxRangeLifecycle.mjs";
 
 type SessionStatus = "queued" | "provisioning" | "running" | "stopping" | "stopped" | "expired" | "failed";
 type RangeSession = {
@@ -71,6 +72,13 @@ function publicRangeError(): string {
 }
 
 export default function EternyxRangeSessions() {
+  const ownerId=useAuthStore(s=>s.isAuthenticated?s.user?.id??null:null);
+  // Key the entire private subtree, not just an effect: no previous account
+  // state can be painted during the render before effect cleanup.
+  return <RangeSessionDashboard key={ownerId??"signed-out"} />;
+}
+
+function RangeSessionDashboard() {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [provider, setProvider] = useState<ProviderStatus | null>(null);
@@ -79,13 +87,15 @@ export default function EternyxRangeSessions() {
   const [errorText, setErrorText] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [clock, setClock] = useState(()=>Date.now());
+  const mounted=useRef(false);
   const ownerId = isAuthenticated ? user?.id ?? null : null;
   const fence = useRef(createRangeOwnerFence());
   const pendingAction = useRef(false);
   const actionSequence = useRef(0);
 
   const load = useCallback(async (): Promise<boolean> => {
-    if (!ownerId || currentAuthenticatedOwner() !== ownerId) return false;
+    if (!mounted.current || !ownerId || currentAuthenticatedOwner() !== ownerId) return false;
     const ticket = fence.current.start(ownerId);
     try {
       const [status, results] = await Promise.all([rangeCall("status"), rangeCall("sessions")]);
@@ -110,6 +120,7 @@ export default function EternyxRangeSessions() {
   }, [ownerId]);
 
   useEffect(() => {
+    mounted.current=true;
     fence.current.invalidate();
     ++actionSequence.current;
     pendingAction.current = false;
@@ -120,15 +131,36 @@ export default function EternyxRangeSessions() {
     setErrorText("");
     if (!ownerId || currentAuthenticatedOwner() !== ownerId) {
       setState("idle");
-      return () => { fence.current.invalidate(); ++actionSequence.current; };
+      return () => { mounted.current=false; fence.current.invalidate(); ++actionSequence.current; };
     }
     setState("loading");
     void load();
     return () => {
+      mounted.current=false;
       fence.current.invalidate();
       ++actionSequence.current;
     };
   }, [ownerId, load]);
+
+  useEffect(()=>{
+    if (!ownerId) return;
+    const tick=()=>setClock(Date.now());
+    const synchronize=()=>{
+      tick();
+      if (mayRefreshRange({visible:document.visibilityState==="visible",
+        owner:ownerId,currentOwner:currentAuthenticatedOwner(),busy:pendingAction.current||busy,
+        mounted:mounted.current})) void load();
+    };
+    const timer=window.setInterval(tick,1000);
+    const refreshTimer=window.setInterval(synchronize,10000);
+    document.addEventListener("visibilitychange",synchronize);
+    window.addEventListener("online",synchronize);
+    return ()=>{
+      window.clearInterval(timer); window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange",synchronize);
+      window.removeEventListener("online",synchronize);
+    };
+  },[ownerId,load,busy]);
 
   const active = useMemo(() => sessions.filter((session) => activeStates.has(session.status)), [sessions]);
   const canRequest = canRequestRangeSession(provider, sessions, state === "ready") &&
@@ -138,7 +170,7 @@ export default function EternyxRangeSessions() {
     if (!ownerId || pendingAction.current || busy || currentAuthenticatedOwner() !== ownerId) return;
     setBusy(true); setMessage("");
     try { await load(); }
-    finally { if (currentAuthenticatedOwner() === ownerId && !pendingAction.current) setBusy(false); }
+    finally { if (mounted.current && currentAuthenticatedOwner() === ownerId && !pendingAction.current) setBusy(false); }
   };
 
   const runAction = async (action: "request" | "stop", sessionId?: string) => {
@@ -148,7 +180,7 @@ export default function EternyxRangeSessions() {
       s.id === sessionId && ["queued", "provisioning", "running"].includes(s.status)))) return;
     pendingAction.current = true;
     const generation = ++actionSequence.current;
-    const isCurrent = () => generation === actionSequence.current &&
+    const isCurrent = () => mounted.current && generation === actionSequence.current &&
       currentAuthenticatedOwner() === ownerId;
     setBusy(true); setMessage("");
     try {
@@ -175,6 +207,12 @@ export default function EternyxRangeSessions() {
   };
   const request = () => runAction("request");
   const stop = (sessionId: string) => runAction("stop", sessionId);
+  const restart = (session: RangeSession) => {
+    if (!restartEligibility(session,provider,sessions,state==="ready").allowed || !canRequest) return;
+    // A restart is a new ordinary quota-checked request. Never auto-launch
+    // after stop, and never reuse the old session identifier.
+    void runAction("request");
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -250,12 +288,14 @@ export default function EternyxRangeSessions() {
 
                 <section className="rounded-2xl border border-border/70 bg-card/70 p-5 sm:p-7">
                   <h2 className="text-xl font-bold">My recent reservations</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">Records come from the authenticated server. Instance credentials and internal provider IDs are never returned.</p>
+                  <p className="mt-2 text-sm text-muted-foreground">Records come from the authenticated server. Instance credentials and internal provider IDs are never returned. Status refreshes every 10 seconds while this tab is visible. The countdown is informational, not proof of teardown.</p>
                   {sessions.length === 0
                     ? <p className="mt-5 rounded-xl border border-border bg-background/50 p-4 text-sm text-muted-foreground">No sessions are registered for this account.</p>
                     : <div className="mt-5 space-y-3">
-                      {sessions.map((session) => (
-                        <article key={session.id} className="rounded-xl border border-border/70 bg-background/45 p-4">
+                      {sessions.map((session) => {
+                        const lifecycle=rangeLifecycle(session,clock);
+                        const restartState=restartEligibility(session,provider,sessions,state==="ready");
+                        return <article key={session.id} className="rounded-xl border border-border/70 bg-background/45 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <h3 className="font-semibold">HTTP Basics · {session.status}</h3>
                             {["queued", "provisioning", "running"].includes(session.status) && (
@@ -265,8 +305,13 @@ export default function EternyxRangeSessions() {
                           </div>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">{statuses[session.status]}</p>
                           <p className="mt-2 text-xs text-muted-foreground">Requested: {safelyFormatted(session.requested_at)} · Expires: {safelyFormatted(session.expires_at)}</p>
-                        </article>
-                      ))}
+                          <p className="mt-2 text-sm font-medium">{lifecycle.label}</p>
+                          {lifecycle.canOfferRestart && <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <button type="button" className={outlined} disabled={!restartState.allowed || !canRequest} onClick={()=>restart(session)}><RefreshCcw className="h-4 w-4" /> Request fresh session</button>
+                            <span className="text-xs text-muted-foreground">{restartState.reason}</span>
+                          </div>}
+                        </article>;
+                      })}
                     </div>}
                 </section>
               </>
