@@ -66,11 +66,21 @@ def copy_bounded(source,target,max_bytes):
     finally:
         os.close(fd)
 
-def verify_bundle(work):
+def verify_bundle(work, *, profile="diagnostic"):
+    require(profile in ("diagnostic","http-security-exercise-v1"),"unknown bundle profile")
+    expected_schema=("eternyx-fixed-guest-boot-bundle-v1" if profile=="diagnostic"
+                     else "eternyx-http-exercise-boot-bundle-v1")
     report=exact_json((work/"bundle.json").read_bytes())
-    require(report["schema"]=="eternyx-fixed-guest-boot-bundle-v1" and
+    require(report["schema"]==expected_schema and
         report["bootBundlePrepared"] is True and report["kernelSha256"]==j.OBSERVED_KERNEL,
         "invalid fixed bundle")
+    if profile=="http-security-exercise-v1":
+        require(report.get("exerciseProfile")==profile and
+                isinstance(report.get("exerciseSourceSha256"),str) and
+                SHA.fullmatch(report["exerciseSourceSha256"]),"exercise profile evidence missing")
+    else:
+        require("exerciseProfile" not in report and "exerciseSourceSha256" not in report,
+                "unexpected exercise metadata")
     require(j.boot.digest(work/"kernel")==j.OBSERVED_KERNEL,"immutable kernel mismatch")
     require(report["rootfsBytes"]==ROOT_BYTES and
         (work/"rootfs.ext4").stat().st_size==ROOT_BYTES and
@@ -139,7 +149,7 @@ def exchange(path,session,nonce,deadline):
         sock.sendall(request)
         return verify_response(read_line(sock,end),session,nonce)
 
-def exercise(work,report,*,name=None,watchdog=None):
+def exercise(work,report,*,name=None,watchdog=None,mission=None):
     name=name or "ef-"+uuid.uuid4().hex[:20]
     cg=j.CGROOT/name
     net=pathlib.Path("/run/netns")/name
@@ -200,6 +210,13 @@ def exercise(work,report,*,name=None,watchdog=None):
             two=exchange(vsock,session,second,deadline)
             require(one!=two,"repeated response")
             j.verify_live(child,cg,root,net,allowed_socket=vsock)
+            mission_result=None
+            if mission is not None:
+                require(watchdog is None,"separate mission and crash acceptance modes")
+                def attest():
+                    return j.verify_live(child,cg,root,net,allowed_socket=vsock)
+                mission_result=mission(vsock,attest)
+                attest()
             if watchdog is not None:
                 watchdog.crash(cg,child)
                 raise RuntimeError("controller crash did not occur")
@@ -241,8 +258,9 @@ def exercise(work,report,*,name=None,watchdog=None):
             with log.open("rb") as stream:
                 stream.seek(max(0,log.stat().st_size-4096))
                 print(stream.read().decode("utf-8",errors="replace"),flush=True)
+    return mission_result
 
-def main(source,exercise_runner=exercise,bundle_validator=None):
+def main(source,exercise_runner=exercise,bundle_validator=None,*,profile="diagnostic"):
     require(os.geteuid()==0,"approved ephemeral root setup required")
     require((j.CGROOT/"cgroup.controllers").is_file() and
             stat.S_ISCHR(pathlib.Path("/dev/kvm").stat().st_mode),"KVM/cgroup v2 absent")
@@ -257,19 +275,20 @@ def main(source,exercise_runner=exercise,bundle_validator=None):
             copy_bounded(source/name,work/name,limit)
         if (source/"initramfs.cpio").exists():
             copy_bounded(source/"initramfs.cpio",work/"initramfs.cpio",MAX_INITRD)
-        report=verify_bundle(work)
+        report=verify_bundle(work,profile=profile)
         if bundle_validator is not None:
             bundle_validator(work,report)
         j.boot.extract_pinned(work/"release.tgz",work)
         for name in ("firecracker","jailer"):
             j.verify_release_executable(work/name)
-        exercise_runner(work,report)
+        mission_result=exercise_runner(work,report)
     print(json.dumps({"immutableKernelRootfsBootVerified":True,
         "guestReadOnlyExt4ServiceVerified":True,"guestVsockVerified":True,
         "guestModuleLoadingVerified":report["mode"]=="authenticated-module-plan",
         "guestBootMode":report["mode"],"guestNetworkDevices":0,"apiDisabled":True,
         "ownedResourcesCleaned":True,"dedicatedHardwareAcceptanceVerified":False,
         "providerActivationAllowed":False,"productionReleaseReady":False}),flush=True)
+    return mission_result
 
 if __name__=="__main__":
     if len(sys.argv)!=2:
