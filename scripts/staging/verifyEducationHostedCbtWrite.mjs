@@ -23,6 +23,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const completed=[];
 let config, studentA, studentB, guest, accountA, accountB, attemptId, essayAnswerId;
 let twoVerified=false,signedOut=false,writesAttempted=false,attemptCreated=false;
+let originalStartTime, originalMcqAnswerId;
 function must(value){if(!value)throw new Error("Synthetic staging gate failed");}
 function success(result){must(result && !result.error);return result.data;}
 function permissionDenied(result){
@@ -179,6 +180,8 @@ async function main(){
     const r=success(await studentA.rpc("start_cbt_attempt",{p_test_id:f.testId}));
     must(r?.status==="in_progress"&&typeof r.id==="string"&&uuid.test(r.id));
     attemptId=r.id;attemptCreated=true;
+    must(typeof r.start_time==="string"&&Number.isFinite(Date.parse(r.start_time)));
+    originalStartTime=r.start_time;
   });
   await gate("student-a-repeated-start-reuses-attempt",async()=>{
     const r=success(await studentA.rpc("start_cbt_attempt",{p_test_id:f.testId}));
@@ -208,11 +211,47 @@ async function main(){
     const essay=rows.find(x=>x.question_id===f.essayId);
     must(essay && typeof essay.id==="string" && uuid.test(essay.id));
     essayAnswerId=essay.id;
+    const mcq=rows.find(x=>x.question_id===f.mcqId);
+    must(mcq&&uuid.test(mcq.id));originalMcqAnswerId=mcq.id;
   });
   await gate("student-a-attempt-in-progress",async()=>{
     const r=exactRows(await studentA.from("user_attempts")
       .select("id,user_id,test_id,status").eq("id",attemptId),1)[0];
     checkAttempt(r);must(r.status==="in_progress");
+  });
+  // The same authorized attempt must survive loss of the original client session.
+  await gate("unenrolled-student-cannot-start-fresh-exam",async()=>{
+    must(permissionDenied(await studentB.rpc("start_cbt_attempt",{p_test_id:f.testId})));
+  });
+  await gate("student-a-signs-out-during-active-attempt",async()=>{
+    const logout=await studentA.auth.signOut({scope:"local"});
+    must(!logout.error);
+    const session=await studentA.auth.getSession();
+    must(!session.error&&session.data?.session===null);
+  });
+  await gate("student-a-reauthenticates-in-independent-client",async()=>{
+    studentA=client(config);
+    const login=await studentA.auth.signInWithPassword(config.accounts[0]);
+    must(!login.error&&login.data?.user?.id===accountA);
+    const verified=await studentA.auth.getUser();
+    must(!verified.error&&verified.data?.user?.id===accountA);
+  });
+  await gate("student-a-resume-preserves-attempt-and-original-clock",async()=>{
+    const r=success(await studentA.rpc("start_cbt_attempt",{p_test_id:f.testId}));
+    must(r?.id===attemptId&&r?.status==="in_progress"&&
+      typeof r.start_time==="string"&&Date.parse(r.start_time)===Date.parse(originalStartTime));
+    const a=exactRows(await studentA.from("user_attempts")
+      .select("id,user_id,test_id,start_time,status,score,max_score").eq("test_id",f.testId).eq("user_id",accountA),1)[0];
+    checkAttempt(a);
+    must(a.status==="in_progress"&&Date.parse(a.start_time)===Date.parse(originalStartTime)&&
+      a.score===null&&a.max_score===null);
+  });
+  await gate("student-a-resume-preserves-exact-saved-answers",async()=>{
+    const rows=exactRows(await studentA.from("user_answers")
+      .select("id,attempt_id,question_id,selected_option_id,short_answer_text").eq("attempt_id",attemptId),2);
+    must(rows.every(x=>x.attempt_id===attemptId)&&
+      rows.some(x=>x.id===originalMcqAnswerId&&x.question_id===f.mcqId&&x.selected_option_id===f.mcqOptionId)&&
+      rows.some(x=>x.id===essayAnswerId&&x.question_id===f.essayId&&x.short_answer_text===syntheticEssay));
   });
   await gate("student-b-cannot-read-a-attempt",async()=>{
     must(invisible(await studentB.from("user_attempts")
@@ -378,7 +417,7 @@ if(!config || !twoVerified || !signedOut ||
 if(process.exitCode!==1 && config?.mode==="write" &&
    process.env.ETERNYX_EDU_RELEASE_MODE==="journey"){
   try{
-    // Private same-run handoff: only after all 46 cases and signout pass.
+    // Private same-run handoff: only after every configured case and signout pass.
     const handoff=makeJourneyHandoff(process.env,attemptId,essayAnswerId);
     writeFileSync(HANDOFF_PATH,JSON.stringify(handoff)+"\n",{mode:0o600,flag:"wx"});
   }catch{
