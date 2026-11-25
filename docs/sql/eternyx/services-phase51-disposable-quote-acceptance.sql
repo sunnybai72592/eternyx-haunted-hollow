@@ -11,7 +11,7 @@ RETURNING id AS first_quote \gset
 INSERT INTO public.service_quotations(request_id,scope_review_id,author_id,amount_minor,terms,valid_until)
 VALUES('33333333-3333-4333-8333-333333333333',:'scope',auth.uid(),15000,'Synthetic quote revision two for testing only; no actual payment or fulfillment.',clock_timestamp()+interval '1 day')
 RETURNING id AS second_quote \gset
-SELECT set_config('eternyx.phase51.first',:'first_quote',true),set_config('eternyx.phase51.second',:'second_quote',true) \gset
+SELECT set_config('eternyx.phase51.first',:'first_quote',true) AS first_setting,set_config('eternyx.phase51.second',:'second_quote',true) AS second_setting \gset
 DO $t$
 BEGIN
  IF (SELECT count(*) FROM public.service_quotation_register WHERE request_id='33333333-3333-4333-8333-333333333333' AND quote_state IN ('superseded','open'))<>2 THEN
