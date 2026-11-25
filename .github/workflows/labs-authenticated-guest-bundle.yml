@@ -1,0 +1,71 @@
+name: LABS authenticated guest boot bundle
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-authenticated-guest-bundle.yml'
+      - 'scripts/labs-prepare-authenticated-guest.py'
+      - 'scripts/labs-authenticated-module-plan.py'
+      - 'scripts/labs-authenticated-kernel-drivers.py'
+      - 'scripts/labs-runner-kernel-provenance.py'
+      - 'scripts/labs-runner-firecracker-boot.py'
+      - 'scripts/labs-build-fixed-guest.py'
+      - 'tests/labs-prepare-authenticated-guest-test.py'
+      - 'infrastructure/cyber-range/guest/eternyx_module_bootstrap.c'
+      - 'infrastructure/cyber-range/guest/eternyx_fixed_probe_init.c'
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Prepare fixed authenticated boot inputs without starting a guest
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_AUTHENTICATED_GUEST_BOOT_BUNDLE
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Compile static bootstrap and test bundle contracts
+        run: |
+          python3 -B tests/labs-authenticated-module-plan-test.py
+          python3 -B tests/labs-prepare-authenticated-guest-test.py
+  prepare-bundle:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_AUTHENTICATED_GUEST_BOOT_BUNDLE' }}
+    needs: offline-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Build authenticated ephemeral boot bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$(mktemp -d "$RUNNER_TEMP/eternyx-guest-bundle.XXXXXXXX")"
+          trap 'rm -rf -- "$work"' EXIT
+          python3 -I -B scripts/labs-prepare-authenticated-guest.py "$work"
+          test -f "$work/bundle.json"

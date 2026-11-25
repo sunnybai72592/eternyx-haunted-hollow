@@ -167,7 +167,7 @@ def audit(tar,release,version,env,work):
         ordered=inspect_closure(modules_tar,release,targets,work)
     blocked=mode.startswith("blocked")
     extra=any(x["firmwareRequired"] or x["softDependenciesPresent"] for x in ordered)
-    print(json.dumps({"schema":"eternyx-authenticated-module-plan-v1",
+    result={"schema":"eternyx-authenticated-module-plan-v1",
         "kernelSha256":p.PIN,"kernelRelease":release,"configurationSha256":report["configurationSha256"],
         "mode":mode,"modulePackageSha256":package_pin,"targets":targets,
         "dependencyFirstModules":ordered,"moduleBytes":sum(x["bytes"] for x in ordered),
@@ -175,7 +175,9 @@ def audit(tar,release,version,env,work):
         "hardDependencyPlanAvailable":not blocked,
         "guestModuleLoadingVerified":False,"guestBootVerified":False,"guestVsockVerified":False,
         "hardwareAcceptanceVerified":False,"providerActivationAllowed":False,
-        "productionReleaseReady":False},sort_keys=True),flush=True)
+        "productionReleaseReady":False}
+    print(json.dumps(result,sort_keys=True),flush=True)
+    return report,result
 
 if __name__=="__main__":
     p.main(None,audit=audit)
