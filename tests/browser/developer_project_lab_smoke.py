@@ -695,6 +695,21 @@ def api_project_link(page, staging):
         page.get_by_role("button", name="Run selected project suite").click()
         expect(page.get_by_text("Actual results: 2 passed · 0 failed · 0 cancelled")).to_be_visible(timeout=15000)
         expect(page.get_by_role("button", name="Export sanitized results")).to_be_enabled()
+        history_key = "eternyx:project-api-run-history:v1"
+        history = store(page, history_key)
+        assert len(history) == 4
+        assert history[0]["state"] == "completed"
+        assert history[1]["state"] == "stopped-on-failure"
+        assert len(history[1]["cases"]) == 1 and len(history[1]["scenarioIds"]) == 2
+        assert "PRIVATE_TOKEN" not in json.dumps(history) and ORIGIN not in json.dumps(history)
+        page.reload()
+        expect(page.get_by_role("heading", name="API execution history")).to_be_visible()
+        with page.expect_download() as history_export:
+            page.get_by_role("button", name="Export API run history", exact=True).click()
+        history_report=json.loads(Path(history_export.value.path()).read_text(encoding="utf-8"))
+        assert history_report["productionVerified"] is False
+        assert len(history_report["runs"]) == 4
+        assert history_report["runs"][0]["state"] == "completed"
 
 def malformed_import_rejected(page):
     page.goto(ORIGIN + "/developer-studio/project-lab")
