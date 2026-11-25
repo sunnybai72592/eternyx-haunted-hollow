@@ -1,0 +1,41 @@
+name: Cloud Phase 1 hosted owner control center and account isolation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cloud-hosted-owner-control-phase1.yml'
+      - 'src/pages/CloudIntegrations.tsx'
+      - 'src/pages/CloudSolutions.tsx'
+      - 'src/components/cloud/HostedCloudControlCenter.tsx'
+      - 'src/lib/cloudHostedOwnerSummary.mjs'
+      - 'tests/cloud-hosted-owner-control-phase1.test.mjs'
+      - 'docs/CLOUD_HOSTED_OWNER_CONTROL_PHASE1.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  owner-cloud-dashboard:
+    name: Verify actual owner list contracts, auth isolation, fail-closed status and no remote Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check new hosted cloud owner contract and tests
+        run: |
+          node --check src/lib/cloudHostedOwnerSummary.mjs
+          node --check tests/cloud-hosted-owner-control-phase1.test.mjs
+      - name: Verify two-owner isolation and existing Docker/cloud backend gates (no hosting or credentials)
+        env:
+          CI: 'true'
+        run: |
+          node --test tests/cloud-hosted-owner-control-phase1.test.mjs
+          node --test tests/cloud-inventory.test.mjs
+          node --test tests/docker-control.test.mjs
+          node --test tests/docker-enrollment.test.mjs
+          node --test tests/docker-hosted-auth-probe.test.mjs
+          node --test tests/docker-staging-acceptance.test.mjs
