@@ -11,6 +11,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/reboot.h>
+#include <sys/vfs.h>
+#include <sys/statvfs.h>
+#include <linux/magic.h>
 
 #define PROTOCOL "eternyx-guest-smoke-v1"
 #define PREFIX "{\"protocol\":\"" PROTOCOL "\",\"sessionId\":\""
@@ -95,6 +98,13 @@ static int self_test(void) {
 int main(int argc,char **argv) {
     if (getpid()!=1)
         return argc==2 && !strcmp(argv[1],"--self-test") ? self_test() : 1;
+    struct statfs filesystem;
+    struct statvfs mounts;
+    if (statfs("/",&filesystem) || filesystem.f_type!=EXT4_SUPER_MAGIC ||
+        statvfs("/",&mounts) || !(mounts.f_flag&ST_RDONLY)) {
+        reboot(RB_AUTOBOOT);
+        for (;;) pause();
+    }
     int server=socket(AF_VSOCK,SOCK_STREAM|SOCK_CLOEXEC,0);
     struct sockaddr_vm addr={.svm_family=AF_VSOCK,.svm_cid=VMADDR_CID_ANY,.svm_port=PORT};
     if (server>=0 && !bind(server,(struct sockaddr *)&addr,sizeof(addr)) && !listen(server,2)) {
