@@ -27,7 +27,8 @@ def command(*args,timeout=60):
                           stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE).stdout
 
-def build(destination):
+def build(destination, *, profile="diagnostic"):
+    require(profile in ("diagnostic","http-security-exercise-v1"),"unknown fixed guest profile")
     require(destination.is_absolute() and destination.name=="rootfs.ext4",
             "expected fixed image filename")
     parent=destination.parent.lstat()
@@ -39,9 +40,14 @@ def build(destination):
         root=work/"tree"
         (root/"sbin").mkdir(parents=True)
         binary=root/"sbin/init"
-        command("/usr/bin/cc","-static","-Os","-Wall","-Wextra","-Werror",
-                "-fstack-protector-strong","-Wl,-z,noexecstack",str(SOURCE),"-o",str(binary),
-                "-lcrypto","-ldl","-pthread")
+        flags=("-DETERNYX_HTTP_EXERCISE=1",) if profile=="http-security-exercise-v1" else ()
+        try:
+            command("/usr/bin/cc","-static","-Os","-Wall","-Wextra","-Werror",
+                    "-fstack-protector-strong","-Wl,-z,noexecstack",*flags,str(SOURCE),"-o",str(binary),
+                    "-lcrypto","-ldl","-pthread")
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError("fixed guest compilation failed:\n"+
+                (exc.stderr or b"")[-4000:].decode("utf-8",errors="replace")) from exc
         binary.chmod(0o555)
         elf=command("/usr/bin/readelf","-l",str(binary))
         require(b"INTERP" not in elf and binary.stat().st_size<=8*1024*1024,
@@ -61,7 +67,7 @@ def build(destination):
         image_hash=digest(image)
         os.link(image,destination)
         require(digest(destination)==image_hash,"published rootfs integrity mismatch")
-        return {"schema":"eternyx-fixed-diagnostic-rootfs-v1",
+        result={"schema":"eternyx-fixed-diagnostic-rootfs-v1",
                 "rootfsSha256":image_hash,"rootfsBytes":SIZE,
                 "initSha256":digest(binary),"sourceSha256":digest(SOURCE),
                 "staticInitVerified":True,"filesystemConsistencyVerified":True,
@@ -69,8 +75,18 @@ def build(destination):
                 "guestVsockVerified":False,"independentImageApprovalVerified":False,
                 "hardwareAcceptanceVerified":False,"providerActivationAllowed":False,
                 "productionReleaseReady":False}
+        if profile=="http-security-exercise-v1":
+            result.update(schema="eternyx-http-security-exercise-rootfs-v1",
+                          diagnosticImageBuilt=False,exerciseImageBuilt=True,
+                          exerciseSourceSha256=digest(SOURCE.with_name("eternyx_http_exercise.h")),
+                          learnerSessionAcceptanceVerified=False)
+        return result
 
 if __name__=="__main__":
-    if len(sys.argv)!=2:
-        raise SystemExit("expected private output directory/rootfs.ext4")
-    print(json.dumps(build(pathlib.Path(sys.argv[1]).absolute()),sort_keys=True))
+    if len(sys.argv)==3 and sys.argv[1]=="--http-exercise":
+        result=build(pathlib.Path(sys.argv[2]).absolute(),profile="http-security-exercise-v1")
+    elif len(sys.argv)==2:
+        result=build(pathlib.Path(sys.argv[1]).absolute())
+    else:
+        raise SystemExit("expected optional --http-exercise and private output directory/rootfs.ext4")
+    print(json.dumps(result,sort_keys=True))
