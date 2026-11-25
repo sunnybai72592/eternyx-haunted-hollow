@@ -13,7 +13,7 @@ import {
 import {
   WORKSPACE_REALTIME_ROLES,REALTIME_DELIVERY_WINDOW_MS,
   REALTIME_SUBSCRIBE_WINDOW_MS,REALTIME_QUIET_WINDOW_MS,
-  matchesWorkspaceTaskUpdate,checkWorkspaceRealtimeEvidence,
+  matchesWorkspaceTaskUpdate,checkWorkspaceRealtimeEvidence,verifyWorkspaceReconnectSnapshot,
 } from "../src/lib/workspaceRealtimeAcceptance.mjs";
 
 const APPROVAL="READ_ONLY_REALTIME_WINDOW";
@@ -84,7 +84,7 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
   onArmed=()=>process.stdout.write(
     "ARMED: In the STAGING browser, update the existing team task ONCE as OWNER.\n"+
     "Do not edit production. The runner does not modify application data.\n"
-  ), approvedFixtureEdit=null, clock=()=>Date.now(), sleep=wait,
+  ), approvedFixtureEdit=null, approvedReconnectEdit=null, clock=()=>Date.now(), sleep=wait,
 }={}){
   const clients=WORKSPACE_REALTIME_ROLES.map(()=>factory(config.url,config.key));
   const channels=[];
@@ -92,8 +92,9 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
   const delivered=new Map();
   const subscribed=new Set();
   const interrupted=new Set();
-  const requireHealthy=()=>{
-    fail(interrupted.size===0&&WORKSPACE_REALTIME_ROLES.every(role=>subscribed.has(role)),"subscriber-interrupted-during-observation");
+  const generations=new Map();
+  const requireHealthy=(roles=WORKSPACE_REALTIME_ROLES)=>{
+    fail(interrupted.size===0&&roles.every(role=>subscribed.has(role)),"subscriber-interrupted-during-observation");
   };
   let outsiderCount=0,baseline=null;
   const space=config.ids.SPACE_ID,task=config.ids.TEAM_TASK_ID;
@@ -120,17 +121,18 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
       .select("id").eq("id",space).limit(1);
     fail(!outsiderQuery.error&&Array.isArray(outsiderQuery.data)
       &&outsiderQuery.data.length===0,"outsider-must-not-see-staging-team");
-    const subscriptions=[];
-    for(let i=0;i<4;i++){
+    const subscribeRole=i=>{
       const role=WORKSPACE_REALTIME_ROLES[i],client=clients[i];
-      const pending=new Promise((resolve,reject)=>{
+      const generation=(generations.get(role)??0)+1;
+      generations.set(role,generation);
+      return new Promise((resolve,reject)=>{
         let settled=false;
-        const channel=client.channel("workspace-p22-"+role+"-"+space)
+        const channel=client.channel("workspace-p22-"+role+"-"+space+"-"+generation)
           .on("postgres_changes",{
             event:"INSERT",schema:"public",table:"workspace_team_events",
             filter:"space_id=eq."+space,
           },payload=>{
-            if(!alive)return;
+            if(!alive||generations.get(role)!==generation)return;
             const row=payload?.new;
             // An outsider must receive no team event, even an unrelated action.
             if(role==="outsider"){
@@ -143,7 +145,7 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
               if(!delivered.has(role))delivered.set(role,row.id);
             }
           }).subscribe(status=>{
-            if(!alive)return;
+            if(!alive||generations.get(role)!==generation)return;
             if(status==="SUBSCRIBED"){
               subscribed.add(role);
               if(!settled){settled=true;resolve(true);}
@@ -153,11 +155,10 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
                 reject(Error("Workspace realtime blocked: channel-not-subscribed"));}
             }
           });
-        channels.push({client,channel});
+        channels.push({client,channel,role});
       });
-      subscriptions.push(pending);
-    }
-    await promiseBefore(Promise.all(subscriptions),
+    };
+    await promiseBefore(Promise.all(WORKSPACE_REALTIME_ROLES.map((_,i)=>subscribeRole(i))),
       REALTIME_SUBSCRIBE_WINDOW_MS,"subscription-timeout");
     // Baseline AFTER all four subscribers are armed; event must follow it.
     baseline=await latestId(clients[0],space);
@@ -192,6 +193,63 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
       subscribed:[...subscribed],outsiderCount,serverRow:row,
       space,task,owner:identities[0],
     });
+    if(approvedReconnectEdit!==null){
+      fail(approvedFixtureEdit!==null&&typeof approvedReconnectEdit==="function","explicit-reconnect-edit-required");
+      const editor=clients[1],owner=clients[0];
+      const readTask=client=>fetchOne(client,"workspace_team_tasks",{id:task,space_id:space},"id,title,updated_at");
+      const before=await readTask(editor);
+      const index=channels.findIndex(entry=>entry.role==="editor");
+      fail(index>=0,"editor-channel-missing");
+      // Retire callbacks before unsubscribing the original editor channel.
+      generations.set("editor",generations.get("editor")+1);
+      subscribed.delete("editor");
+      const removed=await promiseBefore(editor.removeChannel(channels[index].channel),REALTIME_SUBSCRIBE_WINDOW_MS,"editor-unsubscribe-timeout");
+      fail(removed==="ok","editor-unsubscribe-failed");
+      channels.splice(index,1);
+      await editor.realtime.disconnect();
+      fail(editor.realtime.isConnected()===false,"editor-socket-not-disconnected");
+      const controls=["owner","viewer","outsider"];
+      const observe=async(roles,phase)=>{
+        requireHealthy(roles);
+        const previous=await latestId(owner,space);
+        baseline=previous;delivered.clear();
+        await approvedReconnectEdit({client:owner,identity:identities[0],space,task,phase});
+        const recipients=roles.filter(role=>role!=="outsider");
+        const deadline=clock()+REALTIME_DELIVERY_WINDOW_MS;
+        while(clock()<deadline&&!recipients.every(role=>delivered.has(role))&&outsiderCount===0){
+          requireHealthy(roles);await sleep(200);
+        }
+        requireHealthy(roles);
+        fail(outsiderCount===0&&recipients.every(role=>delivered.has(role)),"reconnect-round-delivery-failed");
+        const ids=recipients.map(role=>delivered.get(role));
+        fail(new Set(ids).size===1&&ids[0]>previous,"reconnect-round-event-mismatch");
+        const server=await ownerEventRow(owner,space,ids[0]);
+        fail(matchesWorkspaceTaskUpdate(server,{space,task,owner:identities[0],baseline:previous}),"reconnect-server-event-invalid");
+        for(const role of recipients.filter(role=>role!=="owner"))
+          await fetchOne(clients[WORKSPACE_REALTIME_ROLES.indexOf(role)],"workspace_team_events",{space_id:space,id:server.id},"id");
+        await forbiddenEventRead(clients[3],space,server.id);
+        await sleep(REALTIME_QUIET_WINDOW_MS);
+        requireHealthy(roles);fail(outsiderCount===0,"reconnect-delayed-outsider-leak");
+        return server.id;
+      };
+      const missedId=await observe(controls,"offline");
+      fail(editor.realtime.isConnected()===false&&!delivered.has("editor"),"editor-not-disconnected-through-missed-event");
+      const missed=await readTask(owner);
+      const verified=await editor.auth.getUser();
+      fail(!verified.error&&verified.data?.user?.id===identities[1],"editor-identity-changed");
+      await promiseBefore(subscribeRole(1),REALTIME_SUBSCRIBE_WINDOW_MS,"editor-reconnect-timeout");
+      requireHealthy();
+      const recovered=await readTask(editor);
+      await fetchOne(editor,"workspace_team_events",{space_id:space,id:missedId},"id");
+      const nextId=await observe(WORKSPACE_REALTIME_ROLES,"reconnected");
+      fail(nextId>missedId,"reconnected-event-not-newer");
+      const [after,final]=await Promise.all([readTask(owner),readTask(editor)]);
+      verifyWorkspaceReconnectSnapshot({before,missed,recovered,after,final,task});
+      return {...evidence,mode:"automated_disposable_staging_reconnect",
+        application_data_modified_by_runner:true,verified_editor_disconnect:true,
+        verified_authoritative_catchup:true,verified_reconnected_delivery:true,
+        limitations:"Three approved staging task edits; same-client disconnect and reconnect plus authoritative catch-up. No browser, migration or production certification."};
+    }
     return approvedFixtureEdit===null?evidence:{...evidence,mode:"automated_disposable_staging_edit",
       application_data_modified_by_runner:true,
       limitations:"One explicitly approved disposable staging task edit. No reconnect, browser, migration or production certification."};

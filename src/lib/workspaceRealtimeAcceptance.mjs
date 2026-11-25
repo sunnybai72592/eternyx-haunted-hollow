@@ -46,3 +46,15 @@ export function checkWorkspaceRealtimeEvidence({
     limitations:"A real staging task edit was performed manually by the operator. This does not prove revocation, browser behavior, deployment history or production readiness.",
   });
 }
+
+export function verifyWorkspaceReconnectSnapshot({before,missed,recovered,after,final,task}){
+  if(typeof task!=="string"||!task||[before,missed,recovered,after,final].some(r=>r?.id!==task||
+    typeof r.title!=="string"||typeof r.updated_at!=="string"||!Number.isFinite(Date.parse(r.updated_at))))
+    throw Error("Invalid reconnect task snapshots");
+  if(before.updated_at===missed.updated_at||missed.updated_at!==recovered.updated_at||
+    missed.title!==recovered.title||before.title===missed.title||
+    recovered.updated_at===after.updated_at||after.updated_at!==final.updated_at||
+    after.title!==final.title||after.title===recovered.title)
+    throw Error("Reconnect task snapshots did not converge");
+  return true;
+}

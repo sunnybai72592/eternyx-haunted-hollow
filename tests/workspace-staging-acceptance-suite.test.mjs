@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {verifyWorkspaceReconnectSnapshot} from "../src/lib/workspaceRealtimeAcceptance.mjs";
 import {validateSuiteConfig,verifySuiteStage,SUITE_CONFIRM} from "../scripts/workspace-staging-acceptance-suite.mjs";
 import {FIXTURE_REF} from "../scripts/workspace-staging-provision-fixtures.mjs";
 import {WRITE_PROBE_APPROVAL,WRITE_AUDIT_APPROVAL} from "../src/lib/workspaceRoleWriteAcceptance.mjs";
@@ -33,10 +34,12 @@ test("stage-specific evidence cannot be replaced by a generic success flag",()=>
  const base={release_gate:"manual_review_required",production_certified:false};
  for(const stage of ["authenticated_read","private_storage","concurrent_write","realtime","revocation"])
   assert.throws(()=>verifySuiteStage(stage,base));
- const rt={...base,verified_realtime_delivery:true,verified_outsider_exclusion:true,application_data_modified_by_runner:true};
+ const rt={...base,verified_realtime_delivery:true,verified_outsider_exclusion:true,application_data_modified_by_runner:true,verified_editor_disconnect:true,verified_authoritative_catchup:true,verified_reconnected_delivery:true};
  assert.equal(verifySuiteStage("realtime",rt),true);
  assert.throws(()=>verifySuiteStage("realtime",{...rt,application_data_modified_by_runner:false}));
  assert.throws(()=>verifySuiteStage("realtime",{...rt,production_certified:true}));
+ for(const key of ["verified_editor_disconnect","verified_authoritative_catchup","verified_reconnected_delivery"])
+  assert.throws(()=>verifySuiteStage("realtime",{...rt,[key]:false}));
 });
 test("automated edit only occurs after armed subscriptions; irreversible revocation runs last",()=>{
  const rt=readFileSync(new URL("../scripts/workspace-team-staging-realtime.mjs",import.meta.url),"utf8");
@@ -46,4 +49,20 @@ test("automated edit only occurs after armed subscriptions; irreversible revocat
  assert.ok(s.indexOf("()=>runWorkspaceRealtimeStaging")<s.indexOf("()=>runStagingRevocationAcceptance"));
  assert.ok(s.includes("p_expected_updated_at:row.updated_at")&&s.includes("eternyx_workspace_test_fixture"));
  assert.ok(!s.includes("auth.admin")&&!s.includes("WORKSPACE_FIXTURE_ADMIN_KEY"));
+});
+
+test("reconnect requires matching authoritative rows and two distinct version changes",()=>{
+ const task=uuid(2),row=(title,second)=>({id:task,title,updated_at:"2026-11-25T12:00:0"+second+"Z"});
+ const before=row("before",1),missed=row("offline",2),after=row("reconnected",3);
+ const receipt={before,missed,recovered:{...missed},after,final:{...after},task};
+ assert.equal(verifyWorkspaceReconnectSnapshot(receipt),true);
+ for(const patch of [{recovered:before},{final:missed},{missed:before},{after:missed,final:missed},{final:{...after,id:uuid(3)}}])
+  assert.throws(()=>verifyWorkspaceReconnectSnapshot({...receipt,...patch}));
+});
+test("same editor disconnects, catches up by authoritative reads, and resubscribes",()=>{
+ const rt=readFileSync(new URL("../scripts/workspace-team-staging-realtime.mjs",import.meta.url),"utf8");
+ for(const marker of ["editor.realtime.disconnect()","editor.realtime.isConnected()===false",
+  "generations.get(role)!==generation",'observe(controls,"offline")',"editor.auth.getUser()","subscribeRole(1)",
+  'observe(WORKSPACE_REALTIME_ROLES,"reconnected")',"id:missedId","verifyWorkspaceReconnectSnapshot({before,missed,recovered,after,final,task})"])
+  assert.ok(rt.includes(marker),marker);
 });
