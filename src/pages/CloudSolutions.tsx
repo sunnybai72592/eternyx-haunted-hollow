@@ -71,10 +71,9 @@ export default function CloudSolutions() {
   };
 
   const simulateDeployment = () => {
-    setDeploymentStatus(`Simulating deployment of ${deploymentService} on ${deploymentProvider}...`);
-    setTimeout(() => {
-      setDeploymentStatus(`Deployment of ${deploymentService} on ${deploymentProvider} successful!\n\nAccess Endpoint: https://${deploymentProvider}-${deploymentService}-example.com`);
-    }, 2000);
+    // A preview is not a successful deployment. Never invent a cloud URL,
+    // provider deployment ID, billing status or successful infrastructure.
+    setDeploymentStatus(`LOCAL PREVIEW ONLY — ${deploymentService} on ${deploymentProvider}.\n\nNo deployment was performed. No provider account, API credentials, cloud resource or billing account is connected. Real provisioning requires a separate approved, authenticated, quota-bound backend and an independently verified provider response.`);
   };
 
   return (
@@ -85,7 +84,7 @@ export default function CloudSolutions() {
           Cloud Solutions Tools
         </h1>
         <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto responsive-text-lg mb-8">
-          Manage and optimize your cloud infrastructure across AWS, Azure, and GCP.
+          Explore illustrative cloud costs and local policy/deployment previews for AWS, Azure, and GCP. These tools do not connect to provider accounts or manage live resources.
         </p>
 
         <Tabs defaultValue="cost-estimator" className="w-full">
@@ -149,8 +148,9 @@ export default function CloudSolutions() {
               Calculate Estimated Cost
             </Button>
             <div className="text-xl font-bold text-center mt-4">
-              Estimated Monthly Cost: <span className="text-cyber-green">${estimatedCost.toFixed(2)}</span>
+              Illustrative Monthly Cost (USD): <span className="text-cyber-green">${estimatedCost.toFixed(2)}</span>
             </div>
+            <p className="text-sm text-muted-foreground">Static example rates only; not current AWS/Azure/GCP prices or a billable quote. Region input does not affect this calculation. Verify live provider pricing before budgeting.</p>
           </TabsContent>
           <TabsContent value="security-policy" className="space-y-4 mt-8">
             <h2 className="text-2xl font-bold text-secondary">Cloud Security Policy Generator</h2>
@@ -185,7 +185,7 @@ export default function CloudSolutions() {
             )}
           </TabsContent>
           <TabsContent value="deployment-simulator" className="space-y-4 mt-8">
-            <h2 className="text-2xl font-bold text-accent">Cloud Deployment Simulator</h2>
+            <h2 className="text-2xl font-bold text-accent">Cloud Deployment Preview — no resources created</h2>
             <Label htmlFor="deployment-provider">Cloud Provider:</Label>
             <select
               id="deployment-provider"
