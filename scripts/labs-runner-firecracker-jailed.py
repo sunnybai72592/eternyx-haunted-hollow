@@ -87,7 +87,7 @@ def marker_in(log):
     require(log.stat().st_size <= 4*1024*1024, "boot log too large")
     return MARKER in [line.strip() for line in log.read_bytes().splitlines()]
 
-def verify_live(pid, cg, root, net):
+def verify_live(pid, cg, root, net, allowed_socket=None):
     require(pid in members(cg), "child not in dedicated cgroup")
     proc = pathlib.Path("/proc") / str(pid)
     require(os.path.samestat((proc / "exe").stat(), (root / "firecracker").stat()), "wrong executable")
@@ -101,8 +101,12 @@ def verify_live(pid, cg, root, net):
                   for line in (proc / "net/dev").read_text().splitlines() if ":" in line}
     require(interfaces == {"lo"}, "unexpected network interface")
     require(all(read(cg / key) == value for key, value in LIMITS.items()), "cgroup limits differ")
-    require(not any(stat.S_ISSOCK(p.lstat().st_mode) for p in root.rglob("*")),
-            "unexpected socket in jail")
+    sockets = {p for p in root.rglob("*") if stat.S_ISSOCK(p.lstat().st_mode)}
+    expected = set() if allowed_socket is None else {root / "v.sock"}
+    require(allowed_socket is None or allowed_socket == root / "v.sock", "invalid allowed socket")
+    require(sockets == expected, "unexpected socket in jail")
+    if allowed_socket is not None:
+        require(allowed_socket.lstat().st_uid == UID, "unexpected vsock listener owner")
     return {"mountNamespace": True, "pidNamespace": True, "networkNamespace": True,
             "chrootIdentity": True, "uidGidDropped": True, "seccompFilter": True,
             "noNewPrivileges": True, "noEffectiveOrPermittedCapabilities": True,
