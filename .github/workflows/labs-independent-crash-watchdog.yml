@@ -1,0 +1,76 @@
+name: LABS independent crash watchdog acceptance
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-independent-crash-watchdog.yml'
+      - 'scripts/labs-runner-crash-watchdog.py'
+      - 'scripts/labs-watchdog-expire.py'
+      - 'tests/labs-runner-crash-watchdog-test.py'
+      - 'scripts/labs-runner-fixed-vsock.py'
+      - 'scripts/labs-runner-firecracker-*.py'
+      - 'scripts/labs-prepare-authenticated-guest.py'
+      - 'scripts/labs-authenticated-*.py'
+      - 'scripts/labs-build-fixed-guest.py'
+      - 'infrastructure/cyber-range/guest/*.c'
+      - 'tests/labs-runner-fixed-vsock-test.py'
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Boot fixed guest and deliberately crash controller; observe independent watchdog
+        type: choice
+        required: true
+        options:
+          - DENY
+          - I_APPROVE_EPHEMERAL_CRASH_WATCHDOG
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Verify fixed guest and live acceptance contracts without KVM
+        run: |
+          python3 -B tests/labs-fixed-guest-image-test.py
+          python3 -B tests/labs-prepare-authenticated-guest-test.py
+          python3 -B tests/labs-runner-firecracker-jailed-test.py
+          python3 -B tests/labs-runner-fixed-vsock-test.py
+          python3 -B tests/labs-runner-crash-watchdog-test.py
+  crash-watchdog:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approval == 'I_APPROVE_EPHEMERAL_CRASH_WATCHDOG' }}
+    needs: offline-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Prepare authenticated bundle then boot and verify fixed guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$(mktemp -d "$RUNNER_TEMP/eternyx-live-vsock.XXXXXXXX")"
+          trap 'rm -rf -- "$work"' EXIT
+          python3 -I -B scripts/labs-prepare-authenticated-guest.py "$work"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 60 --max-filesize 7606252 --output "$work/release.tgz" 'https://github.com/firecracker-microvm/firecracker/releases/download/v1.18.0/firecracker-v1.18.0-x86_64.tgz'
+          sudo -n /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /usr/bin/python3 -I -B scripts/labs-runner-crash-watchdog.py "$work"
