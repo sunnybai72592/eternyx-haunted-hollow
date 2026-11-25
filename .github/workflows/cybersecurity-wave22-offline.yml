@@ -12,6 +12,8 @@ on:
       - 'tests/security-wave22-evidence-gateway.test.mjs'
       - 'scripts/security-wave*-*.mjs'
       - 'tests/security-wave29-scanner-acceptance.test.mjs'
+      - 'tests/security-wave30-scanner-admission.test.mjs'
+      - 'supabase/functions/_shared/scanner-admission.mjs'
       - 'tests/security-wave25-gateway-acceptance.test.mjs'
       - 'tests/security-wave26-release-assessment.test.mjs'
       - 'scripts/sql/audit-security-gateway-release.sql'
@@ -29,6 +31,8 @@ on:
       - 'tests/security-wave22-evidence-gateway.test.mjs'
       - 'scripts/security-wave*-*.mjs'
       - 'tests/security-wave29-scanner-acceptance.test.mjs'
+      - 'tests/security-wave30-scanner-admission.test.mjs'
+      - 'supabase/functions/_shared/scanner-admission.mjs'
       - 'tests/security-wave25-gateway-acceptance.test.mjs'
       - 'tests/security-wave26-release-assessment.test.mjs'
       - 'scripts/sql/audit-security-gateway-release.sql'
@@ -52,7 +56,7 @@ jobs:
           git -C "$source_dir" init -q
           git -C "$source_dir" fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
           test "$(git -C "$source_dir" rev-parse FETCH_HEAD)" = "$TEST_SHA"
-          for path in scripts/security-wave29-scanner-acceptance.mjs tests/security-wave29-scanner-acceptance.test.mjs scripts/security-wave26-release-assessment.mjs tests/security-wave26-release-assessment.test.mjs scripts/security-wave18-real-auth.mjs scripts/security-wave19-session-evidence.mjs scripts/security-wave21-live-fence.mjs scripts/security-wave25-gateway-acceptance.mjs tests/security-wave25-gateway-acceptance.test.mjs supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs scripts/sql/staged-security-evidence-controls.sql scripts/sql/test-security-evidence-controls.sql scripts/sql/staged-security-evidence-global-budget.sql scripts/sql/test-security-evidence-global-budget.sql; do
+          for path in supabase/functions/_shared/scanner-admission.mjs tests/security-wave30-scanner-admission.test.mjs scripts/security-wave29-scanner-acceptance.mjs tests/security-wave29-scanner-acceptance.test.mjs scripts/security-wave26-release-assessment.mjs tests/security-wave26-release-assessment.test.mjs scripts/security-wave18-real-auth.mjs scripts/security-wave19-session-evidence.mjs scripts/security-wave21-live-fence.mjs scripts/security-wave25-gateway-acceptance.mjs tests/security-wave25-gateway-acceptance.test.mjs supabase/functions/security-evidence-gateway/handler.mjs tests/security-wave22-evidence-gateway.test.mjs scripts/sql/staged-security-evidence-controls.sql scripts/sql/test-security-evidence-controls.sql scripts/sql/staged-security-evidence-global-budget.sql scripts/sql/test-security-evidence-global-budget.sql; do
             mkdir -p "$(dirname "$path")"
             git -C "$source_dir" show "$TEST_SHA:$path" > "$path"
           done
@@ -60,7 +64,7 @@ jobs:
         with:
           node-version: '22'
       - run: node --check supabase/functions/security-evidence-gateway/handler.mjs
-      - run: node --test tests/security-wave22-evidence-gateway.test.mjs tests/security-wave25-gateway-acceptance.test.mjs tests/security-wave26-release-assessment.test.mjs tests/security-wave29-scanner-acceptance.test.mjs
+      - run: node --test tests/security-wave22-evidence-gateway.test.mjs tests/security-wave25-gateway-acceptance.test.mjs tests/security-wave26-release-assessment.test.mjs tests/security-wave29-scanner-acceptance.test.mjs tests/security-wave30-scanner-admission.test.mjs
       - name: Execute quota and role isolation in disposable PostgreSQL
         shell: bash
         run: |
