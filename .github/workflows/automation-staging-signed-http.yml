@@ -1,0 +1,74 @@
+name: Automation staging signed webhook result acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      signed_approval:
+        description: "Two dedicated empty staging workflow accounts; create one temporary signed webhook, retain one metadata record, remove workflow and trigger."
+        type: choice
+        required: true
+        options:
+          - NOT_APPROVED
+          - I_APPROVE_ONE_STAGING_SIGNED_WEBHOOK
+        default: NOT_APPROVED
+permissions:
+  contents: read
+concurrency:
+  group: eternyx-automation-staging-core-release
+  cancel-in-progress: false
+jobs:
+  signed:
+    if: "${{ github.ref == 'refs/heads/main' && inputs.signed_approval == 'I_APPROVE_ONE_STAGING_SIGNED_WEBHOOK' }}"
+    name: Real staged signed delivery, replay, policy denial, ownership and cleanup
+    environment: automation-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      ETERNYX_AUTOMATION_STAGING_REF: mhodwvypfbxafamkrgsk
+      ETERNYX_AUTOMATION_PRODUCTION_REF: wcncuarekaofmfurbtbh
+      ETERNYX_AUTOMATION_TWO_OWNER_MODE: ONE_TEMPORARY_WORKFLOW
+      ETERNYX_AUTOMATION_TWO_OWNER_REVIEW: STAGING_TEST_ACCOUNTS_REVIEWED
+      ETERNYX_AUTOMATION_TWO_OWNER_WRITE_CONSENT: I_AUTHORIZE_ONE_ISOLATED_STAGING_RUN
+      ETERNYX_AUTOMATION_SIGNED_CONSENT: "${{ inputs.signed_approval }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Strip checkout authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          if git config --local --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1; then exit 1; fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Independently verify staging project and active core functions before loading credentials
+        env:
+          SUPABASE_ACCESS_TOKEN: "${{ secrets.ETERNYX_AUTOMATION_STAGING_MANAGEMENT_TOKEN }}"
+        run: |
+          node --input-type=module <<'NODE'
+          import {validateSignedConsent} from "./scripts/automation-staging-signed-acceptance.mjs";
+          import {fetchStageManagement,inspectStageProject,verifyDeployedCore} from "./scripts/automation-staging-core-release.mjs";
+          validateSignedConsent(process.env);
+          const ref=process.env.ETERNYX_AUTOMATION_STAGING_REF;
+          const url="https://api.supabase.com/v1/projects/"+ref;
+          const token=process.env.SUPABASE_ACCESS_TOKEN;
+          inspectStageProject(await fetchStageManagement(url,token),ref);
+          if(verifyDeployedCore(await fetchStageManagement(url+"/functions",token)).length!==3)throw Error("core inventory unverified");
+          NODE
+      - name: Prove signed delivery and safe failure behavior
+        env:
+          ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY: "${{ vars.ETERNYX_AUTOMATION_STAGING_PUBLISHABLE_KEY }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_A_EMAIL: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_EMAIL }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_A_PASSWORD }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_B_EMAIL: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_EMAIL }}"
+          ETERNYX_AUTOMATION_STAGING_OWNER_B_PASSWORD: "${{ secrets.ETERNYX_AUTOMATION_STAGING_OWNER_B_PASSWORD }}"
+        run: node scripts/automation-staging-signed-acceptance.mjs > "$RUNNER_TEMP/automation-signed-receipt.json"
+      - name: Upload sanitized verified result only
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: automation-signed-staging-receipt
+          path: ${{ runner.temp }}/automation-signed-receipt.json
+          if-no-files-found: error
+          retention-days: 7
