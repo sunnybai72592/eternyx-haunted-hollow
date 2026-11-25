@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {accountProvisionConfig,provisionAccounts,ACCOUNT_APPROVAL,ACCOUNT_LABELS} from "../scripts/staging/educationStagingAccountProvision.mjs";
+import {accountProvisionConfig,accountConfigurationIssues,provisionAccounts,ACCOUNT_APPROVAL,ACCOUNT_LABELS} from "../scripts/staging/educationStagingAccountProvision.mjs";
 import {STAGING_REF} from "../scripts/staging/educationStagingSyntheticFixtures.mjs";
 const env={ETERNYX_EDU_ACCOUNT_APPROVAL:ACCOUNT_APPROVAL,ETERNYX_RLS_STAGING_REF:STAGING_REF,
  ETERNYX_RLS_STAGING_URL:"https://"+STAGING_REF+".supabase.co",ETERNYX_RLS_PRODUCTION_REF:"p".repeat(20),
@@ -42,4 +42,12 @@ test("partial creation or unexpected privilege stops immediately without rollbac
   assert.equal(h.records.at(-1).accounts[3].status,"not_started");
   assert.doesNotMatch(JSON.stringify(h.records),/private server error/);
  }
+});
+
+test("configuration diagnostics identify only fixed missing or invalid setting names",()=>{
+ const x=accountConfigurationIssues({...env,ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL:"",ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD:"short",ETERNYX_RLS_TEST_A_EMAIL:"private@example.invalid"});
+ assert.deepEqual(x,[{setting:"ETERNYX_RLS_TEST_A_EMAIL",reason:"requires_rls_prefix_email"},{setting:"ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL",reason:"missing"},{setting:"ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD",reason:"requires_16_to_72_characters"}]);
+ assert.doesNotMatch(JSON.stringify(x),/private@example|short|synthetic-password|sb_secret/);
+ assert.deepEqual(accountConfigurationIssues(env),[]);
+ assert.ok(accountConfigurationIssues({...env,ETERNYX_RLS_TEST_B_PASSWORD:env.ETERNYX_RLS_TEST_A_PASSWORD}).filter(x=>x.reason==="must_be_distinct").length===2);
 });
