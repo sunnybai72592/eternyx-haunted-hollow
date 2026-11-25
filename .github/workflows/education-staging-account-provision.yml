@@ -2,6 +2,11 @@ name: ETERNYX Education provision staging Auth accounts
 on:
   workflow_dispatch:
     inputs:
+      check_config_only:
+        description: "Validate protected settings only, without making Auth requests"
+        type: boolean
+        required: true
+        default: true
       approve_new_accounts:
         description: "Create four NEW dedicated staging Auth accounts (no application privileges)"
         type: boolean
@@ -21,7 +26,7 @@ jobs:
   provision-accounts:
     runs-on: ubuntu-latest
     environment: rls-staging
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && inputs.approve_new_accounts && inputs.acknowledge_partial_failure && github.run_attempt == '1' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'sunnybai72592/eternyx-haunted-hollow' && (inputs.check_config_only || (inputs.approve_new_accounts && inputs.acknowledge_partial_failure)) && github.run_attempt == '1' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -50,12 +55,12 @@ jobs:
           ETERNYX_RLS_INSTRUCTOR_PASSWORD: ${{ secrets.ETERNYX_RLS_INSTRUCTOR_PASSWORD }}
           ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL }}
           ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD: ${{ secrets.ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD }}
-        run: node scripts/staging/runEducationStagingAccountProvision.mjs
+        run: node scripts/staging/runEducationStagingAccountProvision.mjs ${{ inputs.check_config_only && '--check-config' || '' }}
       - name: Independently sanitize account recovery evidence
-        if: always()
+        if: always() && !inputs.check_config_only
         run: node scripts/staging/educationAccountWorkflowEvidence.mjs
       - name: Upload only sanitized current-run account recovery evidence
-        if: always()
+        if: always() && !inputs.check_config_only
         uses: actions/upload-artifact@v4
         with:
           name: education-staging-account-recovery-${{ github.run_id }}-${{ github.run_attempt }}

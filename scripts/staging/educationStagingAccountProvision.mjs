@@ -4,7 +4,33 @@ import {validateStagingRlsReadOnlyConfig} from "./stagingRlsConfig.mjs";
 export const ACCOUNT_APPROVAL="I_APPROVE_FOUR_NEW_SYNTHETIC_EDUCATION_STAGING_AUTH_USERS";
 export const ACCOUNT_LABELS=Object.freeze(["student_a","student_b","instructor_candidate","operator_candidate"]);
 const fail=()=>{throw new Error("Education staging Auth provisioning blocked");};
+// Fixed setting names and reason codes only; never include actual values or API errors.
+export function accountConfigurationIssues(env={}){
+ const issues=[];
+ const add=(setting,reason)=>issues.push({setting,reason});
+ const ref="ETERNYX_RLS_STAGING_REF",prod="ETERNYX_RLS_PRODUCTION_REF",url="ETERNYX_RLS_STAGING_URL",
+ pub="ETERNYX_RLS_STAGING_PUBLISHABLE_KEY",secret="ETERNYX_EDU_STAGING_SERVICE_ROLE_KEY";
+ const check=(key,predicate,reason)=>{const v=env[key];if(typeof v!=="string"||!v.trim())add(key,"missing");else if(!predicate(v))add(key,reason);};
+ check("ETERNYX_EDU_ACCOUNT_APPROVAL",v=>v===ACCOUNT_APPROVAL,"invalid_approval");
+ check(ref,v=>v===STAGING_REF,"wrong_staging_reference");
+ check(prod,v=>/^[a-z0-9]{20}$/.test(v)&&v!==STAGING_REF,"invalid_production_reference");
+ check(url,v=>v==="https://"+STAGING_REF+".supabase.co","wrong_staging_url");
+ const claims=v=>{try{const p=v.split(".");return p.length===3&&p.every(Boolean)?JSON.parse(Buffer.from(p[1],"base64url").toString("utf8")):null;}catch{return null;}};
+ check(pub,v=>v.length>16&&v.length<2500&&!v.toLowerCase().includes("service_role")&&
+  !v.startsWith("sb_secret_")&&(v.startsWith("sb_publishable_")||claims(v)?.role==="anon"),"invalid_publishable_key");
+ check(secret,v=>v!==env[pub]&&(/^sb_secret_[A-Za-z0-9_-]{18,}$/.test(v)||
+  (claims(v)?.role==="service_role"&&claims(v)?.ref===STAGING_REF)),"invalid_staging_service_key");
+ const emailKeys=["ETERNYX_RLS_TEST_A_EMAIL","ETERNYX_RLS_TEST_B_EMAIL","ETERNYX_RLS_INSTRUCTOR_EMAIL","ETERNYX_EDU_FIXTURE_OPERATOR_EMAIL"];
+ const passwordKeys=["ETERNYX_RLS_TEST_A_PASSWORD","ETERNYX_RLS_TEST_B_PASSWORD","ETERNYX_RLS_INSTRUCTOR_PASSWORD","ETERNYX_EDU_FIXTURE_OPERATOR_PASSWORD"];
+ for(const key of emailKeys)check(key,v=>/^rls-[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(v),"requires_rls_prefix_email");
+ for(const key of passwordKeys)check(key,v=>v.length>=16&&v.length<=72,"requires_16_to_72_characters");
+ for(const [keys,normalize] of [[emailKeys,v=>v.toLowerCase()],[passwordKeys,v=>v]]){
+  for(const key of keys){const v=env[key];if(typeof v==="string"&&v&&keys.some(other=>other!==key&&typeof env[other]==="string"&&normalize(env[other])===normalize(v)))add(key,"must_be_distinct");}
+ }
+ return issues;
+}
 export function accountProvisionConfig(env){
+ if(accountConfigurationIssues(env).length)fail();
  if(env?.ETERNYX_EDU_ACCOUNT_APPROVAL!==ACCOUNT_APPROVAL||
    env.ETERNYX_RLS_STAGING_REF!==STAGING_REF||
    env.ETERNYX_RLS_STAGING_URL!=="https://"+STAGING_REF+".supabase.co")fail();
