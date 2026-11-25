@@ -129,7 +129,8 @@ def prepare_module_initrd(work,output,modules):
         return {"initramfsSha256":p.digest(output),"initramfsBytes":len(image),
                 "bootstrapSha256":p.digest(init),"modules":evidence}
 
-def prepare(output):
+def prepare(output, *, profile="diagnostic"):
+    p.require(profile in ("diagnostic","http-security-exercise-v1"),"unknown boot bundle profile")
     info=output.lstat()
     p.require(stat.S_ISDIR(info.st_mode) and info.st_uid==os.getuid()
               and stat.S_IMODE(info.st_mode)==0o700 and not list(output.iterdir()),
@@ -137,7 +138,7 @@ def prepare(output):
     def audit(tar,release,version,env,work):
         drivers,plan=m.audit(tar,release,version,env,work)
         mode,modules=choose_profile(drivers,plan)
-        image=b.build(output/"rootfs.ext4")
+        image=b.build(output/"rootfs.ext4",profile=profile)
         initrd=None
         if modules:
             initrd=prepare_module_initrd(work,output/"initramfs.cpio",modules)
@@ -152,6 +153,10 @@ def prepare(output):
                 "guestBootVerified":False,"guestVsockVerified":False,
                 "hardwareAcceptanceVerified":False,"providerActivationAllowed":False,
                 "productionReleaseReady":False}
+        if profile=="http-security-exercise-v1":
+            result.update(schema="eternyx-http-exercise-boot-bundle-v1",
+                          exerciseProfile=profile,
+                          exerciseSourceSha256=image["exerciseSourceSha256"])
         with (output/"bundle.json").open("x") as stream:
             json.dump(result,stream,sort_keys=True)
         (output/"bundle.json").chmod(0o400)
@@ -159,6 +164,9 @@ def prepare(output):
     p.main(None,export=output/"kernel",audit=audit)
 
 if __name__=="__main__":
-    if len(sys.argv)!=2:
-        raise SystemExit("expected empty private boot bundle directory")
-    prepare(pathlib.Path(sys.argv[1]).absolute())
+    if len(sys.argv)==3 and sys.argv[1]=="--http-exercise":
+        prepare(pathlib.Path(sys.argv[2]).absolute(),profile="http-security-exercise-v1")
+    elif len(sys.argv)==2:
+        prepare(pathlib.Path(sys.argv[1]).absolute())
+    else:
+        raise SystemExit("expected optional --http-exercise and empty private boot bundle directory")
