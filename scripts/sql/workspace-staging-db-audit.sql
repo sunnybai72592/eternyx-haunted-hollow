@@ -34,7 +34,7 @@ WITH expected(name,signature) AS (VALUES ('workspace_team_role','public.workspac
 SELECT 'function_status=' || e.name || ':' ||
  (p.oid IS NOT NULL)::text || ':' ||
  COALESCE(p.prosecdef::text,'false') || ':' ||
- COALESCE(('search_path='=ANY(p.proconfig))::text,'false') || ':' ||
+ COALESCE((('search_path='=ANY(p.proconfig)) OR ('search_path=""'=ANY(p.proconfig)))::text,'false') || ':' ||
  COALESCE(has_function_privilege('authenticated',p.oid,'EXECUTE')::text,'false') || ':' ||
  COALESCE(has_function_privilege('anon',p.oid,'EXECUTE')::text,'false') || ':' ||
  (SELECT COUNT(*) FROM pg_catalog.pg_proc pf

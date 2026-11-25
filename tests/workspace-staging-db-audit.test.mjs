@@ -169,3 +169,10 @@ test("downgrade and forged legacy v1 receipts cannot silently pass the v2 catalo
   "table_status="+WORKSPACE_AUDIT_TABLES[0]+":true:false");
  assert.throws(()=>parseWorkspaceStagingAudit(mismatch),/unexpected_output/);
 });
+
+test("catalog accepts both PostgreSQL representations of an empty search path, not arbitrary paths",()=>{
+ const sql=readFileSync(path.join(root,"scripts/sql/workspace-staging-db-audit.sql"),"utf8");
+ assert.ok(sql.includes("'search_path='=ANY(p.proconfig)"));
+ assert.ok(sql.includes("'search_path=\"\"'=ANY(p.proconfig)"));
+ assert.ok(!sql.includes("LIKE 'search_path=%'"));
+});
