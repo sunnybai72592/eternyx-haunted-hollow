@@ -14,7 +14,7 @@ export interface ToolExecutionResult {
 }
 
 class ToolExecutionService {
-  private baseUrl = 'https://wcncuarekaofmfurbtbh.supabase.co/functions/v1';
+  private baseUrl = `${import.meta.env.VITE_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`;
 
   async executeVulnerabilityScanner(params: {
     vendor?: string;
