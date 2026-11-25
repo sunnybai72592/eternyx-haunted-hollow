@@ -9,6 +9,8 @@ import { PresenceMap } from "./PresenceMap";
 type Snapshot = { total: number; countries: { code: string; count: number }[]; networkAvailable: boolean };
 const Presence = createContext<{ snapshot?: Snapshot; failed: boolean; updatedAt: number; included: boolean; locked: boolean; toggle: () => void } | null>(null);
 const preference = "eternyx.presence.include";
+// Only the explicitly guarded Cloudflare staging build sets this flag.
+const presenceDisabled = import.meta.env.VITE_DISABLE_VISITOR_PRESENCE === "true";
 const names = new Intl.DisplayNames(undefined, { type: "region" });
 
 async function loadPresence(contribute: boolean, signal: AbortSignal): Promise<Snapshot> {
@@ -37,7 +39,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     path.startsWith("/test/") || path.startsWith("/test-results/");
   const restoring = useAuthStore(state => state.isLoading || (!!state.user && !state.profile));
   const analytics = useAuthStore(state => state.profile?.preferences?.analytics);
-  const locked = analytics === false || navigator.doNotTrack === "1" ||
+  const locked = presenceDisabled || analytics === false || navigator.doNotTrack === "1" ||
     (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
   const [allowed, setAllowed] = useState(() => {
     try { return localStorage.getItem(preference) !== "off"; } catch { return false; }
@@ -53,10 +55,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const query = useQuery({
     queryKey: ["visitor-presence", included, privateEducation],
     queryFn: ({ signal }) => loadPresence(included, signal),
-    enabled: !privateEducation && (included || home), refetchInterval: 30000, refetchIntervalInBackground: false,
+    enabled: !presenceDisabled && !privateEducation && (included || home), refetchInterval: 30000, refetchIntervalInBackground: false,
     networkMode: "always", staleTime: 0, retry: false,
   });
   function toggle() {
+    if (presenceDisabled) return;
     const next = !allowed;
     setAllowed(next);
     try { localStorage.setItem(preference, next ? "on" : "off"); } catch { /* This tab still honors the choice. */ }
@@ -68,13 +71,13 @@ export function VisitorPresence() {
   const presence = useContext(Presence);
   if (!presence) return null;
   const { snapshot, failed, updatedAt, included, locked, toggle } = presence;
-  const unavailable = failed || (snapshot?.total === 0 && !snapshot.networkAvailable);
+  const unavailable = presenceDisabled || failed || (snapshot?.total === 0 && !snapshot.networkAvailable);
   return <section aria-labelledby="presence-heading" className="mt-12 rounded-2xl border border-white/10 bg-slate-950/70 p-5 text-slate-100 sm:p-8">
     <div className="flex items-center gap-3"><Globe2 aria-hidden="true" className="size-6 text-cyan-300" />
       <h2 id="presence-heading" className="text-2xl font-semibold tracking-tight">Around Eternyx now</h2></div>
     <p className="mt-2 text-sm text-slate-400">Approximate visitor locations from network addresses active this minute or the previous minute. Shared connections can represent several people.</p>
     <div className="mt-5" role="status">
-      {unavailable ? <p>Live visitor data is temporarily unavailable.</p> : !snapshot ? <p>Checking activity…</p> : <>
+      {presenceDisabled ? <p>Live visitor telemetry is disabled in this staging environment.</p> : unavailable ? <p>Live visitor data is temporarily unavailable.</p> : !snapshot ? <p>Checking activity…</p> : <>
         <p className="text-lg"><strong className="tabular-nums text-cyan-200">{snapshot.total.toLocaleString()}</strong> estimated active {snapshot.total === 1 ? "network" : "networks"}</p>
         <PresenceMap key={locked || !included ? "view" : "participate"} countries={snapshot.countries} locked={locked || !included} />
         {snapshot.countries.length > 0 ? <ul aria-label="Most active countries" className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
@@ -87,6 +90,6 @@ export function VisitorPresence() {
     <label className="mt-5 flex min-h-11 items-center gap-2 text-sm text-slate-300">
       <input type="checkbox" checked={included} disabled={locked} onChange={toggle} />Include my network in the estimate
     </label>
-    {locked && <p className="text-xs text-slate-400">Your privacy preferences disable participation.</p>}
+    {locked && !presenceDisabled && <p className="text-xs text-slate-400">Your privacy preferences disable participation.</p>}
   </section>;
 }

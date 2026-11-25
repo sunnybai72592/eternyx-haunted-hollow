@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -15,7 +15,7 @@ export function stagingBuildEnv(env) {
   if (typeof key !== "string" || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key))
     throw new Error("Use the staging project's modern publishable browser key, never an anon/service-role/secret key.");
   return {...env,VITE_SUPABASE_PROJECT_ID:STAGING_REF,VITE_SUPABASE_URL:STAGING_URL,
-    VITE_SUPABASE_PUBLISHABLE_KEY:key,VITE_OPENAI_API_KEY:"",
+    VITE_SUPABASE_PUBLISHABLE_KEY:key,VITE_OPENAI_API_KEY:"",VITE_DISABLE_VISITOR_PRESENCE:"true",
     VITE_ENABLE_POLAR_SANDBOX_CHECKOUT:"false",VITE_ENABLE_STRIPE_TEST_CHECKOUT:"false"};
 }
 
@@ -46,7 +46,12 @@ function main() {
   rmSync("dist",{recursive:true,force:true});
   const result=spawnSync(process.execPath,["node_modules/vite/bin/vite.js","build"],{env,stdio:"inherit"});
   if(result.error||result.status!==0)throw new Error("Staging Vite build failed.");
-  try {const checked=verifyStagingAssets("dist"); console.log("Staging asset guard passed:",checked.files,"text assets checked.");}
+  try {
+    const checked=verifyStagingAssets("dist");
+    // Do not place this file in public/: the production Lovable build is unchanged.
+    writeFileSync("dist/_headers",readFileSync(new URL("../infrastructure/cloudflare/staging-headers.txt",import.meta.url),"utf8"));
+    console.log("Staging asset guard passed:",checked.files,"text assets checked; staging HTTPS headers generated.");
+  }
   catch(error){rmSync("dist",{recursive:true,force:true});throw error;}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

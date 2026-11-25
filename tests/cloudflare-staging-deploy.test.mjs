@@ -10,6 +10,7 @@ test("staging variables must be explicit and cannot target production",()=>{
   assert.throws(()=>stagingBuildEnv({...valid,VITE_SUPABASE_URL:"https://"+PRODUCTION_REF+".supabase.co"}),/isolated staging/);
   assert.throws(()=>stagingBuildEnv({...valid,VITE_SUPABASE_PUBLISHABLE_KEY:"sb_secret_TEST"}),/publishable/);
   const env=stagingBuildEnv({...valid,VITE_OPENAI_API_KEY:"private",VITE_ENABLE_STRIPE_TEST_CHECKOUT:"true",VITE_ENABLE_POLAR_SANDBOX_CHECKOUT:"true"});
+  assert.equal(env.VITE_DISABLE_VISITOR_PRESENCE,"true");
   assert.equal(env.VITE_OPENAI_API_KEY,"");assert.equal(env.VITE_ENABLE_STRIPE_TEST_CHECKOUT,"false");assert.equal(env.VITE_ENABLE_POLAR_SANDBOX_CHECKOUT,"false");
 });
 test("static artifact guard detects production endpoint anywhere in nested JS",()=>{
@@ -29,4 +30,17 @@ test("explicit static Worker has no runtime code and guards deployment",()=>{
   assert.equal(config.main,undefined);assert.equal(config.build.command,"npm run build:staging");
   const service=readFileSync(new URL("../src/services/toolExecutionService.ts",import.meta.url),"utf8");
   assert.ok(!service.includes(PRODUCTION_REF));assert.match(service,/import\.meta\.env\.VITE_SUPABASE_URL/);
+});
+
+test("staging header policy and telemetry fence are source-defined without changing normal Vite build",()=>{
+  const h=readFileSync(new URL("../infrastructure/cloudflare/staging-headers.txt",import.meta.url),"utf8");
+  for(const line of ["Strict-Transport-Security: max-age=31536000","X-Content-Type-Options: nosniff","Referrer-Policy: no-referrer","X-Frame-Options: SAMEORIGIN","X-Robots-Tag: noindex, nofollow","frame-ancestors 'self'","object-src 'none'","/release-info.json\n  Cache-Control: no-store"])assert.ok(h.includes(line),line);
+  assert.ok(!h.includes("'unsafe-eval'"));assert.ok(!h.includes(PRODUCTION_REF));assert.ok(h.includes(STAGING_URL));
+  const presence=readFileSync(new URL("../src/components/home/VisitorPresence.tsx",import.meta.url),"utf8");
+  assert.match(presence,/VITE_DISABLE_VISITOR_PRESENCE === "true"/);
+  assert.match(presence,/enabled: !presenceDisabled && !privateEducation/);
+  assert.match(presence,/if \(presenceDisabled\) return;/);
+  assert.match(presence,/Live visitor telemetry is disabled in this staging environment/);
+  const build=readFileSync(new URL("../scripts/build-cloudflare-staging.mjs",import.meta.url),"utf8");
+  assert.match(build,/writeFileSync\("dist\/_headers"/);
 });
