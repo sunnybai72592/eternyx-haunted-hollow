@@ -11,7 +11,7 @@ import {
 import {
   WRITE_PROBE_SPACE_NAME,WRITE_PROBE_APPROVAL,WRITE_AUDIT_APPROVAL,
   UUID_REGEX,isExpectedAccessDenial,assertDeniedOutcome,
-  validateWriteProbeTeam,writeRoleProbeReport,
+  validateWriteProbeTeam,writeRoleProbeReport,verifyWorkspaceConcurrentWrite,
 } from "../src/lib/workspaceRoleWriteAcceptance.mjs";
 
 function gate(ok,code){
@@ -92,7 +92,7 @@ async function cleanupTask(owner,space,entry){
     {id:entry.id,space_id:space},"id,title",2);
   gate(current.length<=1,"ambiguous-cleanup-target");
   if(current.length){
-    gate(current[0].title===entry.title,"cleanup-would-touch-unexpected-row");
+    gate([entry.title,...(entry.allowedTitles??[])].includes(current[0].title),"cleanup-would-touch-unexpected-row");
     const removed=await owner.rpc("workspace_team_delete_task",{
       p_space_id:space,p_task_id:entry.id,
     });
@@ -152,6 +152,27 @@ export async function runStagingWriteRoleAcceptance(config,clientFactory=createS
     await inspectCreated(owner,space,created.at(-1),identities[0]);
     gate(await countTasks(owner,space)===2,"expected-two-verified-test-tasks");
     checks.push("owner_and_editor_created_real_tasks");
+    // Two real authenticated clients read the same version then race the same task.
+    const raceEntry=created.find(entry=>entry.id===oTask);
+    const versions=await Promise.all([owner,editor].map(client=>exactlyOne(client,"workspace_team_tasks",
+      {id:oTask,space_id:space},"id,title,updated_at")));
+    gate(versions.every(row=>row.title===ownerTitle&&typeof row.updated_at==="string"&&
+      Number.isFinite(Date.parse(row.updated_at)))&&versions[0].updated_at===versions[1].updated_at,
+      "concurrent-write-baseline-mismatch");
+    const raceTitles=[title("owner race"),title("editor race")];
+    raceEntry.allowedTitles=raceTitles; // permit cleanup of only this run's exact candidate titles
+    const race=await Promise.all([owner,editor].map((client,i)=>client.rpc("workspace_team_save_task",{
+      ...denyArgs,p_task_id:oTask,p_title:raceTitles[i],p_expected_updated_at:versions[0].updated_at,
+    })));
+    const winner=verifyWorkspaceConcurrentWrite(race,oTask);
+    for(const client of [owner,editor,viewer]){
+      const persisted=await exactlyOne(client,"workspace_team_tasks",{id:oTask,space_id:space},"id,title,updated_at");
+      gate(persisted.title===raceTitles[winner]&&persisted.updated_at!==versions[0].updated_at,
+        "concurrent-write-not-converged");
+    }
+    const updates=await rows(owner,"workspace_team_events",{space_id:space,entity_id:oTask,event_type:"task_updated"},"id,actor_id",2);
+    gate(updates.length===1&&updates[0].actor_id===identities[winner],"concurrent-write-audit-mismatch");
+    checks.push("concurrent_edit_one_winner_and_shared_convergence");
     const editorComment=await positive(editor,"workspace_team_post_comment",{
       p_space_id:space,p_task_id:eTask,p_body:"Phase 23 generated staging-only comment",
     });

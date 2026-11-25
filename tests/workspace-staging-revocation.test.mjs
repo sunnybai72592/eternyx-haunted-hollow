@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {verifyWorkspaceConcurrentWrite} from "../src/lib/workspaceRoleWriteAcceptance.mjs";
 import {
   REVOCATION_TEAM_NAME,REVOCATION_CONFIRM,REVOCATION_HISTORY_CONFIRM,
   validateRevocationConfig,validateRevocationFixture,isRoleDenied,
@@ -95,4 +97,24 @@ test("sanitized report cannot claim production or successful migration checks",(
   assert.equal(r.browser_ui_verified,false);
   assert.equal(r.persisted_editor_revocation,true);
   assert.throws(()=>safeRevocationReport(["bad"]),/unsafe-report/);
+});
+
+test("concurrent writes require exactly one committed UUID and exact stale-conflict proof",()=>{
+ const ok={data:task,error:null},stale={data:null,error:{code:"23514",message:"Task changed since review. Refresh before saving"}};
+ assert.equal(verifyWorkspaceConcurrentWrite([ok,stale],task),0);
+ assert.equal(verifyWorkspaceConcurrentWrite([stale,ok],task),1);
+ for(const pair of [[ok,ok],[stale,stale],[ok,{data:null,error:{code:"42501"}}],
+  [ok,{data:null,error:{code:"23514",message:"Other constraint"}}],[ok,{data:null,error:{status:500}}]])
+   assert.throws(()=>verifyWorkspaceConcurrentWrite(pair,task));
+});
+test("staging runners use valid composite-key probes and fail on interrupted control channels",()=>{
+ const revoke=readFileSync(new URL("../scripts/workspace-team-staging-revocation.mjs",import.meta.url),"utf8");
+ assert.ok(revoke.includes('["workspace_team_members","workspace_team_read_cursors"].includes(table)?"user_id":"id"'));
+ const realtime=readFileSync(new URL("../scripts/workspace-team-staging-realtime.mjs",import.meta.url),"utf8");
+ assert.ok(realtime.includes("subscribed.delete(role);interrupted.add(role);"));
+ assert.ok(realtime.includes("await sleep(REALTIME_QUIET_WINDOW_MS);\n    requireHealthy();"));
+ const write=readFileSync(new URL("../scripts/workspace-team-staging-write-roles.mjs",import.meta.url),"utf8");
+ assert.ok(write.includes("verifyWorkspaceConcurrentWrite(race,oTask)"));
+ assert.ok(write.includes("raceEntry.allowedTitles=raceTitles"));
+ assert.ok(write.includes('updates.length===1&&updates[0].actor_id===identities[winner]'));
 });

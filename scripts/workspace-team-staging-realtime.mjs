@@ -91,6 +91,10 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
   let alive=true;
   const delivered=new Map();
   const subscribed=new Set();
+  const interrupted=new Set();
+  const requireHealthy=()=>{
+    fail(interrupted.size===0&&WORKSPACE_REALTIME_ROLES.every(role=>subscribed.has(role)),"subscriber-interrupted-during-observation");
+  };
   let outsiderCount=0,baseline=null;
   const space=config.ids.SPACE_ID,task=config.ids.TEAM_TASK_ID;
   const identities=[];
@@ -144,6 +148,7 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
               subscribed.add(role);
               if(!settled){settled=true;resolve(true);}
             }else if(["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(status)){
+              subscribed.delete(role);interrupted.add(role);
               if(!settled){settled=true;
                 reject(Error("Workspace realtime blocked: channel-not-subscribed"));}
             }
@@ -156,10 +161,14 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
       REALTIME_SUBSCRIBE_WINDOW_MS,"subscription-timeout");
     // Baseline AFTER all four subscribers are armed; event must follow it.
     baseline=await latestId(clients[0],space);
+    requireHealthy();
     onArmed();
     const deadline=clock()+REALTIME_DELIVERY_WINDOW_MS;
-    while(clock()<deadline&&delivered.size<3&&outsiderCount===0)
+    while(clock()<deadline&&delivered.size<3&&outsiderCount===0){
+      requireHealthy();
       await sleep(200);
+    }
+    requireHealthy();
     fail(outsiderCount===0,"outsider-received-private-team-event");
     fail(delivered.size===3,"expected-task-update-not-delivered-to-all-members");
     const ids=[...delivered.values()];
@@ -172,6 +181,7 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
     await forbiddenEventRead(clients[3],space,row.id);
     // Wait briefly for late unauthorized delivery before reporting a pass.
     await sleep(REALTIME_QUIET_WINDOW_MS);
+    requireHealthy();
     fail(outsiderCount===0,"delayed-outsider-event-leak");
     return checkWorkspaceRealtimeEvidence({
       baseline,delivered:[...delivered].map(([role,eventId])=>({role,eventId})),

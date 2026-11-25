@@ -58,3 +58,15 @@ export function writeRoleProbeReport(checks){
     limitations:"Authorized staging records were created/deleted; immutable audit events remain. This does not prove production readiness or realtime.",
   });
 }
+
+/** Exactly one compare-and-save may commit. Network failures are not conflict evidence. */
+export function verifyWorkspaceConcurrentWrite(results,taskId){
+  if(!UUID_REGEX.test(String(taskId))||!Array.isArray(results)||results.length!==2)
+    throw Error("Workspace Phase 23 blocked: invalid-concurrent-write-receipt");
+  const winners=results.map((r,i)=>!r?.error&&r?.data===taskId?i:-1).filter(i=>i>=0);
+  if(winners.length!==1)throw Error("Workspace Phase 23 blocked: concurrent-write-winner-not-unique");
+  const loser=results[1-winners[0]];
+  if(loser?.error?.code!=="23514"||loser.error.message!=="Task changed since review. Refresh before saving"||
+    loser.data!=null)throw Error("Workspace Phase 23 blocked: stale-write-conflict-not-proven");
+  return winners[0];
+}

@@ -51,7 +51,8 @@ async function one(client,table,filters,fields="id"){
   return data[0];
 }
 async function invisible(client,table,filters){
-  const data=await queryRows(client,table,filters,"id",1);
+  const column=["workspace_team_members","workspace_team_read_cursors"].includes(table)?"user_id":"id";
+  const data=await queryRows(client,table,filters,column,1);
   gate(data.length===0,"revoked-row-level-access-exposed");
 }
 async function latestEventId(client,space){
