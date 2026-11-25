@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {checkEvidence,REQUIRED,STAGING_REF,PRODUCTION_REF} from '../scripts/eternyx-integrated-evidence-check.mjs';
+const sha='a'.repeat(40), now=Date.parse('2026-11-25T12:00:00.000Z');
+function fixture(){return {schemaVersion:1,candidate:sha,stagingRef:STAGING_REF,evidence:REQUIRED.map((gate,i)=>({gate,status:'PASS',candidate:sha,stagingRef:STAGING_REF,runId:String(i+1),artifactSha256:'b'.repeat(64),observedAt:'2026-11-25T10:00:00.000Z',reviewedAt:'2026-11-25T11:00:00.000Z',operator:'operator-a',reviewer:'reviewer-b'}))};}
+test('complete structure is reviewable but never authorizes production',()=>{const r=checkEvidence(fixture(),sha,now);assert.equal(r.status,'READY_FOR_INDEPENDENT_REVIEW');assert.equal(r.productionAuthorized,false);});
+test('each missing gate blocks',()=>{for(let i=0;i<REQUIRED.length;i++){const f=fixture();f.evidence.splice(i,1);assert.equal(checkEvidence(f,sha,now).status,'HOLD');}});
+test('duplicate, unknown and nonpass evidence block',()=>{for(const patch of [{gate:REQUIRED[1]},{gate:'unknown'},{status:'SKIPPED'}]){const f=fixture();Object.assign(f.evidence[0],patch);assert.equal(checkEvidence(f,sha,now).status,'HOLD');}});
+test('wrong candidate and production project block',()=>{for(const patch of [{candidate:'c'.repeat(40)},{stagingRef:PRODUCTION_REF}]){const f=fixture();Object.assign(f.evidence[0],patch);assert.equal(checkEvidence(f,sha,now).status,'HOLD');}});
+test('stale, future, invalid or out-of-order timestamps block',()=>{for(const patch of [{observedAt:'2026-11-01T10:00:00.000Z'},{reviewedAt:'2026-11-26T10:00:00.000Z'},{observedAt:'2026-11-25T11:30:00.000Z'},{observedAt:'2026-02-30T10:00:00.000Z'}]){const f=fixture();Object.assign(f.evidence[0],patch);assert.equal(checkEvidence(f,sha,now).status,'HOLD');}});
+test('self-review, invalid run, digest and arbitrary fields block without echo',()=>{for(const patch of [{reviewer:'OPERATOR-A'},{runId:'0'},{artifactSha256:'not-a-digest'},{secret:'do-not-log'}]){const f=fixture();Object.assign(f.evidence[0],patch);const r=checkEvidence(f,sha,now);assert.equal(r.status,'HOLD');assert.equal(JSON.stringify(r).includes('do-not-log'),false);}});
+test('wrong root and oversized evidence list block',()=>{for(const patch of [{stagingRef:PRODUCTION_REF},{candidate:'c'.repeat(40)},{schemaVersion:2},{evidence:[...fixture().evidence,fixture().evidence[0]]}])assert.equal(checkEvidence({...fixture(),...patch},sha,now).status,'HOLD');});

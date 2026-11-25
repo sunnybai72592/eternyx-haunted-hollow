@@ -1,0 +1,19 @@
+name: Integrated release evidence contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/eternyx-integrated-evidence-check.mjs'
+      - 'tests/eternyx-integrated-evidence-check.test.mjs'
+      - '.github/workflows/eternyx-integrated-evidence-contract.yml'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/eternyx-integrated-evidence-check.test.mjs
