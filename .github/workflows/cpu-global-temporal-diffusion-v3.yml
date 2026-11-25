@@ -1,0 +1,43 @@
+name: CPU global-temporal diffusion V3
+on:
+  pull_request:
+    paths:
+      - "gpu-worker/train_global_temporal_diffusion.py"
+      - "gpu-worker/train_spatiotemporal_diffusion.py"
+      - "gpu-worker/train_joint_video_diffusion.py"
+      - "gpu-worker/tests/test_global_temporal_diffusion.py"
+      - ".github/workflows/cpu-global-temporal-diffusion-v3.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gpu-worker/train_global_temporal_diffusion.py"
+      - "gpu-worker/train_spatiotemporal_diffusion.py"
+      - "gpu-worker/train_joint_video_diffusion.py"
+      - "gpu-worker/tests/test_global_temporal_diffusion.py"
+      - ".github/workflows/cpu-global-temporal-diffusion-v3.yml"
+permissions:
+  contents: read
+jobs:
+  global-diffusion:
+    name: Learn global clip context and paired temporal differences; compare V2/V3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CUDA_VISIBLE_DEVICES: ""
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require NumPy and CPU FFmpeg
+        run: |
+          python -m pip install numpy==2.2.6
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -q libx264
+      - name: Run actual training, matched holdout evaluation and source-free generation
+        run: python -m unittest discover -s gpu-worker/tests -p 'test_global_temporal_diffusion.py' -v
