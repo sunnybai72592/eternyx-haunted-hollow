@@ -21,11 +21,17 @@
 #define SUFFIX "\"}\n"
 #define MAX_LINE 512
 #define PORT 5501
+#ifdef ETERNYX_HTTP_EXERCISE
+#include "eternyx_http_exercise.h"
+#endif
 
 static int hex(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
 }
 static int respond(const char *line, size_t length, char *out, size_t capacity) {
+#ifdef ETERNYX_HTTP_EXERCISE
+    if (length && line[0]!='{') return exercise_http(line,length,out,capacity);
+#endif
     const size_t p = sizeof(PREFIX)-1, m = sizeof(MIDDLE)-1, z = sizeof(SUFFIX)-1;
     if (length != p+36+m+64+z ||
         memcmp(line,PREFIX,p) || memcmp(line+p+36,MIDDLE,m) ||
@@ -63,7 +69,7 @@ static int ready(int fd, short events, long long deadline) {
     }
 }
 static void serve(int fd) {
-    char line[MAX_LINE], out[MAX_LINE];
+    char line[MAX_LINE], out[1024];
     size_t used=0, sent=0;
     long long now=millis();
     if (now<0) return;
@@ -73,9 +79,20 @@ static void serve(int fd) {
         if (n<0 && (errno==EINTR || errno==EAGAIN)) continue;
         if (n<=0) return;
         used+=(size_t)n;
-        const char *nl=memchr(line,'\n',used);
-        if (!nl) continue;
-        if ((size_t)(nl-line)+1!=used) return;
+        size_t frame=0;
+#ifdef ETERNYX_HTTP_EXERCISE
+        if (line[0]!='{') {
+            for (size_t i=3;i<used;i++) {
+                if (!memcmp(line+i-3,"\r\n\r\n",4)) { frame=i+1; break; }
+            }
+        } else
+#endif
+        {
+            const char *nl=memchr(line,'\n',used);
+            if (nl) frame=(size_t)(nl-line)+1;
+        }
+        if (!frame) continue;
+        if (frame!=used) return;
         int length=respond(line,used,out,sizeof(out));
         if (length<0) return;
         while (sent<(size_t)length && ready(fd,POLLOUT,deadline)) {
@@ -88,7 +105,7 @@ static void serve(int fd) {
     }
 }
 static int self_test(void) {
-    char line[MAX_LINE+1], out[MAX_LINE];
+    char line[MAX_LINE+1], out[1024];
     size_t n=fread(line,1,sizeof(line),stdin);
     if (ferror(stdin) || n>MAX_LINE) return 1;
     int length=respond(line,n,out,sizeof(out));

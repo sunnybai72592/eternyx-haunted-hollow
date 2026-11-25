@@ -1,0 +1,32 @@
+name: LABS fixed HTTP exercise image contract
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/labs-http-exercise-image.yml'
+      - 'scripts/labs-build-fixed-guest.py'
+      - 'scripts/labs-http-exercise-check.py'
+      - 'infrastructure/cyber-range/guest/eternyx_fixed_probe_init.c'
+      - 'infrastructure/cyber-range/guest/eternyx_http_exercise.h'
+      - 'tests/labs-http-exercise-image-test.py'
+permissions:
+  contents: read
+jobs:
+  exercise-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+          submodules: false
+      - name: Remove checkout authorization
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || test "$?" -eq 5
+          rc=0
+          git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
+          test "$rc" -eq 1
+      - name: Build actual diagnostic and exercise filesystems and verify extracted services
+        run: |
+          python3 -B tests/labs-fixed-guest-image-test.py
+          python3 -B tests/labs-http-exercise-image-test.py
