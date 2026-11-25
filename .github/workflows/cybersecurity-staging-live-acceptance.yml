@@ -4,8 +4,16 @@ on:
     inputs:
       phase:
         type: choice
-        options: [pre-cutover, post-cutover]
+        options: [pre-cutover, post-cutover, scanners]
         required: true
+      tls_host:
+        description: "Optional owned or explicitly authorized TLS assessment hostname"
+        type: string
+        required: false
+      tls_acknowledge:
+        description: "If TLS host supplied, type I_AUTHORIZE_TLS_ASSESSMENT_OF_THIS_HOST"
+        type: string
+        required: false
       acknowledge:
         description: "Type I_APPROVE_SYNTHETIC_STAGING_GATEWAY_FIXTURES"
         required: true
@@ -33,7 +41,7 @@ jobs:
           git fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
           test "$(git rev-parse FETCH_HEAD)" = "$TEST_SHA"
           mkdir -p scripts
-          for script in security-wave18-real-auth security-wave19-session-evidence security-wave21-live-fence security-wave25-gateway-acceptance; do
+          for script in security-wave18-real-auth security-wave19-session-evidence security-wave21-live-fence security-wave25-gateway-acceptance security-wave29-scanner-acceptance; do
             git show "$TEST_SHA:scripts/$script.mjs" > "scripts/$script.mjs"
           done
       - uses: actions/setup-node@v4
@@ -48,6 +56,9 @@ jobs:
           ETERNYX_STAGING_ONLY: 'yes'
           ETERNYX_W18_ACK: I_APPROVE_PERSISTENT_SYNTHETIC_STAGING_FIXTURES
           ETERNYX_W25_ACK: I_APPROVE_SYNTHETIC_STAGING_GATEWAY_FIXTURES
+          ETERNYX_W29_ACK: I_APPROVE_STAGING_SCANNER_RESEARCH
+          ETERNYX_W29_TLS_HOST: ${{ inputs.tls_host }}
+          ETERNYX_W29_TLS_ACK: ${{ inputs.tls_acknowledge }}
           ETERNYX_W25_PHASE: ${{ inputs.phase }}
           ETERNYX_STAGING_PUBLIC_KEY: ${{ secrets.ETERNYX_STAGING_PUBLIC_KEY }}
           ETERNYX_W18_EMAIL_A: ${{ secrets.ETERNYX_W18_EMAIL_A }}
@@ -56,10 +67,16 @@ jobs:
           ETERNYX_W18_PASSWORD_B: ${{ secrets.ETERNYX_W18_PASSWORD_B }}
         run: |
           set -euo pipefail
-          node scripts/security-wave25-gateway-acceptance.mjs --check-config
-          node scripts/security-wave25-gateway-acceptance.mjs --run > observation.json
+          if [[ "$ETERNYX_W25_PHASE" == "scanners" ]]; then
+            node scripts/security-wave29-scanner-acceptance.mjs --check-config
+            node scripts/security-wave29-scanner-acceptance.mjs --run > observation.json
+          else
+            node scripts/security-wave25-gateway-acceptance.mjs --check-config
+            node scripts/security-wave25-gateway-acceptance.mjs --run > observation.json
+          fi
           cat observation.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: cybersecurity-staging-observation
           path: observation.json
