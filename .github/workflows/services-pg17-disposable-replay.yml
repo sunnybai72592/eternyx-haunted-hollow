@@ -60,6 +60,9 @@ on:
       - "docs/sql/eternyx/services-phase48-disposable-admin-helper-acceptance.sql"
       - "tests/services-phase48-admin-helper-hardening.test.mjs"
       - "scripts/services-phase50-staging-lifecycle.mjs"
+      - "scripts/sql/services-staging-quotation-agreements-candidate.sql"
+      - "docs/sql/eternyx/services-phase51-disposable-quote-acceptance.sql"
+      - "tests/services-phase51-quotation-agreements.test.mjs"
       - "tests/services-phase50-staging-lifecycle.test.mjs"
       - "docs/sql/eternyx/services-phase50-disposable-review-lifecycle.sql"
       - ".github/workflows/services-staging-review-lifecycle.yml"
@@ -99,7 +102,7 @@ jobs:
       - name: Prove reviewed migration integrity and write ordered plan
         run: |
           node scripts/services-migration-source-guard.mjs > "$RUNNER_TEMP/services-source-verdict.json"
-          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs tests/services-phase44-staging-foundation.test.mjs tests/services-phase45-pinned-rollout.test.mjs tests/services-phase47-real-acceptance-readiness.test.mjs tests/services-phase48-admin-helper-hardening.test.mjs tests/services-phase50-staging-lifecycle.test.mjs
+          node --test tests/services-pg17-replay-plan.test.mjs tests/services-pg17-role-isolation-phase30.test.mjs tests/services-pg17-catalog-verdict-phase32.test.mjs tests/services-pg17-write-abuse-phase33.test.mjs tests/services-pg17-concurrency-phase34.test.mjs tests/services-phase35-managed-history-reconciler.test.mjs tests/services-phase36-staging-live-db-proof.test.mjs tests/services-phase37-auditor-privileges.test.mjs tests/services-phase38-definer-surface.test.mjs tests/services-phase39-definer-safety.test.mjs tests/services-phase40-consistent-evidence.test.mjs tests/services-phase41-registered-project.test.mjs tests/services-phase42-staging-inventory.test.mjs tests/services-phase43-trusted-admin-foundation.test.mjs tests/services-phase44-staging-foundation.test.mjs tests/services-phase45-pinned-rollout.test.mjs tests/services-phase47-real-acceptance-readiness.test.mjs tests/services-phase48-admin-helper-hardening.test.mjs tests/services-phase50-staging-lifecycle.test.mjs tests/services-phase51-quotation-agreements.test.mjs
           node scripts/services-phase45-pinned-rollout.mjs --check > "$RUNNER_TEMP/services-phase45-reviewed-plan.json"
           node scripts/services-pg17-replay-plan.mjs --list > "$RUNNER_TEMP/services-isolated-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/services-isolated-files.txt")" -eq 13
@@ -310,6 +313,12 @@ jobs:
           echo "PASS: Phase48 hardened helper OID, dependencies, 10 metadata facts, RLS, revocation and 64 catalog checks"
           docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
             < docs/sql/eternyx/services-phase50-disposable-review-lifecycle.sql
+          # Phase51 exact reviewed candidate, outside automatic migrations.
+          docker exec -i "$name" psql -X -1 -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < scripts/sql/services-staging-quotation-agreements-candidate.sql
+          docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U postgres -d services_phase44 \
+            < docs/sql/eternyx/services-phase51-disposable-quote-acceptance.sql
+
 
           echo "PASS: Phase44 exact seedless candidate and complete 13-file Services chain with synthetic RLS acceptance"
           echo "PASS: isolated Services PG17 migrations, RLS, concurrency, auditor privilege and hardened SECURITY DEFINER checks (no remote deployment)"
