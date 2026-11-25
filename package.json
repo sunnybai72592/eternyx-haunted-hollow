@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
+    "workspace:staging:suite": "node scripts/workspace-staging-acceptance-suite.mjs --run",
     "workspace:staging:fixtures": "node scripts/workspace-staging-provision-fixtures.mjs --run",
     "workspace:staging:config": "node scripts/workspace-team-staging-acceptance.mjs --config-check",
     "workspace:staging:acceptance": "node scripts/workspace-team-staging-acceptance.mjs --run",

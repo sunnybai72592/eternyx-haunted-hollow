@@ -84,7 +84,7 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
   onArmed=()=>process.stdout.write(
     "ARMED: In the STAGING browser, update the existing team task ONCE as OWNER.\n"+
     "Do not edit production. The runner does not modify application data.\n"
-  ), clock=()=>Date.now(), sleep=wait,
+  ), approvedFixtureEdit=null, clock=()=>Date.now(), sleep=wait,
 }={}){
   const clients=WORKSPACE_REALTIME_ROLES.map(()=>factory(config.url,config.key));
   const channels=[];
@@ -162,7 +162,11 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
     // Baseline AFTER all four subscribers are armed; event must follow it.
     baseline=await latestId(clients[0],space);
     requireHealthy();
-    onArmed();
+    if(approvedFixtureEdit!==null){
+      fail(typeof approvedFixtureEdit==="function","invalid-approved-edit");
+      await approvedFixtureEdit({client:clients[0],identity:identities[0],space,task});
+      requireHealthy();
+    }else onArmed();
     const deadline=clock()+REALTIME_DELIVERY_WINDOW_MS;
     while(clock()<deadline&&delivered.size<3&&outsiderCount===0){
       requireHealthy();
@@ -183,11 +187,14 @@ export async function runWorkspaceRealtimeStaging(config, factory=createStagingC
     await sleep(REALTIME_QUIET_WINDOW_MS);
     requireHealthy();
     fail(outsiderCount===0,"delayed-outsider-event-leak");
-    return checkWorkspaceRealtimeEvidence({
+    const evidence=checkWorkspaceRealtimeEvidence({
       baseline,delivered:[...delivered].map(([role,eventId])=>({role,eventId})),
       subscribed:[...subscribed],outsiderCount,serverRow:row,
       space,task,owner:identities[0],
     });
+    return approvedFixtureEdit===null?evidence:{...evidence,mode:"automated_disposable_staging_edit",
+      application_data_modified_by_runner:true,
+      limitations:"One explicitly approved disposable staging task edit. No reconnect, browser, migration or production certification."};
   }finally{
     alive=false;
     await Promise.allSettled(channels.map(({client,channel})=>
