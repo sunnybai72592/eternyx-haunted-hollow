@@ -90,14 +90,23 @@ def make_initramfs(init,modules):
     entry("TRAILER!!!",0)
     return b"".join(entries)
 
+def compile_bootstrap(init,count):
+    p.require(type(count) is int and 1<=count<=m.MAX_COUNT,"invalid bootstrap module count")
+    try:
+        b.command("/usr/bin/cc","-static","-Os","-D_FORTIFY_SOURCE=3",
+                  "-Wall","-Wextra","-Werror",f"-DMODULE_COUNT={count}",
+                  str(SOURCE),"-o",str(init))
+    except subprocess.CalledProcessError as exc:
+        detail=(exc.stderr or b"")[-4000:].decode("utf-8",errors="replace")
+        raise RuntimeError("fixed guest bootstrap compilation failed:\n"+detail) from exc
+    p.require(b"INTERP" not in b.command("/usr/bin/readelf","-l",str(init)),
+              "bootstrap not static")
+
 def prepare_module_initrd(work,output,modules):
     with tempfile.TemporaryDirectory(prefix="bootstrap-",dir=work) as directory:
         stage=pathlib.Path(directory)
         init=stage/"init"
-        b.command("/usr/bin/cc","-static","-Os","-Wall","-Wextra","-Werror",
-                  f"-DMODULE_COUNT={len(modules)}",str(SOURCE),"-o",str(init))
-        p.require(b"INTERP" not in b.command("/usr/bin/readelf","-l",str(init)),
-                  "bootstrap not static")
+        compile_bootstrap(init,len(modules))
         payloads=[]
         evidence=[]
         for i,item in enumerate(modules):

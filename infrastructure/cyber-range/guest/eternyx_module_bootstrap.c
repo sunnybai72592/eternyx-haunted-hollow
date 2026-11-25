@@ -13,9 +13,11 @@
 #error Invalid fixed module count
 #endif
 
-static void fail(void) {
+static _Noreturn void fail(void) {
     static const char msg[]="ETERNYX_MODULE_BOOTSTRAP_FAILED\n";
-    (void)write(2,msg,sizeof(msg)-1);
+    if (write(STDERR_FILENO,msg,sizeof(msg)-1)<0) {
+        /* Diagnostic output is best-effort; always proceed to reboot. */
+    }
     reboot(RB_AUTOBOOT);
     for (;;) pause();
 }

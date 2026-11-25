@@ -64,11 +64,26 @@ class BundleTest(unittest.TestCase):
 
     def test_real_static_bootstrap_compiles_and_refuses_host_execution(self):
         with tempfile.TemporaryDirectory() as directory:
-            init=pathlib.Path(directory)/"init"
-            g.b.command("/usr/bin/cc","-static","-Os","-Wall","-Wextra","-Werror",
-                        "-DMODULE_COUNT=2",str(g.SOURCE),"-o",str(init))
-            self.assertNotIn(b"INTERP",g.b.command("/usr/bin/readelf","-l",str(init)))
-            self.assertEqual(subprocess.run([str(init)],timeout=5).returncode,1)
+            for count in (1,2,64):
+                with self.subTest(count=count):
+                    init=pathlib.Path(directory)/f"init-{count}"
+                    g.compile_bootstrap(init,count)
+                    self.assertNotIn(b"INTERP",g.b.command("/usr/bin/readelf","-l",str(init)))
+                    self.assertEqual(subprocess.run([str(init)],timeout=5).returncode,1)
+
+    def test_bootstrap_compiler_error_is_visible_and_bounded(self):
+        error=subprocess.CalledProcessError(1,["cc"],stderr=b"x"*5000+b"compiler diagnostic")
+        with patch.object(g.b,"command",side_effect=error):
+            with self.assertRaisesRegex(RuntimeError,"compiler diagnostic") as failure:
+                g.compile_bootstrap(pathlib.Path("/tmp/unused-init"),2)
+            self.assertLess(len(str(failure.exception)),4100)
+
+    def test_invalid_bootstrap_count_never_invokes_compiler(self):
+        with patch.object(g.b,"command") as command:
+            for count in (0,65,True,"2"):
+                with self.assertRaises(RuntimeError):
+                    g.compile_bootstrap(pathlib.Path("/tmp/unused-init"),count)
+            command.assert_not_called()
 
     def test_nonempty_output_refused_before_archive_work(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -32,3 +32,16 @@ acceptance or provider activation. Eight offline regressions. Next: consume
 the same preparation within a separately approved real isolated rootfs/vsock
 workflow, rehash all inputs at the privileged boundary, confirm liveness and
 cleanup. Missing zstd/xz/gzip or unexpected module compression fails closed.
+
+## Fortified compiler correction
+
+PR #817 offline job 139250577118 passed seven module-plan tests and seven
+of eight bundle tests; the static compilation failed with stderr hidden by
+the command wrapper. Reproduced locally with GCC 14 and _FORTIFY_SOURCE=3:
+ignoring write's warn_unused_result was rejected under -Werror. Check the
+write result explicitly while retaining unconditional failure/reboot behavior.
+Use one shared fortified compilation helper for build and test, preserve
+-Werror, and surface bounded compiler stderr on failure. Locally verified
+static C compilation for module counts 1, 2 and 64 and exit 1 outside PID 1.
+Two new tests cover compiler diagnostics and invalid count rejection. Full
+updated CI and live bundle preparation still require verification.
