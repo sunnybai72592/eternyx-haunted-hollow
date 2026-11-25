@@ -113,7 +113,27 @@ export function checkLocalVideoCamera(camera){
   return {mode:camera.mode,strength_percent:camera.strength_percent};
 }
 
-export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard", transition, camera }) {
+export function checkLocalVideoTitles(titles,totalFrames,fps){
+  if(titles===undefined)return undefined;
+  if(!Array.isArray(titles)||titles.length<1||titles.length>3)throw new Error("Supply one to three timed titles.");
+  let previousEnd=0;
+  return titles.map(item=>{
+    const keys=["text","position","color","start_ms","duration_ms","animation"];
+    if(!item||typeof item!=="object"||Array.isArray(item)||Object.keys(item).length!==keys.length||keys.some(key=>!Object.hasOwn(item,key)))
+      throw new Error("Invalid title overlay fields.");
+    if(typeof item.text!=="string"||!item.text.trim()||item.text.length>40||/[^ -~]/.test(item.text))
+      throw new Error("Title text must be 1-40 printable ASCII characters.");
+    if(!["center","lower_left","upper_left"].includes(item.position)||!["white","gold","cyan"].includes(item.color)||!["static","fade"].includes(item.animation))
+      throw new Error("Unsupported title style.");
+    const start=item.start_ms,duration=item.duration_ms;
+    if(!Number.isSafeInteger(start)||!Number.isSafeInteger(duration)||start<0||duration<500||start%250||duration%250||start<previousEnd||(start+duration)*fps>totalFrames*1000)
+      throw new Error("Title timings must be ordered, non-overlapping 250 ms steps within the movie, with duration >= 500 ms.");
+    previousEnd=start+duration;
+    return Object.fromEntries(keys.map(key=>[key,item[key]]));
+  });
+}
+
+export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narration = null, effects = null, quality = "standard", transition, camera, titles }) {
   const fps=localVideoFps(quality),maxFrames=localVideoMaxFrames(fps),maxSource=localVideoMaxSourceFrames(fps);
   const clips = validateUniqueClips(sources);
   if (!Array.isArray(shots) || shots.length === 0 || shots.length > LOCAL_VIDEO_LIMITS.maxClips) {
@@ -142,7 +162,8 @@ export function buildLocalVideoBoard({ sources, shots, soundtrack = null, narrat
   });
   const sceneTransition=checkLocalVideoTransition(transition,normalized,fps);
   const motion=checkLocalVideoCamera(camera);
-  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}), ...(sceneTransition?{transition:sceneTransition}:{}), ...(motion?{camera:motion}:{}) };
+  const overlays=checkLocalVideoTitles(titles,totalFrames,fps);
+  const board = { version: 2, shots: normalized, ...(fps===24?{fps:24}:{}), ...(sceneTransition?{transition:sceneTransition}:{}), ...(motion?{camera:motion}:{}), ...(overlays?{titles:overlays}:{}) };
   const names=new Set([...clips.keys()].map(name=>name.toLowerCase()));
   for(const [role,track] of [["soundtrack",soundtrack],["narration",narration],["effects",effects]]){
     if(track===null)continue;

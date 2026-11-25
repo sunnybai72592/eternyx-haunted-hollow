@@ -137,7 +137,7 @@ test("main Studio and launcher are wired to native cinematic without fake browse
   const launcher=readFileSync(new URL("../gpu-worker/launch_portable_video.py",import.meta.url),"utf8");
   const bundle=readFileSync(new URL("../src/lib/ai/portableVideoBundle.mjs",import.meta.url),"utf8");
   for(const token of ["fps={fps}","switchQuality","resetTimelineHistory(mapped)",
-                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition, camera })',
+                      'buildLocalVideoBoard({ sources, shots, soundtrack, narration, effects, quality, transition, camera, titles })',
                       "native 24 FPS"])assert.ok(studio.includes(token),token);
   assert.match(timeline,/fps=16/);
   assert.match(timeline,/timelineSegments\(shots,fps\)/);
@@ -177,4 +177,19 @@ test("camera presets roundtrip and preserve exact cinematic cuts and captions",(
   }
   assert.equal(auditLocalVideoExport({...input,camera}).canExport,true);
   assert.equal(auditLocalVideoExport({...input,camera:{mode:"bad",strength_percent:20}}).canExport,false);
+});
+
+test("title timing and literal content are preserved, unsafe options and overlaps rejected",()=>{
+  const input={sources:[a,b],shots:state(),quality:"cinematic"};
+  const title={text:"Title 100% : ' [ ]",position:"center",color:"cyan",start_ms:250,duration_ms:500,animation:"fade"};
+  const titles=[title];
+  const project=buildLocalVideoBoard({...input,titles});
+  assert.deepEqual(project.board.titles,titles);
+  assert.equal(project.totalFrames,72);
+  assert.equal(localVideoSrt(project.board),localVideoSrt(buildLocalVideoBoard(input).board));
+  assert.deepEqual(readLocalVideoDraft(createLocalVideoDraft({...input,titles}).json).titles,titles);
+  for(const bad of [null,[],[{...title,text:"bad\ntext"}],[{...title,start_ms:333}],[{...title,duration_ms:3500}],[{...title,color:"red:enable=1"}],[title,title]]){
+    assert.throws(()=>buildLocalVideoBoard({...input,titles:bad}),/title/i);
+  }
+  assert.equal(auditLocalVideoExport({...input,titles}).canExport,true);
 });
