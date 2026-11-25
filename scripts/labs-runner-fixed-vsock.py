@@ -242,7 +242,7 @@ def exercise(work,report,*,name=None,watchdog=None):
                 stream.seek(max(0,log.stat().st_size-4096))
                 print(stream.read().decode("utf-8",errors="replace"),flush=True)
 
-def main(source,exercise_runner=exercise):
+def main(source,exercise_runner=exercise,bundle_validator=None):
     require(os.geteuid()==0,"approved ephemeral root setup required")
     require((j.CGROOT/"cgroup.controllers").is_file() and
             stat.S_ISCHR(pathlib.Path("/dev/kvm").stat().st_mode),"KVM/cgroup v2 absent")
@@ -258,6 +258,8 @@ def main(source,exercise_runner=exercise):
         if (source/"initramfs.cpio").exists():
             copy_bounded(source/"initramfs.cpio",work/"initramfs.cpio",MAX_INITRD)
         report=verify_bundle(work)
+        if bundle_validator is not None:
+            bundle_validator(work,report)
         j.boot.extract_pinned(work/"release.tgz",work)
         for name in ("firecracker","jailer"):
             j.verify_release_executable(work/name)
