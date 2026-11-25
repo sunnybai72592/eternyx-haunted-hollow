@@ -60,7 +60,7 @@ serve(async (req) => {
     if (!authorization?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
 
@@ -73,7 +73,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
 
@@ -81,7 +81,7 @@ serve(async (req) => {
     if (declaredLength > REQUEST_BODY_LIMIT_BYTES) {
       return new Response(JSON.stringify({ error: 'Request body is too large' }), {
         status: 413,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
 
@@ -91,7 +91,7 @@ serve(async (req) => {
     } catch {
       return new Response(JSON.stringify({ error: 'Request body is too large' }), {
         status: 413,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
 
@@ -101,13 +101,13 @@ serve(async (req) => {
     } catch {
       return new Response(JSON.stringify({ error: 'Request body must be valid JSON' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return new Response(JSON.stringify({ error: 'Request body must be a JSON object' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
     const { domain } = body
@@ -118,7 +118,7 @@ serve(async (req) => {
     if (!domainRegex.test(normalizedDomain)) {
       return new Response(JSON.stringify({ error: 'Enter a valid public domain name' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
     const domainName = normalizedDomain
@@ -128,7 +128,7 @@ serve(async (req) => {
     const dnsRecords: DNSRecord[] = []
     let nameservers: string[] = []
 
-    console.log(`Starting DNS configuration review for: ${domainName}`)
+    // Do not log user-supplied target names.
 
     // 1. DNS Record Enumeration
     const recordTypes = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
@@ -220,18 +220,18 @@ serve(async (req) => {
         recommendations: generateDNSRecommendations(vulnerabilities, securityFeatures)
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } 
       }
     )
 
   } catch (error) {
-    console.error('DNS analyzer error:', error)
+    console.error('DNS analyzer failed')
     const timedOut = error instanceof Error && error.name === 'AbortError'
     return new Response(
       JSON.stringify({ error: timedOut ? 'DNS provider request timed out' : 'DNS analysis could not be completed' }),
       {
         status: timedOut ? 504 : 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       }
     )
   }
@@ -276,6 +276,7 @@ async function queryDNSRecords(domain: string, recordType: string): Promise<DNSR
     response = await fetch(dohUrl, {
       headers: { 'Accept': 'application/dns-json' },
       signal: controller.signal,
+      redirect: 'error',
     })
     if (!response.ok) {
       throw new Error(`DNS provider returned HTTP ${response.status} for ${recordType} query`)
@@ -285,7 +286,7 @@ async function queryDNSRecords(domain: string, recordType: string): Promise<DNSR
   } finally {
     clearTimeout(timeout)
   }
-  let data: { Status?: number; Answer?: Array<{ name?: unknown; data?: unknown; TTL?: unknown }> }
+  let data: { Status?: number; Answer?: Array<{ name?: unknown; data?: unknown; TTL?: unknown; type?: unknown }> }
   try {
     data = JSON.parse(responseText)
   } catch {
@@ -296,8 +297,11 @@ async function queryDNSRecords(domain: string, recordType: string): Promise<DNSR
   }
 
   if (!Array.isArray(data.Answer)) return []
+  const recordCodes: Record<string, number> = { A:1, AAAA:28, MX:15, NS:2, TXT:16, CNAME:5, SOA:6, CAA:257, DS:43 }
+  const expectedCode = recordCodes[recordType]
+  if (expectedCode === undefined) throw new Error('Unsupported DNS record type')
   return data.Answer
-    .filter(answer => typeof answer.name === 'string' && typeof answer.data === 'string')
+    .filter(answer => answer && answer.type === expectedCode && typeof answer.name === 'string' && typeof answer.data === 'string')
     .slice(0, 100)
     .map(answer => ({
       type: recordType,

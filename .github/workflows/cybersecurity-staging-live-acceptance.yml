@@ -1,0 +1,67 @@
+name: Cybersecurity live staging acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        type: choice
+        options: [pre-cutover, post-cutover]
+        required: true
+      acknowledge:
+        description: "Type I_APPROVE_SYNTHETIC_STAGING_GATEWAY_FIXTURES"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: cybersecurity-staging-acceptance
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.ref == 'refs/heads/main' && inputs.acknowledge == 'I_APPROVE_SYNTHETIC_STAGING_GATEWAY_FIXTURES'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: cybersecurity-staging
+    steps:
+      - name: Fetch reviewed source without submodule checkout
+        shell: bash
+        env:
+          TEST_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TEST_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q
+          git fetch --no-tags --depth=1 https://github.com/sunnybai72592/eternyx-haunted-hollow.git "$TEST_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$TEST_SHA"
+          mkdir -p scripts
+          for script in security-wave18-real-auth security-wave19-session-evidence security-wave21-live-fence security-wave25-gateway-acceptance; do
+            git show "$TEST_SHA:scripts/$script.mjs" > "scripts/$script.mjs"
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Execute real staging acceptance
+        shell: bash
+        env:
+          ETERNYX_STAGING_URL: https://mhodwvypfbxafamkrgsk.supabase.co
+          ETERNYX_STAGING_PROJECT_REF: mhodwvypfbxafamkrgsk
+          ETERNYX_PRODUCTION_PROJECT_REF: wcncuarekaofmfurbtbh
+          ETERNYX_STAGING_ONLY: 'yes'
+          ETERNYX_W18_ACK: I_APPROVE_PERSISTENT_SYNTHETIC_STAGING_FIXTURES
+          ETERNYX_W25_ACK: I_APPROVE_SYNTHETIC_STAGING_GATEWAY_FIXTURES
+          ETERNYX_W25_PHASE: ${{ inputs.phase }}
+          ETERNYX_STAGING_PUBLIC_KEY: ${{ secrets.ETERNYX_STAGING_PUBLIC_KEY }}
+          ETERNYX_W18_EMAIL_A: ${{ secrets.ETERNYX_W18_EMAIL_A }}
+          ETERNYX_W18_EMAIL_B: ${{ secrets.ETERNYX_W18_EMAIL_B }}
+          ETERNYX_W18_PASSWORD_A: ${{ secrets.ETERNYX_W18_PASSWORD_A }}
+          ETERNYX_W18_PASSWORD_B: ${{ secrets.ETERNYX_W18_PASSWORD_B }}
+        run: |
+          set -euo pipefail
+          node scripts/security-wave25-gateway-acceptance.mjs --check-config
+          node scripts/security-wave25-gateway-acceptance.mjs --run > observation.json
+          cat observation.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cybersecurity-staging-observation
+          path: observation.json
+          retention-days: 7
+          if-no-files-found: error
