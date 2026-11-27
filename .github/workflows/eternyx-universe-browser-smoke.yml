@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.56.1 does not support Ubuntu 26.04
     timeout-minutes: 18
     env:
       VITE_SUPABASE_URL: https://universe-smoke.invalid
