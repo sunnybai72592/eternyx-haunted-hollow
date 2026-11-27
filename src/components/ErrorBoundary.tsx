@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TerminalWindow } from '@/components/TerminalWindow';
@@ -10,8 +10,7 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error?: Error;
-  errorInfo?: ErrorInfo;
+  reference?: string;
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -20,21 +19,12 @@ class ErrorBoundary extends Component<Props, State> {
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(): State {
+    return { hasError: true, reference: globalThis.crypto?.randomUUID?.() ?? 'unavailable' };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState({
-      error,
-      errorInfo
-    });
-
-    // Log error to monitoring service
-    console.error('Error caught by boundary:', error, errorInfo);
-    
-    // In production, you would send this to your error tracking service
-    // Example: Sentry.captureException(error, { extra: errorInfo });
+  componentDidCatch() {
+    console.error('ETERNYX_RENDER_FAILURE', this.state.reference);
   }
 
   handleReload = () => {
@@ -52,34 +42,31 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4" data-testid="eternyx-error-recovery">
           <div className="max-w-2xl w-full">
             <TerminalWindow title="SYSTEM_ERROR.exe" className="border-red-500/50">
-              <div className="space-y-4">
+              <div className="space-y-4" role="alert">
                 <div className="flex items-center space-x-2 text-red-500">
                   <AlertTriangle className="h-6 w-6 animate-pulse" />
-                  <span className="text-xl font-bold">CRITICAL ERROR DETECTED</span>
+                  <span className="text-xl font-bold">Unable to display this page</span>
                 </div>
                 
                 <div className="text-cyber-green">
-                  $ cat error_log.txt
+                  Recovery information
                 </div>
                 
                 <div className="bg-red-500/10 border border-red-500/30 rounded p-4">
                   <div className="text-red-400 font-mono text-sm">
-                    <div>Error: {this.state.error?.message}</div>
-                    <div className="mt-2 text-xs text-red-300">
-                      Stack: {this.state.error?.stack?.split('\n')[1]?.trim()}
-                    </div>
+                    <div className="break-all">Local reference: {this.state.reference}</div>
                   </div>
                 </div>
                 
                 <div className="text-muted-foreground">
-                  <div>$ echo "System encountered an unexpected error"</div>
-                  <div>$ echo "Initiating recovery protocols..."</div>
+                  <div>Reload or return home.</div>
+                  <div>Check whether your previous action completed before repeating it.</div>
                 </div>
                 
-                <div className="flex space-x-4 pt-4">
+                <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:flex-wrap">
                   <Button 
                     onClick={this.handleReload}
                     className="bg-cyber-green hover:bg-cyber-green/80 text-black"

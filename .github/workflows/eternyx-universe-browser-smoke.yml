@@ -1,0 +1,43 @@
+name: Universe built frontend smoke
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/eternyx-universe-browser-smoke.mjs'
+      - 'tests/eternyx-recovery-privacy.test.mjs'
+      - '.github/workflows/eternyx-universe-browser-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04 # Playwright 1.56.1 does not support Ubuntu 26.04
+    timeout-minutes: 18
+    env:
+      VITE_SUPABASE_URL: https://universe-smoke.invalid
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_local_smoke_not_a_real_key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: node --test tests/eternyx-recovery-privacy.test.mjs
+      - run: npm run build
+      - name: Install pinned isolated browser runner
+        run: |
+          npm install --prefix "$RUNNER_TEMP/eternyx-browser" --no-save --package-lock=false playwright@1.56.1
+          "$RUNNER_TEMP/eternyx-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check built routes with remote browser requests blocked
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run preview -- --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/eternyx-preview.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4173/ > /dev/null
+          ETERNYX_PLAYWRIGHT_MODULE="$RUNNER_TEMP/eternyx-browser/node_modules/playwright" node scripts/eternyx-universe-browser-smoke.mjs
