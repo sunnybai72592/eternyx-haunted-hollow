@@ -13,6 +13,8 @@ CREATE TABLE public.ctf_http_assessment_observations (
   session_id uuid PRIMARY KEY REFERENCES public.ctf_range_sessions(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   bundle_sha text NOT NULL CHECK(bundle_sha ~ '^[a-f0-9]{64}$'),
+  instance_ref text NOT NULL CHECK(instance_ref ~ '^[A-Za-z0-9._:-]{1,128}$'),
+  observation_nonce text NOT NULL UNIQUE CHECK(observation_nonce ~ '^[a-f0-9]{64}$'),
   transcript_sha text NOT NULL UNIQUE CHECK(transcript_sha ~ '^[a-f0-9]{64}$'),
   observed_at timestamptz NOT NULL,
   facts jsonb NOT NULL CHECK(facts = '{"authorization-denial":403,"unknown-resource":404,"method-restriction":405,"allowed-method":"GET","cache-policy":"no-store","content-sniffing":"nosniff"}'::jsonb)
@@ -37,7 +39,7 @@ GRANT SELECT,INSERT ON public.ctf_http_assessment_observations,public.ctf_http_a
 -- Privileged future evidence producer only. A digest is not proof of provenance:
 -- caller must independently validate the actual host and per-session transcript.
 CREATE FUNCTION public.ctf_http_record_observation(p_user uuid,p_session uuid,p_bundle text,
-  p_transcript text,p_facts jsonb) RETURNS boolean
+  p_transcript text,p_facts jsonb,p_instance text,p_nonce text) RETURNS boolean
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE s public.ctf_range_sessions%ROWTYPE;
   policy public.ctf_http_assessment_policy%ROWTYPE;
@@ -45,6 +47,8 @@ DECLARE s public.ctf_range_sessions%ROWTYPE;
   t timestamptz;
 BEGIN
   IF p_user IS NULL OR p_session IS NULL OR p_bundle IS NULL OR p_transcript IS NULL
+    OR p_instance IS NULL OR p_instance !~ '^[A-Za-z0-9._:-]{1,128}$'
+    OR p_nonce IS NULL OR p_nonce !~ '^[a-f0-9]{64}$'
     OR p_bundle !~ '^[a-f0-9]{64}$' OR p_transcript !~ '^[a-f0-9]{64}$'
     OR p_facts IS DISTINCT FROM '{"authorization-denial":403,"unknown-resource":404,"method-restriction":405,"allowed-method":"GET","cache-policy":"no-store","content-sniffing":"nosniff"}'::jsonb
   THEN RETURN false; END IF;
@@ -54,14 +58,14 @@ BEGIN
   SELECT * INTO provider FROM public.ctf_range_provider WHERE singleton_id=1 FOR SHARE;
   t:=pg_catalog.clock_timestamp();
   IF s.status<>'running' OR s.started_at IS NULL OR s.started_at>t OR s.expires_at<=t
-    OR s.provider_instance_ref IS NULL OR policy.enabled IS DISTINCT FROM true
+    OR s.provider_instance_ref IS DISTINCT FROM p_instance OR policy.enabled IS DISTINCT FROM true
     OR policy.reviewed_bundle_sha IS DISTINCT FROM p_bundle
     OR provider.enabled IS DISTINCT FROM true OR provider.ingress_approved IS DISTINCT FROM true
     OR provider.max_active_sessions<1 OR provider.last_heartbeat_at IS NULL
     OR provider.last_heartbeat_at<=t-interval '60 seconds' OR provider.last_heartbeat_at>t+interval '5 seconds'
   THEN RETURN false; END IF;
-  INSERT INTO public.ctf_http_assessment_observations(session_id,user_id,bundle_sha,transcript_sha,observed_at,facts)
-    VALUES(p_session,p_user,p_bundle,p_transcript,t,p_facts) ON CONFLICT DO NOTHING;
+  INSERT INTO public.ctf_http_assessment_observations(session_id,user_id,bundle_sha,transcript_sha,observed_at,facts,instance_ref,observation_nonce)
+    VALUES(p_session,p_user,p_bundle,p_transcript,t,p_facts,p_instance,p_nonce) ON CONFLICT DO NOTHING;
   RETURN FOUND;
 END; $$;
 
@@ -107,7 +111,7 @@ BEGIN
   IF NOT FOUND THEN RETURN deny; END IF;
   t:=pg_catalog.clock_timestamp();
   IF s.status<>'running' OR s.started_at IS NULL OR s.started_at>t OR s.expires_at<=t
-    OR s.provider_instance_ref IS NULL OR policy.enabled IS DISTINCT FROM true
+    OR s.provider_instance_ref IS DISTINCT FROM obs.instance_ref OR policy.enabled IS DISTINCT FROM true
     OR policy.reviewed_bundle_sha IS DISTINCT FROM obs.bundle_sha
     OR obs.observed_at<s.started_at OR obs.observed_at>t
     OR provider.enabled IS DISTINCT FROM true OR provider.ingress_approved IS DISTINCT FROM true
@@ -132,10 +136,10 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $$
    ON s.id=r.session_id AND s.user_id=r.user_id
    WHERE r.user_id=p_user AND r.session_id=p_session),'{"ok":false,"reason":"unavailable"}'::jsonb);
 $$;
-REVOKE ALL ON FUNCTION public.ctf_http_record_observation(uuid,uuid,text,text,jsonb),
+REVOKE ALL ON FUNCTION public.ctf_http_record_observation(uuid,uuid,text,text,jsonb,text,text),
  public.ctf_http_submit_assessment(uuid,uuid,text,jsonb),
  public.ctf_http_read_assessment(uuid,uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.ctf_http_record_observation(uuid,uuid,text,text,jsonb),
+GRANT EXECUTE ON FUNCTION public.ctf_http_record_observation(uuid,uuid,text,text,jsonb,text,text),
  public.ctf_http_submit_assessment(uuid,uuid,text,jsonb),
  public.ctf_http_read_assessment(uuid,uuid) TO service_role;
 COMMIT;

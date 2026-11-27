@@ -4,6 +4,8 @@ on:
     paths:
       - '.github/workflows/labs-http-assessment-candidate.yml'
       - 'scripts/sql/labs-http-assessment-candidate.sql'
+      - 'infrastructure/cyber-range/provider/http-assessment-evidence.mjs'
+      - 'tests/labs-http-assessment-evidence.test.mjs'
       - 'tests/sql/labs-http-assessment-candidate-smoke.sql'
       - 'tests/sql/ctf-range-db-bootstrap.sql'
       - 'supabase/migrations/20261122180000_ctf_range_session_control.sql'
@@ -27,6 +29,8 @@ jobs:
           rc=0
           git config --local --get-all http.https://github.com/.extraheader > /dev/null || rc=$?
           test "$rc" -eq 1
+      - name: Verify actual Ed25519 evidence admission
+        run: node --test tests/labs-http-assessment-evidence.test.mjs
       - name: Rehearse SQL in networkless disposable PostgreSQL
         shell: bash
         run: |
