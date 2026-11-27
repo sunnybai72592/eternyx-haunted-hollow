@@ -30,6 +30,8 @@ BEGIN
  IF public.ctf_http_record_observation(a,sa,repeat('c',64),repeat('b',64),facts,'fixture-a',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'unreviewed image accepted'; END IF;
  IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts||'{"score":6}','fixture-a',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'extra observation field accepted'; END IF;
  IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts,'fixture-b',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'wrong instance accepted'; END IF;
+ IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts,'fixture-a','bad') IS DISTINCT FROM false THEN RAISE EXCEPTION 'malformed nonce accepted'; END IF;
+ IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts,'fixture-a!',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'malformed instance accepted'; END IF;
  IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts,'fixture-a',repeat('b',64)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'owner observation denied'; END IF;
  IF public.ctf_http_record_observation(b,sb,repeat('a',64),repeat('b',64),facts,'fixture-b',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'transcript replay accepted'; END IF;
  IF public.ctf_http_submit_assessment(b,sa,repeat('1',64),facts)->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'foreign session grade'; END IF;

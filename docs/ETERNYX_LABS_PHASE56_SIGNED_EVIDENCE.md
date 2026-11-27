@@ -27,3 +27,11 @@ nonce issuance, independent key review/rotation, actual dedicated host,
 authenticated Edge deployment and staging race/owner acceptance remain
 required. The SQL service-role boundary trusts the admission adapter;
 SQL itself does not verify Ed25519. Do not deploy or activate.
+
+## CI correction
+The initial Phase 56 job 140592591237 passed all seven Ed25519 tests but
+failed parsing the candidate SQL. Replacement-string expansion corrupted
+regex anchors and duplicated SQL suffixes. Rebuilt the candidate from the
+passed Phase 55 source with literal replacements, preserving all instance,
+nonce, ownership and grant checks. Added malformed nonce and instance
+rejections to the actual PostgreSQL smoke test. Updated CI remains required.
