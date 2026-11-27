@@ -1,0 +1,23 @@
+name: AI Chat hosted activation
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/eternyx-ai-chat/**'
+      - 'supabase/functions/_shared/ai-provider.ts'
+      - 'src/pages/EternyxAI.tsx'
+      - 'scripts/ai-chat-staging-acceptance.mjs'
+      - 'tests/ai-chat-*.test.mjs'
+      - 'tests/ai-provider-gateway.test.mjs'
+      - '.github/workflows/ai-chat-hosted-activation.yml'
+permissions:
+  contents: read
+jobs:
+  offline-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/ai-chat-staging-acceptance.test.mjs tests/ai-chat-credit-enforcement.test.mjs tests/ai-provider-gateway.test.mjs tests/ai-edge-function-security.test.mjs

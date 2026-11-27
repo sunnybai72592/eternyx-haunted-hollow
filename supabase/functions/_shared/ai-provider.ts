@@ -43,6 +43,33 @@ export interface AIChatProviderAdapter {
   complete(input: AIChatCompletionInput): Promise<string>;
 }
 
+const MAX_PROVIDER_RESPONSE_BYTES = 512 * 1024;
+const PROVIDER_TIMEOUT_MS = 25000;
+
+async function readProviderResponse(response: Response): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new AIProviderError("Empty provider response", "invalid_response", false);
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let total = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_PROVIDER_RESPONSE_BYTES) throw new AIProviderError("Oversized provider response", "invalid_response", false);
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } catch (error) {
+    if (error instanceof AIProviderError) throw error;
+    throw new AIProviderError("Provider response could not be read", "invalid_response", false);
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
 const groqAdapter: AIChatProviderAdapter = {
   id: "groq",
   async complete(input) {
@@ -56,6 +83,7 @@ const groqAdapter: AIChatProviderAdapter = {
     }
 
     const model = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-20b";
+    const signal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
     const messages = [
       { role: "system", content: input.systemPrompt },
       ...input.chatHistory.map((message) => ({
@@ -69,6 +97,7 @@ const groqAdapter: AIChatProviderAdapter = {
     try {
       response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
+        signal,
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
@@ -80,7 +109,7 @@ const groqAdapter: AIChatProviderAdapter = {
         }),
       });
     } catch (error) {
-      console.error("AI provider network request failed:", error);
+      console.error("AI provider network request failed", { provider: "groq" });
       throw new AIProviderError(
         "The AI provider could not be reached. Please try again.",
         "network",
@@ -88,7 +117,7 @@ const groqAdapter: AIChatProviderAdapter = {
       );
     }
 
-    const responseText = await response.text();
+    const responseText = await readProviderResponse(response);
     let data: any = null;
     try {
       data = responseText ? JSON.parse(responseText) : null;
@@ -149,6 +178,21 @@ const groqAdapter: AIChatProviderAdapter = {
   },
 };
 
+/** Configuration validation is deliberately network-free and precedes charging.
+ * It verifies configuration presence, not provider availability or key validity.
+ */
+export function assertChatProviderConfigured(): void {
+  const providerId = Deno.env.get("AI_CHAT_PROVIDER") || "groq";
+  if (!Object.prototype.hasOwnProperty.call(providers, providerId) ||
+      !Deno.env.get("GROQ_API_KEY")?.trim()) {
+    throw new AIProviderError("AI provider configuration is unavailable", "configuration", false);
+  }
+  const model = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-20b";
+  if (model.length > 150 || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(model)) {
+    throw new AIProviderError("AI model configuration is invalid", "configuration", false);
+  }
+}
+
 /** Explicit adapter registry. Unknown providers fail closed; no silent fallback. */
 const providers: Readonly<Record<string, AIChatProviderAdapter>> = {
   groq: groqAdapter,
@@ -158,7 +202,7 @@ export async function generateChatCompletion(
   input: AIChatCompletionInput,
 ): Promise<string> {
   const providerId = Deno.env.get("AI_CHAT_PROVIDER") || "groq";
-  const provider = providers[providerId];
+  const provider = Object.prototype.hasOwnProperty.call(providers, providerId) ? providers[providerId] : undefined;
 
   if (!provider) {
     throw new AIProviderError(

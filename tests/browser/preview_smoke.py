@@ -320,7 +320,7 @@ def chat(page):
         for role, content in [("user", prompt), ("assistant", answer)]:
             turns.append({"id": str(len(turns)), "role": role, "content": content,
                           "created_at": "2026-01-01T00:00:00Z"})
-        route.fulfill(json={"sessionId": session, "response": answer})
+        route.fulfill(json={"success": True, "sessionId": session, "response": answer})
 
     def sessions(route):
         route.fulfill(json=[{"id": session, "title": prompt}] if turns else [])
@@ -615,7 +615,7 @@ def domain_check(page):
         payload = route.request.post_data_json
         assert payload["sessionId"] is None
         submitted.append(payload["message"])
-        route.fulfill(json={"sessionId": "00000000-0000-4000-8000-000000000003", "response": "These counts describe the lookup."})
+        route.fulfill(json={"success": True, "sessionId": "00000000-0000-4000-8000-000000000003", "response": "These counts describe the lookup."})
     page.route("**/functions/v1/eternyx-ai-chat", explain)
     page.get_by_role("button", name="Explain with Eternyx AI").click()
     draft = page.get_by_role("textbox", name="Message to Eternyx AI")

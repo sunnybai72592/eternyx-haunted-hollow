@@ -275,6 +275,8 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !userId || isLoading || loadingHistory || historyFailed) return;
 
+    if (useAuthStore.getState().user?.id !== userId) return;
+    if (!window.confirm('Send this message and relevant saved conversation or document context to the configured external AI provider? AI Chat may consume credits and saves messages in your account. Continue?')) return;
     historyVersion.current++;
     setSendError('');
     const userMessage = inputValue;
@@ -309,10 +311,13 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
         if (status === 402) throw new Error('Your account has insufficient chat credits.');
         if (status === 401) throw new Error('Please sign in again to continue chatting.');
         if (status === 422) throw new Error('No matching text found in this document. Try a more specific question. No AI generation was requested.');
-        if (status === 409) throw new Error('This document is not ready or the request needs review. Check its processing status.');
-        throw new Error(chatError.message);
+        if (status === 409) throw new Error('This document is not ready or the request needs review. Check its processing status and history before retrying.');
+        if (status === 429) throw new Error('The AI provider is rate limited. Check your credit status before trying again.');
+        if (status === 403) throw new Error('This account is not authorized for this AI request.');
+        throw new Error('AI Chat could not finish. Check saved history and credit status before sending another request; no automatic retry was made.');
       }
-      if (typeof data?.response !== 'string' || !data.response.trim() || !data.sessionId) throw new Error('No response from Eternyx AI');
+      if (useAuthStore.getState().user?.id !== userId) return;
+      if (data?.success !== true || typeof data.response !== 'string' || !data.response.trim() || typeof data.sessionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.sessionId) || (currentSessionId && currentSessionId !== data.sessionId)) throw new Error('AI result could not be confirmed. Check saved history and credit status before retrying.');
 
       // Update session ID if new
       if (!currentSessionId) {
@@ -410,7 +415,7 @@ const ChatWorkspace = ({ userId }: { userId: string }) => {
             Eternyx AI
           </h1>
           <p className="text-muted-foreground">
-            Your intelligent assistant powered by advanced AI. Chat, analyze documents, and get instant insights.
+            Send reviewed prompts to the configured AI provider. Messages are saved in your account; external processing and AI Chat credits may apply.
           </p>
         </div>
 
