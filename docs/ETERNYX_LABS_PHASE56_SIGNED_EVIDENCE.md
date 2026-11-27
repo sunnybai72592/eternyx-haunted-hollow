@@ -35,3 +35,10 @@ regex anchors and duplicated SQL suffixes. Rebuilt the candidate from the
 passed Phase 55 source with literal replacements, preserving all instance,
 nonce, ownership and grant checks. Added malformed nonce and instance
 rejections to the actual PostgreSQL smoke test. Updated CI remains required.
+
+The second CI attempt (job 140594255757) created all candidate tables and
+functions and passed all seven signature tests plus the first two SQL DO
+blocks. The replacement-instance regression block still had single-dollar
+rather than double-dollar delimiters from the same editing error. Restored
+both delimiters literally, checked all five test blocks and three function
+bodies for paired delimiters. No assertion removed. Full updated CI pending.

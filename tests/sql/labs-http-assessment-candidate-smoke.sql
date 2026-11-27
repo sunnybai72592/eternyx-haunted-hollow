@@ -48,11 +48,11 @@ END $$;
 RESET ROLE;
 UPDATE public.ctf_range_sessions SET provider_instance_ref='replacement-b' WHERE id='123e4567-e89b-42d3-a456-426614174002';
 SET LOCAL ROLE service_role;
-DO $
+DO $$
 BEGIN
  IF public.ctf_http_submit_assessment('22222222-2222-4222-8222-222222222222','123e4567-e89b-42d3-a456-426614174002',repeat('2',64),
  '{"authorization-denial":403,"unknown-resource":404,"method-restriction":405,"allowed-method":"GET","cache-policy":"no-store","content-sniffing":"nosniff"}')->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'replaced instance accepted'; END IF;
-END $;
+END $$;
 RESET ROLE;
 UPDATE public.ctf_range_sessions SET provider_instance_ref='fixture-b' WHERE id='123e4567-e89b-42d3-a456-426614174002';
 UPDATE public.ctf_range_access_grants SET revoked_at=now() WHERE token_hash=repeat('2',64);
