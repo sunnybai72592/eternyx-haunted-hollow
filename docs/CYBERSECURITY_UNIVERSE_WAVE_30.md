@@ -1,0 +1,15 @@
+# Wave 30 — scanner admission and abuse prevention
+
+PR #828 merged at 79d9e4394936c64ba094968d6982ff3b9d0a2aab; CI, Wave 27 recovery and Wave 22 offline workflows all passed. Read-only staging snapshot: two confirmed accounts, zero CVE history, zero analysis history, zero evidence and no direct Storage cutover. No live provider acceptance demonstrated.
+
+## Candidate controls
+All three scanner handlers require explicit Auth getUser(token) validation, then a server-only admission call before upstream provider requests. The shared helper matches JWT subject, session, role and expiry to the verified user; it does not independently verify JWT signatures and must never be called with an unverified user object. Private definer lookup has fixed empty search_path and is executable only by service_role; it tests session ownership, existence and not_after. Public reservation RPC is invoker-only and service-role-only. The quota table has RLS and no app grants. No target hostname, query text, credential or provider response is stored in quota state.
+
+Fixed-window admission limits shared across CVE/DNS/TLS: 3 invocations per owner per minute and 30/day; global 15/min and 300/day (UTC). Failed or unfinished admitted operations remain charged. Global denial rolls back the owner charge. This limits invocations, not each internal provider lookup or bandwidth, and cannot protect against unauthenticated edge-level denial of service. Windows can permit bursts at boundaries. Session verification occurs at admission, not continuously; already admitted in-flight provider operations may finish after logout. RLS history restrictions remain. HTTP 401 for revoked session, 429 for quota exhaustion, 503 for missing/unavailable admission service, with generic client-safe errors.
+
+## Rollout
+New SQL and function code are not deployed. After CI and review, verify the staging helper schema and absence of conflicting objects, rehearse candidate SQL, apply exact migration to staging, verify privileges and advisor findings, then redeploy all three functions with reviewed shared dependency and JWT verification. Do not deploy function changes before database admission is ready. Existing staging v1 scanners are not yet protected by these new quotas. No production changes.
+
+Run the existing live staging acceptance using private configured test credentials. Verify successful provider results, safe error behavior and actual history persistence; separately validate quota exhaustion and recovery with disposable accounts and tightly bounded requests. Do not trigger repeated external provider traffic to test quotas; prefer controlled staging admission tests. Hosted gateway pre/post-cutover, hosted labs/incident acceptance, recovery, independent security review remain outstanding.
+
+CI covers mocked transport and disposable PostgreSQL synthetic session/admission checks; actual HTTP requests, real Auth revocation and provider outage behavior have not been demonstrated. No production certification.

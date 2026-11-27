@@ -61,7 +61,12 @@ test('CVE research uses public NVD records and does not claim live target scanni
   assert.match(scanner, /keyword match is not a confirmed vulnerability/);
   assert.match(edgeFunction, /services\.nvd\.nist\.gov\/rest\/json\/cves\/2\.0/);
   assert.match(edgeFunction, /cpeMatch/);
-  assert.match(edgeFunction, /getUser\(\)/);
+  assert.match(edgeFunction, /supabase\.auth\.getUser\(authorization\.slice\(7\)\)/);
+  assert.match(edgeFunction, /if \(authError \|\| !user\)/);
+  assert.match(edgeFunction, /const admission = await admitScanner\(\{ authorization, user,/);
+  assert.match(edgeFunction, /if \(admission\.status !== 200\) return jsonResponse/);
+  assert.ok(edgeFunction.indexOf("supabase.auth.getUser(") < edgeFunction.indexOf("const admission = await admitScanner("));
+  assert.ok(edgeFunction.indexOf("const admission = await admitScanner(") < edgeFunction.indexOf("nvdResponse = await fetch("));
   assert.match(edgeFunction, /cve-keyword-research/);
   assert.doesNotMatch(edgeFunction, /fetch\(target_url|calculateRiskScore|cve\.circl\.lu/);
   assert.doesNotMatch(scanner, /Risk Score|vulnerabilities_found/);

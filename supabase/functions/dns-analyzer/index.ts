@@ -1,3 +1,4 @@
+import { admitScanner } from "../_shared/scanner-admission.mjs";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -69,7 +70,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authorization } } },
     )
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(authorization.slice(7))
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
         status: 401,
@@ -121,6 +122,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       })
     }
+    const admission = await admitScanner({ authorization, user, url: Deno.env.get("SUPABASE_URL") ?? "", publicKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "", serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "" });
+    if (admission.status !== 200) return new Response(JSON.stringify({ error: admission.error }), { status: admission.status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+
     const domainName = normalizedDomain
     const user_id = user.id
     const startTime = Date.now()
