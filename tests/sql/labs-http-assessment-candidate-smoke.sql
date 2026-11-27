@@ -12,7 +12,7 @@ DO $$
 DECLARE a uuid:='11111111-1111-4111-8111-111111111111'; s uuid:='123e4567-e89b-42d3-a456-426614174001';
  facts jsonb:='{"authorization-denial":403,"unknown-resource":404,"method-restriction":405,"allowed-method":"GET","cache-policy":"no-store","content-sniffing":"nosniff"}';
 BEGIN
- IF public.ctf_http_record_observation(a,s,repeat('a',64),repeat('b',64),facts) IS DISTINCT FROM false THEN RAISE EXCEPTION 'disabled evidence admission'; END IF;
+ IF public.ctf_http_record_observation(a,s,repeat('a',64),repeat('b',64),facts,'fixture-a',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'disabled evidence admission'; END IF;
  IF (public.ctf_http_submit_assessment(a,s,repeat('1',64),facts)->>'ok') IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'disabled grading'; END IF;
 END $$;
 RESET ROLE;
@@ -26,11 +26,12 @@ DECLARE a uuid:='11111111-1111-4111-8111-111111111111'; b uuid:='22222222-2222-4
  res jsonb;
 BEGIN
  IF public.ctf_http_submit_assessment(a,sa,repeat('1',64),facts)->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'missing evidence accepted'; END IF;
- IF public.ctf_http_record_observation(b,sa,repeat('a',64),repeat('b',64),facts) IS DISTINCT FROM false THEN RAISE EXCEPTION 'foreign evidence accepted'; END IF;
- IF public.ctf_http_record_observation(a,sa,repeat('c',64),repeat('b',64),facts) IS DISTINCT FROM false THEN RAISE EXCEPTION 'unreviewed image accepted'; END IF;
- IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts||'{"score":6}') IS DISTINCT FROM false THEN RAISE EXCEPTION 'extra observation field accepted'; END IF;
- IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts) IS DISTINCT FROM true THEN RAISE EXCEPTION 'owner observation denied'; END IF;
- IF public.ctf_http_record_observation(b,sb,repeat('a',64),repeat('b',64),facts) IS DISTINCT FROM false THEN RAISE EXCEPTION 'transcript replay accepted'; END IF;
+ IF public.ctf_http_record_observation(b,sa,repeat('a',64),repeat('b',64),facts,'fixture-a',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'foreign evidence accepted'; END IF;
+ IF public.ctf_http_record_observation(a,sa,repeat('c',64),repeat('b',64),facts,'fixture-a',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'unreviewed image accepted'; END IF;
+ IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts||'{"score":6}','fixture-a',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'extra observation field accepted'; END IF;
+ IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts,'fixture-b',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'wrong instance accepted'; END IF;
+ IF public.ctf_http_record_observation(a,sa,repeat('a',64),repeat('b',64),facts,'fixture-a',repeat('b',64)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'owner observation denied'; END IF;
+ IF public.ctf_http_record_observation(b,sb,repeat('a',64),repeat('b',64),facts,'fixture-b',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'transcript replay accepted'; END IF;
  IF public.ctf_http_submit_assessment(b,sa,repeat('1',64),facts)->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'foreign session grade'; END IF;
  IF public.ctf_http_submit_assessment(a,sa,repeat('2',64),facts)->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'foreign grant accepted'; END IF;
  IF public.ctf_http_submit_assessment(a,sa,repeat('1',64),facts||'{"score":6}')->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'client score accepted'; END IF;
@@ -39,9 +40,19 @@ BEGIN
  IF public.ctf_http_submit_assessment(a,sa,repeat('1',64),facts)->>'reason' IS DISTINCT FROM 'already_submitted' THEN RAISE EXCEPTION 'duplicate grade accepted'; END IF;
  IF public.ctf_http_read_assessment(b,sa)->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'cross-account grade read'; END IF;
  IF public.ctf_http_read_assessment(a,sa)->>'correct' IS DISTINCT FROM '5' THEN RAISE EXCEPTION 'owner grade read'; END IF;
- IF public.ctf_http_record_observation(b,sb,repeat('a',64),repeat('c',64),facts) IS DISTINCT FROM true THEN RAISE EXCEPTION 'B observation failed'; END IF;
+ IF public.ctf_http_record_observation(b,sb,repeat('a',64),repeat('c',64),facts,'fixture-b',repeat('b',64)) IS DISTINCT FROM false THEN RAISE EXCEPTION 'nonce replay accepted'; END IF;
+ IF public.ctf_http_record_observation(b,sb,repeat('a',64),repeat('c',64),facts,'fixture-b',repeat('c',64)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'B observation failed'; END IF;
 END $$;
 RESET ROLE;
+UPDATE public.ctf_range_sessions SET provider_instance_ref='replacement-b' WHERE id='123e4567-e89b-42d3-a456-426614174002';
+SET LOCAL ROLE service_role;
+DO $
+BEGIN
+ IF public.ctf_http_submit_assessment('22222222-2222-4222-8222-222222222222','123e4567-e89b-42d3-a456-426614174002',repeat('2',64),
+ '{"authorization-denial":403,"unknown-resource":404,"method-restriction":405,"allowed-method":"GET","cache-policy":"no-store","content-sniffing":"nosniff"}')->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'replaced instance accepted'; END IF;
+END $;
+RESET ROLE;
+UPDATE public.ctf_range_sessions SET provider_instance_ref='fixture-b' WHERE id='123e4567-e89b-42d3-a456-426614174002';
 UPDATE public.ctf_range_access_grants SET revoked_at=now() WHERE token_hash=repeat('2',64);
 SET LOCAL ROLE service_role;
 DO $$
@@ -57,7 +68,7 @@ BEGIN
   FOREACH tbl IN ARRAY ARRAY['ctf_http_assessment_policy','ctf_http_assessment_observations','ctf_http_assessment_results'] LOOP
    IF pg_catalog.has_table_privilege(role_name,'public.'||tbl,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN RAISE EXCEPTION 'client privilege drift'; END IF;
   END LOOP;
-  FOREACH fun IN ARRAY ARRAY['ctf_http_record_observation(uuid,uuid,text,text,jsonb)','ctf_http_submit_assessment(uuid,uuid,text,jsonb)','ctf_http_read_assessment(uuid,uuid)'] LOOP
+  FOREACH fun IN ARRAY ARRAY['ctf_http_record_observation(uuid,uuid,text,text,jsonb,text,text)','ctf_http_submit_assessment(uuid,uuid,text,jsonb)','ctf_http_read_assessment(uuid,uuid)'] LOOP
    IF pg_catalog.has_function_privilege(role_name,'public.'||fun,'EXECUTE') THEN RAISE EXCEPTION 'client RPC privilege drift'; END IF;
   END LOOP;
  END LOOP;
